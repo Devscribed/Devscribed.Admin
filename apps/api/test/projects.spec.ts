@@ -470,6 +470,63 @@ describe('Projects (spec 11)', () => {
     expect(res.body).toEqual({ errors: { name: PROJECT_MESSAGES.nameInvalidChars } });
   });
 
+  // TC-11-INT-18
+  it('samples the roster into memberPreview without replacing memberCount', async () => {
+    const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    const chen = await createMember(admin.organizationId, {
+      email: 'chen@acme.com', role: 'user', firstName: 'Bob', lastName: 'Chen',
+    });
+    const kaminski = await createMember(admin.organizationId, {
+      email: 'kaminski@acme.com', role: 'user', firstName: 'Alex', lastName: 'Kaminski',
+    });
+    const novak = await createMember(admin.organizationId, {
+      email: 'novak@acme.com', role: 'user', firstName: 'Dana', lastName: 'Novak',
+    });
+    const smith = await createMember(admin.organizationId, {
+      email: 'smith@acme.com', role: 'user', firstName: 'Jane', lastName: 'Smith',
+    });
+
+    const project = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+    const empty = await createProject(admin.cookies, admin.organizationId, 'Beta');
+    await addMembers(
+      admin.cookies,
+      admin.organizationId,
+      project.body.id,
+      [chen.membershipId, kaminski.membershipId, novak.membershipId, smith.membershipId],
+    );
+
+    const list = await listProjects(admin.cookies, admin.organizationId);
+    const alpha = list.body.projects.find((p: any) => p.id === project.body.id);
+
+    // The count is every active member; the preview is the first three of them, in the
+    // roster's own order (lastName, then firstName) — Smith is counted but not drawn.
+    expect(alpha.memberCount).toBe(4);
+    expect(alpha.memberPreview).toEqual([
+      { name: 'Bob Chen', initials: 'BC' },
+      { name: 'Alex Kaminski', initials: 'AK' },
+      { name: 'Dana Novak', initials: 'DN' },
+    ]);
+
+    const beta = list.body.projects.find((p: any) => p.id === empty.body.id);
+    expect(beta).toMatchObject({ memberCount: 0, memberPreview: [] });
+
+    // Spec 04's removal is a soft delete, and the preview filters on the membership's
+    // status exactly as the count does — so a removed member leaves both.
+    await request(server())
+      .delete(`/api/organizations/${admin.organizationId}/members/${chen.membershipId}`)
+      .set('Cookie', admin.cookies)
+      .expect(200);
+
+    const after = await listProjects(admin.cookies, admin.organizationId);
+    const alphaAfter = after.body.projects.find((p: any) => p.id === project.body.id);
+    expect(alphaAfter.memberCount).toBe(3);
+    expect(alphaAfter.memberPreview.map((m: any) => m.name)).toEqual([
+      'Alex Kaminski',
+      'Dana Novak',
+      'Jane Smith',
+    ]);
+  });
+
   // Empty-array member add is a 400 with the field error.
   it('rejects an empty membershipIds array with 400', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');

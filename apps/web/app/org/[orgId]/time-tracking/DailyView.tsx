@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
-import { IconButton } from '@/ds';
+import { IconButton } from '@devscribed/ds';
 import { PencilIcon, TrashIcon } from '@/layout/icons';
 import { formatDurationHuman, formatWallClockInTz } from '@devscribed/validation';
 import { formatDayLabel } from './date-utils';
@@ -42,7 +42,7 @@ export function DailyView({
   onEdit: (entry: TimeEntry) => void;
   onDelete: (entry: TimeEntry) => void;
   /** Spec organization/03 §10 — passed through to `TimeGrid`, which renders the
-   * full-column amber overlay for the day when a holiday is present. */
+   * full-column holiday overlay for the day when a holiday is present. */
   holidaysByDate?: Map<string, CalendarHoliday>;
   onHolidayAnnounce?: (message: string) => void;
 }) {
@@ -58,39 +58,32 @@ export function DailyView({
         flexDirection: 'column',
         justifyContent: 'center',
         gap: 2,
-        padding: '0 16px',
-        // The header keeps the amber tint as a running cue when the day is a
-        // holiday; the overlay in the grid body carries the marker + testid.
-        background: holiday ? 'var(--holiday-bg)' : undefined,
+        padding: '0 var(--space-6)',
+        // The header keeps the holiday tint as a running cue when the day is one;
+        // the overlay in the grid body carries the marker + testid.
+        background: holiday ? 'var(--surface-holiday)' : undefined,
       }}
     >
       <span
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-13)',
-          color: date === today ? 'var(--accent)' : 'var(--text)',
+          fontWeight: 'var(--font-weight-semibold)',
+          fontSize: 'var(--font-size-xs)',
+          color: date === today ? 'var(--color-blue)' : 'var(--text-primary)',
         }}
       >
         {formatDayLabel(date, today)}
       </span>
-      <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-12)',
-            color: 'var(--text-muted)',
-          }}
-        >
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
+        <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
           Total logged
         </span>
         <span
           data-testid="tt-day-total"
           style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-15)',
-            color: 'var(--accent)',
+            fontWeight: 'var(--font-weight-semibold)',
+            fontSize: 'var(--font-size-s)',
+            fontVariantNumeric: 'tabular-nums',
+            color: 'var(--color-blue)',
           }}
         >
           {formatDurationHuman(totalMinutes)}
@@ -103,24 +96,21 @@ export function DailyView({
     durationOnly.length > 0 ? (
       <div
         style={{
-          borderTop: '1px solid var(--border)',
-          background: 'var(--bg-panel-2)',
-          padding: '10px 14px',
+          borderTop: 'var(--border-width-hairline) solid var(--border-default)',
+          background: 'var(--surface-sunken)',
+          padding: 'var(--space-4) var(--space-6)',
           display: 'flex',
           alignItems: 'center',
-          gap: 14,
+          gap: 'var(--space-6)',
           flexWrap: 'wrap',
           flexShrink: 0,
         }}
       >
         <span
           style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-11)',
-            letterSpacing: 1.2,
-            textTransform: 'uppercase',
-            color: 'var(--text-muted)',
+            fontWeight: 'var(--font-weight-medium)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
           }}
         >
           Duration-only (no time set)
@@ -220,26 +210,25 @@ function DailyBlock({
               position: 'absolute',
               top: 4,
               right: 6,
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-11)',
-              color: 'var(--text-muted)',
-              background: 'var(--bg-panel)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '0 4px',
+              fontWeight: 'var(--font-weight-medium)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-secondary)',
+              background: 'var(--surface-card)',
+              borderRadius: 'var(--radius-s)',
+              padding: '0 var(--space-1)',
               lineHeight: 1.3,
             }}
           >
             NB
           </span>
         ) : null}
-        <span style={{ fontWeight: 500, fontSize: 'var(--fs-11)', opacity: 0.85 }}>
+        <span style={{ fontSize: 'var(--font-size-xs)', opacity: 0.85 }}>
           {timeRange} · {duration}
         </span>
         <span
           style={{
-            fontWeight: 600,
-            fontSize: 'var(--fs-14)',
+            fontWeight: 'var(--font-weight-semibold)',
+            fontSize: 'var(--font-size-s)',
             marginTop: 2,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -247,12 +236,12 @@ function DailyBlock({
           }}
         >
           {project}
-          {entry.task ? <span style={{ fontWeight: 500 }}> · {entry.task}</span> : null}
+          {entry.task ? <span style={{ fontWeight: 'var(--font-weight-regular)' }}> · {entry.task}</span> : null}
         </span>
         {entry.description ? (
           <span
             style={{
-              fontSize: 'var(--fs-11)',
+              fontSize: 'var(--font-size-xs)',
               opacity: 0.75,
               marginTop: 2,
               whiteSpace: 'nowrap',
@@ -274,9 +263,9 @@ function DailyBlock({
             display: 'flex',
             gap: 2,
             opacity: hovered ? 1 : 0,
-            transition: 'opacity var(--duration-fast) var(--easing-standard)',
-            background: 'var(--bg-panel)',
-            borderRadius: 'var(--radius-sm)',
+            transition: 'opacity var(--duration-fast) var(--ease-standard)',
+            background: 'var(--surface-card)',
+            borderRadius: 'var(--radius-s)',
           }}
         >
           <IconButton
@@ -322,15 +311,13 @@ function DurationChip({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 8,
-        padding: '6px 8px 6px 12px',
-        borderRadius: 'var(--radius-sm)',
-        border: nonBillable ? '1px dashed var(--border-strong)' : undefined,
-        borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
-        background: nonBillable ? 'var(--bg-sunken)' : color.bg,
-        color: nonBillable ? 'var(--text-muted)' : color.text,
-        fontFamily: 'var(--font-display)',
-        fontWeight: 500,
-        fontSize: 'var(--fs-13)',
+        padding: 'var(--space-2) var(--space-3) var(--space-2) var(--space-5)',
+        borderRadius: 'var(--radius-s)',
+        border: nonBillable ? 'var(--border-width-control) dashed var(--border-default)' : undefined,
+        borderLeft: nonBillable ? '3px dashed var(--border-default)' : `3px solid ${color.rail}`,
+        background: nonBillable ? 'var(--surface-sunken)' : color.bg,
+        color: nonBillable ? 'var(--text-secondary)' : color.text,
+        fontSize: 'var(--font-size-xs)',
       }}
     >
       <span>
@@ -372,12 +359,13 @@ function blockButtonStyle(color: BlockColor, nonBillable: boolean): CSSPropertie
     height: '100%',
     textAlign: 'left',
     padding: '8px 12px',
-    border: nonBillable ? '1px dashed var(--border-strong)' : 'none',
-    borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
-    borderRadius: 'var(--radius-sm)',
-    background: nonBillable ? 'var(--bg-sunken)' : color.bg,
-    color: nonBillable ? 'var(--text-muted)' : color.text,
-    fontFamily: 'var(--font-display)',
+    // §Phase 2 settled `--border-strong` onto `--border-default` at `--border-width-control`:
+    // yellow said "a form control's edge" in ink, the system says it in width.
+    border: nonBillable ? 'var(--border-width-control) dashed var(--border-default)' : 'none',
+    borderLeft: nonBillable ? '3px dashed var(--border-default)' : `3px solid ${color.rail}`,
+    borderRadius: 'var(--radius-s)',
+    background: nonBillable ? 'var(--surface-sunken)' : color.bg,
+    color: nonBillable ? 'var(--text-secondary)' : color.text,
     cursor: 'pointer',
     overflow: 'hidden',
   };

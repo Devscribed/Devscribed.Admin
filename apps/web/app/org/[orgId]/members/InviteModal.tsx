@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { Button, InfoBanner, Input, Modal, Select } from '@/ds';
-import { errorNode } from '@/field-error';
+import { Button, FormActions, InfoBanner, Modal, Select, TextInput } from '@devscribed/ds';
 import { useToast } from '@/toast';
 import { MESSAGES, ROLE_VALUES, validateEmail, type Role } from '@devscribed/validation';
 
@@ -20,6 +19,15 @@ function rolesFor(callerRole: string): Role[] {
   return [];
 }
 
+/**
+ * Spec 03's invitation dialog.
+ *
+ * Two things moved with the repaint. The error message is `TextInput`'s own `error` +
+ * `errorId` (§4) rather than a span smuggled through the field as a node cast to a string,
+ * so the message is the field's `aria-describedby` target by construction. And the buttons
+ * sit in `FormActions` (§63) inside the dialog rather than in an `actions` slot the
+ * system's `Modal` does not have — one row, right-aligned, the primary last.
+ */
 export function InviteModal({
   open,
   callerRole,
@@ -105,47 +113,18 @@ export function InviteModal({
     setSubmitting(false);
   }
 
+  if (!open) return null;
+
   return (
-    <Modal
-      open={open}
-      title="Invite member"
-      onClose={handleClose}
-      width={480}
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={submitting}
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="invite-form"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            disabled={!emailValid}
-            data-testid="invite-submit-button"
-            style={{ flex: 1 }}
-          >
-            {submitting ? 'Sending' : 'Send invitation'}
-          </Button>
-        </>
-      }
-    >
-      <form id="invite-form" onSubmit={submit} noValidate data-testid="invite-form">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
-          <Input
+    <Modal open={open} title="Invite member" onClose={handleClose}>
+      <form onSubmit={submit} noValidate data-testid="invite-form">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          <TextInput
             label="Email address"
             type="email"
             placeholder="you@company.com"
             value={email}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setEmail(event.target.value);
               // A server error stops applying the moment the visitor edits the email.
               setBanner(null);
@@ -153,27 +132,27 @@ export function InviteModal({
             onBlur={blurEmail}
             readOnly={submitting}
             data-testid="invite-email-input"
-            aria-invalid={emailError ? true : undefined}
-            aria-describedby={emailError ? 'field-error-email' : undefined}
-            error={emailError ? errorNode('email', emailError) : undefined}
-            style={submitting ? { opacity: 0.55 } : undefined}
-            wrapperStyle={{ gap: 0 }}
+            error={emailError ?? undefined}
+            errorId="field-error-email"
           />
 
           <Select
             label="Role"
             value={role}
-            onChange={(value: string) => setRole(value as Role)}
+            onChange={(option) =>
+              setRole((typeof option === 'string' ? option : (option as { value: string }).value) as Role)
+            }
             options={roleOptions}
-            disabled={submitting}
+            isDisabled={submitting}
+            variant="formik"
             data-testid="invite-role-select"
           />
         </div>
 
         {banner && (
-          <div style={{ marginTop: 'var(--sp-8)' }}>
+          <div style={{ marginTop: 'var(--space-8)' }}>
             <InfoBanner
-              tone="error"
+              variant="error"
               role="alert"
               aria-live="polite"
               data-testid="invite-error-message"
@@ -182,6 +161,23 @@ export function InviteModal({
             </InfoBanner>
           </div>
         )}
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" onClick={handleClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={submitting}
+              disabled={!emailValid || submitting}
+              data-testid="invite-submit-button"
+            >
+              {submitting ? 'Sending' : 'Send invitation'}
+            </Button>
+          </FormActions>
+        </div>
       </form>
     </Modal>
   );

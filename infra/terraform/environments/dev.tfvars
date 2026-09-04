@@ -107,3 +107,10 @@ create_github_oidc_provider = true
 github_allowed_refs = [
   "environment:dev",
 ]
+
+# Hiring keeps CVs on the task's own filesystem and books interviews against the fake
+# calendar: CVs survive only until the task is replaced, and bookings invite nobody. Accepted
+# on this stand until S3 storage and a Graph tenant exist.
+hiring_storage_provider = "fs"
+hiring_storage_fs_root  = "/tmp/cv-storage"
+calendar_provider       = "fake"

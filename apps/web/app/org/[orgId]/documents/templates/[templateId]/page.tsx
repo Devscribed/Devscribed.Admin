@@ -3,7 +3,20 @@
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { TEMPLATE_MESSAGES } from '@devscribed/validation';
-import { Button, Card, InfoBanner, Input, Modal, Select, Spinner, Tabs } from '@/ds';
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  FormActions,
+  InfoBanner,
+  TextArea,
+  TextInput,
+  Modal,
+  Select,
+  Preloader,
+  PageTabs,
+} from '@devscribed/ds';
+import { valueOf } from '@/select';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
 import {
@@ -22,7 +35,7 @@ import { BodyEditor } from '@/documents/BodyEditor';
 import { FieldModal } from '@/documents/FieldModal';
 import { versionOptionLabel, versionSummary } from '@/documents/format';
 import { PreviewModal } from '@/documents/PreviewModal';
-import { ToastProvider, useToast } from '@/documents/toast';
+import { useToast } from '@/toast';
 
 type Tab = 'body' | 'fields' | 'signers';
 type SaveState = 'saved' | 'saving' | 'dirty';
@@ -47,16 +60,12 @@ export default function TemplateEditorPage({
   params: Promise<{ orgId: string; templateId: string }>;
 }) {
   const { orgId, templateId } = use(params);
-  return (
-    <ToastProvider>
-      <EditorScreen orgId={orgId} templateId={templateId} />
-    </ToastProvider>
-  );
+  return <EditorScreen orgId={orgId} templateId={templateId} />;
 }
 
 function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string }) {
   const router = useRouter();
-  const toast = useToast();
+  const { showToast } = useToast();
   const url = templateUrl(orgId, templateId);
 
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
@@ -174,6 +183,12 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
     setRemovedElements([]);
   }, [url]);
 
+  /** Drop the local copy and take the server's. The only way out of the stale dialog. */
+  const reload = useCallback((): void => {
+    setStaleBody(null);
+    void load();
+  }, [load]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -227,11 +242,7 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
         setStaleBody(sentBody);
         return false;
       }
-      toast.show({
-        testId: 'toast-template-error',
-        message: failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast('toast-template-error', failureMessage(result.failure), 'error');
       return false;
     }
 
@@ -254,13 +265,9 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       setSaveState('dirty');
     }
 
-    toast.show({
-      testId: 'toast-template-saved',
-      message: TEMPLATE_MESSAGES.toast.saved,
-      tone: 'success',
-    });
+    showToast('toast-template-saved', TEMPLATE_MESSAGES.toast.saved);
     return true;
-  }, [toast, url]);
+  }, [showToast, url]);
 
   /**
    * Flush the buffer, waiting out whatever is already flushing.
@@ -305,11 +312,11 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
         style={{
           display: 'flex',
           justifyContent: 'center',
-          padding: 'var(--sp-24)',
-          color: 'var(--accent)',
+          padding: 'var(--space-12)',
+          color: 'var(--action-primary)',
         }}
       >
-        <Spinner size={28} />
+        <Preloader size={28} />
       </div>
     );
   }
@@ -352,11 +359,7 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       return;
     }
 
-    toast.show({
-      testId: 'toast-template-published',
-      message: TEMPLATE_MESSAGES.toast.published,
-      tone: 'success',
-    });
+    showToast('toast-template-published', TEMPLATE_MESSAGES.toast.published);
     // The buffer is no longer ahead of the server — publishing flushed it on the way in —
     // so the reload below is allowed to seed from the freshly published version. Without
     // this the editor keeps showing a draft that no longer exists.
@@ -369,18 +372,10 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
     setDeleteBlocked(null);
     const result = await apiRequest(`${url}/archive`, { method: 'POST' });
     if (!result.ok) {
-      toast.show({
-        testId: 'toast-template-error',
-        message: failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast('toast-template-error', failureMessage(result.failure), 'error');
       return;
     }
-    toast.show({
-      testId: 'toast-template-archived',
-      message: TEMPLATE_MESSAGES.toast.archived,
-      tone: 'success',
-    });
+    showToast('toast-template-archived', TEMPLATE_MESSAGES.toast.archived);
     // Archiving freezes the template; whatever was in the buffer is moot.
     revision.current = 0;
     await load();
@@ -393,18 +388,10 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
         setDeleteBlocked(result.failure.envelopeCount ?? 0);
         return;
       }
-      toast.show({
-        testId: 'toast-template-error',
-        message: failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast('toast-template-error', failureMessage(result.failure), 'error');
       return;
     }
-    toast.show({
-      testId: 'toast-template-deleted',
-      message: TEMPLATE_MESSAGES.toast.deleted,
-      tone: 'success',
-    });
+    showToast('toast-template-deleted', TEMPLATE_MESSAGES.toast.deleted);
     router.push(`/org/${orgId}/documents/templates`);
   }
 
@@ -425,11 +412,7 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       ),
     });
     if (!result.ok) {
-      toast.show({
-        testId: 'toast-template-error',
-        message: failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast('toast-template-error', failureMessage(result.failure), 'error');
       return;
     }
     setPreviewHtml(result.data.html);
@@ -499,10 +482,10 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
         title={detail.name}
         subtitle={detail.description ?? undefined}
         action={
-          <div style={{ display: 'flex', gap: 'var(--sp-5)', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center' }}>
             <span
               data-testid="template-save-state"
-              style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+              style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
             >
               {SAVE_LABEL[saveState]}
             </span>
@@ -521,19 +504,18 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
                   value: version.id,
                   label: versionOptionLabel(version),
                 }))}
-                onChange={(versionId: string) => void preview(versionId)}
+                onChange={(option) => void preview(valueOf(option))}
                 data-testid="template-version-picker"
                 wrapperStyle={{ minWidth: 210 }}
                 // Sized down to the header's button row rather than the form default.
-                style={{ height: 'var(--field-h-sm)', fontSize: 'var(--fs-14)' }}
+                style={{ height: 'var(--control-height)', fontSize: 'var(--font-size-s)' }}
               />
             )}
-            <Button variant="secondary" data-testid="template-preview-btn" onClick={() => void preview()}>
+            <Button data-testid="template-preview-btn" onClick={() => void preview()}>
               Preview
             </Button>
             {canManage && !archived && (
               <Button
-                variant="secondary"
                 data-testid="template-archive-btn"
                 onClick={() => setArchiveOpen(true)}
               >
@@ -553,7 +535,7 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
               </Button>
             )}
             {canManage && (
-              <Button variant="danger" data-testid="template-delete-btn" onClick={() => void remove()}>
+              <Button variant="delete" data-testid="template-delete-btn" onClick={() => void remove()}>
                 Delete
               </Button>
             )}
@@ -564,34 +546,33 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       <div
         data-testid="template-version-summary"
         style={{
-          marginTop: 'calc(-1 * var(--sp-6))',
-          marginBottom: 'var(--sp-8)',
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text-muted)',
+          marginTop: 'calc(-1 * var(--space-5))',
+          marginBottom: 'var(--space-6)',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-secondary)',
         }}
       >
         {versionSummary(publishedVersion, draftVersion)}
       </div>
 
       {archived && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
-          <InfoBanner tone="warning">{TEMPLATE_MESSAGES.generic.archived}</InfoBanner>
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <InfoBanner variant="warning">{TEMPLATE_MESSAGES.generic.archived}</InfoBanner>
         </div>
       )}
 
       {removedElements.length > 0 && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
-          <InfoBanner tone="warning">
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <InfoBanner variant="warning">
             {TEMPLATE_MESSAGES.body.sanitizerRemoved(removedElements)}
           </InfoBanner>
         </div>
       )}
 
       {uniqueLines.length > 0 && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
-          <InfoBanner tone="warning" data-testid="template-validation-banner">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <InfoBanner variant="warning" data-testid="template-validation-banner">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               {uniqueLines.map((line) => (
                 <span key={line}>{line}</span>
               ))}
@@ -634,31 +615,28 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       )}
 
       <div data-testid="template-tabs">
-        <Tabs
-          items={[
-            { value: 'body', label: <span data-testid="template-tab-body">Body</span> },
-            { value: 'fields', label: <span data-testid="template-tab-fields">Fields</span> },
-            { value: 'signers', label: <span data-testid="template-tab-signers">Signers</span> },
+        <PageTabs
+          tabs={[
+            { value: 'body', label: 'Body', testId: 'template-tab-body' },
+            { value: 'fields', label: 'Fields', testId: 'template-tab-fields' },
+            { value: 'signers', label: 'Signers', testId: 'template-tab-signers' },
           ]}
-          value={tab}
+          active={tab}
           onChange={(next) => changeTab(next as Tab)}
-          style={{ marginBottom: 'var(--sp-10)' }}
+          style={{ marginBottom: 'var(--space-7)' }}
         />
       </div>
 
       {tab === 'body' && (
         <>
           {publishedNoDraft && !editUnlocked && canEdit && (
-            <div style={{ marginBottom: 'var(--sp-6)' }}>
-              <InfoBanner
-                tone="info"
-                icon={null}
-                // Editing a published template is a version-creating act, so it asks
-                // first rather than silently spawning draft v{n+1} on a stray keystroke.
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-6)' }}>
+            <div style={{ marginBottom: 'var(--space-5)' }}>
+              {/* Editing a published template is a version-creating act, so it asks
+                  first rather than silently spawning draft v{n+1} on a stray keystroke. */}
+              <InfoBanner variant="info">
+                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
                   This version is published and read-only. Editing starts a new draft.
-                  <Button variant="secondary" size="sm" onClick={() => setEditUnlocked(true)}>
+                  <Button onClick={() => setEditUnlocked(true)}>
                     Edit
                   </Button>
                 </span>
@@ -676,8 +654,6 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
           action={
             canEdit ? (
               <Button
-                variant="secondary"
-                size="sm"
                 data-testid="template-field-add-btn"
                 onClick={() => setFieldModal({ initial: null })}
               >
@@ -690,10 +666,10 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
             {fields.length === 0 && (
               <div
                 style={{
-                  padding: 'var(--sp-16)',
+                  padding: 'var(--space-10)',
                   textAlign: 'center',
-                  color: 'var(--text-muted)',
-                  fontSize: 'var(--fs-14)',
+                  color: 'var(--text-secondary)',
+                  fontSize: 'var(--font-size-s)',
                 }}
               >
                 No fields yet. Every {'{{placeholder}}'} in the body needs one.
@@ -708,22 +684,22 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 'var(--sp-6)',
-                  padding: 'var(--sp-7) var(--sp-10)',
-                  borderTop: '1px solid var(--divider)',
+                  gap: 'var(--space-5)',
+                  padding: 'var(--space-7) var(--space-7)',
+                  borderTop: '1px solid var(--border-subtle)',
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 'var(--fs-14)',
-                      color: 'var(--text)',
+                      fontFamily: 'var(--font-family-mono)',
+                      fontSize: 'var(--font-size-s)',
+                      color: 'var(--text-primary)',
                     }}
                   >
                     {`{{${field.key}}}`}
                   </div>
-                  <div style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
                     {field.label} · {field.type}
                     {field.required ? ' · Required' : ''} · Filled by:{' '}
                     {field.filledBy === 'sender' ? 'Sender' : field.filledBy.replace('signer:', '')} ·
@@ -732,31 +708,25 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
                 </div>
 
                 {canEdit && (
-                  <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
                     <Button
-                      variant="ghost"
-                      size="sm"
                       aria-label={`Move ${field.key} up`}
                       onClick={() => moveField(index, -1)}
                     >
                       ↑
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="sm"
                       aria-label={`Move ${field.key} down`}
                       onClick={() => moveField(index, 1)}
                     >
                       ↓
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="sm"
                       onClick={() => setFieldModal({ initial: field })}
                     >
                       Edit
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => removeField(field.key)}>
+                    <Button onClick={() => removeField(field.key)}>
                       Remove
                     </Button>
                   </div>
@@ -769,24 +739,23 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
 
       {tab === 'signers' && (
         <Card title="Signer roles">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
             {signers.map((signer, index) => (
               <div
                 key={index}
                 data-testid={`template-signer-row-${index + 1}`}
-                style={{ display: 'flex', gap: 'var(--sp-6)', alignItems: 'flex-end' }}
+                style={{ display: 'flex', gap: 'var(--space-5)', alignItems: 'flex-end' }}
               >
                 <span
                   style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 'var(--fs-15)',
-                    color: 'var(--text-muted)',
-                    paddingBottom: 'var(--sp-6)',
+                    fontSize: 'var(--font-size-base)',
+                    color: 'var(--text-secondary)',
+                    paddingBottom: 'var(--space-5)',
                   }}
                 >
                   {index + 1}.
                 </span>
-                <Input
+                <TextInput
                   label="Key"
                   value={signer.key}
                   placeholder={index === 0 ? 'company' : 'contractor'}
@@ -795,7 +764,7 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
                   onChange={(event) => editSigner(index, { key: event.target.value })}
                   wrapperStyle={{ flex: 1 }}
                 />
-                <Input
+                <TextInput
                   label="Label"
                   value={signer.label}
                   placeholder={index === 0 ? 'Company' : 'Contractor'}
@@ -807,7 +776,7 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
               </div>
             ))}
           </div>
-          <p style={{ marginBottom: 0, fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+          <p style={{ marginBottom: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
             Exactly two signer roles are required. Their order is the default signing order; it can
             be changed per envelope.
           </p>
@@ -827,84 +796,59 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
         />
       )}
 
-      <Modal
+      {/* A question and two answers is `ConfirmDialog` (§40), not a `Modal` with a
+          paragraph in it. `archive()` closes whichever one is open as its first act. */}
+      <ConfirmDialog
         open={archiveOpen}
         title="Archive template"
+        description="Archiving cannot be undone. No new documents can be created from this template; documents already sent keep working."
+        declineBtnText="Cancel"
+        acceptBtnText="Archive"
         onClose={() => setArchiveOpen(false)}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setArchiveOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={() => void archive()}>
-              Archive
-            </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          Archiving cannot be undone. No new documents can be created from this template; documents
-          already sent keep working.
-        </p>
-      </Modal>
+        onAccept={() => void archive()}
+      />
 
-      <Modal
+      <ConfirmDialog
         open={deleteBlocked !== null}
         title="Template in use"
+        description={TEMPLATE_MESSAGES.generic.deleteBlocked(deleteBlocked ?? 0)}
+        declineBtnText="Close"
+        acceptBtnText="Archive"
         onClose={() => setDeleteBlocked(null)}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setDeleteBlocked(null)}>
-              Close
-            </Button>
-            <Button variant="danger" onClick={() => void archive()}>
-              Archive
-            </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          {TEMPLATE_MESSAGES.generic.deleteBlocked(deleteBlocked ?? 0)}
-        </p>
-      </Modal>
+        onAccept={() => void archive()}
+      />
 
       {/* Reload is destructive to unsaved work, so the local body is offered for copying
           before the server's version replaces it. */}
+      {/* Reload is the only way out — there is nothing to go back to — so `Escape` and the
+          button do the same thing rather than `Escape` doing nothing. */}
       <Modal
         open={staleBody !== null}
         title="Changed by someone else"
-        width={640}
-        actions={
-          <Button
-            variant="primary"
-            onClick={() => {
-              setStaleBody(null);
-              void load();
-            }}
-          >
-            Reload
-          </Button>
-        }
+        onClose={reload}
+        style={{ width: 640 }}
       >
-        <p style={{ marginTop: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
+        <p style={{ marginTop: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
           {TEMPLATE_MESSAGES.generic.stale}
         </p>
-        <textarea
+        <TextArea
           readOnly
           value={staleBody ?? ''}
-          aria-label="Your unsaved body"
+          label="Your unsaved body"
           style={{
-            width: '100%',
             minHeight: 200,
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 'var(--sp-6)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--fs-13)',
-            background: 'var(--bg-sunken)',
-            color: 'var(--text)',
+            fontFamily: 'var(--font-family-mono)',
+            background: 'var(--surface-sunken)',
           }}
         />
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button variant="primary" onClick={reload}>
+              Reload
+            </Button>
+          </FormActions>
+        </div>
       </Modal>
 
       <PreviewModal
@@ -926,11 +870,11 @@ function BannerKey({ label, onSelect }: { label: string; onSelect: () => void })
         border: 'none',
         background: 'transparent',
         padding: 0,
-        marginRight: 'var(--sp-3)',
+        marginRight: 'var(--space-2)',
         cursor: 'pointer',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 'var(--fs-13)',
-        color: 'var(--accent)',
+        fontFamily: 'var(--font-family-mono)',
+        fontSize: 'var(--font-size-s)',
+        color: 'var(--action-primary)',
         textDecoration: 'underline',
       }}
     >

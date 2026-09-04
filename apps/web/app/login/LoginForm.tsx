@@ -3,10 +3,9 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { Button, Eye, EyeOff, IconButton, InfoBanner, Input } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, Eye, EyeOff, IconButton, InfoBanner, TextInput } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import {
-  AUTH_MESSAGES,
   LOGIN_FIELD_ORDER,
   MESSAGES,
   validateEmail,
@@ -30,12 +29,30 @@ const LABELS: Record<LoginField, string> = { email: 'Email', password: 'Password
 const VALIDATORS = { email: validateEmail, password: validatePasswordPresent };
 
 /**
- * Deactivation is a state, not a typo — amber says "retrying will not help", where red
- * would invite the visitor to keep guessing. The wording carries the meaning on its
- * own; the tone only reinforces it.
+ * Where to land after signing in.
+ *
+ * `?next` is set by the app shell when a signed-out visitor opened a deep link — the
+ * calendar invite's link to a candidate card is the one that matters (hiring 04 §01.5).
+ * It is honoured only when it addresses this account's own organization, which makes it
+ * same-origin by construction and refuses `//evil.example` and another organization's
+ * route in the same test. Anything else lands on the default screen rather than
+ * erroring: a stale link is not worth a failed sign-in.
+ *
+ * Read from `window` at submit time rather than through `useSearchParams`, which would
+ * opt this route out of the static shell for a value only ever needed on the client.
+ *
+ * A usable `?next` is answered without asking `/api/me` which screen the principal
+ * lands on: the deep link is the answer, and the request would be spent on a value
+ * nothing then reads.
  */
-const toneFor = (message: string) =>
-  message === AUTH_MESSAGES.deactivated ? ('warning' as const) : ('error' as const);
+async function destination(organizationId: string): Promise<string> {
+  if (typeof window !== 'undefined') {
+    const next = new URLSearchParams(window.location.search).get('next');
+    if (next?.startsWith(`/org/${organizationId}/`)) return next;
+  }
+
+  return `/org/${organizationId}/${await landingFor(organizationId)}`;
+}
 
 /**
  * Which screen the signed-in principal lands on. A client contact is refused the members
@@ -111,7 +128,7 @@ export function LoginForm() {
         // The session cookie is httpOnly, so the organization has to come back in the
         // body for the client to know which /org/{id}/… route to land on.
         const { organizationId } = await response.json();
-        router.push(`/org/${organizationId}/${await landingFor(organizationId)}`);
+        router.push(await destination(organizationId));
         router.refresh();
         return;
       }
@@ -132,6 +149,8 @@ export function LoginForm() {
     const message = errors[field];
     return {
       label: LABELS[field],
+      id: TEST_IDS[field],
+      name: field,
       value: values[field],
       onChange: change(field),
       onBlur: blur(field),
@@ -139,18 +158,24 @@ export function LoginForm() {
       'data-testid': TEST_IDS[field],
       'aria-invalid': message ? true : undefined,
       'aria-describedby': message ? `field-error-${field}` : undefined,
-      error: message ? errorNode(field, message) : undefined,
+      error: message,
+      errorId: `field-error-${field}`,
       style: submitting ? { opacity: 0.55 } : undefined,
-      wrapperStyle: { gap: 0 },
     };
   };
 
   return (
     <form onSubmit={submit} noValidate data-testid="login-form">
       {banner && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          {/*
+            A deactivated account used to get its own amber tone, on the reasoning that amber
+            says "retrying will not help" where red invites another guess. The system paints one
+            banner for anything that went wrong, and the tone was only ever reinforcement —
+            the wording carries the meaning on its own, as the note that introduced it said.
+          */}
           <InfoBanner
-            tone={toneFor(banner)}
+            variant="error"
             role="alert"
             aria-live="polite"
             data-testid="login-error-message"
@@ -160,11 +185,16 @@ export function LoginForm() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
+      {/*
+        20px is the system's own form rhythm, and it is what the error slot needs: TextInput pins the
+        message 16px under the field rather than pushing the field below it, so anything under a
+        field has to leave that much room. 14px, which is what this gap used to be, does not.
+      */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
         {LOGIN_FIELD_ORDER.map((field) =>
           field === 'password' ? (
             <div key={field}>
-              <Input
+              <TextInput
                 {...fieldProps(field)}
                 type={revealPassword ? 'text' : 'password'}
                 trailing={
@@ -172,6 +202,7 @@ export function LoginForm() {
                     label={revealPassword ? 'Hide password' : 'Show password'}
                     aria-pressed={revealPassword}
                     active={revealPassword}
+                    size={28}
                     data-testid="login-password-toggle"
                     // Keeps focus in the field: the toggle never steals the caret.
                     onMouseDown={(event) => event.preventDefault()}
@@ -181,18 +212,15 @@ export function LoginForm() {
                   </IconButton>
                 }
               />
-              <div style={{ marginTop: 'var(--sp-2)', fontSize: 'var(--fs-13)' }}>
-                <Link
-                  href="/forgot-password"
-                  data-testid="login-forgot-link"
-                  style={{ textDecoration: 'none' }}
-                >
+              {/* clears the error slot exactly — see the gap note above. */}
+              <div style={{ marginTop: 'var(--space-6)', fontSize: 'var(--font-size-s)' }}>
+                <Link href="/forgot-password" data-testid="login-forgot-link">
                   Forgot password?
                 </Link>
               </div>
             </div>
           ) : (
-            <Input key={field} {...fieldProps(field)} type="email" placeholder="you@company.com" />
+            <TextInput key={field} {...fieldProps(field)} type="email" placeholder="you@company.com" />
           ),
         )}
       </div>
@@ -200,10 +228,9 @@ export function LoginForm() {
       <Button
         type="submit"
         variant="primary"
-        size="lg"
-        loading={submitting}
+        preloader={submitting}
         data-testid="login-submit-button"
-        style={{ width: '100%', marginTop: 'var(--sp-10)' }}
+        style={{ width: '100%', marginTop: 'var(--space-7)' }}
       >
         {submitting ? 'Signing in' : 'Sign in'}
       </Button>

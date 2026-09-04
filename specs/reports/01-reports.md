@@ -66,8 +66,10 @@ The **Reports** sidebar group renders when the caller holds any of the eight `Vi
 
 ### Query shape (shared)
 
-1. Every report endpoint accepts the same query envelope. Common params: `startDate` (ISO date, required), `endDate` (ISO date, required, ≥ `startDate`), `memberIds[]` (optional; only accepted on All variants), `projectIds[]` (optional), `clientIds[]` (optional), `sumDateRanges` (boolean, default `false`), `detailedReports` (boolean, default `false`). Time & Activity additionally accepts `columns[]` (see §Column permission filter).
-2. `startDate` and `endDate` are interpreted in the caller's `Account.timezone`. `endDate` is inclusive — its end-of-day in that timezone becomes the upper UTC boundary.
+1. Every report endpoint accepts the same query envelope. Common params: `startDate` (ISO date, required), `endDate` (ISO date, required, ≥ `startDate`), `memberIds[]` (optional; only accepted on All variants), `projectIds[]` (optional), `clientIds[]` (optional), `sumDateRanges` (boolean, default `false`), `detailedReports` (boolean, default `false`). Per-report additional params:
+    - **Time & Activity** accepts `columns[]` (see §Column permission filter) and `billable` — one of `all` (default), `billable`, `non-billable` — a row-level filter that drops entries not matching the flag before aggregation.
+    - **Time Off** accepts `type` — one of `all` (default), `vacation`, `holiday` — filters which synthetic-row kinds appear; and `status` — one of `all` (default), `approved`, `pending`, `rejected`, `cancelled` — filters `VacationRequest` rows by lifecycle state (holidays are unaffected by `status`).
+2. `startDate` and `endDate` are interpreted in the caller's `Account.timezone`. `endDate` is inclusive. **v1 filter shape:** every time-carrying column reports reads today (`TimeEntry.date`, `VacationRequest.startDate`/`endDate`, `Holiday.date`, `MemberFinancialsSnapshot.effectiveFrom`) is Postgres `DATE` — a calendar day with no time-of-day component. The service therefore filters directly by the calendar day in the caller's timezone: `date >= startDate AND date <= endDate` (raw ISO date), never by a tz-shifted UTC-instant boundary. A `DATE` column compared against a `TIMESTAMPTZ` is silently cast to `DATE` by Postgres and truncates the time, which turns a Warsaw "end of `2026-08-31`" (`2026-08-31T22:00Z`) into `2026-08-31` and excludes entries dated that day — so the tz-shifted boundary is not just unnecessary here, it is wrong. When a future spec introduces a timestamp-typed column (e.g. real per-minute entries), the range validator's `startUtc` / `endUtcExclusive` helpers already return the tz-shifted UTC boundaries; the shifted form is used *then*, on those columns.
 3. The range cannot exceed **370 days** (roughly one year plus a week for cross-year queries). Longer ranges return 422 `range_too_wide`.
 4. On My variants, `memberIds[]` is ignored and forcibly overwritten with `[session.membershipId]`.
 
@@ -79,8 +81,8 @@ The **Reports** sidebar group renders when the caller holds any of the eight `Vi
 
 ### Column permission filter (Time & Activity only)
 
-8. Time & Activity supports these columns: `Project`, `Time`, `Member`, `Client`, `Billable Time`, `Non-Billable Time`, `Billed Amount`, `Spent`, `Notes`.
-9. `Project`, `Time`, and `Member` are **always-shown defaults** (spec parity with Teammerly's Permissions 516-524 model — the caller cannot deselect them from the request and cannot filter them out from the response).
+8. Time & Activity supports these columns, emitted in this order in the response `headers`: `Project`, `Member`, `Time`, `Client`, `Billable Time`, `Non-Billable Time`, `Billed Amount`, `Spent`, `Notes`.
+9. `Project`, `Member`, and `Time` are **always-shown defaults** (spec parity with Teammerly's Permissions 516-524 model — the caller cannot deselect them from the request and cannot filter them out from the response). Rendered order is Project → Member → Time so the "who did what on which project, and how much" reads left-to-right without jumping; the group band already carries the project name, and repeating it on every row keeps the response usable as a flat CSV export where the group structure is lost.
 10. `Billed Amount` requires `ViewTimeAndActivityBilled`. `Spent` requires `ViewTimeAndActivitySpent`. Other optional columns require only the base `View*` capability.
 11. The server takes the caller's requested `columns[]`, intersects with the caller's granted column capabilities, unions with the always-shown defaults, and returns exactly that projection. Denied columns are dropped from the response — they are never `null`-blanked, they simply do not appear on the payload.
 
@@ -112,12 +114,12 @@ The **Reports** sidebar group renders when the caller holds any of the eight `Vi
 
 ### Aggregation branches — Amounts Owed & Time & Activity
 
-The `(sumDateRanges, detailedReports)` matrix produces four output shapes; each report reproduces Teammerly's branches:
+The `(sumDateRanges, detailedReports)` matrix produces four output shapes. Groups are keyed by **date** in both reports (Amounts Owed rows are `(member, activity)`; T&A rows are `(project, member)`) — the day is the primary axis a finance reader scans down, and putting date in the group band lets the same visual pattern (a date-labelled band + a table of rows underneath it) serve both reports. Reproduces Teammerly's four branches:
 
-26. `sumDateRanges = false, detailedReports = false` — **default**. Groups are per-day; per-member totals only.
-27. `sumDateRanges = false, detailedReports = true` — Groups are per-day; per-member `details` bucketed by activity (project name, or `"Holiday · X"`, or `"Vacation (approved)"`).
-28. `sumDateRanges = true, detailedReports = false` — One group covering the whole range; per-member totals only.
-29. `sumDateRanges = true, detailedReports = true` — One group covering the whole range; per-member `details` bucketed by activity.
+26. `sumDateRanges = false, detailedReports = false` — **default**. Groups are per-day; totals only per row.
+27. `sumDateRanges = false, detailedReports = true` — Groups are per-day; each row carries a `details` array bucketed by activity (Amounts Owed: `"Holiday · X"`/`"Vacation (approved)"`/project name; T&A: task name from the entry).
+28. `sumDateRanges = true, detailedReports = false` — One group covering the whole range; totals only per row.
+29. `sumDateRanges = true, detailedReports = true` — One group covering the whole range; each row carries a `details` array with per-day breakdown.
 
 ### Empty-row filtering
 
@@ -135,7 +137,10 @@ The `(sumDateRanges, detailedReports)` matrix produces four output shapes; each 
 
 33. PDF endpoints render the same aggregation output through an HTML template (server-side React → static markup in `apps/api/src/reports/pdf/`) that calls the existing `PdfRenderer.render(html)` port (`apps/api/src/pdf/`).
 34. Page format: A4 landscape, margins `20mm` top/bottom, `15mm` sides. The template repeats the header on every page and shows a footer with `"Page {n} of {m}"` and the generated-at timestamp in the caller's tz.
-35. Filename: `{OrgName}_{ReportType}_{startYYYY-MM-DD}_to_{endYYYY-MM-DD}.pdf`. Non-ASCII and filesystem-hostile characters in `OrgName` are replaced by `_`. Length is clamped to 200 characters.
+35. Filename shape, driven by the range:
+    - **Multi-day range:** `{Report Display Name} {startYYYY-MM-DD}_to_{endYYYY-MM-DD}.pdf` — e.g. `Amounts Owed 2026-08-01_to_2026-08-31.pdf`.
+    - **Single-day range (`startDate == endDate`):** `{Report Display Name} {YYYY-MM-DD}.pdf` — e.g. `Amounts Owed 2026-09-02.pdf`.
+    `Report Display Name` is the human-facing report name (`Amounts Owed`, `Time & Activity`, `Time Off`), not a CamelCase code. Filesystem-hostile characters (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, control chars) in the display name are replaced by `-`; runs of whitespace collapse to one space; length is clamped to 200 characters (dates always survive; the name is truncated if needed). **The organization name is NOT in the filename** — the person saving is already inside their organization; adding the org to every file is noise. If a future spec introduces cross-org sharing, the PDF's *header* (not filename) is where the org gets named.
 36. `Content-Type: application/pdf`, `Content-Disposition: attachment; filename="…"`, `Cache-Control: private, no-store`.
 37. PDFs run synchronously inside the request. Ranges producing more than **3,000 rows** return 422 `range_too_large_for_pdf` and prompt the user to narrow the filters or the range. This is a v1 backpressure; a future spec (§Known Gaps) adds async queueing.
 
@@ -172,6 +177,9 @@ Each endpoint accepts:
 &sumDateRanges=false
 &detailedReports=false
 &columns=Client&columns=Billable+Time  (Time & Activity only)
+&billable=billable                     (Time & Activity only; all|billable|non-billable, default all)
+&type=vacation                         (Time Off only; all|vacation|holiday, default all)
+&status=approved                       (Time Off only; all|approved|pending|rejected|cancelled, default all)
 ```
 
 ### `GET /api/organizations/{orgId}/reports/amounts-owed`
@@ -222,9 +230,10 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
 ```json
 {
   "headers": [
+    { "title": "Project",        "value": "project" },
     { "title": "Member",         "value": "member" },
-    { "title": "Client",         "value": "client" },
     { "title": "Time",           "value": "time" },
+    { "title": "Client",         "value": "client" },
     { "title": "Billable Time",  "value": "billableTime" },
     { "title": "Non-Billable",   "value": "nonBillableTime" },
     { "title": "Billed Amount",  "value": "billedAmount" },
@@ -232,12 +241,12 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
   ],
   "groups": [
     {
-      "id": "prj_website",
-      "title": "Website Redesign · Acme Corp",
+      "id": "2026-08-03",
+      "title": "Aug 3, 2026",
       "rows": [
-        { "member": "Alex Kaminski", "client": "Acme Corp", "time": "84.00", "billableTime": "80.00", "nonBillableTime": "4.00", "billedAmount": "4000.00", "notes": "Design review, QA fixes, client demo" }
+        { "project": "Website Redesign", "member": "Alex Kaminski", "time": "8.00", "client": "Acme Corp", "billableTime": "8.00", "nonBillableTime": "0.00", "billedAmount": "400.00", "notes": "Design review" }
       ],
-      "total": { "time": "242.50", "billableTime": "232.50", "nonBillableTime": "10.00", "billedAmount": "12125.00" }
+      "total": { "time": "8.00", "billableTime": "8.00", "nonBillableTime": "0.00", "billedAmount": "400.00" }
     }
   ],
   "summary": [
@@ -251,6 +260,8 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
 ```
 
 `Spent` column is added when `ViewTimeAndActivitySpent` is granted; it is omitted from `headers` and every `row` and `total` when not.
+
+**Row filter — `billable`:** default `all` returns every entry (subject to other filters). `billable` drops rows sourced from `TimeEntry.billable = false`; the `Non-Billable Time` column then reads `0` for every row. `non-billable` drops rows sourced from `TimeEntry.billable = true`; the `Billed Amount` and `Billable Time` columns then read `0`. In every mode, both columns still appear in `headers` — the filter narrows the data, not the schema.
 
 ### `GET /api/organizations/{orgId}/reports/time-off` / `/my` / `/pdf` / `/pdf/my`
 
@@ -292,6 +303,10 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
 }
 ```
 
+**Row filter — `type`:** default `all` includes both vacation groups (per-member) and the `organization_wide` holiday group. `vacation` drops the `organization_wide` group and every holiday-kind row. `holiday` drops every vacation-kind row and returns only the `organization_wide` group.
+
+**Row filter — `status`:** default `all` includes every `VacationRequest` in the range regardless of lifecycle. Setting it to `approved` (finance's default), `pending`, `rejected`, or `cancelled` narrows vacation rows to that status; the `organization_wide` holiday group is unaffected. On the `/my` variant, `pending` still shows the caller's own pending requests. On `/pdf`, the filter is stored in the response's meta and rendered in the PDF header (`"Status: Approved only"`).
+
 ## Validation Rules
 
 1. `startDate` required and a valid ISO date — "Start date is required." / "Invalid start date."
@@ -303,6 +318,9 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
 7. `columns[]` items must be from the supported set — silently dropped if unknown (not an error, since the client and server versions of the column list may drift on the always-shown defaults).
 8. `sumDateRanges` and `detailedReports` must be booleans (`"true"`/`"false"` also accepted).
 9. PDF row-count budget exceeded — 422 "This report is too large to export as PDF. Please narrow the range or filters." (`range_too_large_for_pdf`)
+10. `billable` must be one of `all`, `billable`, `non-billable` — "Invalid billable filter." (422; Time & Activity only). Unknown values return 422; missing defaults to `all`.
+11. `type` must be one of `all`, `vacation`, `holiday` — "Invalid type filter." (422; Time Off only). Defaults to `all`.
+12. `status` must be one of `all`, `approved`, `pending`, `rejected`, `cancelled` — "Invalid status filter." (422; Time Off only). Defaults to `all`.
 
 ## Error Messages
 
@@ -396,7 +414,22 @@ The report's owner scope is chosen via the segmented control on the page. The UR
 
 ### Sidebar integration
 
-New **REPORTS** section with parent row **Reports** and three sub-rows: **Amounts Owed**, **Time & Activity**, **Time Off**. Each sub-row is capability-gated. The parent row is `active` when the current path is `/org/{orgId}/reports` or its child; each sub-row is `active` on its own path.
+New **REPORTS** section with **one entry only** — a top-level **Reports** row that leads to `/org/{orgId}/reports`. The three reports (Amounts Owed, Time & Activity, Time Off) are not sub-rows on the sidebar; they are **cards on the landing page** — templates the caller picks from once they are already in the Reports area. The sidebar entry appears when the caller holds any of the eight `View*` capabilities; when they hold none, the whole group drops out. The row is `active` when the current path is `/org/{orgId}/reports` or any of its children.
+
+> **Amended by the design-system merge, ruling E4.** Reports **is** a collapsible group with
+> four sub-rows — *Time & activity*, *Amounts owed*, *Time offs* and *All reports* — because
+> the design system's default `Sidebar` names that group and those rows, and E4 gives the
+> system the grouping wherever it named one. `nav-reports` is unchanged in meaning and still
+> addresses the landing page; it is now the group's **All reports** row rather than the group's
+> own row, so a test that clicks it opens the group first (`clickNav(page, 'Reports', …)`).
+> Each sub-row carries its own capability, so a caller holding one `View*` sees one report row
+> plus *All reports* — the paragraph below about "one entry" and its rationale are superseded
+> to that extent, and the landing cards are unaffected: they still exist and are still what
+> the three cases here click.
+
+**Position:** the REPORTS group sits **between PROJECTS and DOCUMENTS**. Reports read the work Projects produce, and are checked more often than either Documents or Settings; keeping them one click from the daily project surface matches how finance uses them.
+
+Rationale: three sibling report screens are a small enough set to render on one page, and once on that landing the cards give more context (icon, description, "who sees it") than a nav row ever could — the two-tier "parent + three subs" that spec parity products use is repetition of information the landing already carries. A future spec can revisit this if the reports area grows past a single screen's worth of templates.
 
 ### States
 
@@ -430,10 +463,7 @@ New **REPORTS** section with parent row **Reports** and three sub-rows: **Amount
 
 ### Sidebar
 
-- `nav-reports`
-- `nav-reports-amounts-owed`
-- `nav-reports-time-and-activity`
-- `nav-reports-time-off`
+- `nav-reports` — the sole Reports entry in the sidebar (§Sidebar integration).
 
 ### Landing
 
@@ -451,6 +481,9 @@ New **REPORTS** section with parent row **Reports** and three sub-rows: **Amount
 - `reports-filter-range`, `reports-filter-range-input`
 - `reports-filter-members`, `reports-filter-projects`, `reports-filter-clients`
 - `reports-filter-columns`, `reports-filter-columns-item-{key}` — where `{key}` is the header value
+- `reports-filter-billable` (Time & Activity only) — dropdown, values `all` / `billable` / `non-billable`
+- `reports-filter-type` (Time Off only) — dropdown, values `all` / `vacation` / `holiday`
+- `reports-filter-status` (Time Off only) — dropdown, values `all` / `approved` / `pending` / `rejected` / `cancelled`
 - `reports-filter-sum-toggle`, `reports-filter-detailed-toggle`
 - `reports-filter-range-error`, `reports-filter-generic-error`
 
@@ -588,7 +621,7 @@ New **REPORTS** section with parent row **Reports** and three sub-rows: **Amount
 - **TC-01-INT-25: Cross-org member id in `memberIds[]`.** Silently dropped; response contains only in-org rows.
 - **TC-01-INT-26: `meta.currencyCode` is always USD.** Every report response — regardless of members' `MemberFinancials.currency` — returns `meta.currencyCode = "USD"`. The field is hardcoded in v1 as a forward-compatibility hook for the future currency spec.
 - **TC-01-INT-27: Vacation math untouched.** Run the Amounts Owed report; separately re-run vacation approval on the same request; the `deductionAmount` remains the frozen value.
-- **TC-01-INT-28: Timezone — end of day.** Caller in Europe/Warsaw asks for `endDate=2026-08-31`. Entries at 2026-08-31 23:00 UTC in Warsaw = 2026-09-01 01:00 are excluded; entries at 2026-08-31 21:00 UTC = 2026-08-31 23:00 Warsaw are included.
+- **TC-01-INT-28: Timezone — last-day inclusion.** Caller in Europe/Warsaw asks for `endDate=2026-08-31`. An entry dated `2026-08-31` is included in the response; an entry dated `2026-09-01` is not — matching the v1 calendar-day filter (§Query shape, req 2). The intra-day tz-boundary sub-case (an entry at 2026-08-31 23:00 UTC vs 2026-08-31 21:00 UTC) does not apply while every time-carrying column is `@db.Date`; a future spec introducing per-minute entries brings that case back with a new integration test on the tz-shifted UTC bounds `validateReportRange` already exposes.
 - **TC-01-INT-29: PDF endpoint — happy.** GET returns `application/pdf` with `Content-Disposition` and non-trivial body length.
 - **TC-01-INT-30: PDF row-count backpressure.** Seed > 3000 rows; PDF endpoint returns 422 `range_too_large_for_pdf`.
 - **TC-01-INT-31: PDF filename — clean org name.** Filename matches the sanitizer test.
@@ -596,6 +629,10 @@ New **REPORTS** section with parent row **Reports** and three sub-rows: **Amount
 - **TC-01-INT-33: Session revocation — 401.** Rotate `securityStamp` mid-cycle; PDF endpoint returns 401.
 - **TC-01-INT-34: OrgScope guard — 404.** Cross-org PDF request returns 404.
 - **TC-01-INT-35: `ExportReports` guard — 403.** User without `ExportReports` calling `/pdf` returns 403.
+- **TC-01-INT-36: Time Off `type` filter.** Seed 3 approved vacations + 2 global holidays in the range. GET `time-off?type=vacation` returns only the vacation groups (no `organization_wide` group). GET `?type=holiday` returns only the `organization_wide` group. GET `?type=all` (default) returns both. GET `?type=weekend` returns 422 `Invalid type filter.`
+- **TC-01-INT-37: Time Off `status` filter.** Seed 2 approved, 1 pending, 1 cancelled vacation in the range. GET `time-off?status=approved` returns only the 2 approved rows. GET `?status=pending` returns the 1 pending row. GET `?status=all` returns all 4. The `organization_wide` holiday group is present in every case (unaffected by `status`).
+- **TC-01-INT-38: Time & Activity `billable` filter.** Seed 40h billable + 8h non-billable for one member in the range. GET `time-and-activity?billable=all` returns rows summing to `time: 48.00, billableTime: 40.00, nonBillableTime: 8.00, billedAmount: 40 × rate`. GET `?billable=billable` returns rows where `time: 40.00, billableTime: 40.00, nonBillableTime: 0.00, billedAmount: 40 × rate`. GET `?billable=non-billable` returns rows where `time: 8.00, billableTime: 0.00, nonBillableTime: 8.00, billedAmount: 0.00`. GET `?billable=maybe` returns 422 `Invalid billable filter.`
+- **TC-01-INT-39: My + pending filter.** User calls `time-off/my?status=pending` — returns only their own pending requests. `pending` visibility on `/my` does not require the `ViewTimeOff` capability, just `ViewMyTimeOff`.
 
 ### E2E
 

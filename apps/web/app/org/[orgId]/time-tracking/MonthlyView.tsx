@@ -11,16 +11,25 @@ import {
 import { HolidayMarker } from './HolidayMarker';
 import type { CalendarHoliday, TimeEntry } from './types';
 
-/** Heat tiers over a violet tint (DS gap — no `--heat-*` tokens yet; the mock hardcodes
- * oklch). Numeric hours ALWAYS accompany the tint, so colour is never the sole signal.
- * Empty cells are transparent regardless of weekend (spec 12 change B — weekends are not
- * muted; some members work them). */
+/**
+ * Three heat tiers, and they are the action blue at rising strength rather than the violet
+ * the previous design's accent gave them. A ramp of one hue is the only honest way to draw
+ * *more of the same thing*, and the hue has to be the one the product is in.
+ *
+ * They stay literals rather than becoming `--heat-*` tokens: one screen reads them, and the
+ * three alphas are a ramp measured against each other, not three separate decisions the rest
+ * of the system needs a name for.
+ *
+ * Numeric hours ALWAYS accompany the tint, so colour is never the sole signal. Empty cells are
+ * transparent regardless of weekend (spec 12 change B — weekends are not muted; some members
+ * work them).
+ */
 function heatBackground(minutes: number): string {
   if (minutes <= 0) return 'transparent';
   const hours = minutes / 60;
-  if (hours <= 4) return 'oklch(0.7 0.17 292 / 0.10)';
-  if (hours <= 7) return 'oklch(0.7 0.17 292 / 0.20)';
-  return 'oklch(0.7 0.17 292 / 0.34)';
+  if (hours <= 4) return 'rgba(0, 122, 255, 0.10)';
+  if (hours <= 7) return 'rgba(0, 122, 255, 0.20)';
+  return 'rgba(0, 122, 255, 0.34)';
 }
 
 /**
@@ -31,9 +40,11 @@ function heatBackground(minutes: number): string {
  * the daily view for that date.
  *
  * Spec organization/03 requirement 10 adds a read-only holiday marker to the matching
- * cells. The tint is layered as an inset ring in `--holiday-border` OVER the heat
+ * cells. The tint is layered as an inset ring in `--border-holiday` OVER the heat
  * background, not instead of it: requirement 11 says a logged entry and a holiday
- * coexist, so the marker must survive a day that has hours on it.
+ * coexist, so the marker must survive a day that has hours on it. §91's holiday hue is
+ * chosen so it can do that: today's ring is `--color-blue` and the heat ramp is the same
+ * blue, so a holiday drawn in any blue at all would be a third one nobody could separate.
  */
 export function MonthlyView({
   anchorDate,
@@ -71,9 +82,9 @@ export function MonthlyView({
       <div
         data-testid="tt-calendar-grid"
         style={{
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-2xl)',
+          background: 'var(--surface-card)',
+          border: 'var(--border-width-hairline) solid var(--border-default)',
+          borderRadius: 'var(--radius-l)',
           overflow: 'hidden',
         }}
       >
@@ -82,17 +93,14 @@ export function MonthlyView({
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(7, 1fr)',
-            background: 'var(--bg-header)',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-11)',
-            letterSpacing: 1.2,
-            textTransform: 'uppercase',
-            color: 'var(--text-muted)',
+            background: 'var(--surface-sunken)',
+            fontWeight: 'var(--font-weight-medium)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
           }}
         >
           {weekdayHeads.map((d) => (
-            <div key={d} style={{ padding: '10px 12px', textAlign: 'left' }}>
+            <div key={d} style={{ padding: 'var(--space-4) var(--space-5)', textAlign: 'left' }}>
               {d}
             </div>
           ))}
@@ -110,18 +118,18 @@ export function MonthlyView({
                   aria-hidden
                   style={{
                     aspectRatio: '1.5 / 1',
-                    borderTop: '1px solid var(--divider)',
-                    borderLeft: index % 7 === 0 ? 'none' : '1px solid var(--divider)',
-                    background: 'var(--bg-panel-2)',
-                    padding: '8px 10px',
-                    color: 'var(--text-faint)',
+                    borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
+                    borderLeft: index % 7 === 0 ? 'none' : 'var(--border-width-hairline) solid var(--border-subtle)',
+                    background: 'var(--surface-sunken)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    color: 'var(--text-secondary)',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
                   }}
                 >
-                  <span style={{ fontSize: 'var(--fs-13)' }}>{dayNumber(cell.date)}</span>
-                  <span style={{ alignSelf: 'flex-end', fontSize: 'var(--fs-13)' }}>—</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)' }}>{dayNumber(cell.date)}</span>
+                  <span style={{ alignSelf: 'flex-end', fontSize: 'var(--font-size-xs)' }}>—</span>
                 </div>
               );
             }
@@ -156,17 +164,17 @@ export function MonthlyView({
                 style={{
                   aspectRatio: '1.5 / 1',
                   border: 'none',
-                  borderTop: '1px solid var(--divider)',
-                  borderLeft: index % 7 === 0 ? 'none' : '1px solid var(--divider)',
+                  borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
+                  borderLeft: index % 7 === 0 ? 'none' : 'var(--border-width-hairline) solid var(--border-subtle)',
                   // Today's ring wins the outline; a holiday takes an inset box-shadow
                   // so a day can be both without either disappearing.
-                  outline: isToday ? '2px solid var(--accent)' : 'none',
+                  outline: isToday ? '2px solid var(--color-blue)' : 'none',
                   outlineOffset: '-2px',
-                  boxShadow: holiday ? 'inset 0 0 0 2px var(--holiday-border)' : undefined,
+                  boxShadow: holiday ? 'inset 0 0 0 2px var(--border-holiday)' : undefined,
                   background: holiday
-                    ? `linear-gradient(var(--holiday-bg), var(--holiday-bg)), ${heatBackground(minutes)}`
+                    ? `linear-gradient(var(--surface-holiday), var(--surface-holiday)), ${heatBackground(minutes)}`
                     : heatBackground(minutes),
-                  padding: '8px 10px',
+                  padding: 'var(--space-3) var(--space-4)',
                   cursor: 'pointer',
                   textAlign: 'left',
                   display: 'flex',
@@ -176,9 +184,9 @@ export function MonthlyView({
               >
                 <span
                   style={{
-                    fontSize: 'var(--fs-13)',
-                    fontWeight: isToday ? 600 : 400,
-                    color: isToday ? 'var(--accent)' : 'var(--text-sub)',
+                    fontSize: 'var(--font-size-xs)',
+                    fontWeight: isToday ? 'var(--font-weight-semibold)' : 'var(--font-weight-regular)',
+                    color: isToday ? 'var(--color-blue)' : 'var(--text-tertiary)',
                   }}
                 >
                   {dayNumber(cell.date)}
@@ -196,19 +204,19 @@ export function MonthlyView({
                     flexDirection: 'column',
                     alignItems: 'flex-end',
                     lineHeight: 1.15,
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 600,
-                    fontSize: 'var(--fs-14)',
-                    color: minutes > 0 ? 'var(--text)' : 'var(--text-faint)',
+                    fontWeight: 'var(--font-weight-semibold)',
+                    fontSize: 'var(--font-size-s)',
+                    fontVariantNumeric: 'tabular-nums',
+                    color: minutes > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
                   }}
                 >
                   <span>{hoursText}</span>
                   {nonBillableMinutes > 0 ? (
                     <span
                       style={{
-                        fontSize: 'var(--fs-11)',
-                        fontWeight: 500,
-                        color: 'var(--text-muted)',
+                        fontSize: 'var(--font-size-xs)',
+                        fontWeight: 'var(--font-weight-regular)',
+                        color: 'var(--text-secondary)',
                       }}
                     >
                       +{formatDurationHuman(nonBillableMinutes)} nb
@@ -224,15 +232,14 @@ export function MonthlyView({
       <div
         data-testid="tt-month-total"
         style={{
-          marginTop: 14,
+          marginTop: 'var(--space-6)',
           textAlign: 'right',
-          fontFamily: 'var(--font-text)',
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text-sub)',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-tertiary)',
         }}
       >
         Total this month{' '}
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text)' }}>
+        <span style={{ fontWeight: 'var(--font-weight-semibold)', fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>
           {formatDurationHuman(totalMinutes)}
         </span>
       </div>

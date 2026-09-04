@@ -7,8 +7,10 @@ import {
   ENVELOPE_STATUSES,
   hasCapability,
 } from '@devscribed/validation';
-import { Badge, Button, Card, SearchField, Select, Spinner } from '@/ds';
+import { Badge, Button, Card, SearchInput, Select, Preloader, Table } from '@devscribed/ds';
+import type { TableColumn } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
+import { optionFor, valueOf } from '@/select';
 import { useSession } from '@/layout/session-context';
 import { apiRequest, templatesUrl, type TemplateListResponse } from '@/documents/api';
 import {
@@ -140,12 +142,12 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
         <div
           style={{
             display: 'flex',
-            gap: 'var(--sp-6)',
+            gap: 'var(--space-5)',
             alignItems: 'center',
-            padding: 'var(--sp-8) var(--sp-10)',
+            padding: 'var(--space-6) var(--space-7)',
           }}
         >
-          <SearchField
+          <SearchInput
             placeholder="Search documents"
             value={query}
             data-testid="envelope-search-input"
@@ -153,20 +155,20 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
             style={{ flex: 1 }}
           />
           <Select
-            value={status}
+            value={optionFor(STATUS_OPTIONS, status)}
             options={STATUS_OPTIONS}
-            onChange={(next: string) => {
-              setStatus(next);
+            onChange={(option) => {
+              setStatus(valueOf(option));
               setPage(1);
             }}
             data-testid="envelope-status-filter"
             wrapperStyle={{ width: 190 }}
           />
           <Select
-            value={templateId}
+            value={optionFor(templates, templateId)}
             options={templates}
-            onChange={(next: string) => {
-              setTemplateId(next);
+            onChange={(option) => {
+              setTemplateId(valueOf(option));
               setPage(1);
             }}
             data-testid="envelope-template-filter"
@@ -180,11 +182,11 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
             style={{
               display: 'flex',
               justifyContent: 'center',
-              padding: 'var(--sp-20)',
-              color: 'var(--accent)',
+              padding: 'var(--space-12)',
+              color: 'var(--action-primary)',
             }}
           >
-            <Spinner size={28} />
+            <Preloader size={28} />
           </div>
         )}
 
@@ -192,11 +194,11 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
           <div
             data-testid="envelope-empty"
             style={{
-              padding: 'var(--sp-20)',
+              padding: 'var(--space-12)',
               textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: 'var(--fs-15)',
-              borderTop: '1px solid var(--divider)',
+              color: 'var(--text-secondary)',
+              fontSize: 'var(--font-size-base)',
+              borderTop: '1px solid var(--border-subtle)',
             }}
           >
             {ENVELOPE_MESSAGES.empty.noDocuments}
@@ -206,11 +208,11 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
         {!loading && envelopes.length === 0 && filtered && (
           <div
             style={{
-              padding: 'var(--sp-20)',
+              padding: 'var(--space-12)',
               textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: 'var(--fs-14)',
-              borderTop: '1px solid var(--divider)',
+              color: 'var(--text-secondary)',
+              fontSize: 'var(--font-size-s)',
+              borderTop: '1px solid var(--border-subtle)',
             }}
           >
             No documents match this search.
@@ -218,36 +220,19 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
         )}
 
         {!loading && envelopes.length > 0 && (
-          // Hand-rolled rather than the DS `Table`, for the same reason the templates list
-          // is: the spec wants `envelope-row-{id}` on the row element and `Table` exposes
-          // no per-row attributes. The tokens below are `Table`'s own.
-          <div data-testid="envelopes-table">
-            <div
-              style={{
-                display: 'flex',
-                height: 52,
-                padding: '0 var(--sp-10)',
-                alignItems: 'center',
-                background: 'var(--bg-header)',
-                borderTop: '1px solid var(--divider)',
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <span style={{ flex: 3 }}>Title</span>
-              <span style={{ flex: 2 }}>Signers</span>
-              <span style={{ flex: 1 }}>Status</span>
-              <span style={{ flex: 1 }}>Sent</span>
-            </div>
-
-            {envelopes.map((item) => (
-              <EnvelopeRow key={item.id} orgId={orgId} item={item} />
-            ))}
-          </div>
+          <Table<EnvelopeListItem>
+            data-testid="envelopes-table"
+            columns={envelopeColumns}
+            rows={envelopes}
+            rowKey="id"
+            rowTestId={(item) => `envelope-row-${item.id}`}
+            rowHref={(item) => `/org/${orgId}/documents/${item.id}`}
+            onRowClick={(item, event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              router.push(`/org/${orgId}/documents/${item.id}`);
+            }}
+          />
         )}
 
         {!loading && total > PAGE_SIZE && (
@@ -256,28 +241,24 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 'var(--sp-6)',
-              padding: 'var(--sp-8) var(--sp-10)',
-              borderTop: '1px solid var(--divider)',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-muted)',
+              gap: 'var(--space-5)',
+              padding: 'var(--space-6) var(--space-7)',
+              borderTop: '1px solid var(--border-subtle)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-secondary)',
             }}
           >
             <span>
               Page {page} of {lastPage} · {total} documents
             </span>
-            <span style={{ display: 'flex', gap: 'var(--sp-4)' }}>
+            <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
               <Button
-                variant="secondary"
-                size="sm"
                 disabled={page <= 1}
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
               >
                 Previous
               </Button>
               <Button
-                variant="secondary"
-                size="sm"
                 disabled={page >= lastPage}
                 onClick={() => setPage((current) => Math.min(lastPage, current + 1))}
               >
@@ -291,77 +272,79 @@ function DocumentsScreen({ orgId }: { orgId: string }) {
   );
 }
 
-function EnvelopeRow({ orgId, item }: { orgId: string; item: EnvelopeListItem }) {
-  const router = useRouter();
-  const href = `/org/${orgId}/documents/${item.id}`;
-  const signers = [...item.signers].sort((a, b) => a.order - b.order);
-
-  return (
-    <div
-      data-testid={`envelope-row-${item.id}`}
-      style={{
-        display: 'flex',
-        minHeight: 68,
-        alignItems: 'center',
-        padding: '0 var(--sp-10)',
-        borderTop: '1px solid var(--divider)',
-        fontFamily: 'var(--font-text)',
-        fontSize: 'var(--fs-15)',
-        color: 'var(--text)',
-      }}
-    >
-      <span style={{ flex: 3, minWidth: 0 }}>
-        <a
-          href={href}
-          onClick={(event) => {
-            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-            event.preventDefault();
-            router.push(href);
-          }}
-          style={{ color: 'var(--text)', textDecoration: 'none' }}
-        >
-          {item.title}
-        </a>
+/**
+ * The list's columns. `Table` (§18) draws the header, the row and its anchor, so what is
+ * left here is only what each cell holds — which is what a column is.
+ */
+const envelopeColumns: TableColumn<EnvelopeListItem>[] = [
+  {
+    label: 'Title',
+    flex: 3,
+    align: 'flex-start',
+    render: (item) => (
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: 'block', color: 'var(--text-primary)' }}>{item.title}</span>
         <span
-          style={{ display: 'block', fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+          style={{ display: 'block', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
         >
           {item.templateName} v{item.templateVersionNumber}
         </span>
       </span>
-
-      <span style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {signers.length === 0 && <span style={{ color: 'var(--text-muted)' }}>—</span>}
-        {signers.map((signer) => (
-          <span
-            key={signer.id}
-            data-testid={`envelope-signer-status-${item.id}-${signer.order}`}
-            title={signerStatusLabel(signer.status)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--sp-3)',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-sub)',
-            }}
-          >
-            <StatusDot status={signer.status} />
-            {signer.name || '—'}
-          </span>
-        ))}
-      </span>
-
-      <span style={{ flex: 1 }}>
-        <Badge tone={envelopeStatusTone(item.status)} data-testid={`envelope-status-${item.id}`}>
-          {envelopeStatusLabel(item.status)}
-        </Badge>
-      </span>
-
-      <span style={{ flex: 1, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+    ),
+  },
+  {
+    label: 'Signers',
+    flex: 2,
+    align: 'flex-start',
+    render: (item) => {
+      const signers = [...item.signers].sort((a, b) => a.order - b.order);
+      return (
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {signers.length === 0 && <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+          {signers.map((signer) => (
+            <span
+              key={signer.id}
+              data-testid={`envelope-signer-status-${item.id}-${signer.order}`}
+              title={signerStatusLabel(signer.status)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-tertiary)',
+              }}
+            >
+              <StatusDot status={signer.status} />
+              {signer.name || '—'}
+            </span>
+          ))}
+        </span>
+      );
+    },
+  },
+  {
+    label: 'Status',
+    flex: 1,
+    align: 'flex-start',
+    render: (item) => (
+      <Badge status={envelopeStatusTone(item.status)} data-testid={`envelope-status-${item.id}`}>
+        {envelopeStatusLabel(item.status)}
+      </Badge>
+    ),
+  },
+  {
+    label: 'Sent',
+    flex: 1,
+    align: 'flex-start',
+    // §60's 96px cap belongs to an actions column; this one holds a date.
+    maxWidth: 'none',
+    render: (item) => (
+      <span style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
         {formatDay(item.sentAt)}
       </span>
-    </div>
-  );
-}
+    ),
+  },
+];
 
 /**
  * The mockup's per-signer marker (`○ ● ✓`). A dot rather than a second `Badge`: two
@@ -372,12 +355,12 @@ function StatusDot({ status }: { status: EnvelopeListItem['signers'][number]['st
   const tone = signerStatusTone(status);
   const color =
     tone === 'active'
-      ? 'var(--status-active-ink)'
+      ? 'var(--status-success)'
       : tone === 'inactive'
-        ? 'var(--status-inactive-ink)'
+        ? 'var(--status-error)'
         : tone === 'info'
-          ? 'var(--accent)'
-          : 'var(--text-faint)';
+          ? 'var(--action-primary)'
+          : 'var(--text-secondary)';
   return (
     <span
       aria-hidden

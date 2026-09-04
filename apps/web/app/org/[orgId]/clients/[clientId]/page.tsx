@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, IconButton, InfoBanner } from '@/ds';
+import { BackTo, Badge, Button, Card, EmptyState, IconButton, InfoBanner, Preloader } from '@devscribed/ds';
 import { PencilIcon } from '@/layout/icons';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
@@ -13,9 +13,10 @@ import { ClientModal } from '../ClientModal';
 import { ClientContactsSection } from './ClientContactsSection';
 import type { ClientDetailResponse, ClientProjectRow, ClientSummary, ClientStatus } from '../types';
 
-const STATUS_META: Record<ClientStatus, { tone: 'active' | 'inactive'; label: string }> = {
-  active: { tone: 'active', label: 'Active' },
-  archived: { tone: 'inactive', label: 'Archived' },
+/** §32's own pair — the component was written for exactly active/inactive. */
+const STATUS_META: Record<ClientStatus, { status: 'active' | 'inactive'; label: string }> = {
+  active: { status: 'active', label: 'Active' },
+  archived: { status: 'inactive', label: 'Archived' },
 };
 
 const DATE_FMT = new Intl.DateTimeFormat('en-US', {
@@ -137,173 +138,145 @@ export default function ClientDetailPage({
 
   return (
     <div data-testid="client-detail-page" style={{ maxWidth: 720, margin: '0 auto' }}>
-      <Link
+      {/* §56 — a real `href`, so the browser keeps middle-click and "copy link address", and
+          the client router still gets the unmodified click. */}
+      <BackTo
+        label="Back to clients"
         href={`/org/${orgId}/clients`}
         data-testid="client-detail-back-link"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: 'var(--fs-14)',
-          color: 'var(--accent)',
-          textDecoration: 'none',
-          marginBottom: 'var(--sp-8)',
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+          event.preventDefault();
+          router.push(`/org/${orgId}/clients`);
         }}
-      >
-        <span aria-hidden style={{ fontSize: 18, lineHeight: 1 }}>
-          &#8592;
-        </span>
-        Back to clients
-      </Link>
+      />
 
-      {state.kind === 'loading' && <DetailSkeleton />}
+      {state.kind === 'loading' && (
+        <Preloader data-testid="client-detail-loading" aria-label="Loading client" />
+      )}
 
       {state.kind === 'error' && (
-        <InfoBanner tone="error" role="alert">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-4)' }}>
+        <InfoBanner variant="error" role="alert">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-5)',
+            }}
+          >
             <span>{CLIENT_MESSAGES.errorLoad}</span>
-            <Button variant="secondary" size="sm" onClick={() => void load()}>
-              Retry
-            </Button>
+            <Button onClick={() => void load()}>Retry</Button>
           </div>
         </InfoBanner>
       )}
 
       {state.kind === 'ready' && (
-        <Card>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
-            {/* Header — title + status + meta line */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-                <h1
-                  data-testid="client-detail-title"
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 600,
-                    fontSize: 'var(--fs-24)',
-                    letterSpacing: '-.4px',
-                    color: 'var(--text)',
-                    margin: 0,
-                  }}
-                >
-                  {state.client.name}
-                </h1>
-                <Badge tone={STATUS_META[state.client.status].tone}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
+          {/* The client's own card. `title` is a node so the status and the rename control sit
+              on the heading's line, which is §12's own title row rather than a header this
+              screen draws inside the card. */}
+          <Card
+            title={
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
+                <span data-testid="client-detail-title">{state.client.name}</span>
+                <Badge status={STATUS_META[state.client.status].status} size="s">
                   {STATUS_META[state.client.status].label}
                 </Badge>
-                <IconButton
-                  label="Rename client"
-                  onClick={() => setRenameOpen(true)}
-                  data-testid="client-detail-rename-btn"
-                >
-                  <PencilIcon />
-                </IconButton>
-              </div>
-              <div style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+              </span>
+            }
+            action={
+              <IconButton
+                label="Rename client"
+                onClick={() => setRenameOpen(true)}
+                data-testid="client-detail-rename-btn"
+              >
+                <PencilIcon />
+              </IconButton>
+            }
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
                 Created {DATE_FMT.format(new Date(state.client.createdAt))} · Last updated{' '}
                 {DATE_FMT.format(new Date(state.client.updatedAt))}
               </div>
-            </div>
 
-            {/* Actions row */}
-            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-              {state.client.status === 'active' ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => setArchiveOpen(true)}
-                  data-testid="client-detail-archive-btn"
-                >
-                  Archive
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  loading={restoring}
-                  onClick={() => void handleRestore()}
-                  data-testid="client-detail-restore-btn"
-                >
-                  Restore
-                </Button>
-              )}
-            </div>
-
-            {/* Projects section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
-              <h2
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 600,
-                  fontSize: 'var(--fs-16)',
-                  color: 'var(--text)',
-                  margin: 0,
-                }}
-              >
-                Projects ({state.projects.length})
-              </h2>
-              <div
-                data-testid="client-detail-projects-list"
-                style={{
-                  border: '1px solid var(--divider)',
-                  borderRadius: 'var(--radius-lg)',
-                  overflow: 'hidden',
-                }}
-              >
-                {state.projects.length === 0 ? (
-                  <div style={{ padding: 'var(--sp-8)', color: 'var(--text-faint)', fontSize: 'var(--fs-14)' }}>
-                    No projects linked to this client yet.
-                  </div>
+              <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
+                {state.client.status === 'active' ? (
+                  <Button onClick={() => setArchiveOpen(true)} data-testid="client-detail-archive-btn">
+                    Archive
+                  </Button>
                 ) : (
-                  state.projects.map((project, i) => (
-                    <Link
-                      key={project.id}
-                      href={`/org/${orgId}/projects/${project.id}`}
-                      data-testid={`client-detail-project-${project.id}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--sp-4)',
-                        padding: '12px 14px',
-                        borderTop: i === 0 ? 'none' : '1px solid var(--divider)',
-                        textDecoration: 'none',
-                        color: 'inherit',
-                      }}
-                    >
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          fontFamily: 'var(--font-display)',
-                          fontWeight: 500,
-                          fontSize: 'var(--fs-14)',
-                          color: 'var(--text)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {project.name}
-                      </span>
-                      <Badge tone={STATUS_META[project.status].tone}>
-                        {STATUS_META[project.status].label}
-                      </Badge>
-                    </Link>
-                  ))
+                  <Button
+                    preloader={restoring}
+                    disabled={restoring}
+                    onClick={() => void handleRestore()}
+                    data-testid="client-detail-restore-btn"
+                  >
+                    Restore
+                  </Button>
                 )}
               </div>
             </div>
+          </Card>
 
-            {/* Requests spec 03 — the people at this client a request can be addressed
-                to. Below the projects list, and its own read, so the client's details
-                render while it loads. */}
-            <ClientContactsSection
-              orgId={orgId}
-              clientId={clientId}
-              clientArchived={state.client.status === 'archived'}
-            />
-          </div>
-        </Card>
+          {/* The roster is its own card rather than a bordered box inside the first one: a
+              container drawn twice is what §43 refused on the board, and the count belongs in
+              the card's title where §12 puts it. `clip` stays on — nothing here opens out. */}
+          <Card title={`Projects (${state.projects.length})`} padded={false}>
+            <div data-testid="client-detail-projects-list">
+              {state.projects.length === 0 ? (
+                <EmptyState style={{ padding: 'var(--space-8)' }}>
+                  No projects linked to this client yet.
+                </EmptyState>
+              ) : (
+                state.projects.map((project, i) => (
+                  <Link
+                    key={project.id}
+                    href={`/org/${orgId}/projects/${project.id}`}
+                    data-testid={`client-detail-project-${project.id}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-5)',
+                      padding: 'var(--space-5) var(--space-7)',
+                      borderTop:
+                        i === 0 ? 'none' : 'var(--border-width-hairline) solid var(--border-subtle)',
+                      textDecoration: 'none',
+                      color: 'inherit',
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontWeight: 'var(--font-weight-medium)',
+                        color: 'var(--text-primary)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {project.name}
+                    </span>
+                    <Badge status={STATUS_META[project.status].status} size="s">
+                      {STATUS_META[project.status].label}
+                    </Badge>
+                  </Link>
+                ))
+              )}
+            </div>
+          </Card>
+
+          {/* Requests spec 03 — the people at this client a request can be addressed
+              to. Below the projects list, and its own read, so the client's details
+              render while it loads. */}
+          <ClientContactsSection
+            orgId={orgId}
+            clientId={clientId}
+            clientArchived={state.client.status === 'archived'}
+          />
+        </div>
       )}
 
       {state.kind === 'ready' && (
@@ -328,27 +301,5 @@ export default function ClientDetailPage({
         </>
       )}
     </div>
-  );
-}
-
-function DetailSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
-  return (
-    <Card>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-          <div style={block(200, 24)} />
-          <div style={block(64, 22, 20)} />
-        </div>
-        <div style={block(280, 14)} />
-        <div style={block('100%', 46)} />
-        <div style={block('100%', 46)} />
-      </div>
-    </Card>
   );
 }

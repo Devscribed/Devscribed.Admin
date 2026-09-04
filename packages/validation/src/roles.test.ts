@@ -73,6 +73,16 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewAllRequests',
         // Requests spec 02: curating the topic catalogue.
         'ManageRequestTopics',
+        // Spec reports/01: full reporting rights, including the Spent column.
+        'ViewAmountsOwed',
+        'ViewMyAmountsOwed',
+        'ViewTimeAndActivity',
+        'ViewMyTimeAndActivity',
+        'ViewTimeOff',
+        'ViewMyTimeOff',
+        'ViewTimeAndActivityBilled',
+        'ViewTimeAndActivitySpent',
+        'ExportReports',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -100,13 +110,30 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewAllRequests',
         // Requests spec 02: a manager curates the catalogue as an admin does.
         'ManageRequestTopics',
+        // Spec reports/01: every All variant plus Billed Amount; Spent stays admin only.
+        'ViewAmountsOwed',
+        'ViewMyAmountsOwed',
+        'ViewTimeAndActivity',
+        'ViewMyTimeAndActivity',
+        'ViewTimeOff',
+        'ViewMyTimeOff',
+        'ViewTimeAndActivityBilled',
+        'ExportReports',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       // Requests spec 01 is the first spec to put anything in these two rows: everybody
       // sees the requests they raised or that are addressed to them, and a `viewer` may
-      // not raise one.
-      user: ['CreateRequest', 'ViewOwnRequests'],
-      viewer: ['ViewOwnRequests'],
+      // not raise one. Spec reports/01 adds the three My-side reports and the export.
+      user: [
+        'CreateRequest',
+        'ViewOwnRequests',
+        'ViewMyAmountsOwed',
+        'ViewMyTimeAndActivity',
+        'ViewMyTimeOff',
+        'ExportReports',
+      ],
+      // Spec reports/01 also gives a viewer their own time-off calendar; no export.
+      viewer: ['ViewOwnRequests', 'ViewMyTimeOff'],
     });
   });
 });
@@ -161,6 +188,15 @@ describe('capabilitiesFor', () => {
       'ViewOwnRequests',
       'ViewAllRequests',
       'ManageRequestTopics',
+      'ViewAmountsOwed',
+      'ViewMyAmountsOwed',
+      'ViewTimeAndActivity',
+      'ViewMyTimeAndActivity',
+      'ViewTimeOff',
+      'ViewMyTimeOff',
+      'ViewTimeAndActivityBilled',
+      'ViewTimeAndActivitySpent',
+      'ExportReports',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -180,14 +216,29 @@ describe('capabilitiesFor', () => {
       'ViewOwnRequests',
       'ViewAllRequests',
       'ManageRequestTopics',
+      'ViewAmountsOwed',
+      'ViewMyAmountsOwed',
+      'ViewTimeAndActivity',
+      'ViewMyTimeAndActivity',
+      'ViewTimeOff',
+      'ViewMyTimeOff',
+      'ViewTimeAndActivityBilled',
+      'ExportReports',
     ]);
     // `member` normalizes to `user`, and `null` to `viewer` — both rows are non-empty
     // since requests spec 01, so each is asserted against the role it normalizes to
     // rather than against the empty list it used to produce.
     expect(capabilitiesFor('member')).toEqual(capabilitiesFor('user'));
-    expect(capabilitiesFor('member')).toEqual(['CreateRequest', 'ViewOwnRequests']);
+    expect(capabilitiesFor('member')).toEqual([
+      'CreateRequest',
+      'ViewOwnRequests',
+      'ViewMyAmountsOwed',
+      'ViewMyTimeAndActivity',
+      'ViewMyTimeOff',
+      'ExportReports',
+    ]);
     expect(capabilitiesFor(null)).toEqual(capabilitiesFor('viewer'));
-    expect(capabilitiesFor(null)).toEqual(['ViewOwnRequests']);
+    expect(capabilitiesFor(null)).toEqual(['ViewOwnRequests', 'ViewMyTimeOff']);
   });
 });
 
@@ -236,7 +287,7 @@ describe('TC-02-UNIT-06: Capability map', () => {
 
   it('grants an unknown role no more than a viewer, because normalization lands there', () => {
     expect(capabilitiesFor('superadmin')).toEqual(capabilitiesFor('viewer'));
-    expect(capabilitiesFor('superadmin')).toEqual(['ViewOwnRequests']);
+    expect(capabilitiesFor('superadmin')).toEqual(['ViewOwnRequests', 'ViewMyTimeOff']);
   });
 
   it('leaves the spec 01 capabilities exactly as they were', () => {
@@ -299,8 +350,12 @@ describe('spec 03 profile capabilities', () => {
   it('never invents a `self` role — the table only holds values the column can hold', () => {
     expect(Object.keys(ROLE_CAPABILITIES)).toEqual(['admin', 'manager', 'user', 'viewer']);
     expect(normalizeRole('self')).toBe('viewer');
+    // Reports/01: `viewer` also holds ViewMyTimeOff — the profile-capability
+    // block below (canReadProfile / canReadProfilePii / canEditProfile) is
+    // authorised via `isSelf`, so neither of these narrow capabilities widens
+    // the profile surface for anyone.
     expect(capabilitiesFor('self')).toEqual(capabilitiesFor('viewer'));
-    expect(capabilitiesFor('self')).toEqual(['ViewOwnRequests']);
+    expect(capabilitiesFor('self')).toEqual(['ViewOwnRequests', 'ViewMyTimeOff']);
   });
 });
 

@@ -193,7 +193,10 @@ test.describe('14 — Task Collaboration', () => {
 
     // + Add label → pick Bug from the picker → chip renders.
     await page.getByTestId('task-labels-section').getByTestId('task-label-add-btn').click();
-    await expect(page.getByTestId('task-label-picker')).toBeVisible();
+    // §22 — the picker is a `Popover` now, so its panel is a real `role="menu"`. The
+    // component draws that panel and tags its rows but not the panel itself, which is why
+    // `task-label-picker` is gone and the menu is found by its role.
+    await expect(page.getByRole('menu')).toBeVisible();
     await page.getByTestId(`task-label-picker-option-${bugLabel.id}`).click();
     await expect(page.getByTestId(`task-label-chip-${bugLabel.id}`)).toBeVisible();
 
@@ -287,7 +290,7 @@ test.describe('14 — Task Collaboration', () => {
     await expect(confirmDialog).toBeVisible();
     await expect(confirmDialog).toContainText('Bug');
     await confirmDialog
-      .getByRole('button', { name: 'Delete label', exact: true })
+      .getByTestId('board-settings-label-delete-confirm-btn')
       .click();
     await expect(page.getByTestId('toast-label-deleted')).toBeVisible();
 
@@ -714,7 +717,10 @@ test.describe('14 — Task Collaboration', () => {
     await expect(page.getByTestId('task-detail')).toBeVisible();
 
     await page.getByTestId('task-labels-section').getByTestId('task-label-add-btn').click();
-    await expect(page.getByTestId('task-label-picker')).toBeVisible();
+    // §22 — the picker is a `Popover` now, so its panel is a real `role="menu"`. The
+    // component draws that panel and tags its rows but not the panel itself, which is why
+    // `task-label-picker` is gone and the menu is found by its role.
+    await expect(page.getByRole('menu')).toBeVisible();
     await page.getByTestId(`task-label-picker-option-${label.id}`).click();
     await expect(page.getByTestId(`task-label-chip-${label.id}`)).toBeVisible();
   });

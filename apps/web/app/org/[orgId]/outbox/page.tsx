@@ -3,8 +3,9 @@
 import { notFound } from 'next/navigation';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { hasCapability } from '@devscribed/validation';
-import { Badge, Button, Card, InfoBanner, Select, Spinner } from '@/ds';
+import { Badge, Button, Card, InfoBanner, Select, Preloader, Table } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
+import { optionFor, valueOf } from '@/select';
 import { useSession } from '@/layout/session-context';
 import { apiRequest } from '@/documents/api';
 
@@ -136,21 +137,21 @@ function OutboxScreen({ orgId }: { orgId: string }) {
         title="Outbox"
         subtitle="Mail this environment simulated instead of sending"
         action={
-          <div style={{ display: 'flex', gap: 'var(--sp-5)', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center' }}>
             <Select
               data-testid="outbox-type-filter"
-              value={type}
-              onChange={(value: string) => setType(value)}
+              value={optionFor(TYPE_OPTIONS, type)}
+              onChange={(option) => setType(valueOf(option))}
               options={TYPE_OPTIONS}
             />
-            <Button variant="secondary" data-testid="outbox-refresh-btn" onClick={() => void load()}>
+            <Button data-testid="outbox-refresh-btn" onClick={() => void load()}>
               Refresh
             </Button>
           </div>
         }
       />
 
-      <InfoBanner tone="info" data-testid="outbox-explainer">
+      <InfoBanner variant="info" data-testid="outbox-explainer">
         No mail provider is connected yet, so nothing here was delivered. These are the
         messages the application produced, with the links they carry — the same links a
         recipient would click. Only this organization&apos;s mail is listed.
@@ -159,109 +160,93 @@ function OutboxScreen({ orgId }: { orgId: string }) {
       {loading && messages.length === 0 && (
         <div
           data-testid="outbox-loading"
-          style={{ display: 'flex', justifyContent: 'center', padding: 'var(--sp-24)' }}
+          style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-12)' }}
         >
-          <Spinner size={28} />
+          <Preloader size={28} />
         </div>
       )}
 
       {!loading && messages.length === 0 && (
         <Card data-testid="outbox-empty">
-          <div style={{ padding: 'var(--sp-16)', color: 'var(--text-muted)' }}>
+          <div style={{ padding: 'var(--space-10)', color: 'var(--text-secondary)' }}>
             Nothing sent yet. Send an envelope and it will appear here within a few seconds.
           </div>
         </Card>
       )}
 
       {messages.length > 0 && (
-        <Card>
-          {/*
-            Hand-rolled rather than the DS `Table`, the same way the envelopes and templates
-            lists are: a row needs its own attributes and `Table` exposes none. The tokens
-            below are `Table`'s own.
-          */}
-          <div data-testid="outbox-table">
-            <div
-              style={{
-                display: 'flex',
-                height: 52,
-                padding: '0 var(--sp-10)',
-                alignItems: 'center',
-                background: 'var(--bg-header)',
-                borderTop: '1px solid var(--divider)',
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <span style={{ flex: 1 }}>Sent</span>
-              <span style={{ flex: 1 }}>Type</span>
-              <span style={{ flex: 2 }}>To</span>
-              <span style={{ flex: 2 }}>Document</span>
-              <span style={{ flex: 3 }}>Link</span>
-            </div>
-
-            {messages.map((message, index) => (
-              <div
-                key={`${message.sentAt}-${message.to}-${index}`}
-                data-testid="outbox-row"
-                style={{
-                  display: 'flex',
-                  minHeight: 56,
-                  padding: 'var(--sp-4) var(--sp-10)',
-                  alignItems: 'center',
-                  borderTop: '1px solid var(--divider)',
-                  fontSize: 'var(--fs-13)',
-                }}
-              >
-                <span style={{ flex: 1, color: 'var(--text-muted)' }}>
-                  {formatSentAt(message.sentAt)}
-                </span>
-                <span style={{ flex: 1 }}>
-                  <Badge tone={TYPE_TONE[message.type] ?? 'info'}>
+        <Card padded={false}>
+          <Table<OutboxMessage>
+            data-testid="outbox-table"
+            columns={[
+              {
+                label: 'Sent',
+                flex: 1,
+                align: 'flex-start',
+                render: (message) => (
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {formatSentAt(message.sentAt)}
+                  </span>
+                ),
+              },
+              {
+                label: 'Type',
+                flex: 1,
+                align: 'flex-start',
+                render: (message) => (
+                  <Badge status={TYPE_TONE[message.type] ?? 'info'}>
                     {TYPE_LABEL[message.type] ?? message.type}
                   </Badge>
-                </span>
-                <span style={{ flex: 2, wordBreak: 'break-all' }} data-testid="outbox-to">
-                  {message.to}
-                </span>
-                <span style={{ flex: 2 }}>{message.envelopeTitle ?? '—'}</span>
-                <span
-                  style={{ flex: 3, display: 'flex', gap: 'var(--sp-4)', alignItems: 'center' }}
-                >
-                  {message.link ? (
-                    <>
+                ),
+              },
+              {
+                label: 'To',
+                flex: 2,
+                align: 'flex-start',
+                render: (message) => (
+                  <span style={{ wordBreak: 'break-all' }} data-testid="outbox-to">
+                    {message.to}
+                  </span>
+                ),
+              },
+              {
+                label: 'Document',
+                flex: 2,
+                align: 'flex-start',
+                render: (message) => <span>{message.envelopeTitle ?? '—'}</span>,
+              },
+              {
+                label: 'Link',
+                flex: 3,
+                align: 'flex-start',
+                maxWidth: 'none',
+                render: (message) =>
+                  message.link ? (
+                    <span
+                      style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', width: '100%' }}
+                    >
                       <a
                         data-testid="outbox-link"
                         href={message.link}
                         target="_blank"
                         rel="noreferrer"
-                        style={{
-                          color: 'var(--accent)',
-                          wordBreak: 'break-all',
-                          flex: 1,
-                        }}
+                        style={{ color: 'var(--action-primary)', wordBreak: 'break-all', flex: 1 }}
                       >
                         {message.link}
                       </a>
-                      <Button
-                        variant="secondary"
-                        data-testid="outbox-copy-btn"
-                        onClick={() => void copy(message.link!)}
-                      >
+                      <Button data-testid="outbox-copy-btn" onClick={() => void copy(message.link!)}>
                         {copied === message.link ? 'Copied' : 'Copy'}
                       </Button>
-                    </>
+                    </span>
                   ) : (
-                    <span style={{ color: 'var(--text-muted)' }}>No link in this message</span>
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
+                    <span style={{ color: 'var(--text-secondary)' }}>No link in this message</span>
+                  ),
+              },
+            ]}
+            rows={messages}
+            rowKey={(message) => `${message.sentAt}-${message.to}`}
+            rowTestId="outbox-row"
+          />
         </Card>
       )}
     </div>

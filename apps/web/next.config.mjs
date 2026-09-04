@@ -2,8 +2,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-/** The Meridian bundle lives outside the app; it is the single source of UI truth. */
-const designSystem = path.resolve(here, '../../1_DS for dev');
 
 /**
  * Where `/api/*` is proxied to.
@@ -41,10 +39,11 @@ const embedOrigin = process.env.SIGNING_EMBED_ORIGIN || 'https://www.signwell.co
 /**
  * The two origins the product's typefaces come from (BUG-006).
  *
- * The design system pairs Space Grotesk with IBM Plex Sans and loads both from Google:
- * `@ds/styles.css` imports `tokens/fonts.css`, whose first statement is an `@import` of
- * `fonts.googleapis.com`. Webpack does not resolve a remote `@import` — it hoists it — so
- * the request is made by the browser, at runtime, from whatever page loaded the bundle.
+ * The design system sets Poppins as `--font-family-base` and loads it from Google:
+ * `@devscribed/ds/styles.css` imports `tokens/fonts.css`, whose first statement is an
+ * `@import` of `fonts.googleapis.com`. Webpack does not resolve a remote `@import` — it
+ * hoists it — so the request is made by the browser, at runtime, from whatever page
+ * loaded the bundle.
  *
  * That is invisible on every other route, because `/sign/*` is the only one with a policy.
  * There it was refused, and the one page a counterparty ever sees was the one page in the
@@ -65,6 +64,9 @@ const fontFileOrigin = 'https://fonts.gstatic.com';
 
 /** @type {import('next').NextConfig} */
 export default {
+  // `@devscribed/ds` ships TypeScript source rather than a build, so Next compiles it the
+  // way it compiles this app. No build step sits inside the pixel-tuning loop.
+  transpilePackages: ['@devscribed/ds'],
   /**
    * Ships a self-contained server with only the traced node_modules, so the container
    * image carries a fraction of the workspace install. Harmless locally: `next dev` and
@@ -73,19 +75,10 @@ export default {
   output: 'standalone',
   /**
    * Tracing has to start at the repository root, not at this app. Two of the app's
-   * dependencies live above it — `packages/validation` and the design system — and a
-   * trace rooted here would silently leave them out of the standalone bundle.
+   * dependencies live above it — `packages/validation` and `packages/ds` — and a trace
+   * rooted here would silently leave them out of the standalone bundle.
    */
   outputFileTracingRoot: path.resolve(here, '../..'),
-  // Lets Next compile the .jsx design-system files that sit outside this app's root.
-  experimental: { externalDir: true },
-  webpack: (config) => {
-    config.resolve.alias['@ds'] = designSystem;
-    return config;
-  },
-  turbopack: {
-    resolveAlias: { '@ds': designSystem },
-  },
   // Same-origin proxy to the NestJS API, so the session cookie needs no CORS dance.
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${apiOrigin}/api/:path*` }];

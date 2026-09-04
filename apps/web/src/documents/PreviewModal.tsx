@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Modal } from '@/ds';
+import { Button, FormActions, Modal } from '@devscribed/ds';
 
 /**
  * Template bodies are author-controlled HTML. Rendering them anywhere in the application
@@ -18,17 +18,9 @@ export function PreviewModal({
   onClose: () => void;
 }) {
   return (
-    <Modal
-      open={open}
-      title="Preview"
-      width={860}
-      onClose={onClose}
-      actions={
-        <Button variant="secondary" onClick={onClose} data-testid="template-preview-close-btn">
-          Close
-        </Button>
-      }
-    >
+    // A document is what this panel holds, so it takes a width rather than being sized by
+    // its content — the system's `Modal` caps it at 70% of the viewport either way.
+    <Modal open={open} title="Preview" onClose={onClose} style={{ width: 860 }}>
       <div data-testid="template-preview-modal">
         <iframe
           title="Template preview"
@@ -38,20 +30,28 @@ export function PreviewModal({
           style={{
             width: '100%',
             height: '60vh',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--paper-0)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-l)',
+            background: 'var(--surface-card)',
           }}
         />
         <p
           style={{
-            margin: 'var(--sp-4) 0 0',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--text-muted)',
+            margin: 'var(--space-3) 0 0',
+            fontSize: 'var(--font-size-s)',
+            color: 'var(--text-secondary)',
           }}
         >
           Preview uses sample values. No member data is used.
         </p>
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button onClick={onClose} data-testid="template-preview-close-btn">
+              Close
+            </Button>
+          </FormActions>
+        </div>
       </div>
     </Modal>
   );

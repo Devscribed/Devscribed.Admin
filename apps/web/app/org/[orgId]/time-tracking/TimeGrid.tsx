@@ -23,28 +23,46 @@ const HOUR_HEIGHT = 48; // px — one hour row
 const PX_PER_MINUTE = HOUR_HEIGHT / 60;
 const MIN_BLOCK_HEIGHT = 22; // px — keep a very short entry legible/clickable
 
-/** A block colour trio (background / left rail / text). Inline oklch literals are a
- * documented DS gap (no `--project-*` tokens); colour is never the sole signal — every
- * block also carries the project name in text. */
+/** A block colour trio (background / left rail / text). */
 export interface BlockColor {
   bg: string;
   rail: string;
   text: string;
 }
 
-/** Project palette, mirroring the mock's `.ev-*` variants. Index 0 is used for the
- * "(no project)" neutral grey; the remaining hues are hashed onto by project id. */
+/**
+ * **A categorical palette, and deliberately not the status palette.** These five hues answer
+ * *which project*, and the system's green / yellow / red / cyan answer *how something is
+ * going* — painting a project in the red that means `inactive` says something false about it,
+ * which is the call §32 and §59 already made for `Badge`. So they are hues chosen to be told
+ * apart, and they carry no meaning at all beyond "not the one next to it".
+ *
+ * They are not tokens for the same reason `MembersLoadingSkeleton` is not a component: one
+ * screen reads them, and a name in the shared vocabulary that one call site will ever look up
+ * is noise. They stay `oklch` literals with the ramp stated once, here.
+ *
+ * The set is re-anchored on the system's own blue rather than on the violet it used to lead
+ * with — that violet was the previous design's accent, and leading a palette with a hue this
+ * product no longer has is how a leftover survives a repaint.
+ *
+ * **There is no amber in it, and that is deliberate.** §91 gives a holiday its own warm ground,
+ * and a holiday tints the *whole day column* behind the blocks logged on it — so an amber block
+ * on an amber column is a block nobody can see. A categorical hue is free to be any hue that is
+ * not already saying something; this one is.
+ *
+ * **Colour is never the sole signal**: every block also carries the project's name as text.
+ */
 const NO_PROJECT_COLOR: BlockColor = {
-  bg: 'var(--bg-sunken)',
-  rail: 'var(--text-muted)',
-  text: 'var(--text-sub)',
+  bg: 'var(--surface-sunken)',
+  rail: 'var(--text-secondary)',
+  text: 'var(--text-tertiary)',
 };
 const PROJECT_PALETTE: BlockColor[] = [
-  { bg: 'oklch(0.96 0.03 292)', rail: 'oklch(0.5 0.16 292)', text: 'oklch(0.35 0.15 292)' }, // violet
+  { bg: 'oklch(0.95 0.04 250)', rail: 'oklch(0.55 0.19 250)', text: 'oklch(0.38 0.16 250)' }, // blue
   { bg: 'oklch(0.96 0.03 180)', rail: 'oklch(0.55 0.11 180)', text: 'oklch(0.35 0.11 180)' }, // teal
-  { bg: 'oklch(0.96 0.04 74)', rail: 'oklch(0.55 0.13 74)', text: 'oklch(0.4 0.12 74)' }, // amber
-  { bg: 'oklch(0.96 0.03 340)', rail: 'oklch(0.55 0.14 340)', text: 'oklch(0.4 0.14 340)' }, // pink
   { bg: 'oklch(0.95 0.04 160)', rail: 'oklch(0.58 0.11 160)', text: 'oklch(0.35 0.1 160)' }, // green
+  { bg: 'oklch(0.95 0.04 300)', rail: 'oklch(0.52 0.17 300)', text: 'oklch(0.38 0.15 300)' }, // violet
+  { bg: 'oklch(0.96 0.03 340)', rail: 'oklch(0.55 0.14 340)', text: 'oklch(0.4 0.14 340)' }, // pink
 ];
 
 /** Deterministic `projectId → palette` mapping (same char-sum discipline as the avatar
@@ -181,7 +199,7 @@ export function TimeGrid({
   renderBlock: (entry: TimeEntry, placement: BlockPlacement) => ReactNode;
   durationStrip?: ReactNode;
   cardHeight?: number;
-  /** Spec organization/03 §10 — a full-column amber overlay per holiday day. Logged
+  /** Spec organization/03 §10 — a full-column holiday overlay per holiday day. Logged
    * entries on the same day still render on top (they carry a higher z-index by
    * default). Keyed by ISO day, matching the column's `date`. */
   holidaysByDate?: Map<string, CalendarHoliday>;
@@ -211,9 +229,9 @@ export function TimeGrid({
   return (
     <div
       style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
+        background: 'var(--surface-card)',
+        border: 'var(--border-width-hairline) solid var(--border-default)',
+        borderRadius: 'var(--radius-l)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -238,8 +256,8 @@ export function TimeGrid({
           style={{
             display: 'grid',
             gridTemplateColumns: headerTemplate,
-            background: 'var(--bg-header)',
-            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-sunken)',
+            borderBottom: 'var(--border-width-hairline) solid var(--border-default)',
             position: 'sticky',
             top: 0,
             zIndex: 5,
@@ -247,16 +265,13 @@ export function TimeGrid({
         >
           <div
             style={{
-              borderRight: '1px solid var(--divider)',
+              borderRight: 'var(--border-width-hairline) solid var(--border-subtle)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-11)',
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              color: 'var(--text-muted)',
+              fontWeight: 'var(--font-weight-medium)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-secondary)',
             }}
           >
             {gutterLabel}
@@ -265,7 +280,7 @@ export function TimeGrid({
             <div
               key={col.date}
               style={{
-                borderRight: '1px solid var(--divider)',
+                borderRight: 'var(--border-width-hairline) solid var(--border-subtle)',
                 background: 'transparent',
               }}
             >
@@ -287,7 +302,7 @@ export function TimeGrid({
             <HourRow key={hour} hour={hour} columns={columns} />
           ))}
 
-          {/* Spec organization/03 §10 — an amber all-day overlay per holiday column,
+          {/* Spec organization/03 §10 — an all-day overlay per holiday column,
               rendered before the entry blocks so a logged entry on the same day sits
               on top (its wrapper has `zIndex: 3`). The overlay is the marker the
               spec's testid roster names, so its `data-testid` moves here from the
@@ -349,7 +364,7 @@ export function TimeGrid({
                 left: `calc(${columnLeft(todayCol)} + 3px)`,
                 width: `calc(${colWidth} - 6px)`,
                 height: 2,
-                background: 'var(--error-500)',
+                background: 'var(--status-error)',
                 zIndex: 6,
                 pointerEvents: 'none',
               }}
@@ -361,8 +376,8 @@ export function TimeGrid({
                   top: -4,
                   width: 10,
                   height: 10,
-                  borderRadius: '50%',
-                  background: 'var(--error-500)',
+                  borderRadius: 'var(--radius-circle)',
+                  background: 'var(--status-error)',
                 }}
               />
             </div>
@@ -376,11 +391,11 @@ export function TimeGrid({
 }
 
 /**
- * A full-column amber block for a holiday day (spec organization/03 §10). It fills the
+ * A full-column holiday block for a holiday day (spec organization/03 §10). It fills the
  * body height so the day reads as an all-day "off" — not the small chip an earlier
  * draft put under the date header — while sitting at `zIndex: 1` so a logged entry on
  * the same day (`zIndex: 3`) renders on top. Focus fires the live-region announcement
- * (§Accessibility); the amber tokens carry the whole visual signal, the star icon and
+ * (§Accessibility); §91's holiday ground carries the whole visual signal, the star icon and
  * the name text carry the semantic one, and the tooltip mirrors the aria-label.
  */
 function HolidayOverlay({
@@ -414,24 +429,23 @@ function HolidayOverlay({
         left,
         width,
         zIndex: 1,
-        background: 'var(--holiday-bg)',
+        background: 'var(--surface-holiday)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        gap: 'var(--sp-1)',
-        padding: '10px 8px',
+        gap: 'var(--space-1)',
+        padding: 'var(--space-4) var(--space-3)',
         pointerEvents: 'auto',
         cursor: 'default',
-        color: 'var(--holiday-ink)',
+        color: 'var(--text-primary)',
       }}
     >
       <StarIcon size={14} />
       <span
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-12)',
+          fontWeight: 'var(--font-weight-medium)',
+          fontSize: 'var(--font-size-xs)',
           lineHeight: 1.3,
           textAlign: 'center',
           maxWidth: '100%',
@@ -442,12 +456,7 @@ function HolidayOverlay({
         {holiday.name}
       </span>
       <span
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: 'var(--fs-11)',
-          opacity: 0.75,
-        }}
+        style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
       >
         {holiday.paidHours}h paid
       </span>
@@ -463,17 +472,15 @@ function HourRow({ hour, columns }: { hour: number; columns: TimeGridColumn[] })
     <>
       <div
         style={{
-          borderRight: '1px solid var(--divider)',
-          borderBottom: '1px dashed var(--divider)',
+          borderRight: 'var(--border-width-hairline) solid var(--border-subtle)',
+          borderBottom: 'var(--border-width-hairline) dashed var(--border-subtle)',
           height: HOUR_HEIGHT,
-          padding: '2px 8px 0',
+          padding: '2px var(--space-3) 0',
           display: 'flex',
           justifyContent: 'flex-end',
           alignItems: 'flex-start',
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: 'var(--fs-11)',
-          color: 'var(--text-muted)',
+          fontSize: 'var(--font-size-xs)',
+          color: 'var(--text-secondary)',
         }}
       >
         {label}
@@ -482,8 +489,8 @@ function HourRow({ hour, columns }: { hour: number; columns: TimeGridColumn[] })
         <div
           key={col.date}
           style={{
-            borderRight: '1px solid var(--divider)',
-            borderBottom: '1px dashed var(--divider)',
+            borderRight: 'var(--border-width-hairline) solid var(--border-subtle)',
+            borderBottom: 'var(--border-width-hairline) dashed var(--border-subtle)',
             height: HOUR_HEIGHT,
             // Weekends render like any other day (spec 12 change B — some members work them).
             background: 'transparent',

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
@@ -10,10 +11,10 @@ import {
   EyeOff,
   IconButton,
   InfoBanner,
-  Input,
-  Spinner,
-} from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+  Preloader,
+  TextInput,
+} from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import {
   INVITE_ACCEPT_FIELD_ORDER,
   INVITE_MESSAGES,
@@ -83,9 +84,9 @@ function orgSwitchWarningText(oldOrganizationName: string, lastAdmin: boolean): 
 }
 
 const backToLogin = (
-  <a href="/login" data-testid="accept-back-link" style={{ textDecoration: 'none' }}>
+  <Link href="/login" data-testid="accept-back-link">
     Back to login
-  </a>
+  </Link>
 );
 
 /**
@@ -344,12 +345,15 @@ export function AcceptInviteScreen() {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 'var(--sp-5)',
-            padding: 'var(--sp-12) 0 var(--sp-10)',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-8) 0 var(--space-7)',
           }}
         >
-          <Spinner size={28} style={{ color: 'var(--accent)' }} />
-          <p style={{ margin: 0, fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+          {/* The system's loader is three pulsing dots at a fixed size, not a sizable arc —
+              the page loader is `size=12 margin=7`, which is the default. Same as
+              `/reset-password`, which is the screen this one's phases were modelled on. */}
+          <Preloader />
+          <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
             Checking your invitation…
           </p>
         </div>
@@ -362,7 +366,7 @@ export function AcceptInviteScreen() {
       <AuthLayout title="You're invited" footer={backToLogin}>
         <div data-testid="accept-invite-screen">
           <InfoBanner
-            tone="error"
+            variant="error"
             role="alert"
             aria-live="polite"
             data-testid="accept-invite-error"
@@ -381,21 +385,21 @@ export function AcceptInviteScreen() {
       <div data-testid="accept-invite-screen">
         <p
           data-testid="accept-invite-org-name"
-          style={{ margin: 0, fontSize: 'var(--fs-15)', color: 'var(--text)' }}
+          style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-primary)' }}
         >
           You&apos;ve been invited to join {invite.organizationName}
         </p>
         <p
           data-testid="accept-invite-role"
-          style={{ margin: 'var(--sp-2) 0 0', fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+          style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
         >
           as a {invite.role}
         </p>
 
         {formError && (
-          <div style={{ marginTop: 'var(--sp-8)' }}>
+          <div style={{ marginTop: 'var(--space-6)' }}>
             <InfoBanner
-              tone="error"
+              variant="error"
               role="alert"
               aria-live="polite"
               data-testid="accept-invite-error"
@@ -410,19 +414,19 @@ export function AcceptInviteScreen() {
             onSubmit={submitExistingAccount}
             noValidate
             data-testid="accept-form"
-            style={{ marginTop: 'var(--sp-8)' }}
+            style={{ marginTop: 'var(--space-6)' }}
           >
             <p
               style={{
-                margin: '0 0 var(--sp-7)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text-sub)',
+                margin: '0 0 var(--space-7)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-tertiary)',
               }}
             >
               Welcome back! Enter your password to confirm your identity.
             </p>
 
-            <Input
+            <TextInput
               label="Password"
               type="password"
               value={password}
@@ -432,25 +436,27 @@ export function AcceptInviteScreen() {
               data-testid="accept-password-input"
               aria-invalid={passwordError ? true : undefined}
               aria-describedby={passwordError ? 'field-error-password' : undefined}
-              error={passwordError ? errorNode('password', passwordError) : undefined}
+              error={passwordError ?? undefined}
+              errorId="field-error-password"
               style={submitting ? { opacity: 0.55 } : undefined}
-              wrapperStyle={{ gap: 0 }}
             />
 
             {invite.orgSwitch && (
-              <div style={{ marginTop: 'var(--sp-7)' }}>
+              <div style={{ marginTop: 'var(--space-7)' }}>
                 <InfoBanner
-                  tone="warning"
+                  variant="warning"
                   role="alert"
                   aria-live="polite"
                   data-testid="accept-org-switch-warning"
                 >
                   {orgSwitchWarningText(invite.oldOrganizationName ?? '', invite.lastAdmin)}
                 </InfoBanner>
-                <div style={{ marginTop: 'var(--sp-5)' }}>
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                  {/* The system's `Checkbox` is a native input and hands back the event
+                      (§79), not the boolean the previous system's did. */}
                   <Checkbox
                     checked={orgSwitchConfirmed}
-                    onChange={setOrgSwitchConfirmed}
+                    onChange={(event) => setOrgSwitchConfirmed(event.target.checked)}
                     disabled={submitting}
                     label="I understand"
                     data-testid="accept-org-switch-confirm"
@@ -462,11 +468,10 @@ export function AcceptInviteScreen() {
             <Button
               type="submit"
               variant="primary"
-              size="lg"
-              loading={submitting}
+              preloader={submitting}
               disabled={!existingAccountValid}
               data-testid="accept-submit-button"
-              style={{ width: '100%', marginTop: 'var(--sp-10)' }}
+              style={{ width: '100%', marginTop: 'var(--space-7)' }}
             >
               {submitting ? 'Accepting' : 'Accept invitation'}
             </Button>
@@ -476,9 +481,9 @@ export function AcceptInviteScreen() {
             onSubmit={submitNewAccount}
             noValidate
             data-testid="accept-form"
-            style={{ marginTop: 'var(--sp-8)' }}
+            style={{ marginTop: 'var(--space-6)' }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
               {INVITE_ACCEPT_FIELD_ORDER.map((field) => {
                 const message = newErrors[field];
                 const shared = {
@@ -490,13 +495,15 @@ export function AcceptInviteScreen() {
                   'data-testid': NEW_ACCOUNT_TEST_IDS[field],
                   'aria-invalid': message ? true : undefined,
                   'aria-describedby': message ? `field-error-${field}` : undefined,
-                  error: message ? errorNode(field, message) : undefined,
+                  // §4 — the field tags its own message, so `field-error-{field}` is the
+                  // `aria-describedby` target by construction rather than by a wrapper.
+                  error: message,
+                  errorId: `field-error-${field}`,
                   style: submitting ? { opacity: 0.55 } : undefined,
-                  wrapperStyle: { gap: 0 },
                 };
 
                 return field === 'password' ? (
-                  <Input
+                  <TextInput
                     key={field}
                     {...shared}
                     type={revealPassword ? 'text' : 'password'}
@@ -505,6 +512,7 @@ export function AcceptInviteScreen() {
                         label={revealPassword ? 'Hide password' : 'Show password'}
                         aria-pressed={revealPassword}
                         active={revealPassword}
+                        size={28}
                         data-testid="accept-password-toggle"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => setRevealPassword((shown) => !shown)}
@@ -514,7 +522,7 @@ export function AcceptInviteScreen() {
                     }
                   />
                 ) : (
-                  <Input key={field} {...shared} type="text" />
+                  <TextInput key={field} {...shared} type="text" />
                 );
               })}
             </div>
@@ -522,11 +530,10 @@ export function AcceptInviteScreen() {
             <Button
               type="submit"
               variant="primary"
-              size="lg"
-              loading={submitting}
+              preloader={submitting}
               disabled={!newAccountValid}
               data-testid="accept-submit-button"
-              style={{ width: '100%', marginTop: 'var(--sp-10)' }}
+              style={{ width: '100%', marginTop: 'var(--space-7)' }}
             >
               {submitting ? 'Accepting' : 'Accept invitation'}
             </Button>

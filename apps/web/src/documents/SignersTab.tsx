@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ENVELOPE_MESSAGES } from '@devscribed/validation';
-import { Badge, Button, Card, InfoBanner } from '@/ds';
+import { Badge, Button, Card, InfoBanner } from '@devscribed/ds';
 import { apiRequest, failureMessage } from './api';
 import {
   envelopeUrl,
@@ -12,7 +12,7 @@ import {
   type EnvelopeDetail,
   type EnvelopeSignerDto,
 } from './envelopes';
-import { useToast } from './toast';
+import { useToast } from '@/toast';
 
 /**
  * The Signers tab. Each row is one `EnvelopeSigner`: who they are, where they got to,
@@ -32,7 +32,7 @@ export function SignersTab({
   canManage: boolean;
   onChanged: () => void;
 }) {
-  const toast = useToast();
+  const { showToast } = useToast();
   const [resending, setResending] = useState<string | null>(null);
 
   const signers = [...detail.signers].sort((a, b) => a.order - b.order);
@@ -48,24 +48,19 @@ export function SignersTab({
     setResending(null);
 
     if (!result.ok) {
-      toast.show({
-        testId: 'toast-envelope-error',
-        message:
-          result.failure.error === 'rate_limited'
-            ? ENVELOPE_MESSAGES.resend.tooSoon
-            : result.failure.error === 'not_current_signer'
-              ? ENVELOPE_MESSAGES.resend.wrongSigner
-              : failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast(
+        'toast-envelope-error',
+        result.failure.error === 'rate_limited'
+          ? ENVELOPE_MESSAGES.resend.tooSoon
+          : result.failure.error === 'not_current_signer'
+            ? ENVELOPE_MESSAGES.resend.wrongSigner
+            : failureMessage(result.failure),
+        'error',
+      );
       return;
     }
 
-    toast.show({
-      testId: 'toast-envelope-resent',
-      message: ENVELOPE_MESSAGES.toast.resent,
-      tone: 'success',
-    });
+    showToast('toast-envelope-resent', ENVELOPE_MESSAGES.toast.resent);
     onChanged();
   }
 
@@ -87,18 +82,17 @@ export function SignersTab({
             data-testid={`envelope-signer-row-${signer.order}`}
             style={{
               display: 'flex',
-              gap: 'var(--sp-8)',
+              gap: 'var(--space-6)',
               alignItems: 'flex-start',
-              padding: 'var(--sp-8) var(--sp-10)',
-              borderTop: '1px solid var(--divider)',
+              padding: 'var(--space-6) var(--space-7)',
+              borderTop: '1px solid var(--border-subtle)',
             }}
           >
             <span
               style={{
-                fontFamily: 'var(--font-display)',
                 fontWeight: 600,
-                fontSize: 'var(--fs-15)',
-                color: 'var(--text-muted)',
+                fontSize: 'var(--font-size-base)',
+                color: 'var(--text-secondary)',
                 width: 24,
               }}
             >
@@ -106,19 +100,19 @@ export function SignersTab({
             </span>
 
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+              <span style={{ display: 'block', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
                 {signer.label || signer.roleKey}
               </span>
-              <span style={{ display: 'block', fontSize: 'var(--fs-15)', color: 'var(--text)' }}>
+              <span style={{ display: 'block', fontSize: 'var(--font-size-base)', color: 'var(--text-primary)' }}>
                 {signer.name || '—'}
               </span>
-              <span style={{ display: 'block', fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+              <span style={{ display: 'block', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
                 {signer.email || '—'}
               </span>
 
               {bounced && (
-                <span style={{ display: 'block', marginTop: 'var(--sp-4)' }}>
-                  <InfoBanner tone="warning" data-testid={`envelope-signer-bounce-${signer.order}`}>
+                <span style={{ display: 'block', marginTop: 'var(--space-3)' }}>
+                  <InfoBanner variant="warning" data-testid={`envelope-signer-bounce-${signer.order}`}>
                     {ENVELOPE_MESSAGES.bounce(signer.email)}
                   </InfoBanner>
                 </span>
@@ -128,9 +122,9 @@ export function SignersTab({
                 <span
                   style={{
                     display: 'block',
-                    marginTop: 'var(--sp-4)',
-                    fontSize: 'var(--fs-14)',
-                    color: 'var(--text-sub)',
+                    marginTop: 'var(--space-3)',
+                    fontSize: 'var(--font-size-s)',
+                    color: 'var(--text-tertiary)',
                   }}
                 >
                   Reason: {signer.declineReason}
@@ -143,11 +137,11 @@ export function SignersTab({
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-end',
-                gap: 'var(--sp-4)',
+                gap: 'var(--space-3)',
               }}
             >
               <Badge
-                tone={signerStatusTone(signer.status)}
+                status={signerStatusTone(signer.status)}
                 data-testid={`envelope-signer-status-${signer.order}`}
               >
                 {signerStatusLabel(signer.status)}
@@ -155,7 +149,7 @@ export function SignersTab({
 
               <span
                 data-testid={`envelope-signer-signed-at-${signer.order}`}
-                style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+                style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
               >
                 {signer.signedAt
                   ? formatUtcTimestamp(signer.signedAt)
@@ -166,9 +160,7 @@ export function SignersTab({
 
               {resendable && (
                 <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={resending === signer.id}
+                  preloader={resending === signer.id}
                   data-testid={`envelope-resend-btn-${signer.order}`}
                   onClick={() => void resend(signer)}
                 >

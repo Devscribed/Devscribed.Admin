@@ -94,24 +94,21 @@ export function WeeklyView({
     durationOnly.length > 0 ? (
       <div
         style={{
-          borderTop: '1px solid var(--border)',
-          background: 'var(--bg-panel-2)',
-          padding: '10px 14px',
+          borderTop: 'var(--border-width-hairline) solid var(--border-default)',
+          background: 'var(--surface-sunken)',
+          padding: 'var(--space-4) var(--space-6)',
           display: 'flex',
           alignItems: 'center',
-          gap: 14,
+          gap: 'var(--space-6)',
           flexWrap: 'wrap',
           flexShrink: 0,
         }}
       >
         <span
           style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-11)',
-            letterSpacing: 1.2,
-            textTransform: 'uppercase',
-            color: 'var(--text-muted)',
+            fontWeight: 'var(--font-weight-medium)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
           }}
         >
           Duration-only
@@ -141,15 +138,14 @@ export function WeeklyView({
       <div
         data-testid="tt-week-total"
         style={{
-          marginTop: 14,
+          marginTop: 'var(--space-6)',
           textAlign: 'right',
-          fontFamily: 'var(--font-text)',
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text-sub)',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-tertiary)',
         }}
       >
         Total this week{' '}
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text)' }}>
+        <span style={{ fontWeight: 'var(--font-weight-semibold)', fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>
           {formatDurationHuman(weekTotal)}
         </span>
       </div>
@@ -158,7 +154,7 @@ export function WeeklyView({
 }
 
 /** A day column header: weekday + date, tinted for today, with the per-day total. On
- * a holiday day the header keeps the amber tint as a running-header cue, and the
+ * a holiday day the header keeps the holiday tint as a running-header cue, and the
  * full-column overlay in the grid body carries the marker, the name and the
  * `time-cell-{date}-holiday-marker` test id. */
 function DayHeader({
@@ -179,7 +175,7 @@ function DayHeader({
   return (
     <div
       style={{
-        background: isHoliday ? 'var(--holiday-bg)' : undefined,
+        background: isHoliday ? 'var(--surface-holiday)' : undefined,
         // `minHeight` (not fixed height) so the split billable / non-billable
         // sub-line has room to render — spec 16 requires two lines when both
         // totals are non-zero, and 64px only fits one.
@@ -189,17 +185,14 @@ function DayHeader({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 1,
-        padding: '6px 4px',
+        padding: 'var(--space-2) var(--space-1)',
       }}
     >
       <span
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-11)',
-          letterSpacing: 1.2,
-          textTransform: 'uppercase',
-          color: isToday ? 'var(--accent)' : 'var(--text-muted)',
+          fontWeight: 'var(--font-weight-medium)',
+          fontSize: 'var(--font-size-xs)',
+          color: isToday ? 'var(--color-blue)' : 'var(--text-secondary)',
         }}
       >
         {name}
@@ -207,11 +200,10 @@ function DayHeader({
       </span>
       <span
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-22)',
-          letterSpacing: -0.5,
-          color: isToday ? 'var(--accent)' : 'var(--text)',
+          fontWeight: 'var(--font-weight-semibold)',
+          fontSize: 'var(--font-size-xl)',
+          fontVariantNumeric: 'tabular-nums',
+          color: isToday ? 'var(--color-blue)' : 'var(--text-primary)',
         }}
       >
         {dayNumber(date)}
@@ -229,10 +221,9 @@ function DayHeader({
           flexDirection: 'column',
           alignItems: 'center',
           lineHeight: 1.05,
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: 'var(--fs-12)',
-          color: totalMinutes > 0 ? 'var(--text-sub)' : 'var(--text-faint)',
+          fontSize: 'var(--font-size-xs)',
+          fontVariantNumeric: 'tabular-nums',
+          color: totalMinutes > 0 ? 'var(--text-tertiary)' : 'var(--text-secondary)',
         }}
       >
         <span>{totalMinutes > 0 ? formatDurationHuman(billableMinutes) : '—'}</span>
@@ -240,8 +231,8 @@ function DayHeader({
           <span
             style={{
               marginTop: 1,
-              fontSize: 'var(--fs-11)',
-              color: 'var(--text-muted)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-secondary)',
               lineHeight: 1.05,
             }}
           >
@@ -298,11 +289,11 @@ function WeeklyBlock({
       style={blockButtonStyle(color, nonBillable)}
     >
       {nonBillable ? <NBTag /> : null}
-      <span style={{ fontWeight: 500, fontSize: 'var(--fs-11)', opacity: 0.85 }}>{timeRange}</span>
+      <span style={{ fontSize: 'var(--font-size-xs)', opacity: 0.85 }}>{timeRange}</span>
       <span
         style={{
-          fontWeight: 600,
-          fontSize: 'var(--fs-13)',
+          fontWeight: 'var(--font-weight-semibold)',
+          fontSize: 'var(--font-size-xs)',
           marginTop: 2,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -314,7 +305,7 @@ function WeeklyBlock({
       {entry.task ? (
         <span
           style={{
-            fontSize: 'var(--fs-11)',
+            fontSize: 'var(--font-size-xs)',
             opacity: 0.75,
             marginTop: 2,
             whiteSpace: 'nowrap',
@@ -350,22 +341,20 @@ function DurationChip({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '6px 12px',
-        borderRadius: 'var(--radius-sm)',
+        gap: 'var(--space-3)',
+        padding: 'var(--space-2) var(--space-5)',
+        borderRadius: 'var(--radius-s)',
         // Spec 16 §Weekly view — dashed border + sunken background + muted text for
         // non-billable chips; billable keeps the project palette treatment.
-        border: nonBillable ? '1px dashed var(--border-strong)' : 'none',
-        borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
-        background: nonBillable ? 'var(--bg-sunken)' : color.bg,
-        color: nonBillable ? 'var(--text-muted)' : color.text,
-        fontFamily: 'var(--font-display)',
-        fontWeight: 500,
-        fontSize: 'var(--fs-13)',
+        border: nonBillable ? 'var(--border-width-control) dashed var(--border-default)' : 'none',
+        borderLeft: nonBillable ? '3px dashed var(--border-default)' : `3px solid ${color.rail}`,
+        background: nonBillable ? 'var(--surface-sunken)' : color.bg,
+        color: nonBillable ? 'var(--text-secondary)' : color.text,
+        fontSize: 'var(--font-size-xs)',
         cursor: 'pointer',
       }}
     >
-      {nonBillable ? <span style={{ fontSize: 'var(--fs-11)', color: 'var(--text-muted)' }}>NB</span> : null}
+      {nonBillable ? <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>NB</span> : null}
       {day} · {project}
       {entry.task ? ` · ${entry.task}` : ''} · {formatDurationHuman(entry.durationMinutes)}
     </button>
@@ -381,13 +370,12 @@ function NBTag() {
         position: 'absolute',
         top: 4,
         right: 6,
-        fontFamily: 'var(--font-display)',
-        fontWeight: 600,
-        fontSize: 'var(--fs-11)',
-        color: 'var(--text-muted)',
-        background: 'var(--bg-panel)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '0 4px',
+        fontWeight: 'var(--font-weight-medium)',
+        fontSize: 'var(--font-size-xs)',
+        color: 'var(--text-secondary)',
+        background: 'var(--surface-card)',
+        borderRadius: 'var(--radius-s)',
+        padding: '0 var(--space-1)',
         lineHeight: 1.3,
       }}
     >
@@ -408,12 +396,13 @@ function blockButtonStyle(color: BlockColor, nonBillable: boolean): CSSPropertie
     height: '100%',
     textAlign: 'left',
     padding: '6px 8px',
-    border: nonBillable ? '1px dashed var(--border-strong)' : 'none',
-    borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
-    borderRadius: 'var(--radius-sm)',
-    background: nonBillable ? 'var(--bg-sunken)' : color.bg,
-    color: nonBillable ? 'var(--text-muted)' : color.text,
-    fontFamily: 'var(--font-display)',
+    // §Phase 2 settled `--border-strong` onto `--border-default` at `--border-width-control`:
+    // yellow said "a form control's edge" in ink, the system says it in width.
+    border: nonBillable ? 'var(--border-width-control) dashed var(--border-default)' : 'none',
+    borderLeft: nonBillable ? '3px dashed var(--border-default)' : `3px solid ${color.rail}`,
+    borderRadius: 'var(--radius-s)',
+    background: nonBillable ? 'var(--surface-sunken)' : color.bg,
+    color: nonBillable ? 'var(--text-secondary)' : color.text,
     cursor: 'pointer',
     overflow: 'hidden',
   };

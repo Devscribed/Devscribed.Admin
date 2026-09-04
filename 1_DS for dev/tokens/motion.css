@@ -1,9 +1,0 @@
-:root{
-  --easing-standard:cubic-bezier(.4,0,.2,1); /* @kind other */
-  --duration-fast:120ms;  /* @kind other */
-  --duration-base:150ms;  /* @kind other */
-  --duration-slow:250ms;  /* @kind other */
-  --transition-color:color var(--duration-base) var(--easing-standard),background var(--duration-slow) var(--easing-standard); /* @kind other */
-  --transition-transform:transform var(--duration-fast) var(--easing-standard); /* @kind other */
-  --hover-bg-tint:oklch(0.62 0.17 292 / 0.07); /* the universal Meridian hover */
-}

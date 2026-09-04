@@ -248,6 +248,10 @@ Organizations group work into **projects**. An `admin` or `manager` creates proj
       "name": "Project Alpha",
       "status": "active",
       "memberCount": 3,
+      "memberPreview": [
+        { "name": "Jane Smith", "initials": "JS" },
+        { "name": "Alex Kaminski", "initials": "AK" }
+      ],
       "totalHours": 142.5,
       "createdAt": "2026-08-01T10:00:00Z"
     }
@@ -256,6 +260,15 @@ Organizations group work into **projects**. An `admin` or `manager` creates proj
 ```
 
 `totalHours` is the sum of all `durationMinutes` across all time entries for the project, divided by 60, rounded to one decimal.
+
+`memberPreview` carries **at most the first three** of the project's active members, in the same
+order `GET .../projects/{id}/members` returns them — last name, then first. It is a sample, not
+a length: `memberCount` remains the count of *all* active members, and a project with more
+members than the preview holds is still described by the count beside it. `initials` is the
+first letter of each name, upper-cased, computed server-side so that one rule serves every
+screen that draws the mark. Added for the Members column of the projects list (see
+[11-projects.design.md](11-projects.design.md) §Member cell), which draws people rather than a
+quantity; additive, so a client that ignores the field is unaffected.
 
 **Errors:**
 - `401 Unauthorized`: not authenticated.
@@ -543,7 +556,10 @@ Breakpoints follow the app shell (spec 00). The Projects page has three layouts:
 - `projects-table`, `projects-row-{id}`
 - `projects-new-btn`
 - `projects-empty-state`
-- `projects-loading-skeleton`
+- ~~`projects-loading-skeleton`~~ → `projects-loading`
+
+  *Amended by the main merge, Phase 6:* renamed to **`projects-loading`**, and drawn by `Preloader` (§23, §69). The old id named a component that does not exist — the design system ships no `Skeleton`, and the one outline left in this product is the members list's, kept there deliberately and not copied. That is the ruling the first migration already made twice, at `specs/hiring/05-board.design.md` and `specs/hiring/04-candidate-card.design.md`: a test id naming an *announcement* survives the component drawing it, and one naming the component does not.
+
 
 **Project detail:**
 - `project-detail-page`, `project-detail-name`
@@ -815,6 +831,20 @@ Security is enforced end-to-end. The UI hides what a caller cannot do; the API i
   1. As A, `POST .../projects` with `{ "name": "<script>alert('x')</script>" }` — server accepts (100-char limit is the only constraint; the character class rule rejects `<` and `>`).
 - **Expected Result:**
   1. HTTP 400 with validation error on `name` — the allowed-character class excludes `<` and `>`. Even if it did accept them, the web client would render as a text node, not HTML.
+
+### TC-11-INT-18: `memberPreview` samples the roster and never replaces the count
+
+- **Level:** Integration
+- **Preconditions:** admin A, four active members — Chen, Kaminski, Novak, Smith.
+- **Steps:**
+  1. As A, create a project and assign all four.
+  2. As A, `GET .../projects`.
+- **Expected Result:**
+  1. `memberCount` is `4` — every active member, not the length of the preview.
+  2. `memberPreview` has **three** entries, in roster order: Chen, Kaminski, Novak.
+  3. Each entry carries `name` (first + last) and `initials` (first letter of each, upper-cased).
+  4. A project with no members returns `memberPreview: []` and `memberCount: 0`.
+  5. A member removed from the organization (spec 04's soft delete) leaves the preview as well as the count.
 
 ### TC-11-E2E-01: Admin creates project, adds members, archives
 

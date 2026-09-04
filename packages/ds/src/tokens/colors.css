@@ -1,0 +1,109 @@
+/* Colour tokens.
+
+   The base palette is the raw values; **nothing outside this file should name one.** Components
+   reach for the semantic aliases below it, so a surface, a border and an action can move
+   independently of the hue they happen to share today. */
+
+:root {
+  /* Base palette */
+  --color-black: #1B1B1B;
+  --color-blue: #007AFF;        /* primary action color, iOS-blue */
+  --color-blue-light: #EFF6FF;
+  --color-blue-lighter: #E8F2FE; /* logo lockup background */
+  --color-blue-tint: #F4F7FF;    /* active sidebar sub-item background */
+  --color-tracker-blue: #2AA7FF; /* floating tracker widget accent (distinct from primary blue) */
+  /* §91 — a day the organisation is closed, and a colour of its own rather than a status.
+     It shares today's pigment with `--color-warning`, and it is a separate name for the
+     reason stated at the top of this file: a surface and a status must be able to move
+     apart. A holiday is not a warning — nothing is going badly on the 25th of December —
+     and the calendar it marks already spends blue on today and red on the now-line, so
+     those two are unavailable to it as well as wrong. */
+  --color-holiday: #FFD02B;
+  --color-gray: #64748B;
+  --color-gray-light: #E7E7E7;
+  --color-gray-lighter: #E8E8E8;
+  --color-gray-dark: #54595E;
+  --color-gray-table-header: #EEF2F5;
+  --color-gray-disabled-bg: #EFF1F5;
+  --color-white: #FFFFFF;
+
+  /* Status palette */
+  --color-success: #27C79A;
+  --color-warning: #FFD02B;
+  --color-error: #D80027;
+  --color-info: #00B6FF;
+
+  /* Structural colours. These are the translucent ones, and they are translucent on purpose:
+     each sits over a surface it must not fully replace. */
+  --color-border-subtle: rgba(72, 94, 144, 0.16);
+  --color-row-hover: rgba(211, 211, 211, 0.1);
+  --color-overlay-scrim: rgba(0, 0, 0, 0.6);
+  --color-error-outline: rgba(234, 78, 61, 0.45);
+  --color-info-tint: rgba(0, 182, 255, 0.1);
+  --color-error-tint: rgba(216, 0, 39, 0.1);
+  /* §91 — the holiday hue at 10%, which is the same derivation `--color-info-tint` and
+     `--color-error-tint` take. It tints a whole day column behind the entries logged on it,
+     so it has to be a wash rather than a fill. */
+  --color-holiday-tint: rgba(255, 208, 43, 0.1);
+
+  /* §93 — the six grounds a person's avatar can take, and the ink that goes on each.
+     A person is not a status, so none of these is drawn from the status palette; they are
+     a *category* ramp in §59's sense, saying only "not the one beside it". The hues are
+     spread evenly and every one of them stays at least 25° away from the four the system
+     has already given a meaning — error, warning, success and blue — so no avatar reads
+     as a claim about how its owner is going. Ground and ink are the same hue at two steps,
+     which is what keeps the initials legible on all six without a per-hue exception. */
+  --avatar-1-surface: oklch(0.9 0.07 55);
+  --avatar-1-text: oklch(0.42 0.14 55);
+  --avatar-2-surface: oklch(0.9 0.07 130);
+  --avatar-2-text: oklch(0.42 0.14 130);
+  --avatar-3-surface: oklch(0.9 0.07 195);
+  --avatar-3-text: oklch(0.42 0.14 195);
+  --avatar-4-surface: oklch(0.9 0.07 285);
+  --avatar-4-text: oklch(0.42 0.14 285);
+  --avatar-5-surface: oklch(0.9 0.07 325);
+  --avatar-5-text: oklch(0.42 0.14 325);
+  --avatar-6-surface: oklch(0.9 0.07 350);
+  --avatar-6-text: oklch(0.42 0.14 350);
+
+  /* Semantic aliases */
+  --surface-page: var(--color-white);
+  /* The ground the app frame paints behind its content, and the same ground the signed-out
+     and public shells use. It is the one surface that is not white, and naming it is what
+     keeps three shells agreeing about what "the page" looks like. */
+  --surface-well: #F8FAFC;
+  /* A menu row under the pointer. Lighter than `--color-row-hover`, which tints a 70px table
+     row: a 32px menu row tinted that heavily reads as selected rather than as hovered. */
+  --surface-row-hover: #F8F8F8;
+  --surface-card: var(--color-white);
+  --surface-sunken: var(--color-gray-table-header);
+  --surface-disabled: var(--color-gray-disabled-bg);
+  --surface-overlay: var(--color-white);
+
+  --text-primary: var(--color-black);
+  --text-secondary: var(--color-gray);
+  --text-tertiary: var(--color-gray-dark);
+  --text-on-accent: var(--color-white);
+  --text-link: var(--color-blue);
+
+  --border-default: var(--color-gray-light);
+  --border-subtle: var(--color-border-subtle);
+  /* §91 — a holiday's ground and its edge. There is no `--text-holiday`: ink on this hue is
+     `--text-primary`, which is the call §32 already made for `Badge`'s warning tone — white
+     on a yellow this light is not a legibility trade-off but an absence of text. */
+  --surface-holiday: var(--color-holiday-tint);
+  --border-holiday: var(--color-holiday);
+
+  --action-primary: var(--color-blue);
+  --action-primary-text: var(--color-white);
+  --action-danger: var(--color-error);
+  --action-danger-text: var(--color-white);
+  --action-neutral-text: var(--color-gray);
+
+  --status-success: var(--color-success);
+  --status-warning: var(--color-warning);
+  --status-error: var(--color-error);
+  --status-info: var(--color-info);
+
+  --focus-ring-color: rgba(1, 104, 250, 0.5);
+}

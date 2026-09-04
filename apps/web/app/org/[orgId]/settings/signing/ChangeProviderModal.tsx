@@ -1,7 +1,7 @@
 'use client';
 
 import { SIGNING_PROVIDER_MESSAGES } from '@devscribed/validation';
-import { Button, Checkbox, Modal } from '@/ds';
+import { Button, Checkbox, FormActions, Modal } from '@devscribed/ds';
 
 /**
  * The confirmation requirement 33 asks for.
@@ -35,45 +35,44 @@ export function ChangeProviderModal({
   onConfirm: () => void;
 }) {
   return (
-    <Modal
-      open={open}
-      title="Change signature provider"
-      onClose={onCancel}
-      actions={
-        <>
-          <Button variant="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            // Disabled until the checkbox is ticked — a deliberate confirmation — and
-            // while the request is in flight, which is the other permitted case.
-            disabled={!confirmed}
-            loading={saving}
-            data-testid="signing-change-submit"
-            onClick={onConfirm}
-          >
-            Change provider
-          </Button>
-        </>
-      }
-    >
+    <Modal open={open} title="Change signature provider" onClose={onCancel}>
       <div data-testid="signing-change-modal">
-        <p style={{ margin: '0 0 var(--sp-7)', fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
+        <p style={{ margin: '0 0 var(--space-7)', fontSize: 'var(--font-size-base)', color: 'var(--text-tertiary)' }}>
           New documents will be signed through {providerName}.
         </p>
         <p
           data-testid="signing-change-inflight"
-          style={{ margin: '0 0 var(--sp-8)', fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+          style={{ margin: '0 0 var(--space-6)', fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
         >
           {SIGNING_PROVIDER_MESSAGES.settings.inFlight(inFlightCount)}
         </p>
+        {/* The system's `Checkbox` is a native input and hands back the event (§79). */}
         <Checkbox
           checked={confirmed}
-          onChange={onConfirmedChange}
+          onChange={(event) => onConfirmedChange(event.target.checked)}
           data-testid="signing-change-confirm"
           label="I understand"
         />
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              // Disabled until the checkbox is ticked — a deliberate confirmation — and
+              // while the request is in flight, which is the other permitted case.
+              disabled={!confirmed}
+              preloader={saving}
+              data-testid="signing-change-submit"
+              onClick={onConfirm}
+            >
+              Change provider
+            </Button>
+          </FormActions>
+        </div>
       </div>
     </Modal>
   );

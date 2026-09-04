@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Spinner } from '@/ds';
+import { Chip, Preloader, TextInput } from '@devscribed/ds';
 import { TASK_TYPE_COLOR, TaskTypeGlyph } from '../../app/org/[orgId]/projects/[projectId]/kanban/visual';
 import {
   TIME_TRACKING_MESSAGES,
@@ -50,6 +50,18 @@ const DEBOUNCE_MS = 250;
  *
  * The parent owns the paired `taskId` state on the request body — this
  * component only mediates the search UI and reports selection changes.
+ *
+ * **Not a `Select`, and the reason is mechanical rather than effort.** `Select` (§21) owns its
+ * own query and filters the `options` it is handed against each option's *label*. These rows
+ * arrive already filtered, by a server that matched a task's **key** or its **title**
+ * separately and that answers an empty query with the recently-updated set — so handing them
+ * to `Select` would filter them a second time against `{KEY}: {title}` and drop rows the
+ * server had just chosen. The one behaviour that defines the control is the wrong one here,
+ * which is the same shape of argument that kept `ColumnsPicker` out of `Select isMulti`.
+ *
+ * What is the system's is everything inside it: `Chip` (§20, §37) is the chosen state, the
+ * search is a `TextInput` (§3), and `Preloader` (§23) is what waiting looks like. Only the
+ * panel and its outside-click are local.
  */
 export function TaskSelector({
   orgId,
@@ -144,72 +156,27 @@ export function TaskSelector({
 
   if (value) {
     return (
-      <div
-        ref={rootRef}
+      /* One chosen thing with a way to drop it — which is `Chip`, word for word (§20). The
+         key travels in `leading` beside the type glyph rather than inside the label, because
+         §37's label span ellipsises to one line and the key is the half that must not be the
+         half that disappears. */
+      <Chip
         data-testid={`${testIdPrefix}-task-selector`}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 'var(--sp-2)',
-          padding: '0 var(--sp-3)',
-          height: 'var(--field-h)',
-          border: '1.5px solid var(--border-strong)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-panel)',
-          maxWidth: '100%',
-          minWidth: 0,
-          width: '100%',
-        }}
-      >
-        <TaskTypeGlyph type={value.type} size={14} />
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--text-muted)',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {value.key}
-        </span>
-        <span
-          style={{
-            fontFamily: 'var(--font-text)',
-            fontSize: 'var(--fs-14)',
-            color: 'var(--text)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {value.title}
-        </span>
-        <button
-          type="button"
-          onClick={clearTask}
-          disabled={disabled}
-          data-testid={`${testIdPrefix}-task-clear-btn`}
-          aria-label="Clear task selection"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 22,
-            height: 22,
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--text-muted)',
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            padding: 0,
-            fontSize: 'var(--fs-14)',
-            lineHeight: 1,
-          }}
-        >
-          ✕
-        </button>
-      </div>
+        label={value.title}
+        leading={
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', paddingRight: 'var(--space-2)' }}>
+            <TaskTypeGlyph type={value.type} size={14} />
+            <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              {value.key}
+            </span>
+          </span>
+        }
+        onRemove={clearTask}
+        removeDisabled={disabled}
+        removeLabel="Clear task selection"
+        removeTestId={`${testIdPrefix}-task-clear-btn`}
+        style={{ margin: 0, maxWidth: '100%', minWidth: 0 }}
+      />
     );
   }
 
@@ -219,32 +186,18 @@ export function TaskSelector({
       data-testid={`${testIdPrefix}-task-selector`}
       style={{ position: 'relative', width: '100%' }}
     >
-      <input
+      <TextInput
         ref={inputRef}
-        type="text"
         value={query}
         placeholder={placeholder}
         disabled={disabled}
+        aria-label={placeholder}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
         data-testid={`${testIdPrefix}-task-search-input`}
-        style={{
-          height: 'var(--field-h)',
-          width: '100%',
-          border: '1.5px solid var(--border-strong)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '0 var(--sp-3)',
-          fontFamily: 'var(--font-text)',
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text)',
-          background: 'var(--bg-field)',
-          outline: 'none',
-          opacity: disabled ? 0.55 : 1,
-          cursor: disabled ? 'not-allowed' : 'text',
-        }}
       />
       {open && (
         <div
@@ -254,36 +207,35 @@ export function TaskSelector({
             left: 0,
             right: 0,
             zIndex: 40,
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-pop)',
+            background: 'var(--surface-overlay)',
+            border: 'var(--border-width-hairline) solid var(--border-default)',
+            borderRadius: 'var(--radius-m)',
+            boxShadow: 'var(--shadow-popover)',
             maxHeight: 280,
             overflowY: 'auto',
           }}
         >
           {loading && (results === null || results.length === 0) ? (
             <div
+              role="status"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--sp-2)',
-                padding: 'var(--sp-3)',
-                color: 'var(--text-muted)',
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-13)',
+                gap: 'var(--space-2)',
+                padding: 'var(--space-3)',
+                color: 'var(--text-secondary)',
+                fontSize: 'var(--font-size-xs)',
               }}
             >
-              <Spinner size={14} />
+              <Preloader size={6} margin={2} />
               Loading…
             </div>
           ) : results !== null && results.length === 0 ? (
             <div
               style={{
-                padding: 'var(--sp-3)',
-                color: 'var(--text-muted)',
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-13)',
+                padding: 'var(--space-3)',
+                color: 'var(--text-secondary)',
+                fontSize: 'var(--font-size-xs)',
               }}
             >
               {TIME_TRACKING_MESSAGES.taskSelectorNoMatches}
@@ -298,9 +250,9 @@ export function TaskSelector({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 'var(--sp-2)',
+                  gap: 'var(--space-2)',
                   width: '100%',
-                  padding: '6px var(--sp-3)',
+                  padding: 'var(--space-2) var(--space-3)',
                   border: 'none',
                   background: 'transparent',
                   cursor: 'pointer',
@@ -315,7 +267,7 @@ export function TaskSelector({
                     justifyContent: 'center',
                     width: 8,
                     height: 8,
-                    borderRadius: '50%',
+                    borderRadius: 'var(--radius-circle)',
                     background: TASK_TYPE_COLOR[task.type],
                     flexShrink: 0,
                   }}
@@ -323,9 +275,9 @@ export function TaskSelector({
                 <TaskTypeGlyph type={task.type} size={14} />
                 <span
                   style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--fs-12)',
-                    color: 'var(--text-muted)',
+                    fontFamily: 'var(--font-family-mono)',
+                    fontSize: 'var(--font-size-xs)',
+                    color: 'var(--text-secondary)',
                     minWidth: 60,
                     whiteSpace: 'nowrap',
                   }}
@@ -334,9 +286,8 @@ export function TaskSelector({
                 </span>
                 <span
                   style={{
-                    fontFamily: 'var(--font-text)',
-                    fontSize: 'var(--fs-14)',
-                    color: 'var(--text)',
+                    fontSize: 'var(--font-size-s)',
+                    color: 'var(--text-primary)',
                     flex: 1,
                     minWidth: 0,
                     whiteSpace: 'nowrap',

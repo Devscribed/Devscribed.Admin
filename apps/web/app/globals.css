@@ -1,17 +1,869 @@
-/* Page-level reset only. Every visual value comes from the Meridian tokens. */
-* {
-  box-sizing: border-box;
+/*
+ * Layout rules that inline styles cannot express — media queries, `:hover` on a descendant,
+ * `:focus-within`. Every visual value is a design-system token.
+ *
+ * There is no page-level reset here any more. `@devscribed/ds/styles.css` loads `base.css`, which is
+ * the design system's own reset: `box-sizing` on everything, `margin: 0` and the Poppins
+ * stack on `body`, and the brand blue on an unclassed `<a>`. This file used to repeat all
+ * four against the earlier design's token names, and because it is imported *after* the design system it
+ * won — so on blue those declarations resolved to nothing and took the body font and the
+ * link colour down with them. Deleting them is the fix; base.css was always the better copy.
+ */
+
+/*
+ * The public booking page is the one screen with real breakpoints — a calendar beside
+ * a slot list beside a form. Inline styles cannot express a media query, so its layout
+ * lives here. Every value is still a token or a breakpoint from
+ * `specs/hiring/02-booking-page.design.md`.
+ */
+.booking-panels {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: 1fr 1fr;
 }
 
-html,
-body {
+.booking-names {
+  display: grid;
+  /* 20px, not 16: the two fields sit in a form whose rows are 20px apart, and a name row
+     that closed up tighter than the gap above it would read as one field split in two. */
+  gap: var(--space-7);
+  grid-template-columns: 1fr 1fr;
+}
+
+/*
+ * The zone and the clock format, **above** the two panels: they are the frame every number
+ * below is read in, and a control that qualifies what is above it is found only after the
+ * reader has already misread it once. `flex-end` because the zone carries a label and the
+ * toggle does not, so the two controls line up on their own bottom edge rather than on their
+ * boxes' tops.
+ */
+.booking-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-7);
+}
+
+.booking-zone {
+  width: 320px;
+  max-width: 100%;
+}
+
+/*
+ * The toggle needs a definite width from whatever the flex row measures: `ToggleButton` is a
+ * block at `width: 100%`, and a block at 100% inside a shrink-to-fit flex item is 100% of
+ * nothing, so both segments collapse onto each other (decisions §49). This wrapper is what
+ * states it. The control caps itself at `max-content` (§87), so it takes its own width inside
+ * the slot rather than stretching to fill it.
+ */
+.booking-format {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 160px;
+  width: 160px;
+}
+
+.booking-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* The one thing left to do, centred on the page's own ground under everything it acts on. */
+.booking-submit {
+  display: flex;
+  justify-content: center;
+}
+
+.booking-submit > button {
+  width: 320px;
+  max-width: 100%;
+}
+
+@media (max-width: 879px) {
+  .booking-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 599px) {
+  .booking-names {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .booking-zone {
+    width: 100%;
+  }
+
+  /* Stacked, the toggle keeps its own width instead of stretching into a wide pill. */
+  .booking-format {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+  }
+
+  .booking-zone {
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* The list scrolls in its own region rather than growing the page unbounded. */
+  .booking-slots {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .booking-submit {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+/*
+ * Candidate card (hiring 04). Inline styles cannot express a media query, and the
+ * card's header and CV row both restack on a narrow screen — so those two rules live
+ * here. Every value is still a token.
+ */
+.card-section {
+  /* Clear of the shell's own top padding when `?application=` scrolls one into view. */
+  scroll-margin-top: var(--space-7);
+}
+
+.card-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  /*
+   * The panel is `padded={false}` and its two regions pad themselves, so the rule between
+   * them runs the full width of the card instead of stopping 16px short at each end. A
+   * divider inset from both edges reads as a box drawn around the header; one that reaches
+   * the edges reads as the card being in two parts, which is what it is.
+   */
+  padding: var(--space-6) var(--space-7);
+}
+
+.card-section-head-divided {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The vacancy's labels, under its name on the card's header. */
+.application-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/*
+ * The three facts of an interview, one per line with its own glyph (04 §03). A list, not a
+ * dot-separated run: during the interview is exactly when a run is hardest to read off a
+ * screen, and *when · how long · with whom* is what gets asked out loud.
+ */
+.application-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+}
+
+.application-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  min-width: 0;
+  font-size: var(--font-size-s);
+  line-height: 22px;
+  color: var(--text-primary);
+}
+
+.application-meta-row > svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.card-section-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* Label beside the control, on one line, in a header row (04 §03). */
+.application-status-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.application-status-label {
+  font-size: var(--font-size-xs);
+  line-height: 21px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/*
+ * Two columns, and the split is the whole idea of the screen: **what the team writes on the
+ * left, what the candidate gave us on the right** (04 §Layout). Criteria, notes and
+ * conclusion are the working area of a live interview and want the width; the CV, the note
+ * and the name they applied under are reference and want to stay in view beside it, not be
+ * scrolled past to reach the field being typed in.
+ *
+ * 1.7fr against a column that never goes under 240px: the left side holds three text
+ * editors and the right holds a file row, so they are not halves.
+ */
+.card-section-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(240px, 1fr);
+  gap: var(--space-8);
+  padding: var(--space-7);
+}
+
+.card-section-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  min-width: 0;
+}
+
+/*
+ * The rule between the columns belongs to the right one, so it is as tall as the row is —
+ * which is as tall as whichever column is taller — rather than as tall as its own content.
+ */
+.card-section-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  padding-left: var(--space-7);
+  border-left: 1px solid var(--border-subtle);
+}
+
+/*
+ * The scheduling log spans both, and it is the one thing on this card that the design has
+ * no place for — it is neither the team's writing nor the candidate's material, it is what
+ * has happened to the booking. Full width because that is what it needs: each entry is four
+ * facts on one line with a timestamp pushed to the right edge, and in a 300px column every
+ * row of it would wrap three times.
+ */
+.card-section-log {
+  grid-column: 1 / -1;
+}
+
+/* The name they applied under, where the rest of what they sent is. */
+.application-submitted-as {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/*
+ * The CV, as an attachment row (04 §05): extension tile, name, weight — the shape a file has
+ * in a mail client, so it is recognised before it is read. The row itself opens the file.
+ */
+.card-cv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.card-cv-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  box-sizing: border-box;
+  color: inherit;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-l);
+  transition: var(--transition-border-focus);
+}
+
+/* The app's own row tint, not a blue edge: a 1.5px blue border is the focus state of a field,
+   and borrowing it for hover would say "this input is focused". */
+.card-cv-file:hover {
+  background: var(--color-row-hover);
+  color: inherit;
+}
+
+.card-cv-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-s);
+  font-size: 10px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.card-cv-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card-cv-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.card-cv-size {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/*
+ * `Download` takes the width of the column. It is the only action in the aside and it sits
+ * under a row that already spans it, so a shrink-to-fit button would leave a ragged right
+ * edge under a full-width one for no reason — and this is how the design draws it.
+ */
+.card-cv-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.card-cv-actions > * {
+  flex: 1;
+}
+
+@media (max-width: 1023px) {
+  /* The status control drops below the title rather than squeezing it. */
+  .card-section-head {
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  .card-section-status {
+    align-self: flex-start;
+  }
+
+  /*
+   * One column, and the rule between them becomes a rule above the second — the same
+   * division, turned through 90 degrees, rather than dropped.
+   */
+  .card-section-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card-section-side {
+    padding-left: 0;
+    padding-top: var(--space-7);
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+  }
+}
+
+/* A criterion chip: the name, its value control, and the remove button, on one line. */
+/*
+ * One recorded assessment, as a small form on the recessed ground (04 §04). The same object
+ * the candidate database's criteria filter draws, for the same reason: the card records
+ * *English is B1*, the filter asks *whose English is at least B1*.
+ */
+.card-criterion-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 6px 6px 6px var(--space-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+}
+
+.card-criterion-name {
+  font-size: var(--font-size-s);
+  color: var(--text-primary);
+}
+
+@media (max-width: 767px) {
+  .card-cv-file {
+    align-items: flex-start;
+  }
+
+  /* Chips stack full width rather than wrapping mid-control (04 design §Responsive). */
+  .card-criterion-chip {
+    display: flex;
+    width: 100%;
+  }
+
+  .card-criterion-chip > * {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/*
+ * The vacancy screen (spec 01 §08, spec 05). One route: a header that stays put, and the
+ * board scrolling inside whatever is left of the viewport.
+ *
+ * `AppShell`'s content box has a **definite** height — it is `height: 100%` of a flex
+ * child of a `100vh` column — so `height: 100%` here resolves to a real number, and that
+ * is what lets the board be `flex: 1` of something rather than of nothing. Nothing is
+ * clipped: a header taller than the viewport (a narrow window, a wrapped title) overflows
+ * into the shell's own scroller instead, which is the degradation to want.
+ */
+.vacancy-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  height: 100%;
+  min-height: 0;
+}
+
+.vacancy-screen-header {
+  flex-shrink: 0;
+}
+
+.vacancy-screen-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* The title takes the room and gives it back: below its basis the actions wrap under it
+   rather than squeezing the name they belong to. */
+.vacancy-screen-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.vacancy-screen-heading > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vacancy-screen-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-shrink: 0;
+}
+
+/* `React · Senior · Pat Owner · 60 min · times in Europe/Berlin` (01 §08.28). */
+.vacancy-screen-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-3);
+  min-width: 0;
+  font-size: var(--font-size-s);
+  color: var(--text-primary);
+}
+
+.vacancy-screen-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.vacancy-screen-description {
+  font-size: var(--font-size-s);
+  line-height: 22px;
+  color: var(--text-primary);
+  text-wrap: pretty;
+}
+
+/*
+ * `View more` and `Add a description`: text that acts, not a `Button`. The system's three button
+ * variants are all filled or outlined boxes, and a box here would read as a second action
+ * competing with `Copy booking link` two lines above it.
+ */
+.vacancy-screen-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-xs);
+  color: var(--color-blue);
+}
+
+.vacancy-screen-link-button:hover {
+  text-decoration: underline;
+}
+
+.vacancy-screen-board,
+.vacancy-board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * The board (spec 05). Five equal columns; below 1200px the column group scrolls
+ * horizontally inside its own container so the page body never does, and below 768px
+ * the page swaps the grid for a tab strip in JS — a structural change no media query
+ * can express on its own.
+ */
+.board-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  /* `overflow-x: auto` alone would compute `overflow-y` to `auto` as well, and the columns
+     already scroll themselves — two nested scrollbars for one list of cards. */
+  overflow-y: hidden;
+  padding-bottom: var(--space-3);
+}
+
+.board-columns {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  gap: var(--space-5);
+  /* Stretched, not top-aligned. The columns used to size to their own contents and cap
+     themselves with a `100vh` subtraction that named the navbar, the shell's padding and
+     a hand-counted 120px of page header. The header is a real box on this screen now, so
+     the height is one the layout knows: the group fills the region it was given, and each
+     column fills the group. */
+  align-items: stretch;
+  height: 100%;
+}
+
+.board-columns > *,
+.board-single > * {
+  min-height: 0;
+}
+
+@media (max-width: 1199px) {
+  .board-columns {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
+.board-single {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  margin-top: var(--space-5);
+}
+
+/*
+ * The candidate database's filter drawer (spec 03 §09). Five kinds of filter behind one
+ * button, in a 340px panel — so the fields stack full width and nothing here is a grid.
+ */
+.candidates-filters {
+  display: flex;
+  flex-direction: column;
+  /* The gap the fields need, not the one they look like they need: every `Select` hangs
+     its error/hint slot below itself, and a tighter stack would sit a message on the
+     label under it. */
+  gap: var(--space-6);
+}
+
+.candidates-filters-title {
+  margin: 0;
+  font-size: var(--font-size-l);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+/* `Show results` leads, `Clear filters` follows under it — the destructive-ish one is
+   never adjacent to the one that just dismisses. */
+.candidates-filters-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.candidates-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.candidates-criteria-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-text);
+  list-style: none;
 }
 
-a {
-  color: var(--accent);
+/*
+ * One filter, as a small form on the recessed ground the candidate card uses for the same
+ * object. Name, its Archived badge, operator, value and the cross read as one sentence and
+ * wrap together when the 340px panel cannot hold them on one line.
+ */
+.candidates-criteria-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  /* 6px all round, and 10px in front of the name — the extra 4px is what stops the text
+     sitting tighter to the edge than the controls beside it do. */
+  padding: 6px 6px 6px var(--space-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+}
+
+.candidates-criteria-name {
+  font-size: var(--font-size-s);
+  color: var(--text-primary);
+}
+
+/*
+ * The hinge between "what I asked for" and "what I got": the count, alone, between the
+ * toolbar and the table. `min-height` is reserved so the number turning into a loader
+ * never moves the table under the reader.
+ */
+/*
+ * What is left of the count line (03 §05.20): the scope tabs carry the number, so this row
+ * exists only while a filter change is in flight and says so. It reserves no height when
+ * idle — it is not rendered at all — because a permanently blank 28px strip under the
+ * toolbar is what the number used to justify.
+ */
+.candidates-count-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.candidates-count-row > p {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-s);
+  color: var(--text-tertiary);
+}
+
+/*
+ * The candidate table's two-line cells (03 §05). `Table`'s own cell is one line, nowrap
+ * and clipped (decisions §18, §48); everything below is what a cell holding a stack has to
+ * turn back on, and it is here rather than inline because `overflow`/`text-overflow`
+ * cannot be set on the anonymous flex item the DS renders.
+ */
+.candidate-name-cell,
+.candidate-stacked,
+.candidate-date {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+/* The date reads as one object, centred under its heading. */
+.candidate-date {
+  align-items: center;
+  gap: 2px;
+}
+
+/* The name and, beside it, how many applications this person holds — one baseline, so
+   the count reads as an aside to the name rather than as a second name. */
+.candidate-name-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.candidate-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--font-weight-medium);
+}
+
+/* The application count, and the email when it has folded under the name. */
+.candidate-name-meta {
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* The assessed-criteria chips. They wrap rather than scroll: a row is allowed to grow
+   (decisions §48), and a chip half off the edge of a cell says less than none. */
+.candidate-criteria {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 2px;
+  min-width: 0;
+}
+
+/* The interviewer under a vacancy title, and the time under a date: the same step down,
+   because they are the same kind of second line. */
+.candidate-subline {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.candidate-ellipsis {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Manage booking (hiring 07). One rule, and it is the one that matters: below 600px the
+ * actions go full width with the destructive one **beneath** the benign one, so it is
+ * never adjacent to the thumb's resting position.
+ */
+.manage-actions {
+  display: flex;
+  align-items: center;
+  /* Opposite ends: a destructive control adjacent to a benign one is a misclick
+     waiting to happen. Reschedule leads, Cancel trails. */
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-top: var(--space-7);
+}
+
+@media (max-width: 599px) {
+  .manage-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-5);
+  }
+}
+
+/*
+ * The team's two actions on the candidate card, beneath the interview facts they change
+ * (07 design, Screens). Reschedule leads and Cancel follows, in that order on every
+ * width — the destructive one is never the first thing a thumb or a Tab reaches.
+ */
+/*
+ * The header's right-hand column: what this interview *is* on top — its status, and the
+ * kebab holding what can be done to it — and where it goes underneath. The two are pushed
+ * apart so the buttons sit on the header's baseline whatever the left column's height,
+ * which is what keeps a two-line vacancy title from dragging them up with it.
+ */
+.card-section-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  align-items: flex-end;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.application-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  margin-top: auto;
+}
+
+/* The quieter half of the time line: the length and the zone qualify the clock. */
+.application-meta-quiet {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1023px) {
+  /* Stacked under the facts rather than beside them, and the buttons take the full row. */
+  .card-section-aside {
+    align-items: stretch;
+    align-self: auto;
+  }
+
+  .application-header-actions > * {
+    flex: 1;
+  }
+}
+
+/*
+ * `.my-interview-actions` — the reveal-on-hover row actions — was here, and went with the
+ * My interviews screen (03 §06). The candidate list's rows get the same two actions back
+ * inside their actions kebab, which needs no reveal of its own.
+ */
+
+/*
+ * The CV line and its Replace control (07 design, Screens). The chooser expands beneath
+ * the row rather than beside it, so the row's geometry does not move when it opens. The gap
+ * is 20px rather than 12: `FileInput` pins its hint below the field the way `TextInput` does,
+ * and 20px is the first step that clears it (token map, `--sp-7`).
+ */
+.manage-cv {
+  display: grid;
+  gap: var(--space-7);
+}
+
+.manage-cv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+/* The reschedule pickers, which replace the booking Card in place. */
+.manage-reschedule {
+  display: grid;
+  gap: var(--space-7);
+}
+
+.manage-reschedule-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+@media (max-width: 599px) {
+  .manage-reschedule-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: var(--space-5);
+  }
+}
+
+/*
+ * The running-timer dot (spec 12). It is here rather than appended to `<head>` from the
+ * component, which is §69's rule and the reason this animation had never once run: the
+ * name `tt-pulse` was written at the call site and defined nowhere at all, so the dot that
+ * exists to say a timer is live has been sitting perfectly still since it was written.
+ *
+ * The design system's own pulse — `ds-pulse-loader` in `base.css` — is a loader's, staggered
+ * across three dots. This is one dot breathing on its own, so it is the app's.
+ */
+@keyframes tt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AuthLayout } from '@/ds';
+import { AuthLayout } from '@devscribed/ds';
 import { SignupForm } from './SignupForm';
 
 export const metadata = { title: 'Create your organization · Teammerly' };
@@ -12,7 +12,7 @@ export default function SignupPage() {
       footer={
         <>
           Already have an account?{' '}
-          <Link href="/login" data-testid="signup-login-link" style={{ textDecoration: 'none' }}>
+          <Link href="/login" data-testid="signup-login-link">
             Sign in
           </Link>
         </>

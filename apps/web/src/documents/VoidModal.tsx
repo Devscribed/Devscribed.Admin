@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { ENVELOPE_LIMITS, validateReason } from '@devscribed/validation';
-import { Button, Input, Modal } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, FormActions, TextInput, Modal } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 
 /**
  * The void confirmation. The copy is the spec's, verbatim, because the three consequences
@@ -39,32 +39,13 @@ export function VoidModal({
   }
 
   return (
-    <Modal
-      open={open}
-      title="Void document"
-      onClose={onCancel}
-      actions={
-        <>
-          <Button variant="secondary" data-testid="envelope-void-cancel-btn" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            variant="danger"
-            loading={submitting}
-            data-testid="envelope-void-confirm-btn"
-            onClick={confirm}
-          >
-            Void document
-          </Button>
-        </>
-      }
-    >
+    <Modal open={open} title="Void document" onClose={onCancel}>
       <div data-testid="envelope-void-modal">
-        <p style={{ margin: '0 0 var(--sp-8)', fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
+        <p style={{ margin: '0 0 var(--space-6)', fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
           Voiding stops the signing process. Signing links stop working immediately and both
           parties are notified. This cannot be undone.
         </p>
-        <Input
+        <TextInput
           label="Reason *"
           value={reason}
           maxLength={ENVELOPE_LIMITS.reasonMax}
@@ -76,9 +57,27 @@ export function VoidModal({
           }}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'field-error-reason' : undefined}
-          error={error ? errorNode('reason', error) : undefined}
+          error={error ?? undefined}
+          errorId="field-error-reason"
           wrapperStyle={{ gap: 0 }}
         />
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" data-testid="envelope-void-cancel-btn" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="delete"
+              preloader={submitting}
+              data-testid="envelope-void-confirm-btn"
+              onClick={confirm}
+            >
+              Void document
+            </Button>
+          </FormActions>
+        </div>
       </div>
     </Modal>
   );

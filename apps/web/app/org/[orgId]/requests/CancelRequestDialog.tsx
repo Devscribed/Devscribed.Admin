@@ -1,14 +1,18 @@
 'use client';
 
-import { Button, Modal } from '@/ds';
+import { ConfirmDialog } from '@devscribed/ds';
 import type { OrgRequest } from './types';
 
 /**
- * Cancel-confirm dialog for the Requests page (spec 10). Equivalent to spec 09's
- * `VacationPanel` cancel dialog but scoped to this page's own testids
- * (`requests-cancel-confirm-dialog` / `requests-cancel-confirm-btn`) so the two surfaces
- * stay independently addressable. Only approved requests are cancellable here, so the
- * body always carries the refund notice. Confirm drives spec 09's `PUT .../cancel`.
+ * Cancel-confirm dialog for the Requests page (spec 10). The same dialog spec 09's
+ * `VacationPanel` draws, scoped to this page's own test ids (`requests-cancel-confirm-dialog`
+ * / `requests-cancel-confirm-btn`) so the two surfaces stay independently addressable. Only
+ * approved requests are cancellable here, so the body always carries the refund notice.
+ * Confirm drives spec 09's `PUT .../cancel`.
+ *
+ * `ConfirmDialog` rather than a `Modal` with two hand-placed buttons, and §41 is why: the
+ * press starts work whose answer the reader has to see, so `busy` spins the accept button and
+ * blocks both controls, and `closeOnAccept={false}` leaves the closing to the page.
  */
 export function CancelRequestDialog({
   request,
@@ -22,41 +26,19 @@ export function CancelRequestDialog({
   onConfirm: () => void;
 }) {
   return (
-    <Modal
+    <ConfirmDialog
       open={request !== null}
       title="Cancel request"
+      description="Cancel this approved vacation? The reserve will be refunded."
+      acceptBtnText={saving ? 'Cancelling' : 'Cancel request'}
+      declineBtnText="Keep it"
+      busy={saving}
+      closeOnAccept={false}
       onClose={onClose}
+      onAccept={onConfirm}
       data-testid="requests-cancel-confirm-dialog"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={onClose}
-            disabled={saving}
-            data-testid="requests-cancel-dismiss-btn"
-            style={{ flex: 1 }}
-          >
-            Keep it
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="lg"
-            loading={saving}
-            onClick={onConfirm}
-            data-testid="requests-cancel-confirm-btn"
-            style={{ flex: 1 }}
-          >
-            {saving ? 'Cancelling' : 'Cancel request'}
-          </Button>
-        </>
-      }
-    >
-      <p style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
-        Cancel this approved vacation? The reserve will be refunded.
-      </p>
-    </Modal>
+      acceptTestId="requests-cancel-confirm-btn"
+      declineTestId="requests-cancel-dismiss-btn"
+    />
   );
 }

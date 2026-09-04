@@ -5,6 +5,7 @@ import {
   findMember,
   inviteAndAcceptViaApi,
   login,
+  openNavSection,
   seedReserveCredit,
   signupOrg,
   submitVacationRequestViaApi,
@@ -94,6 +95,7 @@ function futureWorkingRange(workingDays: number): { startDate: string; endDate: 
  */
 async function openRequestsPage(page: Page): Promise<void> {
   await expect(async () => {
+    await openNavSection(page, 'Time off');
     await page.getByTestId('sidebar-requests-link').click();
     await page.waitForURL('**/requests', { timeout: 2000 });
   }).toPass({ timeout: 15000 });
@@ -136,7 +138,11 @@ test.describe('10 — Organization Requests Page', () => {
 
     await signInUi(page, managerEmail);
 
-    // Sidebar badge seeds from the shell-mount fetch: two pending requests → "2".
+    // Sidebar badge seeds from the shell-mount fetch: two pending requests → "2". The row it
+    // sits on is inside the `Time off` group, which is closed on `/members` — and a closed
+    // group holds none of its rows in the document (`app-shell.spec.ts`, §13). So the group
+    // is thrown first, exactly as every other case that reads a row inside one does.
+    await openNavSection(page, 'Time off');
     await expect(page.getByTestId('sidebar-requests-badge')).toHaveText('2');
 
     await openRequestsPage(page);

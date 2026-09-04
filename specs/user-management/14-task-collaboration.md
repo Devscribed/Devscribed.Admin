@@ -573,7 +573,12 @@ An **oldest-first** vertical timeline list at the bottom of the left column (or 
 `task-card-label-{id}` (on board and list card instances)
 
 **Labels (task detail):**
-`task-labels-section`, `task-label-chip-{id}`, `task-label-remove-{id}`, `task-label-add-btn`, `task-label-picker`, `task-label-picker-option-{id}`
+`task-labels-section`, `task-label-chip-{id}`, `task-label-remove-{id}`, `task-label-add-btn`, ~~`task-label-picker`~~, `task-label-picker-option-{id}`
+
+*Amended by the main merge, Phase 6:* **`task-label-picker` is retired.** The
+picker is the design system's `Popover` (§22), whose panel is a real `role="menu"` — reached by
+that role, and by the rows' own ids, which are unchanged. §22 draws the panel and tags every row
+in it but not the panel itself; the trigger keeps `task-label-add-btn`.
 
 **Comments:**
 `task-comments-section`, `task-comment-{id}`, `task-comment-author-{id}`, `task-comment-content-{id}`, `task-comment-edited-badge-{id}`

@@ -5,10 +5,15 @@ import { HOLIDAY_MESSAGES } from '@devscribed/validation';
 import type { CalendarHoliday } from './types';
 
 /**
- * The read-only holiday marker on the Weekly and Monthly calendars (spec
- * organization/03 requirement 10). A star, the holiday name in a `title` tooltip, and
- * the amber `--holiday-*` tokens. It is **not** a click target and mutates nothing —
- * logging time on the day leaves it exactly where it is (requirement 11).
+ * The read-only holiday marker on the Monthly calendar (spec organization/03
+ * requirement 10). A star, the holiday name in a `title` tooltip, and §91's holiday ground.
+ * It is **not** a click target and mutates nothing — logging time on the day leaves it
+ * exactly where it is (requirement 11).
+ *
+ * **Not a `Badge`.** It is the right shape and the wrong object: a badge states what a record
+ * *is*, in one of the system's tones, and this states what a *day* is, in a ground of its own.
+ * §59 already refused to paint a label in a status hue for the same reason, and painting over
+ * a `Badge`'s tone to get this one would be the improvisation that rule out-argues.
  *
  * `focusable` exists because the two views nest it differently: the monthly cell is
  * already a `<button>` and announces from that button's own focus, while a weekly day
@@ -39,16 +44,15 @@ export function HolidayMarker({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 'var(--sp-1)',
+        gap: 'var(--space-1)',
         maxWidth: '100%',
-        padding: '1px var(--sp-2)',
+        padding: '1px var(--space-2)',
         borderRadius: 'var(--radius-pill)',
-        background: 'var(--holiday-bg)',
-        border: '1px solid var(--holiday-border)',
-        color: 'var(--holiday-ink)',
-        fontFamily: 'var(--font-display)',
-        fontWeight: 600,
-        fontSize: 'var(--fs-11)',
+        background: 'var(--surface-holiday)',
+        border: 'var(--border-width-hairline) solid var(--border-holiday)',
+        color: 'var(--text-primary)',
+        fontWeight: 'var(--font-weight-medium)',
+        fontSize: 'var(--font-size-xs)',
         lineHeight: 1.4,
         overflow: 'hidden',
         whiteSpace: 'nowrap',

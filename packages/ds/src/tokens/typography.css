@@ -1,0 +1,66 @@
+/* Typography tokens.
+
+   Four body sizes and three headline steps, and that is the whole scale. The weights are not on
+   a round grid — 450 and 550 sit between the named faces the webfont ships — and the headline
+   steps carry negative tracking, because at 20px and above the default spacing reads loose. */
+
+:root {
+  --font-family-base: 'Poppins', sans-serif;
+
+  /* §77 — the second family, and the only one. It is for text the reader will *type or copy
+     back* — a `{{placeholder}}`, a template's source, a key quoted in a message — where the
+     glyphs have to be told apart one by one and the width has to be even. It is a platform
+     stack rather than a webfont: nothing is fetched for it, and every platform in the stack
+     already ships a face designed for exactly this.
+
+     It is **not** for numbers. A column of figures that needs to line up wants
+     `font-variant-numeric: tabular-nums` on the base family — same face as everything around
+     it, even digit widths — because a number in a report is not code and should not read as
+     code. Reaching for this family to align a column is the mistake it exists to be told
+     apart from. */
+  --font-family-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* The weights, and the one role each has. */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-headline: 450;   /* headLine4 / headLine5 */
+  --font-weight-medium: 500;     /* headLine6, nav links, badges */
+  --font-weight-button: 550;     /* Button label weight */
+  --font-weight-semibold: 600;   /* modal / dialog titles */
+  --font-weight-bold: 700;
+
+  /* Body sizes. */
+  --font-size-xs: 12px;   /* fontSizeBodyXS */
+  --font-size-s: 14px;    /* fontSizeBodyS */
+  --font-size-base: 16px; /* fontSizeBody */
+  --font-size-l: 18px;    /* fontSizeBodyL */
+  --font-size-xl: 20px;   /* dialog titles, and the one size an empty state is set in */
+
+  --line-height-base: 1.5;
+  /* Two fixed line heights, for the two places 12px text has to occupy a known height rather
+     than a ratio: a field label, whose block must measure 35px so every field in a column
+     starts at the same y, and the small print under or beside a control. */
+  --line-height-label: 21px;
+  --line-height-xs: 18px;
+  /* The line box 16px text sits in — a button's label, a table heading, a dialog title. It is
+     `--line-height-base` applied to `--font-size-base`, written as a length because these are
+     boxes whose height must not move when the text inside them does. */
+  --line-height-m: 24px;
+
+  /* Headline scale. Each step is a size, a line height, a tracking and a weight together —
+     a heading that takes the size without the tracking is not on the scale. */
+  --headline-4-size: 24px;
+  --headline-4-line: 36px;
+  --headline-4-tracking: -0.7px;
+  --headline-4-weight: var(--font-weight-headline);
+
+  --headline-5-size: 20px;
+  --headline-5-line: 30px;
+  --headline-5-tracking: -0.32px;
+  --headline-5-weight: var(--font-weight-headline);
+
+  --headline-6-size: 16px;
+  --headline-6-line: 24px;
+  --headline-6-tracking: -0.32px;
+  --headline-6-weight: var(--font-weight-medium);
+}

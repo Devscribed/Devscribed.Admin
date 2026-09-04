@@ -1,58 +1,46 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { formatElapsed } from '@devscribed/validation';
+import { AccountMenu, Navbar } from '@devscribed/ds';
 import { useSession } from './session-context';
-import { TopbarTimerIndicator } from './TopbarTimerIndicator';
-
-/** Shared treatment for every item in the account menu card (Account settings, Log out). */
-const MENU_ITEM_STYLE: React.CSSProperties = {
-  display: 'block',
-  width: '100%',
-  textAlign: 'left',
-  padding: '8px 12px',
-  background: 'transparent',
-  border: 'none',
-  borderRadius: 'var(--radius-md)',
-  cursor: 'pointer',
-  fontFamily: 'var(--font-text)',
-  fontSize: 'var(--fs-14)',
-  color: 'var(--text-sub)',
-  textDecoration: 'none',
-};
+import { useRunningTimer } from './running-timer-context';
 
 /**
- * The template's top bar also carries a tracker chip and a light/dark switch. Neither
- * ships here: timesheets belong to a product surface no spec covers, and the design
- * specs pin this release to the light theme with no theme toggle.
+ * The system's `Navbar`: the mini tracker on the left, the account menu on the right.
+ *
+ * **The tracker is back on.** It was passed `false` here on the argument that timesheets
+ * belong to a product surface no spec covers, and that stopped being true — spec 12 is that
+ * surface, and `--color-tracker-blue` was reserved for exactly this pill. It is drawn only
+ * while a timer runs, which is what spec 12 asks for: an always-present `00:00:00` is a
+ * control that looks live and is not.
+ *
+ * `TopbarTimerIndicator` used to draw its own amber pill beside the account button. It is
+ * gone rather than repainted: it and `MiniTracker` are the same element, and the system
+ * owns it. The project label and the stop control it also carried have now landed too, in
+ * the system's `Tracker` — the floating widget this pill discloses (`TimerWidget`). The pill
+ * says *a timer is running*; the widget says what it is and stops it, which is the division
+ * the system drew when it gave `MiniTracker` a chevron and reserved `--color-tracker-blue`
+ * for a panel nothing yet rendered.
+ *
+ * The theme toggle the earlier design template carried never existed here — the system has
+ * no dark palette.
  */
-export function Topbar() {
+export function Topbar({
+  onMenuClick,
+  onOpenTracker,
+  trackerOpen,
+}: {
+  onMenuClick: () => void;
+  /** Discloses the floating tracker. The shell owns whether it is open. */
+  onOpenTracker: () => void;
+  trackerOpen: boolean;
+}) {
   const { account } = useSession();
+  const { timer, elapsedSeconds } = useRunningTimer();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
 
   const name = `${account.firstName} ${account.lastName}`;
-  const initials = `${account.firstName.charAt(0)}${account.lastName.charAt(0)}`.toUpperCase();
-
-  useEffect(() => {
-    if (!open) return;
-
-    const close = (event: MouseEvent) => {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', escape);
-    };
-  }, [open]);
 
   async function logout(): Promise<void> {
     await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
@@ -61,109 +49,29 @@ export function Topbar() {
   }
 
   return (
-    <header className="shell-topbar" style={{ gap: 'var(--sp-8)' }}>
-      {/* Running-timer chip — sits to the left of the account button, only while a timer
-          runs (spec 12). Fed by the shared RunningTimerProvider. */}
-      <TopbarTimerIndicator />
-
-      <div ref={container} style={{ position: 'relative' }}>
-        <button
-          type="button"
+    <Navbar
+      tracker={timer !== null}
+      trackerCounter={formatElapsed(elapsedSeconds)}
+      trackerTestId="topbar-timer-indicator"
+      onOpenTracker={onOpenTracker}
+      trackerExpanded={trackerOpen}
+      onMenuClick={onMenuClick}
+      account={
+        <AccountMenu
+          name={name}
           data-testid="topbar-account-button"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((was) => !was)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            color: 'var(--text)',
-          }}
-        >
-          <span
-            data-testid="topbar-account-name"
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              fontSize: 'var(--fs-14)',
-            }}
-          >
-            {name}
-          </span>
-          <span
-            aria-hidden
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: '50%',
-              background: 'var(--accent-soft)',
-              color: 'var(--accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-14)',
-            }}
-          >
-            {initials}
-          </span>
-        </button>
-
-        {open && (
-          <div
-            role="menu"
-            data-testid="topbar-account-menu"
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 8px)',
-              right: 0,
-              minWidth: 180,
-              padding: 6,
-              background: 'var(--bg-panel)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-lg)',
-              boxShadow: 'var(--shadow-card)',
-              zIndex: 10,
-            }}
-          >
-            <Link
-              href="/account/settings"
-              role="menuitem"
-              data-testid="account-settings-menu-link"
-              onClick={() => setOpen(false)}
-              style={MENU_ITEM_STYLE}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--hover-bg-tint)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              Account settings
-            </Link>
-            <button
-              type="button"
-              role="menuitem"
-              data-testid="logout-button"
-              onClick={logout}
-              style={MENU_ITEM_STYLE}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--hover-bg-tint)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              Log out
-            </button>
-          </div>
-        )}
-      </div>
-    </header>
+          nameTestId="topbar-account-name"
+          menuTestId="topbar-account-menu"
+          items={[
+            {
+              label: 'Account settings',
+              testId: 'account-settings-menu-link',
+              onSelect: () => router.push('/account/settings'),
+            },
+            { label: 'Log out', testId: 'logout-button', onSelect: logout },
+          ]}
+        />
+      }
+    />
   );
 }

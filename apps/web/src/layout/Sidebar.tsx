@@ -1,324 +1,294 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { can, hasCapability, type Role } from '@devscribed/validation';
-import { NavItem, SectionLabel } from '@/ds';
-import { DocumentsIcon } from '@/documents/icons';
-import { BriefcaseIcon, CalendarIcon, ClockIcon, FolderIcon, InboxIcon, PeopleIcon } from './icons';
+import type { MouseEvent } from 'react';
+import { can, canManageHiring, hasCapability, type Role } from '@devscribed/validation';
+import {
+  OrgIcon,
+  PeopleIcon,
+  ProjectManagementIcon,
+  ReportsIcon,
+  Sidebar as Rail,
+  TimeOffIcon,
+  TimesheetsIcon,
+} from '@devscribed/ds';
+import type { SidebarItem, SidebarSubItem } from '@devscribed/ds';
+import { DocumentsIcon } from './icons';
 import { useSession, type SessionFeatures } from './session-context';
 import { usePendingRequests } from './requests-badge-context';
 
-interface NavEntry {
-  testId: string;
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-  /** Optional count pill (spec 10 Requests row). Hidden when `undefined`/0. */
-  badge?: number;
-  badgeTestId?: string;
-}
-
-interface NavGroup {
-  label: string;
-  entries: NavEntry[];
+/** Only what the navigation asks of the session. */
+interface NavSession {
+  principal: 'member' | 'client';
+  role: string;
+  isInterviewer: boolean;
+  features: SessionFeatures;
 }
 
 /**
- * Only destinations that exist today. The Meridian template carries seven groups from
- * the wider product (Timesheets, Reports, Time off…); shipping them as dead links
- * would promise screens no spec has yet defined. Groups arrive as their specs land — a
- * group with no visible rows is dropped entirely (both its label and its rows), so
- * `user`/`viewer` never see an empty PROJECTS or DOCUMENTS heading.
+ * Only destinations that exist today, arranged the way the design system arranges them.
  *
- * Every row here is gated by what the caller may actually do, and each one is *omitted*
- * rather than rendered-then-hidden — a control the caller cannot use is never drawn:
+ * **Where the system named the group, the system's grouping wins.** `Sidebar` ships a
+ * default set of sections, and it is a default rather than a fixture (§13) — but it is not
+ * an arbitrary one: it was measured from this product, section for section. `Timesheets`,
+ * `Project management → Clients`, `People → Members`, `Reports → Time & activity / Amounts
+ * owed / Time offs / All reports`, `Time off → Holidays / Requests` are all its own labels
+ * and its own nesting, so that is where those rows go. Two consequences worth naming:
+ * `Requests` leaves People, and `Holidays` leaves Settings — the system files both under
+ * the thing they are about rather than under who administers them.
  *
- *  - **Time Tracking** (spec 12) needs `view-time-tracking` and leads the menu — it is the
- *    daily-driver surface, so it sits above PEOPLE. Omitted for `viewer`, who therefore
- *    sees PEOPLE first.
- *  - **Requests** (requests spec 01 requirement 38) is drawn for every signed-in member:
- *    the page behind it is now everyone's inbox, so the "no dead links" rule is satisfied
- *    by the destination rather than by hiding the row. Its badge carries the work waiting
- *    on the caller and disappears at 0.
- *  - **Projects** (spec 11) needs `manage-projects` (admin/manager).
- *  - **Documents** and **Templates** are separately gated because the two capabilities
- *    are separately granted: spec 02 gives a `manager` the full envelope set while spec
- *    01 leaves them read-only on templates. The group is assembled from whichever rows
- *    survive, and disappears entirely when none do.
- *  - **Outbox** needs two things at once — an environment that simulates mail, and a role
- *    allowed to see signing links, which is the same set that decides who signs.
+ * **Where the system is silent, the grouping is ours.** It has never seen documents or
+ * hiring, so `Documents` and `Hiring` are shaped here, in its idiom: a titled group whose
+ * rows are destinations. `Documents` follows the system's own `All reports` construction —
+ * the landing row is named for the whole rather than repeating the group's title.
+ *
+ * **A row the system named that no route serves is not shipped.** `Policies`, `Team
+ * overview`, `ToDo / Teams`, `My organization` and `Subscription` are all in the default
+ * set and none has a screen, so none is drawn: a dead link promises a page no spec defines.
+ * The same rule empties a whole group — a section with no visible rows is dropped title and
+ * all, so `viewer` never meets a `Documents` heading that opens onto nothing.
+ *
+ * Every row is gated on what the caller may actually do, and each is **omitted** rather than
+ * drawn-and-disabled. Three gates are not roles:
+ *
+ *  - **Candidates** is role *or* assignment (hiring 03 §06.31), which is what lets an
+ *    engineer interview without becoming an org admin.
+ *  - **Requests** is no gate at all (requests spec 01 requirement 38): the page behind it
+ *    is everyone's inbox, so the "no dead links" rule is satisfied by the destination
+ *    rather than by hiding the row.
+ *  - **Outbox** needs an environment that simulates mail as well as a role allowed to see
+ *    signing links.
  */
-function navigation(
-  orgId: string,
-  principal: 'member' | 'client',
-  role: string,
-  badgeCount: number,
-  features: SessionFeatures,
-): NavGroup[] {
-  const groups: NavGroup[] = [];
+function navigation(orgId: string, session: NavSession, badgeCount: number): SidebarItem[] {
+  const { principal, role, features } = session;
+  const items: SidebarItem[] = [];
+  const at = (path: string): string => `/org/${orgId}${path}`;
+
+  /** §76 — the shared pending count, and it disappears at zero rather than reading `0`. */
+  const requestsRow: SidebarSubItem = {
+    label: 'Requests',
+    href: at('/requests'),
+    testId: 'sidebar-requests-link',
+    badge: badgeCount || undefined,
+    badgeTestId: 'sidebar-requests-badge',
+  };
 
   // Requests spec 03 REQ-03-018 — for a client contact the requests destination is the
   // only organization navigation entry there is. The kind is asked before any role-keyed
   // helper below (REQ-03-017), which would answer a principal with no role the viewer
   // set; and every other destination answers them 404, so drawing one would be a dead
-  // link.
+  // link. A group of one rather than a top-level link, because only a sub-item carries
+  // the badge the count needs.
   if (principal === 'client') {
-    return [
-      {
-        label: 'People',
-        entries: [
-          {
-            testId: 'sidebar-requests-link',
-            label: 'Requests',
-            href: `/org/${orgId}/requests`,
-            icon: <InboxIcon />,
-            badge: badgeCount || undefined,
-            badgeTestId: 'sidebar-requests-badge',
-          },
-        ],
-      },
-    ];
+    return [{ type: 'submenu', title: 'People', Icon: PeopleIcon, subs: [requestsRow] }];
   }
 
+  // The system draws Timesheets as a top-level link, and it is right to: the daily-driver
+  // surface is one destination, and a group of one is a click in front of a page.
   if (can(role as Role, 'view-time-tracking')) {
-    groups.push({
-      label: 'Time',
-      entries: [
-        {
-          testId: 'nav-time-tracking',
-          label: 'Time Tracking',
-          href: `/org/${orgId}/time-tracking`,
-          icon: <ClockIcon />,
-        },
-      ],
+    items.push({
+      type: 'link',
+      title: 'Timesheets',
+      Icon: TimesheetsIcon,
+      href: at('/time-tracking'),
+      testId: 'nav-time-tracking',
     });
   }
 
-  const people: NavEntry[] = [
-    {
-      testId: 'nav-members',
-      label: 'Members',
-      href: `/org/${orgId}/members`,
-      icon: <PeopleIcon />,
-    },
-  ];
-
-  // Unconditional since requests spec 01: every role has an inbox of its own.
-  people.push({
-    testId: 'sidebar-requests-link',
-    label: 'Requests',
-    href: `/org/${orgId}/requests`,
-    icon: <InboxIcon />,
-    badge: badgeCount || undefined,
-    badgeTestId: 'sidebar-requests-badge',
-  });
-
-  groups.push({ label: 'People', entries: people });
-
-  const projects: NavEntry[] = [];
+  const projects: SidebarSubItem[] = [];
   if (can(role as Role, 'manage-projects')) {
-    projects.push({
-      testId: 'nav-projects',
-      label: 'Projects',
-      href: `/org/${orgId}/projects`,
-      icon: <FolderIcon />,
-    });
+    projects.push({ label: 'Projects', href: at('/projects'), testId: 'nav-projects' });
   }
   if (can(role as Role, 'manage-clients')) {
-    // Sits below the Projects row (spec organization/01 §Sidebar integration).
-    // Omitted — not disabled — for a role without `manage-clients`; the group as a
-    // whole is dropped by the trailing filter below when both entries are gone.
-    projects.push({
-      testId: 'nav-clients',
-      label: 'Clients',
-      href: `/org/${orgId}/clients`,
-      icon: <BriefcaseIcon />,
-    });
+    projects.push({ label: 'Clients', href: at('/clients'), testId: 'nav-clients' });
   }
   if (projects.length > 0) {
-    groups.push({ label: 'Projects', entries: projects });
-  }
-
-  const documents: NavEntry[] = [];
-
-  if (hasCapability(role, 'ViewEnvelopes')) {
-    documents.push({
-      testId: 'nav-envelopes',
-      label: 'Documents',
-      href: `/org/${orgId}/documents`,
-      icon: <DocumentsIcon />,
+    items.push({
+      type: 'submenu',
+      title: 'Project management',
+      Icon: ProjectManagementIcon,
+      subs: projects,
     });
   }
 
+  items.push({
+    type: 'submenu',
+    title: 'People',
+    Icon: PeopleIcon,
+    subs: [{ label: 'Members', href: at('/members'), testId: 'nav-members' }],
+  });
+
+  // The three reports and their landing page, under the system's own four labels. Each row
+  // carries its own capability rather than inheriting the group's: a member who may read
+  // their own time off and nothing else gets that one row, not four.
+  const reports: SidebarSubItem[] = [];
+  if (hasCapability(role, 'ViewTimeAndActivity') || hasCapability(role, 'ViewMyTimeAndActivity')) {
+    reports.push({
+      label: 'Time & activity',
+      href: at('/reports/time-and-activity'),
+      testId: 'nav-reports-time-and-activity',
+    });
+  }
+  if (hasCapability(role, 'ViewAmountsOwed') || hasCapability(role, 'ViewMyAmountsOwed')) {
+    reports.push({
+      label: 'Amounts owed',
+      href: at('/reports/amounts-owed'),
+      testId: 'nav-reports-amounts-owed',
+    });
+  }
+  if (hasCapability(role, 'ViewTimeOff') || hasCapability(role, 'ViewMyTimeOff')) {
+    reports.push({
+      label: 'Time offs',
+      href: at('/reports/time-off'),
+      testId: 'nav-reports-time-off',
+    });
+  }
+  if (reports.length > 0) {
+    // The landing page keeps `nav-reports`: it is the same destination that row always
+    // addressed, and the cards on it carry more context than any nav row could.
+    reports.push({ label: 'All reports', href: at('/reports'), testId: 'nav-reports' });
+    items.push({ type: 'submenu', title: 'Reports', Icon: ReportsIcon, subs: reports });
+  }
+
+  const timeOff: SidebarSubItem[] = [];
+  if (hasCapability(role, 'ViewHolidays')) {
+    timeOff.push({
+      label: 'Holidays',
+      href: at('/settings/holidays'),
+      testId: 'settings-tab-holidays',
+    });
+  }
+  // Unconditional since requests spec 01: every role has an inbox of its own, so the row
+  // is drawn for every member and the group is never empty on its account alone.
+  timeOff.push(requestsRow);
+  if (timeOff.length > 0) {
+    items.push({ type: 'submenu', title: 'Time off', Icon: TimeOffIcon, subs: timeOff });
+  }
+
+  // Ours to shape: the system has never seen a document. Templates and envelopes are
+  // separately gated because the two capabilities are separately granted — documents 02
+  // gives a manager the full envelope set while 01 leaves them read-only on templates.
+  const documents: SidebarSubItem[] = [];
+  if (hasCapability(role, 'ViewEnvelopes')) {
+    documents.push({ label: 'All documents', href: at('/documents'), testId: 'nav-envelopes' });
+  }
   if (hasCapability(role, 'ViewDocumentTemplates')) {
     documents.push({
-      testId: 'nav-documents',
       label: 'Templates',
-      href: `/org/${orgId}/documents/templates`,
-      icon: <DocumentsIcon />,
+      href: at('/documents/templates'),
+      testId: 'nav-documents',
     });
   }
-
   if (features.mailOutbox && hasCapability(role, 'ManageEnvelopes')) {
-    documents.push({
-      testId: 'nav-outbox',
-      label: 'Outbox',
-      href: `/org/${orgId}/outbox`,
-      icon: <DocumentsIcon />,
-    });
+    documents.push({ label: 'Outbox', href: at('/outbox'), testId: 'nav-outbox' });
   }
-
   if (documents.length > 0) {
-    groups.push({ label: 'Documents', entries: documents });
+    items.push({ type: 'submenu', title: 'Documents', Icon: DocumentsIcon, subs: documents });
   }
 
-  // Spec 04 — the product's first settings destination. Gated on `ViewSigningSettings`,
-  // so `user` and `viewer` see no Settings group at all: the row is omitted rather than
-  // drawn-and-disabled, and the group with no rows is dropped label and all by the filter
-  // below. No dead links.
-  const settings: NavEntry[] = [];
+  // Also ours. `Hiring` reuses `PeopleIcon`, the same mark `People` draws: the design asks
+  // for a dedicated section glyph and the icon set does not have one (`ds-additions.md #10`).
+  // Reusing it leaves the gap visible; inventing a mark here would hide it in the one place
+  // nobody would look.
+  const hiring: SidebarSubItem[] = [];
+  if (canManageHiring(role)) {
+    hiring.push({ label: 'Vacancies', href: at('/hiring/vacancies'), testId: 'nav-vacancies' });
+  }
+  // The one row an interviewer has, and the same one a manager has. What differs is what the
+  // API will answer them with, which is not the rail's business to pre-empt. There is no
+  // `My interviews` row: that screen is the candidate list's `Assigned to me` scope now.
+  if (canManageHiring(role) || session.isInterviewer) {
+    hiring.push({ label: 'Candidates', href: at('/hiring/candidates'), testId: 'nav-candidates' });
+  }
+  // `Settings` is `Libraries`. The route does not move — nothing on that screen is a
+  // setting, and renaming the row is cheaper and truer than moving a bookmarked path.
+  if (canManageHiring(role)) {
+    hiring.push({ label: 'Libraries', href: at('/hiring/settings'), testId: 'nav-hiring-settings' });
+  }
+  if (hiring.length > 0) {
+    items.push({ type: 'submenu', title: 'Hiring', Icon: PeopleIcon, subs: hiring });
+  }
 
+  // The system's own `Organization` group, holding the one organization-level setting that
+  // has a screen. Choosing the provider decides where every future contract of the
+  // organization is executed and who holds the evidence, which is an organization fact
+  // rather than a documents one — which is also why it is admin-gated more tightly than
+  // sending a document is.
+  const organization: SidebarSubItem[] = [];
   if (hasCapability(role, 'ViewSigningSettings')) {
-    settings.push({
-      testId: 'nav-settings',
-      label: 'Signing',
-      href: `/org/${orgId}/settings/signing`,
-      icon: <DocumentsIcon />,
-    });
+    organization.push({ label: 'Signing', href: at('/settings/signing'), testId: 'nav-settings' });
   }
-
-  // Spec organization/03 — the Holidays row, gated on `ViewHolidays`, so a `user` or
-  // `viewer` never sees a destination the API answers 404 to. Built into the same
-  // conditional list as Signing so a role holding neither capability drops the whole
-  // group rather than seeing an empty Settings heading.
-  if (hasCapability(role, 'ViewHolidays')) {
-    settings.push({
-      testId: 'settings-tab-holidays',
-      label: 'Holidays',
-      href: `/org/${orgId}/settings/holidays`,
-      icon: <CalendarIcon />,
-    });
-  }
-
-  // Requests spec 02 requirement 30 — the Request topics row, gated on
+  // Requests spec 02 requirement 30 — the catalogue every request is filed under, gated on
   // `manage-request-topics`, so a `user` or `viewer` never sees a destination whose every
-  // control is missing and whose write routes answer 403. Built into the same conditional
-  // list as Signing and Holidays, so a role holding none of the three drops the whole
-  // group rather than seeing an empty Settings heading.
-  // `hasCapability` rather than `can`, as the two rows above it: it normalizes the raw
-  // `Membership.role` internally, so the legacy `member` value maps to `user`.
+  // control is missing and whose write routes answer 403. `hasCapability` rather than
+  // `can`, as the row above it: it normalizes the raw `Membership.role` internally, so the
+  // legacy `member` value maps to `user`.
   if (hasCapability(role, 'ManageRequestTopics')) {
-    settings.push({
-      testId: 'settings-tab-request-topics',
+    organization.push({
       label: 'Request topics',
-      href: `/org/${orgId}/settings/request-topics`,
-      icon: <InboxIcon />,
+      href: at('/settings/request-topics'),
+      testId: 'settings-tab-request-topics',
     });
   }
-
-  if (settings.length > 0) {
-    groups.push({ label: 'Settings', entries: settings });
+  if (organization.length > 0) {
+    items.push({ type: 'submenu', title: 'Organization', Icon: OrgIcon, subs: organization });
   }
 
-  return groups.filter((group) => group.entries.length > 0);
+  return items;
 }
 
-export function Sidebar({ orgId }: { orgId: string }) {
+export function Sidebar({ orgId, onClose }: { orgId: string; onClose: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { principal, role, features } = useSession();
+  const { principal, role, isInterviewer, features } = useSession();
   const { badgeCount } = usePendingRequests();
-  const groups = navigation(orgId, principal, role ?? '', badgeCount, features);
+
+  // `role` is `null` for a client contact, who holds none (REQ-03-016). The empty string
+  // is the value every role-keyed helper below already answers from the viewer set — and
+  // `navigation` asks the principal kind before it reaches one of them.
+  const items = navigation(
+    orgId,
+    { principal, role: role ?? '', isInterviewer, features },
+    badgeCount,
+  );
 
   /**
-   * `/documents` is a prefix of `/documents/templates`, so a plain `startsWith` would
-   * light up two rows at once. Only the *longest* matching destination is the one the
-   * caller is actually on.
+   * `/documents` is a prefix of `/documents/templates` and `/reports` of every report, so a
+   * plain `startsWith` lights two rows at once. Only the **longest** matching destination is
+   * the one the caller is actually on — which is why `All reports` and `Time offs` can sit
+   * in one group without fighting, and why a candidate card keeps `Candidates` lit.
    */
-  const matched = groups
-    .flatMap((group) => group.entries)
-    .filter((entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`))
-    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
-
-  return (
-    <nav className="shell-sidebar" data-testid="app-sidebar" aria-label="Main">
-      <div className="shell-sidebar-head">
-        <Wordmark />
-      </div>
-
-      <div className="shell-nav">
-        {groups.map((group, index) => (
-          <div key={group.label} style={{ marginTop: index === 0 ? 0 : 'var(--sp-8)' }}>
-            <SectionLabel className="shell-nav-section" style={{ margin: '0 12px 10px' }}>
-              {group.label}
-            </SectionLabel>
-
-            {group.entries.map((entry) => {
-              const active = matched === entry.href;
-              return (
-                // `NavItem` renders its own <a> and takes no `as`/component prop, so it
-                // cannot host a next/link. Passing `href` keeps the row a real link
-                // (middle-click, copy address) while onClick keeps navigation client-side.
-                <NavItem
-                  key={entry.href}
-                  href={entry.href}
-                  onClick={(event: React.MouseEvent) => {
-                    if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-                    event.preventDefault();
-                    router.push(entry.href);
-                  }}
-                  icon={entry.icon}
-                  active={active}
-                  badge={entry.badge}
-                  badgeTestId={entry.badgeTestId}
-                  title={entry.label}
-                  data-testid={entry.testId}
-                  aria-current={active ? 'page' : undefined}
-                  label={<span className="shell-nav-label">{entry.label}</span>}
-                />
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </nav>
+  const destinations = items.flatMap((item) =>
+    item.type === 'link' ? [item.href as string] : (item.subs as SidebarSubItem[]).map((s) => s.href as string),
   );
-}
+  const current = destinations
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
 
-/**
- * No logo file exists — the Meridian wordmark is plain type plus an amber pin. Collapsed,
- * only the pin survives.
- */
-function Wordmark() {
+  // Both the current row and the open group are answered from the route rather than from a
+  // click, which is what `active` on a sub-item and on its title are for (§13). A group is
+  // current when one of its rows is, and blue opens a group that has just become current —
+  // otherwise arriving at a sub-page by deep link would leave its own section shut.
+  const decorated = items.map((item) => {
+    if (item.type === 'link') return { ...item, active: item.href === current };
+    const subs = (item.subs as SidebarSubItem[]).map((sub) => ({ ...sub, active: sub.href === current }));
+    return { ...item, subs, active: subs.some((sub) => sub.active) };
+  });
+
   return (
-    <span
-      style={{
-        fontFamily: 'var(--font-display)',
-        fontWeight: 600,
-        fontSize: 'var(--fs-21)',
-        letterSpacing: '-.5px',
+    <Rail
+      data-testid="app-sidebar"
+      logoHref={`/org/${orgId}/members`}
+      onClose={onClose}
+      items={decorated}
+      // Every row stays a real link — middle-click, copy address and open-in-new-tab all work —
+      // while an unmodified click is handed to the client router. The group titles are not
+      // rows: the system draws them as `<button aria-expanded>`, so `Hiring` toggles and goes nowhere.
+      onNavigate={(event: MouseEvent, href?: string) => {
+        if (!href || event.metaKey || event.ctrlKey || event.shiftKey) return;
+        event.preventDefault();
+        router.push(href);
       }}
-    >
-      <span className="shell-wordmark-full">
-        Team<span style={{ color: 'var(--accent)' }}>merly</span>
-      </span>
-      <span
-        className="shell-wordmark-mark"
-        style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
-      >
-        T
-      </span>
-      <span
-        style={{
-          display: 'inline-block',
-          width: 6,
-          height: 6,
-          borderRadius: 2,
-          background: 'var(--tracker)',
-          marginLeft: 3,
-          verticalAlign: 'middle',
-        }}
-      />
-    </span>
+    />
   );
 }

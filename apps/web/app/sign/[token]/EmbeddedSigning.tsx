@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SIGNING_PROVIDER_MESSAGES } from '@devscribed/validation';
-import { Button, Card } from '@/ds';
+import { Button, Card } from '@devscribed/ds';
 
 /**
  * The provider's widget, hosted on **our** origin.
@@ -132,20 +132,23 @@ export function EmbeddedSigning({
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
-            gap: 'var(--sp-6)',
+            gap: 'var(--space-5)',
           }}
         >
-          <p
+          {/* The heading of the block, so a real one — at the headline-6 step, which is
+              the 16px this was already rendering: `--fs-21` was never defined. */}
+          <h2
             style={{
               margin: 0,
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-21)',
-              color: 'var(--text)',
+              fontWeight: 'var(--headline-6-weight)',
+              fontSize: 'var(--headline-6-size)',
+              lineHeight: 'var(--headline-6-line)',
+              letterSpacing: 'var(--headline-6-tracking)',
+              color: 'var(--text-primary)',
             }}
           >
             {SIGNING_PROVIDER_MESSAGES.signing.providerUnavailable}
-          </p>
+          </h2>
           <div>
             <Button variant="primary" data-testid="sign-embedded-retry" onClick={onRetry}>
               Retry
@@ -196,13 +199,13 @@ function placeholder() {
         minHeight: FRAME_HEIGHT,
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--sp-6)',
-        padding: 'var(--sp-8)',
+        gap: 'var(--space-5)',
+        padding: 'var(--space-6)',
       }}
     >
       <span style={block('40%', 14)} />
       <span style={block('100%', '100%')} />
-      <p style={{ margin: 0, fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
+      <p style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-tertiary)' }}>
         {SIGNING_PROVIDER_MESSAGES.signing.loading}
       </p>
     </div>
@@ -215,7 +218,7 @@ function block(width: string | number, height: string | number) {
     width,
     height,
     flex: height === '100%' ? 1 : undefined,
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--bg-field)',
+    borderRadius: 'var(--radius-l)',
+    background: 'var(--surface-card)',
   } as const;
 }

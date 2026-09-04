@@ -7,6 +7,7 @@ import {
   findMember,
   inviteAndAcceptViaApi,
   login,
+  openTracker,
   signupOrg,
   startTimerViaApi,
   uniqueEmail,
@@ -103,17 +104,20 @@ test.describe('12 — Time Tracking', () => {
     await page.getByTestId('tt-timer-task-input').fill('Coding');
     await page.getByTestId('tt-timer-start-btn').click();
 
-    // 4–5. Elapsed ticks up; the topbar indicator appears carrying the project name.
+    // 4–5. Elapsed ticks up; the bar's pill appears, and the tracker it discloses carries
+    // the project name.
     await expect(page.getByTestId('tt-timer-elapsed')).toHaveText(/00:00:0[1-9]/);
     await expect(page.getByTestId('topbar-timer-indicator')).toBeVisible();
+    await openTracker(page);
     await expect(page.getByTestId('topbar-timer-project')).toHaveText('Project Alpha');
 
-    // 6. On a different page the topbar indicator is still present.
+    // 6. On a different page the pill is still present.
     await page.getByTestId('nav-members').click();
     await page.waitForURL('**/members');
     await expect(page.getByTestId('topbar-timer-indicator')).toBeVisible();
 
-    // 7–8. Stop from the topbar → toast, indicator gone.
+    // 7–8. Stop from the tracker → toast, pill gone.
+    await openTracker(page);
     await page.getByTestId('topbar-timer-stop-btn').click();
     await expect(page.getByTestId('toast-timer-stopped')).toBeVisible();
     await expect(page.getByTestId('toast-timer-stopped')).toContainText('logged');
@@ -203,7 +207,7 @@ test.describe('12 — Time Tracking', () => {
     await openTimeTracking(page);
 
     // 1–2. Monthly is the default; the grid shows hours on today's cell.
-    await expect(page.getByTestId('tt-view-monthly')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('tt-view-monthly')).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByTestId('tt-calendar-grid')).toBeVisible();
     await expect(page.getByTestId('tt-period-label')).toHaveText(monthLabel(today));
     await expect(page.getByTestId(`tt-calendar-hours-${today}`)).toHaveText('2h 0m');
@@ -223,7 +227,7 @@ test.describe('12 — Time Tracking', () => {
     await expect(page.getByTestId('tt-calendar-grid')).toBeVisible();
     await page.getByTestId(`tt-calendar-cell-${today}`).click();
 
-    await expect(page.getByTestId('tt-view-daily')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('tt-view-daily')).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByTestId('tt-daily-list')).toBeVisible();
     // 'Today work' is a duration-only entry → it shows in the strip below the grid.
     await expect(
@@ -540,7 +544,7 @@ test.describe('12 — Time Tracking', () => {
     await openTimeTracking(page);
 
     // Monthly is the default; its weekday header now leads with Sun and ends with Sat.
-    await expect(page.getByTestId('tt-view-monthly')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('tt-view-monthly')).toHaveAttribute('aria-checked', 'true');
     const grid = page.getByTestId('tt-calendar-grid');
     await expect(grid).toBeVisible();
     const headerCells = grid.locator('> div').first().locator('> div');

@@ -48,6 +48,15 @@ export interface Session {
   role: string | null;
   principal: 'member' | 'client';
   client: SessionClient | null;
+  /**
+   * Whether anybody has assigned this member an interview — the one navigation
+   * predicate that is not a role (hiring 03 §06.31).
+   *
+   * It arrives with the session rather than being fetched by the sidebar because the
+   * shell blocks on this response before it renders anything, which is what stops a
+   * gated row flashing into view and back out.
+   */
+  isInterviewer: boolean;
   features: SessionFeatures;
 }
 

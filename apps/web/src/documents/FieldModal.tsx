@@ -15,8 +15,10 @@ import {
   type AutofillValueType,
   type TemplateFieldType,
 } from '@devscribed/validation';
-import { Button, Checkbox, Input, Modal, Select } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, Checkbox, FormActions, TextArea, TextInput, Modal, Select } from '@devscribed/ds';
+import type { SelectOptionLike } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
+import { optionFor, valueOf } from '@/select';
 import { LockIcon } from '@/members/icons';
 import type { SignerRoleDto, TemplateFieldDto } from './api';
 import {
@@ -186,6 +188,15 @@ export function FieldModal({
     });
   }
 
+  const typeOptions = TEMPLATE_FIELD_TYPES.map((value) => ({ value, label: TYPE_LABELS[value] }));
+
+  /* "— none —" is the default and means manual entry. */
+  const autofillOptions = [
+    { value: '', label: '— none —' },
+    ...(bindingBroken && boundSource ? [sourceOption(boundSource)] : []),
+    ...compatible.map(sourceOption),
+  ];
+
   const filledByOptions = [
     { value: 'sender', label: 'Sender' },
     ...signerRoles
@@ -194,10 +205,10 @@ export function FieldModal({
   ];
 
   return (
-    <Modal open title={initial ? 'Edit field' : 'Add field'} width={520} onClose={onCancel}>
+    <Modal open title={initial ? 'Edit field' : 'Add field'} onClose={onCancel} style={{ width: 520 }}>
       <form onSubmit={submit} noValidate data-testid="template-field-modal">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
-          <Input
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          <TextInput
             label="Key"
             value={key}
             placeholder="contractor_tax_id"
@@ -205,10 +216,11 @@ export function FieldModal({
             onChange={(event) => setKey(event.target.value)}
             aria-invalid={errors.key ? true : undefined}
             aria-describedby={errors.key ? 'field-error-key' : undefined}
-            error={errors.key ? errorNode('key', errors.key) : undefined}
+            error={errors.key}
+            errorId="field-error-key"
             wrapperStyle={{ gap: 0 }}
           />
-          <Input
+          <TextInput
             label="Label"
             value={label}
             placeholder="Full name"
@@ -216,40 +228,39 @@ export function FieldModal({
             onChange={(event) => setLabel(event.target.value)}
             aria-invalid={errors.label ? true : undefined}
             aria-describedby={errors.label ? 'field-error-label' : undefined}
-            error={errors.label ? errorNode('label', errors.label) : undefined}
+            error={errors.label}
+            errorId="field-error-label"
             wrapperStyle={{ gap: 0 }}
           />
 
           <Select
             label="Type"
-            value={type}
+            value={optionFor(typeOptions, type)}
             data-testid="template-field-type-select"
-            options={TEMPLATE_FIELD_TYPES.map((value) => ({ value, label: TYPE_LABELS[value] }))}
-            onChange={changeType}
+            options={typeOptions}
+            onChange={(option) => changeType(valueOf(option))}
           />
           <Select
             label="Filled by"
-            value={filledBy}
+            value={optionFor(filledByOptions, filledBy)}
             data-testid="template-field-filledby-select"
             options={filledByOptions}
-            onChange={setFilledBy}
+            onChange={(option) => setFilledBy(valueOf(option))}
           />
           <div>
             <Select
               label="Autofill from"
-              value={autofill}
+              value={optionFor(autofillOptions, autofill)}
               data-testid="template-field-autofill-select"
-              /* "— none —" is the default and means manual entry. */
-              options={[
-                { value: '', label: '— none —' },
-                ...(bindingBroken && boundSource ? [sourceOption(boundSource)] : []),
-                ...compatible.map(sourceOption),
-              ]}
-              disabled={catalogue.status === 'loading'}
+              options={autofillOptions}
+              formatOptionLabel={sourceRow(allSources)}
+              isDisabled={catalogue.status === 'loading'}
               placeholder={catalogue.status === 'loading' ? 'Loading sources…' : '— none —'}
-              error={errors.autofill}
-              onChange={(next) => {
-                setAutofill(next);
+              error={Boolean(errors.autofill)}
+              errorMessage={errors.autofill}
+              errorId="field-error-autofill"
+              onChange={(option) => {
+                setAutofill(valueOf(option));
                 setErrors((prev) => ({ ...prev, autofill: undefined }));
               }}
             />
@@ -257,8 +268,8 @@ export function FieldModal({
               data-testid="template-field-autofill-hint"
               style={{
                 margin: '6px 0 0',
-                fontSize: 'var(--fs-13)',
-                color: errors.autofill || bindingBroken ? 'var(--error-500)' : 'var(--text-muted)',
+                fontSize: 'var(--font-size-s)',
+                color: errors.autofill || bindingBroken ? 'var(--status-error)' : 'var(--text-secondary)',
               }}
             >
               {autofillHint({
@@ -274,12 +285,12 @@ export function FieldModal({
 
           <Checkbox
             checked={required}
-            onChange={setRequired}
+            onChange={(event) => setRequired(event.target.checked)}
             label="Required"
             data-testid="template-field-required-checkbox"
           />
 
-          <Input
+          <TextInput
             label="Max length"
             value={maxLength}
             inputMode="numeric"
@@ -289,69 +300,37 @@ export function FieldModal({
           />
 
           {type === 'select' && (
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-11)',
-                  letterSpacing: 1,
-                  textTransform: 'uppercase',
-                  color: errors.options ? 'var(--error-500)' : 'var(--text-muted)',
-                  marginBottom: 6,
-                }}
-                htmlFor="template-field-options"
-              >
-                Options
-              </label>
-              <textarea
-                id="template-field-options"
-                value={options}
-                data-testid="template-field-options-input"
-                onChange={(event) => setOptions(event.target.value)}
-                placeholder="One per line, or comma separated"
-                rows={3}
-                aria-invalid={errors.options ? true : undefined}
-                aria-describedby={errors.options ? 'field-error-options' : undefined}
-                style={{
-                  width: '100%',
-                  border: `1.5px solid ${errors.options ? 'var(--error-500)' : 'var(--border-strong)'}`,
-                  borderRadius: 'var(--radius-lg)',
-                  padding: 'var(--sp-5) var(--sp-6)',
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-14)',
-                  background: 'var(--bg-field)',
-                  color: 'var(--text)',
-                  outline: 'none',
-                  resize: 'vertical',
-                }}
-              />
-              {errors.options && (
-                <div style={{ marginTop: 'var(--sp-2)', fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
-                  {errorNode('options', errors.options)}
-                </div>
-              )}
-            </div>
+            <TextArea
+              label="Options"
+              id="template-field-options"
+              value={options}
+              data-testid="template-field-options-input"
+              onChange={(event) => setOptions(event.target.value)}
+              placeholder="One per line, or comma separated"
+              rows={3}
+              aria-invalid={errors.options ? true : undefined}
+              aria-describedby={errors.options ? 'field-error-options' : undefined}
+              error={errors.options}
+              errorId="field-error-options"
+            />
           )}
 
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 'var(--sp-5)',
-              padding: 'var(--sp-5) var(--sp-6)',
-              borderRadius: 'var(--radius-lg)',
-              background: 'var(--bg-sunken)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-sub)',
+              gap: 'var(--space-4)',
+              padding: 'var(--space-4) var(--space-5)',
+              borderRadius: 'var(--radius-l)',
+              background: 'var(--surface-sunken)',
+              fontFamily: 'var(--font-family-mono)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-tertiary)',
             }}
           >
             <span style={{ flex: 1 }}>Insert as: {`{{${key || 'field_key'}}}`}</span>
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
               onClick={() => {
                 void navigator.clipboard?.writeText(`{{${key}}}`);
                 setCopied(true);
@@ -362,18 +341,15 @@ export function FieldModal({
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--sp-5)', marginTop: 'var(--sp-10)' }}>
-          <Button
-            type="button"
-            variant="secondary"
-            data-testid="template-field-cancel-btn"
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" data-testid="template-field-save-btn">
-            Save field
-          </Button>
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" data-testid="template-field-cancel-btn" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" data-testid="template-field-save-btn">
+              Save field
+            </Button>
+          </FormActions>
         </div>
       </form>
     </Modal>
@@ -381,28 +357,39 @@ export function FieldModal({
 }
 
 /**
- * `Member · Tax ID`, as the spec's mockup draws it. Meridian's `Select` has no
- * `optgroup`, so the group travels in the label — which keeps the options in one flat,
- * scannable list and still reads as grouped, because the server returns the catalogue
- * already ordered by group.
+ * `Member · Tax ID`, as the spec's mockup draws it. `Select` has no `optgroup`, so the
+ * group travels in the row — which keeps the options in one flat, scannable list and still
+ * reads as grouped, because the server returns the catalogue already ordered by group.
+ *
+ * The option carries **text**, and the row is drawn by `formatOptionLabel` (§21). An option's
+ * `label` is what the control announces and what it filters on when searchable, so a node in
+ * that slot is a row a screen reader cannot read and a search cannot match; the picture goes
+ * where the pictures go.
  */
 function sourceOption(source: AutofillSourceDto) {
-  return {
-    value: source.key,
-    label: (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: 'var(--text-muted)' }}>{source.group} ·</span>
+  return { value: source.key, label: `${source.group} · ${source.label}` };
+}
+
+/** The rich row for a catalogue option, looked up by the key the option carries. */
+function sourceRow(sources: AutofillSourceDto[]) {
+  return (option: SelectOptionLike) => {
+    const key = typeof option === 'string' ? option : option.value;
+    const source = sources.find((entry) => entry.key === key);
+    if (!source) return typeof option === 'string' ? option : option.label;
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <span style={{ color: 'var(--text-secondary)' }}>{source.group} ·</span>
         <span>{source.label}</span>
         {source.sensitive && (
           <span
             title="Sensitive — visible only to an admin and to the member"
-            style={{ display: 'inline-flex', color: 'var(--text-faint)' }}
+            style={{ display: 'inline-flex', color: 'var(--text-secondary)' }}
           >
             <LockIcon size={11} />
           </span>
         )}
       </span>
-    ),
+    );
   };
 }
 

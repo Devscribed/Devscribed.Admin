@@ -7,7 +7,7 @@ import {
   hasCapability,
   signingProviderName,
 } from '@devscribed/validation';
-import { Button, Card, InfoBanner } from '@/ds';
+import { Button, Card, InfoBanner, Preloader } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
@@ -116,8 +116,8 @@ export default function SigningSettingsPage({
       />
 
       {error && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
-          <InfoBanner tone="error">{error}</InfoBanner>
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <InfoBanner variant="error">{error}</InfoBanner>
         </div>
       )}
 
@@ -141,8 +141,8 @@ export default function SigningSettingsPage({
         )}
 
         {testModeOn && (
-          <div style={{ padding: 'var(--sp-8)', borderTop: '1px solid var(--divider)' }}>
-            <InfoBanner tone="warning" data-testid="signing-test-mode-banner">
+          <div style={{ padding: 'var(--space-6)', borderTop: 'var(--border-width-hairline) solid var(--border-subtle)' }}>
+            <InfoBanner variant="warning" data-testid="signing-test-mode-banner">
               {SIGNING_PROVIDER_MESSAGES.settings.testModeNotice}
             </InfoBanner>
           </div>
@@ -153,13 +153,13 @@ export default function SigningSettingsPage({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 'var(--sp-7)',
+            gap: 'var(--space-7)',
             flexWrap: 'wrap',
-            padding: 'var(--sp-8)',
-            borderTop: '1px solid var(--divider)',
+            padding: 'var(--space-6)',
+            borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
           }}
         >
-          <span style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
             {settings?.setAt
               ? `Last changed ${formatLongDate(settings.setAt)}${
                   settings.setBy ? ` by ${settings.setBy.name}` : ''
@@ -172,7 +172,7 @@ export default function SigningSettingsPage({
               variant="primary"
               // The only permitted reason: an in-flight guard. Never for validation —
               // clicking an unchanged or invalid selection is how the admin learns why.
-              loading={saving}
+              preloader={saving}
               data-testid="signing-provider-save"
               onClick={() => {
                 if (!selected || !settings) return;
@@ -211,41 +211,26 @@ export default function SigningSettingsPage({
   );
 }
 
+
 /**
- * The design system ships no Skeleton primitive — a carried gap, already composed the
- * same way by five other screens. No spec in the documents area carries a DS gaps table,
- * so the gap is recorded in the implementing run's handoff (`dsGaps`) rather than in a
- * section of the spec that does not exist. Static token-coloured blocks, with no
- * animation invented here.
+ * The `GET .../settings/signing` wait.
+ *
+ * It was two grey blocks standing in for the provider rows, on the carried "no `Skeleton`
+ * primitive" gap. The system's answer for waiting is `Preloader` (§23, §69), and an outline
+ * of two rows says nothing the dots do not — the one case the design system's record leaves
+ * an outline standing is a *list* long enough that its shape is the information, which two
+ * rows are not. No spec names this state's test id; it is kept because the run that wrote it
+ * recorded it, and it is the handle for "the page has not answered yet".
  */
 function LoadingRows() {
   return (
-    <div data-testid="signing-settings-loading">
-      {[0, 1].map((row) => (
-        <div
-          key={row}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--sp-7)',
-            padding: 'var(--sp-8)',
-            borderTop: '1px solid var(--divider)',
-          }}
-        >
-          <span style={block(20, 20, '50%')} />
-          <span style={block('40%', 14)} />
-        </div>
-      ))}
+    <div
+      role="status"
+      data-testid="signing-settings-loading"
+      aria-label="Loading signing settings"
+      style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-9) 0' }}
+    >
+      <Preloader />
     </div>
   );
-}
-
-function block(width: string | number, height: string | number, radius = 'var(--radius-md)') {
-  return {
-    display: 'block',
-    width,
-    height,
-    borderRadius: radius,
-    background: 'var(--bg-field)',
-  } as const;
 }

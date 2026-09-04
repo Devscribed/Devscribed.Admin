@@ -2,19 +2,26 @@
 
 import { notFound, useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
-import { Select } from '@/ds';
+import {
+  Button,
+  ConfirmDialog,
+  IconButton,
+  InfoBanner,
+  Preloader,
+  Select,
+  ToggleButton,
+} from '@devscribed/ds';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/layout/icons';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
+import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
 import { TIME_TRACKING_MESSAGES, can, type Role } from '@devscribed/validation';
 import type { MemberListResponse } from '../members/types';
 import type { ProjectsResponse } from '../projects/types';
-import { ConfirmDialog } from './ConfirmDialog';
 import { DailyView } from './DailyView';
 import { HolidayLiveRegion } from './HolidayMarker';
 import { MonthlyView } from './MonthlyView';
-import { SegmentedControl } from './SegmentedControl';
 import { TimeEntryModal } from './TimeEntryModal';
 import { TimerBar } from './TimerBar';
 import { WeeklyView } from './WeeklyView';
@@ -327,6 +334,10 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
         ? formatWeekLabel(anchor, weekStartsOn)
         : formatDayLabel(anchor, today);
 
+  const memberOptions = [
+    { value: MY_TIME, label: 'My time' },
+    ...members.map((m) => ({ value: m.id, label: m.fullName })),
+  ];
   const memberName = members.find((m) => m.id === memberFilter)?.fullName ?? '';
   const isEmpty = entries !== null && entries.length === 0;
   const emptyMessage =
@@ -346,110 +357,102 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
-          gap: 12,
-          marginBottom: 18,
+          gap: 'var(--space-5)',
+          marginBottom: 'var(--space-6)',
         }}
       >
         {isReviewer && (
           <div style={{ minWidth: 190 }}>
             <Select
-              value={memberFilter}
-              options={[
-                { value: MY_TIME, label: 'My time' },
-                ...members.map((m) => ({ value: m.id, label: m.fullName })),
-              ]}
-              onChange={(value: string) => setMemberFilter(value)}
+              value={optionFor(memberOptions, memberFilter)}
+              options={memberOptions}
+              onChange={(option) => setMemberFilter(valueOf(option))}
               data-testid="tt-member-filter"
             />
           </div>
         )}
 
-        <SegmentedControl<TimeView>
-          ariaLabel="View"
-          value={view}
-          onChange={setView}
+        {/* §87 — the three-segment consumer. Reports' scope switch collapsed onto
+            `ToggleButton` with two, and this is the one that made the widening a widening
+            rather than a guess: one control, three answers, one tab stop. */}
+        <ToggleButton
+          aria-label="View"
+          selectedValue={view}
+          onChange={(next) => setView(next as TimeView)}
           options={[
             { value: 'daily', label: 'Daily', testId: 'tt-view-daily' },
             { value: 'weekly', label: 'Weekly', testId: 'tt-view-weekly' },
             { value: 'monthly', label: 'Monthly', testId: 'tt-view-monthly' },
           ]}
+          /* The row owns the spacing between its controls; the control does not add its own.
+             Nothing else: §49's `width: 100%` is what stops the three segments collapsing on
+             top of each other in a flex row, and the per-segment cap is what keeps it from
+             eating the row. Overriding either brings the collapse straight back. */
+          style={{ marginBottom: 0 }}
         />
 
         {/* Spec 16 §Filter chips — Billable / Non-Billable, both on by default;
-            state persists in the URL. */}
-        <div role="group" aria-label="Billable filter" style={{ display: 'inline-flex', gap: 6 }}>
-          <FilterChip
-            testId="time-grid-filter-billable"
-            label="Billable"
-            active={showBillable}
-            onToggle={() => updateBillable(!showBillable, showNonBillable)}
-          />
-          <FilterChip
-            testId="time-grid-filter-nonbillable"
-            label="Non-billable"
-            active={showNonBillable}
-            onToggle={() => updateBillable(showBillable, !showNonBillable)}
-          />
+            state persists in the URL. §71's `pressed`, which is the system's one reading of
+            *chosen*: these are two independent switches rather than one choice with two
+            answers, so they are not a `ToggleButton`. */}
+        <div role="group" aria-label="Billable filter" style={{ display: 'inline-flex', gap: 'var(--space-2)' }}>
+          <Button
+            data-testid="time-grid-filter-billable"
+            data-active={showBillable ? 'true' : 'false'}
+            pressed={showBillable}
+            onClick={() => updateBillable(!showBillable, showNonBillable)}
+          >
+            Billable
+          </Button>
+          <Button
+            data-testid="time-grid-filter-nonbillable"
+            data-active={showNonBillable ? 'true' : 'false'}
+            pressed={showNonBillable}
+            onClick={() => updateBillable(showBillable, !showNonBillable)}
+          >
+            Non-billable
+          </Button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-          <button
-            type="button"
-            data-testid="tt-period-today"
-            onClick={() => setAnchor(today)}
-            style={{
-              height: 34,
-              padding: '0 12px',
-              border: '1.5px solid var(--border-strong)',
-              borderRadius: 'var(--radius-lg)',
-              background: 'var(--bg-panel)',
-              color: 'var(--text-sub)',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              fontSize: 'var(--fs-13)',
-              cursor: 'pointer',
-            }}
-          >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginLeft: 'auto' }}>
+          <Button data-testid="tt-period-today" onClick={() => setAnchor(today)}>
             Today
-          </button>
-          <PeriodArrow testId="tt-period-prev" label="Previous period" onClick={() => stepPeriod(-1)}>
+          </Button>
+          <IconButton
+            data-testid="tt-period-prev"
+            label="Previous period"
+            onClick={() => stepPeriod(-1)}
+          >
             <ChevronLeftIcon />
-          </PeriodArrow>
+          </IconButton>
           <div
             data-testid="tt-period-label"
             style={{
               minWidth: 150,
               textAlign: 'center',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-16)',
-              color: 'var(--text)',
+              fontWeight: 'var(--font-weight-semibold)',
+              fontSize: 'var(--font-size-base)',
+              color: 'var(--text-primary)',
             }}
           >
             {periodLabel}
           </div>
-          <PeriodArrow testId="tt-period-next" label="Next period" onClick={() => stepPeriod(1)}>
+          <IconButton
+            data-testid="tt-period-next"
+            label="Next period"
+            onClick={() => stepPeriod(1)}
+          >
             <ChevronRightIcon />
-          </PeriodArrow>
+          </IconButton>
         </div>
       </div>
 
-      {/* Admin context banner when viewing another member's entries. */}
+      {/* Admin context banner when viewing another member's entries. It reports a *state* —
+          true for exactly as long as the filter is set — so it carries no dismiss (§24). */}
       {isReviewer && memberFilter !== MY_TIME && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: '10px 14px',
-            background: 'var(--accent-soft)',
-            border: '1px solid var(--accent-border)',
-            borderRadius: 'var(--radius-lg)',
-            fontFamily: 'var(--font-text)',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--text-sub)',
-          }}
-        >
+        <InfoBanner variant="info" style={{ marginBottom: 'var(--space-6)' }}>
           Viewing {memberName}&rsquo;s entries. You can edit or delete any block by clicking it.
-        </div>
+        </InfoBanner>
       )}
 
       {/* Spec organization/03 §Accessibility — one polite live region for the whole
@@ -460,7 +463,18 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
           a period with no entries still shows the empty grid (all days present), with a
           modest "no entries" note beneath it rather than replacing the whole view. */}
       {loading || entries === null ? (
-        <ViewSkeleton />
+        /* The view-shaped placeholder is gone. The app ships no `Skeleton` and the system's
+           position on waiting is `Preloader` (§23, §69) — an outline is worth drawing only
+           where the shape it stands in for is already known, which is why the members list
+           keeps its own and three calendar views that each have a different shape do not. */
+        <div
+          data-testid="tt-loading-skeleton"
+          role="status"
+          aria-label="Loading time entries"
+          style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-12) 0' }}
+        >
+          <Preloader />
+        </div>
       ) : (
         <>
           {view === 'monthly' ? (
@@ -499,15 +513,19 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
           )}
 
           {isEmpty && (
+            /* **Not `EmptyState`**, and spec 12 §Empty is the reason: the active view still
+               renders — every day of the period is there with a zero total — and this is a
+               note *beneath* it. `EmptyState` is "a single centred grey message where a list
+               would be", and it drops 150px to sit in the space that list would have filled.
+               There is no such space here, because the grid is still in it. */
             <div
               data-testid="tt-empty-state"
               style={{
-                marginTop: 14,
-                padding: '12px 16px',
+                marginTop: 'var(--space-6)',
+                padding: 'var(--space-5) var(--space-6)',
                 textAlign: 'center',
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text-faint)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-secondary)',
               }}
             >
               {emptyMessage}
@@ -529,128 +547,23 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
         onSaved={() => void load()}
       />
 
+      {/* §41 — `closeOnAccept={false}`, because this confirmation awaits a result: the row is
+          gone only once the server says so, and `busy` blocks both controls until then. */}
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Delete time entry"
-        message={TIME_TRACKING_MESSAGES.deleteConfirm}
-        confirmLabel="Delete"
+        description={TIME_TRACKING_MESSAGES.deleteConfirm}
+        acceptBtnText="Delete"
+        declineBtnText="Cancel"
+        acceptTestId="tt-entry-delete-confirm"
+        declineTestId="tt-entry-delete-cancel"
         busy={deleting}
-        onConfirm={() => void handleDeleteConfirm()}
+        closeOnAccept={false}
+        onAccept={() => void handleDeleteConfirm()}
         onClose={() => {
           if (!deleting) setDeleteTarget(null);
         }}
       />
-    </div>
-  );
-}
-
-/** A period-step chevron control (DS `IconButton`-style). */
-function PeriodArrow({
-  testId,
-  label,
-  onClick,
-  children,
-}: {
-  testId: string;
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      aria-label={label}
-      onClick={onClick}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 34,
-        height: 34,
-        border: '1.5px solid var(--border-strong)',
-        borderRadius: 'var(--radius-lg)',
-        background: 'var(--bg-panel)',
-        color: 'var(--text-sub)',
-        cursor: 'pointer',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-/**
- * Spec 16 §Filter chips — a toggle chip in the toolbar. No DS `Chip` primitive today
- * (carried gap noted in the DS map); the styling mirrors the SegmentedControl idiom
- * used above so the two controls read as siblings. `aria-pressed` carries the state
- * for a screen reader; visual state is background + border weight.
- */
-function FilterChip({
-  testId,
-  label,
-  active,
-  onToggle,
-}: {
-  testId: string;
-  label: string;
-  active: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      data-active={active ? 'true' : 'false'}
-      aria-pressed={active}
-      onClick={onToggle}
-      style={{
-        height: 34,
-        padding: '0 14px',
-        border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border-strong)'}`,
-        borderRadius: 'var(--radius-lg)',
-        background: active ? 'var(--accent-soft)' : 'var(--bg-panel)',
-        color: active ? 'var(--accent)' : 'var(--text-sub)',
-        fontFamily: 'var(--font-display)',
-        fontWeight: 500,
-        fontSize: 'var(--fs-13)',
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-/** Static view-shaped placeholder — the app ships no skeleton primitive (carried gap). */
-function ViewSkeleton() {
-  return (
-    <div
-      data-testid="tt-loading-skeleton"
-      style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ height: 44, background: 'var(--bg-header)' }} />
-      {[0, 1, 2, 3, 4].map((i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            gap: 12,
-            padding: '0 18px',
-            minHeight: 56,
-            alignItems: 'center',
-            borderTop: '1px solid var(--divider)',
-          }}
-        >
-          <div style={{ flex: 1, height: 16, borderRadius: 8, background: 'var(--bg-sunken)' }} />
-          <div style={{ width: 80, height: 16, borderRadius: 8, background: 'var(--bg-sunken)' }} />
-        </div>
-      ))}
     </div>
   );
 }

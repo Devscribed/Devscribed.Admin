@@ -43,6 +43,9 @@ export class MeController {
         role: null,
         principal: 'client' as const,
         client: { id: contact.client.id, name: contact.client.name },
+        // A client contact is never assigned an interview: the predicate is a fact
+        // about vacancy rows keyed by an account with a staff membership.
+        isInterviewer: false,
         features,
       };
     }
@@ -52,12 +55,32 @@ export class MeController {
       include: { account: true, organization: true },
     });
     if (!membership) return null;
+
+    /**
+     * The one navigation predicate that is not a role (hiring 03 §06.31): My interviews
+     * belongs to whoever has been **assigned** an interview, which is a fact about rows
+     * and not about a membership column.
+     *
+     * It rides on `/api/me` rather than being fetched by the sidebar because the shell
+     * already blocks on this response before it renders anything — which is exactly what
+     * stops a gated row flashing into view and back out. Any vacancy counts, closed ones
+     * included: a closed vacancy keeps its past interviews, and losing the screen would
+     * lose the only route an interviewer has to those cards.
+     */
+    const assignedInterviews = await this.prisma.vacancy.count({
+      where: {
+        organizationId: membership.organizationId,
+        interviewerAccountId: membership.accountId,
+      },
+    });
+
     return {
       account: this.accountOf(membership.account),
       organization: { id: membership.organization.id, name: membership.organization.name },
       role: membership.role,
       principal: 'member' as const,
       client: null,
+      isInterviewer: assignedInterviews > 0,
       /**
        * What this environment can do that the product does not otherwise promise. The
        * outbox screen only exists where mail is simulated, and the repository rule is that

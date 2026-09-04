@@ -427,7 +427,10 @@ A new nav row under the existing **PROJECTS** section, positioned after **Projec
 - `clients-table`
 - `clients-row-{id}`, `clients-row-{id}-rename-btn`, `clients-row-{id}-archive-btn`, `clients-row-{id}-restore-btn`
 - `clients-empty-state`, `clients-empty-primary-cta`
-- `clients-loading-skeleton`
+- ~~`clients-loading-skeleton`~~ → `clients-loading`
+
+  *Amended by the main merge, Phase 6:* renamed to **`clients-loading`**, and drawn by `Preloader` (§23, §69). The old id named a component that does not exist — the design system ships no `Skeleton`, and the one outline left in this product is the members list's, kept there deliberately and not copied. That is the ruling the first migration already made twice, at `specs/hiring/05-board.design.md` and `specs/hiring/04-candidate-card.design.md`: a test id naming an *announcement* survives the component drawing it, and one naming the component does not.
+
 - `clients-error-banner`, `clients-error-retry-btn`
 
 ### Client detail page
@@ -439,15 +442,23 @@ A new nav row under the existing **PROJECTS** section, positioned after **Projec
 
 ### Create / Rename modal
 
-- `client-modal`, `client-modal-title`
+- `client-modal`, ~~`client-modal-title`~~ — *amended by the main merge, Phase 6:
+  retired for the same reason as `client-archive-confirm-title` below. It named a hidden copy of
+  the dialog's heading; `Modal` (§8) names the dialog with the real one through `aria-labelledby`.*
 - `client-name-input`
 - `client-save-btn`, `client-cancel-btn`
 - `field-error-name`
 
 ### Archive confirmation
 
-- `client-archive-confirm`, `client-archive-confirm-title`, `client-archive-confirm-message`
+- `client-archive-confirm`, ~~`client-archive-confirm-title`~~, `client-archive-confirm-message`
 - `client-archive-confirm-btn`, `client-archive-cancel-btn`
+
+*Amended by the main merge, Phase 6:* **`client-archive-confirm-title` is
+retired.** It named a visually-hidden copy of the dialog's own heading, written because the
+previous dialog shell drew its title with no way to tag it. `ConfirmDialog` (§40) names the
+dialog with that heading through `aria-labelledby`, so the second copy was the same words
+announced twice. The heading itself is unchanged and still reads "Archive client?".
 
 ### Toasts
 

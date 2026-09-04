@@ -8,6 +8,7 @@ import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { usePendingRequests } from '@/layout/requests-badge-context';
 import { useToast } from '@/toast';
+import { optionFor, valueOf } from '@/select';
 import {
   REQUEST_MESSAGES,
   REQUEST_STATUS_LABELS,
@@ -22,7 +23,6 @@ import {
   type Role,
   type VacationRequestStatus,
 } from '@devscribed/validation';
-import { AvatarInitials } from '../members/[memberId]/AvatarInitials';
 import { RejectRequestModal } from '../members/[memberId]/RejectRequestModal';
 import { formatCurrency, formatDateRange } from '../members/[memberId]/vacation-format';
 import { CancelRequestDialog } from './CancelRequestDialog';
@@ -651,60 +651,59 @@ function VacationCard({
 
   return (
     <Card data-testid={`requests-card-${request.id}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {/* Header: avatar + name + status badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
-          <AvatarInitials
-            fullName={fullName}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', minWidth: 0 }}>
+          <Avatar
+            name={fullName}
             initials={request.member.initials}
             size={40}
+            decorative
             data-testid={`requests-card-avatar-${request.id}`}
           />
           <Link
             href={`/org/${orgId}/members/${request.member.membershipId}`}
             data-testid={`requests-card-member-name-${request.id}`}
             style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              fontSize: 'var(--fs-15)',
-              color: 'var(--text)',
+              fontWeight: 'var(--font-weight-medium)',
+              fontSize: 'var(--font-size-base)',
+              color: 'var(--text-primary)',
               textDecoration: 'none',
               minWidth: 0,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--action-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
           >
             {fullName}
           </Link>
           <div style={{ marginLeft: 'auto' }}>
-            <Badge tone={meta.tone} data-testid={`requests-card-status-${request.id}`}>
+            <Badge status={meta.tone} data-testid={`requests-card-status-${request.id}`}>
               {meta.label}
             </Badge>
           </div>
         </div>
 
         {/* Detail lines */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--sp-2) var(--sp-5)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-1) var(--space-4)' }}>
           <span
             data-testid={`requests-card-dates-${request.id}`}
             style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-15)',
-              color: 'var(--text)',
+              fontWeight: 'var(--font-weight-semibold)',
+              fontSize: 'var(--font-size-base)',
+              color: 'var(--text-primary)',
             }}
           >
             {formatDateRange(request.startDate, request.endDate)}
           </span>
           <span
             data-testid={`requests-card-days-${request.id}`}
-            style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+            style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
           >
             {request.workingDays} working days
           </span>
           <span
             data-testid={`requests-card-balance-${request.id}`}
-            style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+            style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
           >
             {request.memberBalance.availableDays} days available
           </span>
@@ -715,13 +714,12 @@ function VacationCard({
           data-testid={`requests-card-deduction-${request.id}`}
           style={{
             alignSelf: 'flex-start',
-            border: '1px solid var(--divider)',
-            borderRadius: 'var(--radius-md)',
-            padding: 'var(--sp-2) var(--sp-4)',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text)',
+            border: 'var(--border-width-hairline) solid var(--border-subtle)',
+            borderRadius: 'var(--radius-l)',
+            padding: 'var(--space-1) var(--space-3)',
+            fontWeight: 'var(--font-weight-semibold)',
+            fontSize: 'var(--font-size-base)',
+            color: 'var(--text-primary)',
           }}
         >
           {formatCurrency(request.deductionAmount, CURRENCY)}
@@ -731,7 +729,7 @@ function VacationCard({
         {request.status === 'rejected' && request.reviewerComment && (
           <div
             data-testid={`requests-card-reviewer-comment-${request.id}`}
-            style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-13)', color: 'var(--text-sub)' }}
+            style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
           >
             &ldquo;{request.reviewerComment}&rdquo;
           </div>
@@ -742,7 +740,7 @@ function VacationCard({
         {request.reviewedAt && request.reviewedBy && (
           <div
             data-testid={`requests-card-reviewed-by-${request.id}`}
-            style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-13)', color: 'var(--text-sub)' }}
+            style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
           >
             Reviewed by {request.reviewedBy}
           </div>
@@ -750,13 +748,12 @@ function VacationCard({
 
         {/* Action row */}
         {(isPending || isApproved) && (
-          <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             {isPending && (
               <>
                 <Button
                   variant="primary"
-                  size="sm"
-                  loading={approving}
+                  preloader={approving}
                   disabled={actionsBusy && !approving}
                   onClick={() => onApprove(request)}
                   data-testid={`requests-card-approve-${request.id}`}
@@ -764,8 +761,6 @@ function VacationCard({
                   Approve
                 </Button>
                 <Button
-                  variant="secondary"
-                  size="sm"
                   disabled={actionsBusy}
                   onClick={() => onReject(request)}
                   data-testid={`requests-card-reject-${request.id}`}
@@ -776,8 +771,7 @@ function VacationCard({
             )}
             {isApproved && (
               <Button
-                variant="danger"
-                size="sm"
+                variant="delete"
                 disabled={actionsBusy}
                 onClick={() => onCancel(request)}
                 data-testid={`requests-card-cancel-${request.id}`}
@@ -789,35 +783,5 @@ function VacationCard({
         )}
       </div>
     </Card>
-  );
-}
-
-/** Static token-colored card-shaped blocks — the app ships no skeleton primitive, matching
- * spec 05/09's loading placeholders. */
-function RequestsSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
-  return (
-    <div
-      data-testid="requests-loading-skeleton"
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}
-    >
-      {[0, 1].map((i) => (
-        <Card key={i}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
-              <div style={block(40, 40, 20)} />
-              <div style={block(160, 16)} />
-            </div>
-            <div style={block('80%', 14)} />
-            <div style={block('40%', 28)} />
-          </div>
-        </Card>
-      ))}
-    </div>
   );
 }

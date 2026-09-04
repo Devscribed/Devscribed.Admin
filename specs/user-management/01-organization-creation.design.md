@@ -4,72 +4,77 @@ kind: design
 title: Organization Creation — Design
 pairs-with: 01-organization-creation.md
 routes: ["/signup"]
-design-system: "1_DS for dev"
-tags: [signup, auth-layout, form-design, meridian, light-only]
+design-system: "@devscribed/ds"
+tags: [signup, auth-layout, form-design, teammerly-original, light-only]
 ---
 
 # 01 — Organization Creation · Design
 
 Visual and interaction specification for `/signup`. Pairs with [01-organization-creation.md](01-organization-creation.md), which owns the business rules, the API contract, and every validation message. This file owns everything a developer would otherwise have to invent: which design-system component to reach for, which token drives which state, and what the on-screen wording is.
 
-**Design system:** Teammerly Meridian, `1_DS for dev/`. Import components from `1_DS for dev/index.js`; never hardcode a color, size, or font — every value below is a token that already exists in `tokens/*.css`.
+**Design system:** [`packages/ds`](../../packages/ds/README.md). Import from `@devscribed/ds`;
+never hardcode a colour, size or font — every value below is a token that already exists. The
+numbered decisions behind it are in [`decisions.md`](../design-system/decisions.md), cited here
+as `§n`.
 
-**Theme:** light only in this release. The signed-out surface follows the system preference once dark ships; there is no theme toggle on `/signup`.
+**Theme:** light only. The system has no dark palette and the app has no toggle, so there is nothing on `/signup` to switch.
 
 ## Layout
 
-The screen is one `AuthLayout` — the signed-out shell, with no sidebar and no top bar.
+The screen is one `AuthLayout` (§11) — the signed-out shell, with no sidebar and no top bar.
 
 ```
-       Teammerly●                     ← wordmark, outside the card
-  ┌────────────────────────┐
-  │ Create your organization│         ← Grotesk 22, --text
-  │ One account, one org…   │         ← Plex 14, --text-muted
+       Teammerly                       ← wordmark, outside the card
+  ┌─────────────────────────┐
+  │ Create your organization│         ← headline-5, --text-primary
+  │ One account, one org…   │         ← body-s, --text-secondary
   │                         │
   │ [ error banner ]        │         ← only after a server error
   │                         │
-  │ ORGANIZATION NAME       │
+  │ Organization name       │
   │ [____________________]  │
-  │ FIRST NAME              │
+  │ First name              │
   │ [____________________]  │
-  │ LAST NAME               │
+  │ Last name               │
   │ [____________________]  │
-  │ EMAIL                   │
+  │ Email                   │
   │ [____________________]  │
-  │ PASSWORD                │
-  │ [_______________] 👁     │
+  │ Password           👁    │
+  │ [____________________]  │
   │ At least 8 characters…  │
   │                         │
-  │ [   Create account   ]  │         ← full width, primary, size lg
-  └────────────────────────┘
+  │ [   Create account   ]  │         ← full width, primary
+  └─────────────────────────┘
    Already have an account? Sign in   ← outside the card
 ```
 
-- Card: `--radius-2xl` · 1px `--border` · `--shadow-card` · `--bg-panel`, capped at 480px and centred. On the paper field (`--bg`).
-- Card padding `--sp-16`; gap between title block and the form `--sp-12`; gap between fields `--sp-7`; gap above the submit button `--sp-10`.
+- Card: `--radius-l` · 1px `--border-default` · `--surface-card`, capped at 480px and centred. **No shadow** — the system separates static surfaces with a border and reserves shadow for things that float.
+- The page well is `#f8fafc`, the same value `AppShell` paints behind every signed-in screen. It is hardcoded in the system and absent from `tokens/colors.css`; the decision record notes it as un-tokenised.
+- Card padding `--space-10` (30px); gap between the title block and the form `--space-8`; gap between fields `--space-7`; gap above the submit button `--space-7`.
+- **`--space-7` (20px) is not decoration.** `TextInput` pins its message 16px under the field rather than pushing the field below it (§4), so anything under a field has to leave that much room. 20px is also the system's own form rhythm. The 14px this screen used before does not clear the slot.
 - Field order matches the business spec: organization name, first name, last name, email, password. Vertical stack at every breakpoint — never two fields on one row.
 - The error banner sits inside the card, above the first field, and only exists once a server error has come back.
-- The "Already have an account?" line sits below the card, on the paper field — not inside it.
+- The "Already have an account?" line sits below the card, on the well — not inside it.
 
 ## Component map
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
-| Page shell | `AuthLayout` | `title`, `subtitle`, `footer` | — |
+| Page shell | `AuthLayout` (§11) | `title`, `subtitle`, `footer` | — |
 | Form element | native `<form>` | — | `signup-form` |
-| Server error banner | `InfoBanner` | `tone="error"` | `signup-error-banner` |
-| Organization name | `Input` | `label`, `placeholder`, `error` | `signup-org-name-input` |
-| First name | `Input` | `label`, `placeholder`, `error` | `signup-first-name-input` |
-| Last name | `Input` | `label`, `placeholder`, `error` | `signup-last-name-input` |
-| Email | `Input` | `label`, `placeholder`, `error`, `type="email"` | `signup-email-input` |
-| Password | `Input` | `label`, `hint`, `error`, `type`, `trailing` | `signup-password-input` |
-| Password reveal | `IconButton` + `Eye` / `EyeOff` | `label`, `active`, inside the password field's `trailing` | `signup-password-toggle` |
-| Submit | `Button` | `variant="primary"`, `size="lg"`, `loading`, full width | `signup-submit-button` |
+| Server error banner | `InfoBanner` | `variant="error"` (§7) | `signup-error-banner` |
+| Organization name | `TextInput` | `label`, `id`, `name`, `placeholder`, `error`, `errorId` | `signup-org-name-input` |
+| First name | `TextInput` | as above | `signup-first-name-input` |
+| Last name | `TextInput` | as above | `signup-last-name-input` |
+| Email | `TextInput` | as above, `type="email"` | `signup-email-input` |
+| Password | `TextInput` | `label`, `hint`, `hintId`, `error`, `errorId`, `type`, `trailing` (§5) | `signup-password-input` |
+| Password reveal | `IconButton` (§10) + `Eye` / `EyeOff` (§9) | `label`, `active`, `size={28}`, inside the password field's `trailing` | `signup-password-toggle` |
+| Submit | `Button` | `variant="primary"`, `preloader`, `style={{ width: '100%' }}` | `signup-submit-button` |
 | Sign-in link | native `<a>` | — | `signup-login-link` |
 
-Inline field errors are rendered by `Input`'s own `error` prop — the message node underneath the field carries `field-error-{fieldName}`: `field-error-orgName`, `field-error-firstName`, `field-error-lastName`, `field-error-email`, `field-error-password`.
+Inline field errors are rendered by `TextInput`'s own `error` prop, tagged by `errorId` (§4): `field-error-orgName`, `field-error-firstName`, `field-error-lastName`, `field-error-email`, `field-error-password`.
 
-`AuthLayout`, `IconButton`, `Eye` / `EyeOff`, `Input trailing`, and `Button loading` were added to the design system for this screen — see [DS gaps](#ds-gaps).
+**The system has no `size` on `Button` and no `loading`.** It ships one 44px height, and its in-flight prop is `preloader`. Full width is passed as a style rather than assumed, because §1 removed the hardcoded `width: '100%'`.
 
 ## Copy
 
@@ -79,11 +84,11 @@ Validation messages are **not** listed here. They are owned by the business spec
 |---|---|
 | Card title | Create your organization |
 | Card subtitle | One account, one organization. You'll be its first admin. |
-| Micro-label · org name | ORGANIZATION NAME |
-| Micro-label · first name | FIRST NAME |
-| Micro-label · last name | LAST NAME |
-| Micro-label · email | EMAIL |
-| Micro-label · password | PASSWORD |
+| Label · org name | Organization name |
+| Label · first name | First name |
+| Label · last name | Last name |
+| Label · email | Email |
+| Label · password | Password |
 | Placeholder · org name | Acme Inc |
 | Placeholder · first name | Pat |
 | Placeholder · last name | Owner |
@@ -94,7 +99,9 @@ Validation messages are **not** listed here. They are owned by the business spec
 | Submit button, in flight | Creating account |
 | Footer | Already have an account? **Sign in** |
 
-Voice: sentence case in prose, `UPPERCASE` + `--ls-wider` for the micro-labels, no exclamation marks, no emoji. The password hint states the policy up front rather than waiting for the visitor to fail it — it is the same rule as the business spec's password errors, phrased as guidance.
+**Labels are sentence case, not uppercase.** The system capitalises exactly one thing — `PageTabs`, via `text-transform` — and its field labels are 12px `--text-secondary` in sentence case, set by the global `.input-label` rule. The uppercase micro-labels this screen used before were the earlier design's idiom and do not survive the reskin.
+
+Voice: sentence case in prose, no exclamation marks, no emoji, errors terse and factual. The password hint states the policy up front rather than waiting for the visitor to fail it — it is the same rule as the business spec's password errors, phrased as guidance.
 
 ## States
 
@@ -102,61 +109,60 @@ Every value below is a token; nothing here is a literal.
 
 | State | Field | Submit | Notes |
 |---|---|---|---|
-| **Default** | 1.5px `--border-strong`, `--bg-field`, label `--text-muted` | enabled, `--accent` + `--lip-accent` | Card as described above. |
-| **Focus** | border `--accent`, ring `--shadow-glow-accent` (3px violet) | — | No browser default outline anywhere. |
-| **Field error** | border + label + message `--error-500`; on focus the ring swaps to `--shadow-glow-error` | enabled | Message is Plex `--fs-12`, `--sp-2` below the field. |
+| **Default** | 1.5px `--border-default`, white, 44px min-height, `--radius-l`, label `--text-secondary` | enabled, `--action-primary` fill, 550 weight | Card as described above. |
+| **Focus** | border `--color-blue`, `--shadow-focus-input` (inset 2px + a 7px blue glow) | — | No browser default outline anywhere. |
+| **Field error** | border `--status-error`, `--shadow-error-glow`; message `*`-prefixed, 8px, `--status-error`, pinned 16px below the field | enabled | The message is positioned, not in flow — it never moves the field below it. |
 | **Submit-blocked** | every invalid field in its error state at once | enabled | Focus jumps to the first invalid field, top to bottom. |
-| **Loading** | fields read-only, `opacity: .55` | `loading` — spinner leads the label, lip drops to none, cursor `progress`, click blocked | Label changes to "Creating account". |
-| **Server error** | values retained, no field errors added | back to enabled | `InfoBanner tone="error"` above the first field, `--error-500` ink on the tone's soft red field. |
+| **Loading** | fields read-only, `opacity: .55` | `preloader` — a spinner in the trailing slot, `aria-busy` set, label swaps to "Creating account" | The button is *not* disabled; the handler guards re-entry. |
+| **Server error** | values retained, no field errors added | stays enabled | `InfoBanner variant="error"` above the first field. |
 | **Success** | — | — | No toast, no confirmation. Immediate redirect to the Members list. |
 
-Press on the submit button: `translateY(1px)` and the lip shrinks to `--lip-accent-press`. Hover on the sign-in link and the password toggle uses the universal `--hover-bg-tint`. Transitions run at `--duration-base` on `--easing-standard`; nothing bounces.
+Hover on the submit button: `filter: brightness(90%)` over `--duration-hover` — the system brightens its solid buttons rather than swapping to a darker hex. Hover on the reveal toggle: `scale(1.1)`, the same treatment the system gives the Modal close button. **There is no press state**: the system's source has no shrink, lip or translate on any control, and inventing one would be the only motion in the system that is not measured.
 
 ## Interactions
 
 - **Blur on a field** — runs that field's validation. Invalid → the field enters its error state and the message appears in `field-error-{fieldName}`. Valid → any existing error clears.
-- **Submit click** — re-runs every validation. If anything fails, all applicable errors render at once, focus moves to the first invalid field (organization name → first name → last name → email → password), and no request goes out. If everything passes, the button enters `loading` and the request is sent.
+- **Submit click** — re-runs every validation. If anything fails, all applicable errors render at once, focus moves to the first invalid field (organization name → first name → last name → email → password), and no request goes out. If everything passes, the button enters its `preloader` state and the request is sent.
 - **Enter key** inside any field submits the form — same path as clicking the button.
-- **Password toggle** — flips the input between `type="password"` and `type="text"`. The glyph swaps `Eye` ⇄ `EyeOff` and the button's `active` prop tints it `--accent` while the password is visible. Toggling never moves focus out of the password field and never alters the value.
+- **Password toggle** — flips the input between `type="password"` and `type="text"`. The glyph swaps `Eye` ⇄ `EyeOff` and the button's `active` prop tints it `--action-primary` while the password is visible. `onMouseDown` is prevented, so toggling never moves focus out of the password field and never alters the value.
 - **Server-error dismissal** — the banner disappears as soon as the visitor edits any field value.
 
 ## Responsive
 
 - ≥ 520px: card sits at its 480px cap, centred, wordmark above.
-- < 520px: card spans the available width; `AuthLayout`'s horizontal padding (`--sp-8`) keeps it off the edge. Radius, border, and shadow stay — the card does not go full-bleed.
+- < 520px: card spans the available width; `AuthLayout`'s horizontal padding (`--space-6`) keeps it off the edge. Radius and border stay — the card does not go full-bleed.
 - Fields stay stacked at every width. The submit button is full-width at every width.
-- The password field's `trailing` slot is fixed-width, so the input's usable area shrinks with the card rather than the toggle overlapping the text.
+- The password field's `trailing` slot is fixed-width and the field carries matching right padding (§5), so the input's usable area shrinks with the card rather than the toggle overlapping the text.
 
 ## Accessibility
 
-- Every `Input` has a real `<label>`; the uppercase micro-label is the label, not decoration.
-- A field in error carries `aria-invalid="true"` and `aria-describedby` pointing at its `field-error-{fieldName}` node.
-- The password field's hint is also referenced by `aria-describedby`, so it is announced before the visitor types.
-- The error banner is `role="alert"` / `aria-live="polite"` so a server error is announced without stealing focus.
+- Every `TextInput` renders a real `<label for>` bound to the field's `id` (§3). The system's own label is associated with nothing.
+- A field in error carries `aria-invalid="true"` and `aria-describedby` pointing at its `field-error-{fieldName}` node, which exists because of `errorId` (§4).
+- The password hint is referenced by `aria-describedby` through `hintId`, so the policy is announced before the visitor types. Hint and error share one slot, so only one of the two is ever a describedby target.
+- The error banner is `role="alert"` / `aria-live="polite"` so a server error is announced without stealing focus — it reaches the DOM because of §6.
 - The password toggle is a real `<button type="button">` with an `aria-label` that reflects the *action* ("Show password" / "Hide password") and `aria-pressed` reflecting the current state.
-- The submit button carries `aria-busy` while loading.
-- Focus is visible everywhere — the 3px violet ring, never `outline: none` without a replacement.
-- Colour is never the only error signal: the message text carries the meaning.
-- Contrast: `--text` on `--bg-panel` and `--on-accent` on `--accent` both clear AA; `--text-muted` is used for supporting copy only, never for a control label that carries meaning alone.
+- The submit button carries `aria-busy` while its `preloader` is set (§2).
+- Focus is visible everywhere — the system's `--shadow-focus-input`, never `outline: none` without a replacement.
+- Colour is never the only error signal: the message text carries the meaning, and the `*` prefix marks it without relying on hue.
+- Contrast: `--text-primary` (#1B1B1B) on `--surface-card` and `--action-primary-text` on `--action-primary` (#007AFF) both clear AA. `--text-secondary` (#64748B) is used for supporting copy and labels only.
 
-## DS gaps
+**One regression, recorded rather than hidden.** The system pins its field message at 8px, which §4 preserves — and it is below the size at which a hint or an error is comfortable to read. The wording is carried to screen readers by `aria-describedby` regardless, and the field's own red border and glow carry the error state visually. Raising it is a change to the system's own geometry, so it belongs in the system rather than in a shim here.
 
-Everything in this list has been added to `1_DS for dev/` — this is the record of what changed for this screen, not an open to-do.
+## Divergences used by this screen
 
-| Gap | Resolution | Status |
+This screen was the first signed-out surface in the product, so it needed more of the system opened than most. Each of these is numbered in [decisions](../design-system/decisions.md); none is a local workaround.
+
+| § | What it adds | Kind |
 |---|---|---|
-| No signed-out shell anywhere in the Meridian build | `components/surfaces/AuthLayout.jsx` | done |
-| `Input` had no trailing adornment, so the eye toggle had nowhere to sit | `trailing` prop on `Input` | done |
-| No glyph-only button | `components/actions/IconButton.jsx` | done |
-| No `eye` / `eye-off` glyphs in the icon dictionary | `components/icons/Eye.jsx` | done |
-| `Button` had no in-flight state | `loading` prop, SVG spinner (no CSS keyframes exist in the DS) | done |
-| `no-restricted-imports` pointed at an `index.js` that did not exist | `1_DS for dev/index.js` re-exports every component | done |
-
-Known rough edges, not fixed here:
-
-`InfoBanner` hardcodes its four tone triplets as literal `oklch(...)` values instead of tokens, so the error banner's soft red field and border are the one pair of colors on this screen that cannot be pointed at a `--variable`. The mockup mirrors the component verbatim rather than inventing a substitute. Promoting those tones to tokens is a design-system chore worth doing before the second screen adopts banners.
-
-`_adherence.oxlintrc.json` declares each component's props exhaustively, which flags pass-through native attributes such as `placeholder`, `type`, and `data-testid` on `<Input>`. When the frontend lands, that rule needs the native-attribute allowance before the linter can be switched on without noise.
+| 1 | `Button` sizes to its content instead of always filling its parent | `omission` |
+| 2 | `Button` forwards rest props, `ref` and `style`, and sets `aria-busy` | `omission` |
+| 3 | `TextInput` forwards rest props and `ref`, and gives its label a real `htmlFor` | `omission` |
+| 4 | `TextInput` gains `errorId` / `hintId` and a hint that shares the error's slot | `omission` |
+| 5 | `TextInput` gains the `trailing` slot the reveal toggle sits in | `omission` |
+| 6 | `InfoBanner` forwards rest props, so `role`/`aria-live`/`data-testid` reach the DOM | `omission` |
+| 9 | `Eye` / `EyeOff` glyphs, drawn to the system's stated icon rules | `packaging` |
+| 10 | `IconButton`, the treatment the system's readme specifies but never promoted | `packaging` |
+| 11 | `AuthLayout` — the signed-out shell; there was no other signed-out screen to draw from | `designed` |
 
 ## Reference mockup
 

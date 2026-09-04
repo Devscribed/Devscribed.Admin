@@ -7,9 +7,23 @@ import {
   validateTemplateDescription,
   validateTemplateName,
 } from '@devscribed/validation';
-import { Badge, Button, Card, Input, Modal, SearchField, Select, Spinner } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  FormActions,
+  TextInput,
+  Modal,
+  Popover,
+  SearchInput,
+  Select,
+  Preloader,
+  Table,
+} from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
+import { optionFor, valueOf } from '@/select';
 import {
   apiRequest,
   failureMessage,
@@ -21,8 +35,7 @@ import {
 } from '@/documents/api';
 import { formatUpdatedAt, statusLabel, statusTone } from '@/documents/format';
 import { PreviewModal } from '@/documents/PreviewModal';
-import { RowMenu } from '@/documents/RowMenu';
-import { ToastProvider, useToast } from '@/documents/toast';
+import { useToast } from '@/toast';
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -36,16 +49,12 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 export default function TemplatesPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
-  return (
-    <ToastProvider>
-      <TemplatesScreen orgId={orgId} />
-    </ToastProvider>
-  );
+  return <TemplatesScreen orgId={orgId} />;
 }
 
 function TemplatesScreen({ orgId }: { orgId: string }) {
   const router = useRouter();
-  const toast = useToast();
+  const { showToast } = useToast();
 
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -100,14 +109,10 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
     setDeleteBlocked(null);
     const result = await apiRequest(`${templateUrl(orgId, item.id)}/archive`, { method: 'POST' });
     if (!result.ok) {
-      toast.show({ testId: 'toast-template-error', message: failureMessage(result.failure), tone: 'error' });
+      showToast('toast-template-error', failureMessage(result.failure), 'error');
       return;
     }
-    toast.show({
-      testId: 'toast-template-archived',
-      message: TEMPLATE_MESSAGES.toast.archived,
-      tone: 'success',
-    });
+    showToast('toast-template-archived', TEMPLATE_MESSAGES.toast.archived);
     await load();
   }
 
@@ -118,14 +123,10 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
         setDeleteBlocked({ item, count: result.failure.envelopeCount ?? item.envelopeCount });
         return;
       }
-      toast.show({ testId: 'toast-template-error', message: failureMessage(result.failure), tone: 'error' });
+      showToast('toast-template-error', failureMessage(result.failure), 'error');
       return;
     }
-    toast.show({
-      testId: 'toast-template-deleted',
-      message: TEMPLATE_MESSAGES.toast.deleted,
-      tone: 'success',
-    });
+    showToast('toast-template-deleted', TEMPLATE_MESSAGES.toast.deleted);
     await load();
   }
 
@@ -135,7 +136,7 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
       body: JSON.stringify({}),
     });
     if (!result.ok) {
-      toast.show({ testId: 'toast-template-error', message: failureMessage(result.failure), tone: 'error' });
+      showToast('toast-template-error', failureMessage(result.failure), 'error');
       return;
     }
     setPreviewHtml(result.data.html);
@@ -158,12 +159,12 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
         <div
           style={{
             display: 'flex',
-            gap: 'var(--sp-6)',
+            gap: 'var(--space-5)',
             alignItems: 'center',
-            padding: 'var(--sp-8) var(--sp-10)',
+            padding: 'var(--space-6) var(--space-7)',
           }}
         >
-          <SearchField
+          <SearchInput
             placeholder="Search templates"
             value={query}
             data-testid="template-search-input"
@@ -171,9 +172,9 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
             style={{ flex: 1 }}
           />
           <Select
-            value={status}
+            value={optionFor(STATUS_OPTIONS, status)}
             options={STATUS_OPTIONS}
-            onChange={setStatus}
+            onChange={(option) => setStatus(valueOf(option))}
             data-testid="template-status-filter"
             wrapperStyle={{ width: 180 }}
           />
@@ -185,11 +186,11 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
             style={{
               display: 'flex',
               justifyContent: 'center',
-              padding: 'var(--sp-20)',
-              color: 'var(--accent)',
+              padding: 'var(--space-12)',
+              color: 'var(--action-primary)',
             }}
           >
-            <Spinner size={28} />
+            <Preloader size={28} />
           </div>
         )}
 
@@ -197,11 +198,11 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
           <div
             data-testid="template-empty"
             style={{
-              padding: 'var(--sp-20)',
+              padding: 'var(--space-12)',
               textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: 'var(--fs-15)',
-              borderTop: '1px solid var(--divider)',
+              color: 'var(--text-secondary)',
+              fontSize: 'var(--font-size-base)',
+              borderTop: '1px solid var(--border-subtle)',
             }}
           >
             {TEMPLATE_MESSAGES.generic.emptyState}
@@ -211,11 +212,11 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
         {!loading && templates.length === 0 && filtered && (
           <div
             style={{
-              padding: 'var(--sp-20)',
+              padding: 'var(--space-12)',
               textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: 'var(--fs-14)',
-              borderTop: '1px solid var(--divider)',
+              color: 'var(--text-secondary)',
+              fontSize: 'var(--font-size-s)',
+              borderTop: '1px solid var(--border-subtle)',
             }}
           >
             No templates match this search.
@@ -223,117 +224,114 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
         )}
 
         {!loading && templates.length > 0 && (
-          // Hand-rolled rather than the DS `Table`: the spec requires a
-          // `template-row-{id}` handle on the row element itself, and `Table` exposes no
-          // per-row attributes. The geometry and tokens below mirror `Table`'s so the two
-          // are indistinguishable on screen — the members list sets the same precedent.
-          <div data-testid="templates-table">
-            <div
-              style={{
-                display: 'flex',
-                height: 52,
-                padding: '0 var(--sp-10)',
-                alignItems: 'center',
-                background: 'var(--bg-header)',
-                borderTop: '1px solid var(--divider)',
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <span style={{ flex: 3 }}>Name</span>
-              <span style={{ flex: 1 }}>Version</span>
-              <span style={{ flex: 1 }}>Status</span>
-              <span style={{ flex: 1 }}>Updated</span>
-              <span style={{ width: 44 }} />
-            </div>
-
-            {templates.map((item) => (
-              <div
-                key={item.id}
-                data-testid={`template-row-${item.id}`}
-                style={{
-                  display: 'flex',
-                  minHeight: 62,
-                  alignItems: 'center',
-                  padding: '0 var(--sp-10)',
-                  borderTop: '1px solid var(--divider)',
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-15)',
-                  color: 'var(--text)',
-                }}
-              >
-                <span style={{ flex: 3, minWidth: 0 }}>
-                  <a
-                    href={`/org/${orgId}/documents/templates/${item.id}`}
-                    onClick={(event) => {
-                      if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-                      event.preventDefault();
-                      router.push(`/org/${orgId}/documents/templates/${item.id}`);
-                    }}
-                    style={{ color: 'var(--text)', textDecoration: 'none' }}
-                  >
-                    {item.name}
-                  </a>
-                </span>
-                <span
-                  style={{
-                    flex: 1,
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 600,
-                    fontSize: 'var(--fs-14)',
-                  }}
-                >
-                  {item.currentVersionNumber ? `v${item.currentVersionNumber}` : '—'}
-                  {item.hasOpenDraft && (
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> + draft</span>
-                  )}
-                </span>
-                <span style={{ flex: 1 }}>
-                  <Badge tone={statusTone(item.status)} data-testid={`template-status-${item.id}`}>
+          <Table<TemplateListItem>
+            data-testid="templates-table"
+            columns={[
+              {
+                label: 'Name',
+                flex: 3,
+                align: 'flex-start',
+                render: (item) => <span style={{ minWidth: 0 }}>{item.name}</span>,
+              },
+              {
+                label: 'Version',
+                flex: 1,
+                align: 'flex-start',
+                render: (item) => (
+                  <span style={{ fontWeight: 'var(--font-weight-semibold)' }}>
+                    {item.currentVersionNumber ? `v${item.currentVersionNumber}` : '—'}
+                    {item.hasOpenDraft && (
+                      <span
+                        style={{
+                          color: 'var(--text-secondary)',
+                          fontWeight: 'var(--font-weight-regular)',
+                        }}
+                      >
+                        {' '}
+                        + draft
+                      </span>
+                    )}
+                  </span>
+                ),
+              },
+              {
+                label: 'Status',
+                flex: 1,
+                align: 'flex-start',
+                render: (item) => (
+                  <Badge status={statusTone(item.status)} data-testid={`template-status-${item.id}`}>
                     {statusLabel(item.status)}
                   </Badge>
-                </span>
-                <span style={{ flex: 1, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
-                  {formatUpdatedAt(item.updatedAt)}
-                </span>
-                <span style={{ width: 44, display: 'flex', justifyContent: 'flex-end' }}>
-                  <RowMenu
-                    testId={`template-actions-${item.id}`}
-                    items={[
-                      {
-                        label: 'Open',
-                        onSelect: () => router.push(`/org/${orgId}/documents/templates/${item.id}`),
-                      },
-                      { label: 'Preview', onSelect: () => void preview(item) },
-                      ...(canManage && item.status !== 'archived'
-                        ? [
-                            {
-                              label: 'Archive',
-                              testId: 'template-archive-btn',
-                              onSelect: () => setArchiveTarget(item),
-                            },
-                          ]
-                        : []),
-                      ...(canManage
-                        ? [
-                            {
-                              label: 'Delete',
-                              testId: 'template-delete-btn',
-                              danger: true,
-                              onSelect: () => void remove(item),
-                            },
-                          ]
-                        : []),
-                    ]}
-                  />
-                </span>
-              </div>
-            ))}
-          </div>
+                ),
+              },
+              {
+                label: 'Updated',
+                flex: 1,
+                align: 'flex-start',
+                maxWidth: 'none',
+                render: (item) => (
+                  <span style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
+                    {formatUpdatedAt(item.updatedAt)}
+                  </span>
+                ),
+              },
+              {
+                label: '',
+                flex: 0.4,
+                align: 'flex-end',
+                render: (item) => (
+                  // §55 — the menu is portaled, so a click inside it is not a click on the
+                  // row; `data-row-actions` is what tells `onRowClick` so.
+                  <span data-row-actions>
+                    <Popover
+                      label="Row actions"
+                      data-testid={`template-actions-${item.id}`}
+                      items={[
+                        {
+                          label: 'Open',
+                          onSelect: () =>
+                            router.push(`/org/${orgId}/documents/templates/${item.id}`),
+                        },
+                        { label: 'Preview', onSelect: () => void preview(item) },
+                        ...(canManage && item.status !== 'archived'
+                          ? [
+                              {
+                                label: 'Archive',
+                                testId: 'template-archive-btn',
+                                onSelect: () => setArchiveTarget(item),
+                              },
+                            ]
+                          : []),
+                        ...(canManage
+                          ? [
+                              {
+                                label: 'Delete',
+                                testId: 'template-delete-btn',
+                                danger: true,
+                                onSelect: () => void remove(item),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                  </span>
+                ),
+              },
+            ]}
+            rows={templates}
+            rowKey="id"
+            rowTestId={(item) => `template-row-${item.id}`}
+            rowHref={(item) => `/org/${orgId}/documents/templates/${item.id}`}
+            onRowClick={(item, event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+              if ((event.target as HTMLElement).closest('[data-row-actions]')) {
+                event.preventDefault();
+                return;
+              }
+              event.preventDefault();
+              router.push(`/org/${orgId}/documents/templates/${item.id}`);
+            }}
+          />
         )}
       </Card>
 
@@ -342,64 +340,36 @@ function TemplatesScreen({ orgId }: { orgId: string }) {
           orgId={orgId}
           onCancel={() => setNewOpen(false)}
           onCreated={(created) => {
-            toast.show({
-              testId: 'toast-template-created',
-              message: TEMPLATE_MESSAGES.toast.created,
-              tone: 'success',
-            });
+            showToast('toast-template-created', TEMPLATE_MESSAGES.toast.created);
             router.push(`/org/${orgId}/documents/templates/${created.id}`);
           }}
         />
       )}
 
-      <Modal
+      {/* Both of these are a question and two answers, which is `ConfirmDialog` (§40) and
+          not a `Modal` with a paragraph in it. `archive()` closes whichever one is open as
+          its first act, so neither needs §41's `closeOnAccept={false}`. */}
+      <ConfirmDialog
         open={archiveTarget !== null}
         title="Archive template"
+        description={`Archiving “${archiveTarget?.name ?? ''}” cannot be undone. No new documents can be created from it; documents already sent keep working.`}
+        declineBtnText="Cancel"
+        acceptBtnText="Archive"
+        acceptTestId="template-archive-btn"
         onClose={() => setArchiveTarget(null)}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setArchiveTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              data-testid="template-archive-btn"
-              onClick={() => archiveTarget && void archive(archiveTarget)}
-            >
-              Archive
-            </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          Archiving “{archiveTarget?.name}” cannot be undone. No new documents can be created from
-          it; documents already sent keep working.
-        </p>
-      </Modal>
+        onAccept={() => archiveTarget && void archive(archiveTarget)}
+      />
 
-      <Modal
+      <ConfirmDialog
         open={deleteBlocked !== null}
         title="Template in use"
+        description={TEMPLATE_MESSAGES.generic.deleteBlocked(deleteBlocked?.count ?? 0)}
+        declineBtnText="Close"
+        acceptBtnText="Archive"
+        acceptTestId="template-archive-btn"
         onClose={() => setDeleteBlocked(null)}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setDeleteBlocked(null)}>
-              Close
-            </Button>
-            <Button
-              variant="danger"
-              data-testid="template-archive-btn"
-              onClick={() => deleteBlocked && void archive(deleteBlocked.item)}
-            >
-              Archive
-            </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          {TEMPLATE_MESSAGES.generic.deleteBlocked(deleteBlocked?.count ?? 0)}
-        </p>
-      </Modal>
+        onAccept={() => deleteBlocked && void archive(deleteBlocked.item)}
+      />
 
       <PreviewModal
         open={previewHtml !== null}
@@ -480,8 +450,8 @@ function NewTemplateModal({
   return (
     <Modal open title="New template" onClose={onCancel}>
       <form onSubmit={submit} noValidate data-testid="template-new-modal">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
-          <Input
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          <TextInput
             label="Name"
             value={name}
             placeholder="Contractor agreement BY"
@@ -493,10 +463,11 @@ function NewTemplateModal({
             }}
             aria-invalid={errors.name ? true : undefined}
             aria-describedby={errors.name ? 'field-error-name' : undefined}
-            error={errors.name ? errorNode('name', errors.name) : undefined}
+            error={errors.name}
+            errorId="field-error-name"
             wrapperStyle={{ gap: 0 }}
           />
-          <Input
+          <TextInput
             label="Description"
             value={description}
             data-testid="template-description-input"
@@ -510,28 +481,26 @@ function NewTemplateModal({
             }}
             aria-invalid={errors.description ? true : undefined}
             aria-describedby={errors.description ? 'field-error-description' : undefined}
-            error={errors.description ? errorNode('description', errors.description) : undefined}
+            error={errors.description}
+            errorId="field-error-description"
             wrapperStyle={{ gap: 0 }}
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--sp-5)', marginTop: 'var(--sp-10)' }}>
-          <Button
-            type="button"
-            variant="secondary"
-            data-testid="template-new-cancel-btn"
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            loading={submitting}
-            data-testid="template-new-submit-btn"
-          >
-            Create template
-          </Button>
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" data-testid="template-new-cancel-btn" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={submitting}
+              data-testid="template-new-submit-btn"
+            >
+              Create template
+            </Button>
+          </FormActions>
         </div>
       </form>
     </Modal>

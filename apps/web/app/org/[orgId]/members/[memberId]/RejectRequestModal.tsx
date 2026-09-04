@@ -1,27 +1,31 @@
 'use client';
 
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
-import { Button, Modal } from '@/ds';
+import { Button, FormActions, Modal, TextArea } from '@devscribed/ds';
 import { useToast } from '@/toast';
 import { REQUEST_MESSAGES, REVIEWER_COMMENT_MAX, validateReviewerComment } from '@devscribed/validation';
 import type { VacationRequest } from './VacationPanel';
 import { formatDateRange, formatWorkingDays } from './vacation-format';
 
 const summaryLine: CSSProperties = {
-  fontSize: 'var(--fs-15)',
-  color: 'var(--text)',
+  fontSize: 'var(--font-size-base)',
+  color: 'var(--text-primary)',
 };
 
 const requesterLine: CSSProperties = {
-  fontSize: 'var(--fs-13)',
-  color: 'var(--text-sub)',
+  fontSize: 'var(--font-size-s)',
+  color: 'var(--text-tertiary)',
 };
 
 /**
- * Reject Request modal (spec 09). Shows the request summary + requester, an optional comment
- * (native `<textarea>` — the DS has no multi-line field, see the design doc's DS-gaps), and
- * PUTs `.../review` with `{ decision: 'rejected', comment }`. On 200 it closes, toasts, and
+ * Reject Request modal (spec 09). Shows the request summary + requester, an optional comment,
+ * and PUTs `.../review` with `{ decision: 'rejected', comment }`. On 200 it closes, toasts, and
  * asks the panel to refetch. Mirrors `VacationFinancialsModal`'s shell + `useToast()` contract.
+ *
+ * The comment was a hand-built `<textarea>` carrying its own label, focus ring, error node and
+ * `aria-describedby`, under a note saying the system had no multi-line field. It has `TextArea`
+ * (§25, §33), and it had it before this was written — so all four of those are the component's
+ * now, and the `focus` state they needed goes with them.
  */
 export function RejectRequestModal({
   orgId,
@@ -45,7 +49,6 @@ export function RejectRequestModal({
   const [comment, setComment] = useState('');
   const [commentError, setCommentError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [focus, setFocus] = useState(false);
 
   const open = request !== null;
 
@@ -55,7 +58,6 @@ export function RejectRequestModal({
     setComment('');
     setCommentError(null);
     setSaving(false);
-    setFocus(false);
   }, [open, request?.id]);
 
   function handleClose() {
@@ -109,50 +111,12 @@ export function RejectRequestModal({
     setSaving(false);
   }
 
-  const borderColor = commentError
-    ? 'var(--error-500)'
-    : focus
-      ? 'var(--accent)'
-      : 'var(--border-strong)';
-
   return (
-    <Modal
-      open={open}
-      title="Reject Request"
-      onClose={handleClose}
-      width={440}
-      data-testid="vacation-reject-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={saving}
-            data-testid="vacation-reject-cancel-btn"
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="vacation-reject-form"
-            variant="danger"
-            size="lg"
-            loading={saving}
-            data-testid="vacation-reject-confirm-btn"
-            style={{ flex: 1 }}
-          >
-            {saving ? 'Rejecting' : 'Reject'}
-          </Button>
-        </>
-      }
-    >
+    <Modal open={open} title="Reject Request" onClose={handleClose} data-testid="vacation-reject-modal">
       <form id="vacation-reject-form" onSubmit={submit} noValidate>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
           {request && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <div style={summaryLine}>
                 Rejecting: {formatDateRange(request.startDate, request.endDate)} ·{' '}
                 {formatWorkingDays(request.workingDays)}
@@ -161,71 +125,37 @@ export function RejectRequestModal({
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label
-              htmlFor="vacation-reject-comment-input"
-              style={{
-                display: 'block',
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 'var(--ls-wider)',
-                textTransform: 'uppercase',
-                color: commentError ? 'var(--error-500)' : 'var(--text-muted)',
-                marginBottom: 'var(--sp-4)',
-              }}
+          <TextArea
+            label="Comment (optional)"
+            value={comment}
+            maxLength={REVIEWER_COMMENT_MAX}
+            rows={3}
+            readOnly={saving}
+            onChange={(event) => {
+              setComment(event.target.value);
+              setCommentError(null);
+            }}
+            id="vacation-reject-comment-input"
+            data-testid="vacation-reject-comment-input"
+            error={commentError ?? undefined}
+            errorId="field-error-reviewerComment"
+          />
+        </div>
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" onClick={handleClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="delete"
+              preloader={saving}
+              data-testid="vacation-reject-confirm-btn"
             >
-              Comment (optional)
-            </label>
-            <textarea
-              id="vacation-reject-comment-input"
-              value={comment}
-              maxLength={REVIEWER_COMMENT_MAX}
-              rows={3}
-              disabled={saving}
-              onChange={(event) => {
-                setComment(event.target.value);
-                setCommentError(null);
-              }}
-              onFocus={() => setFocus(true)}
-              onBlur={() => setFocus(false)}
-              data-testid="vacation-reject-comment-input"
-              aria-invalid={commentError ? true : undefined}
-              aria-describedby={commentError ? 'field-error-reviewerComment' : undefined}
-              style={{
-                width: '100%',
-                border: `1.5px solid ${borderColor}`,
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--sp-4) 12px',
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-15)',
-                color: 'var(--text)',
-                background: 'var(--bg-field)',
-                outline: 'none',
-                boxShadow: focus
-                  ? commentError
-                    ? 'var(--shadow-glow-error)'
-                    : 'var(--shadow-glow-accent)'
-                  : 'none',
-                transition: 'border-color .15s, box-shadow .15s',
-                resize: 'vertical',
-                opacity: saving ? 0.55 : 1,
-              }}
-            />
-            {commentError && (
-              <div
-                id="field-error-reviewerComment"
-                data-testid="field-error-reviewerComment"
-                style={{
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-12)',
-                  color: 'var(--error-500)',
-                  marginTop: 'var(--sp-2)',
-                }}
-              >
-                {commentError}
-              </div>
-            )}
-          </div>
+              {saving ? 'Rejecting' : 'Reject'}
+            </Button>
+          </FormActions>
         </div>
       </form>
     </Modal>

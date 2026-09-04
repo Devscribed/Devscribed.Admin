@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { ENVELOPE_MESSAGES, validateSignerEmail } from '@devscribed/validation';
-import { Checkbox, Input, Select } from '@/ds';
-import { errorNode } from '@/field-error';
+import { Checkbox, FieldLabel, TextArea, TextInput, Select } from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
 import type { EnvelopeFieldDto, SigningField } from './envelopes';
 
 /**
@@ -64,15 +64,21 @@ export function validateFieldValues(
   return errors;
 }
 
-const LABEL_STYLE = {
-  display: 'block',
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--fs-11)',
-  letterSpacing: 1,
-  textTransform: 'uppercase' as const,
-  color: 'var(--text-muted)',
-  marginBottom: 6,
-};
+/**
+ * The message under a control that draws its own label but not its own message slot — the
+ * checkbox. `field-error-{key}` is the handle the spec names, and it is an
+ * `aria-describedby` target, so the id and the test id are the same string, exactly as
+ * `TextInput` (§4) and `Select` (§21) do it for the fields that own theirs.
+ */
+function FieldError({ fieldKey, message }: { fieldKey: string; message: string }) {
+  return (
+    <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-s)', color: 'var(--status-error)' }}>
+      <span id={`field-error-${fieldKey}`} data-testid={`field-error-${fieldKey}`}>
+        {message}
+      </span>
+    </div>
+  );
+}
 
 export function FieldInput({
   field,
@@ -102,81 +108,55 @@ export function FieldInput({
     if (field.type === 'checkbox') {
       return (
         <div>
-          <span style={LABEL_STYLE}>{label}</span>
+          <FieldLabel>{label}</FieldLabel>
           <Checkbox
             checked={value === 'true'}
             disabled={disabled}
-            onChange={(checked: boolean) => onChange(checked ? 'true' : '')}
+            onChange={(event) => onChange(event.target.checked ? 'true' : '')}
             label={field.label}
             data-testid={testId}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={described}
           />
-          {error && (
-            <div style={{ marginTop: 6, fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
-              {errorNode(field.key, error)}
-            </div>
-          )}
+          {error && <FieldError fieldKey={field.key} message={error} />}
         </div>
       );
     }
 
     if (field.type === 'select') {
-      // `Select` takes `error` for its border but renders no message node, so the
-      // spec's `field-error-{key}` handle is drawn here rather than inside the DS.
+      const choices = (field.options ?? []).map((option) => ({ value: option, label: option }));
       return (
-        <div>
-          <Select
-            label={label}
-            value={value}
-            options={(field.options ?? []).map((option) => ({ value: option, label: option }))}
-            disabled={disabled}
-            onChange={onChange}
-            error={error}
-            data-testid={testId}
-          />
-          {error && (
-            <div style={{ marginTop: 6, fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
-              {errorNode(field.key, error)}
-            </div>
-          )}
-        </div>
+        <Select
+          label={label}
+          value={optionFor(choices, value)}
+          options={choices}
+          isDisabled={disabled}
+          onChange={(option) => onChange(valueOf(option))}
+          error={Boolean(error)}
+          errorMessage={error}
+          errorId={`field-error-${field.key}`}
+          data-testid={testId}
+          aria-describedby={described}
+        />
       );
     }
 
     if (field.type === 'multiline') {
-      // Meridian ships no textarea; `BodyEditor` set the precedent of a plain element
-      // carrying the DS field tokens so the two are indistinguishable on screen.
       return (
-        <div>
-          <span style={LABEL_STYLE}>{label}</span>
-          <textarea
-            value={value}
-            disabled={disabled}
-            readOnly={disabled}
-            data-testid={testId}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={described}
-            onChange={(event) => onChange(event.target.value)}
-            onBlur={onBlur}
-            rows={4}
-            style={{
-              width: '100%',
-              resize: 'vertical',
-              padding: '10px 12px',
-              border: `1.5px solid ${error ? 'var(--error-500)' : 'var(--border-strong)'}`,
-              borderRadius: 'var(--radius-lg)',
-              background: 'var(--bg-field)',
-              color: 'var(--text)',
-              fontFamily: 'var(--font-text)',
-              fontSize: 'var(--fs-15)',
-              opacity: disabled ? 0.7 : 1,
-            }}
-          />
-          {error && (
-            <div style={{ marginTop: 6, fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
-              {errorNode(field.key, error)}
-            </div>
-          )}
-        </div>
+        <TextArea
+          label={label}
+          value={value}
+          disabled={disabled}
+          readOnly={disabled}
+          data-testid={testId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={described}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+          rows={4}
+          error={error}
+          errorId={`field-error-${field.key}`}
+        />
       );
     }
 
@@ -184,7 +164,7 @@ export function FieldInput({
       field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
 
     return (
-      <Input
+      <TextInput
         label={label}
         type={inputType}
         value={value}
@@ -197,7 +177,8 @@ export function FieldInput({
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
         trailing={trailing}
-        error={error ? errorNode(field.key, error) : undefined}
+        error={error}
+        errorId={`field-error-${field.key}`}
         wrapperStyle={{ gap: 0 }}
       />
     );
@@ -219,17 +200,17 @@ export function SignerFieldPreview({
       style={{
         display: 'flex',
         justifyContent: 'space-between',
-        gap: 'var(--sp-6)',
+        gap: 'var(--space-5)',
         padding: '10px 0',
-        borderTop: '1px solid var(--divider)',
-        fontSize: 'var(--fs-14)',
+        borderTop: '1px solid var(--border-subtle)',
+        fontSize: 'var(--font-size-s)',
       }}
     >
-      <span style={{ color: 'var(--text)' }}>
+      <span style={{ color: 'var(--text-primary)' }}>
         {field.label}
         {field.required ? ' *' : ''}
       </span>
-      <span style={{ color: 'var(--text-muted)' }}>filled by {ownerName}</span>
+      <span style={{ color: 'var(--text-secondary)' }}>filled by {ownerName}</span>
     </div>
   );
 }

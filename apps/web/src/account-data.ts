@@ -5,13 +5,18 @@
  * `libphonenumber-js` and `Intl`, so nothing here hardcodes a name, flag, or offset.
  */
 
-import type { ReactNode } from 'react';
 import { getCountries, getCountryCallingCode } from 'libphonenumber-js';
 import { FIRST_DAY_OF_WEEK_VALUES } from '@devscribed/validation';
 
+/**
+ * The shape the system's `Select` takes, which every builder below already produced: the
+ * label was typed `ReactNode` and has always been a string — a flag is an emoji inside one,
+ * not an element. `SelectOption.label` is a `string`, so narrowing the declaration is what
+ * makes these tables usable as options rather than casting at each of the three call sites.
+ */
 export interface AppSelectOption {
   value: string;
-  label: ReactNode;
+  label: string;
 }
 
 /**

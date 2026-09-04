@@ -279,8 +279,17 @@ describe('TC-01-UNIT-06 — capabilities', () => {
     expect(capabilitiesFor('manager')).toEqual(
       expect.arrayContaining(['CreateRequest', 'ViewOwnRequests', 'ViewAllRequests']),
     );
-    expect(capabilitiesFor('user')).toEqual(['CreateRequest', 'ViewOwnRequests']);
-    expect(capabilitiesFor('viewer')).toEqual(['ViewOwnRequests']);
+    // `arrayContaining` rather than the whole row: later specs add capabilities of their
+    // own to these two roles, and this case owns only the three requests grants. What it
+    // still owns exactly is the refusals — a `user` holds no All scope, and a `viewer`
+    // may not raise a request at all.
+    expect(capabilitiesFor('user')).toEqual(
+      expect.arrayContaining(['CreateRequest', 'ViewOwnRequests']),
+    );
+    expect(capabilitiesFor('user')).not.toContain('ViewAllRequests');
+    expect(capabilitiesFor('viewer')).toEqual(expect.arrayContaining(['ViewOwnRequests']));
+    expect(capabilitiesFor('viewer')).not.toContain('CreateRequest');
+    expect(capabilitiesFor('viewer')).not.toContain('ViewAllRequests');
   });
 });
 

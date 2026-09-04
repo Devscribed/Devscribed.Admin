@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useCallback, useEffect, useState } from 'react';
-import { Button, Card, Checkbox, SearchField } from '@/ds';
+import { Button, Checkbox, EmptyState, SearchInput } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
@@ -143,43 +143,32 @@ export default function MembersPage({ params }: { params: Promise<{ orgId: strin
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 16,
+          gap: 'var(--space-6)',
           flexWrap: 'wrap',
-          marginBottom: 18,
+          marginBottom: 'var(--space-7)',
         }}
       >
-        <SearchField
+        <SearchInput
           value={searchInput}
-          onChange={(event: { target: { value: string } }) => setSearchInput(event.target.value)}
+          onChange={(event) => setSearchInput(event.target.value)}
+          onClear={() => setSearchInput('')}
           placeholder="Search members..."
+          aria-label="Search members"
           data-testid="members-search-input"
-          style={{ width: '100%', maxWidth: 320 }}
+          wrapperStyle={{ width: '100%', maxWidth: 320 }}
         />
         <Checkbox
           checked={showRemoved}
-          onChange={setShowRemoved}
+          onChange={(event) => setShowRemoved(event.target.checked)}
           label="Show removed members"
-          data-testid="show-removed-checkbox"
+          id="show-removed-checkbox"
         />
       </div>
 
       {loading || members === null ? (
         <MembersLoadingSkeleton />
       ) : showEmpty ? (
-        <Card padded={false}>
-          <div
-            data-testid="members-empty-state"
-            style={{
-              padding: '48px 20px',
-              textAlign: 'center',
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--fs-16)',
-              color: 'var(--text-faint)',
-            }}
-          >
-            No members found
-          </div>
-        </Card>
+        <EmptyState data-testid="members-empty-state">No members found</EmptyState>
       ) : (
         <MembersTable
           orgId={orgId}

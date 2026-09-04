@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Input, Modal, Radio, Select } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, FormActions, Modal, Select, TextInput, ToggleButton } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import { useToast } from '@/toast';
 import {
   calculateReservePercent,
@@ -30,8 +30,8 @@ const FIELD_TESTIDS: Record<MemberFinancialsField, string> = {
 type Errors = Partial<Record<MemberFinancialsField, string>>;
 
 /**
- * Edit Financial Settings modal (spec 07). Reuses the exact `Modal`/`Input`/`Select`
- * shell and the `useToast()` + `errorNode()` patterns `InviteModal` established. All
+ * Edit Financial Settings modal (spec 07). Reuses the exact `Modal`/`TextInput`/`Select`
+ * shell and the `useToast()` pattern `InviteModal` established. All
  * inputs are controlled strings; the validators (which accept strings or numbers)
  * decide validity, and only `calculateReservePercent` needs the parsed numbers for the
  * live auto-calc preview.
@@ -225,178 +225,118 @@ export function VacationFinancialsModal({
       open={open}
       title="Edit Financial Settings"
       onClose={handleClose}
-      width={480}
       data-testid="vacation-financials-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={saving}
-            data-testid="vacation-financials-cancel-btn"
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="vacation-financials-form"
-            variant="primary"
-            size="lg"
-            loading={saving}
-            data-testid="vacation-financials-save-btn"
-            style={{ flex: 1 }}
-          >
-            {saving ? 'Saving' : 'Save changes'}
-          </Button>
-        </>
-      }
     >
       <form id="vacation-financials-form" onSubmit={submit} noValidate>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
-          <Input
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          <TextInput
             label="Monthly salary"
             type="text"
             inputMode="decimal"
             placeholder="3000.00"
             value={salary}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setSalary(event.target.value);
               clearError('monthlySalary');
             }}
             onBlur={blurSalary}
             readOnly={saving}
             data-testid="vacation-salary-input"
-            aria-invalid={errors.monthlySalary ? true : undefined}
-            aria-describedby={errors.monthlySalary ? 'field-error-monthlySalary' : undefined}
-            error={errors.monthlySalary ? errorNode('monthlySalary', errors.monthlySalary) : undefined}
-            style={saving ? { opacity: 0.55 } : undefined}
+            error={errors.monthlySalary}
+            errorId="field-error-monthlySalary"
             wrapperStyle={{ gap: 0 }}
           />
 
-          <Input
+          <TextInput
             label="Client hourly rate"
             type="text"
             inputMode="decimal"
             placeholder="40.00"
             value={rate}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setRate(event.target.value);
               clearError('clientHourlyRate');
             }}
             onBlur={blurRate}
             readOnly={saving}
             data-testid="vacation-rate-input"
-            aria-invalid={errors.clientHourlyRate ? true : undefined}
-            aria-describedby={errors.clientHourlyRate ? 'field-error-clientHourlyRate' : undefined}
-            error={errors.clientHourlyRate ? errorNode('clientHourlyRate', errors.clientHourlyRate) : undefined}
-            style={saving ? { opacity: 0.55 } : undefined}
+            error={errors.clientHourlyRate}
+            errorId="field-error-clientHourlyRate"
             wrapperStyle={{ gap: 0 }}
           />
 
           <Select
             label="Currency"
             value={currency}
-            onChange={(value: string) => {
-              setCurrency(value);
+            onChange={(option) => {
+              setCurrency(typeof option === 'string' ? option : (option as { value: string }).value);
               clearError('currency');
             }}
             options={[...ISO_4217_CURRENCIES]}
-            disabled={saving}
+            isDisabled={saving}
+            variant="formik"
+
             data-testid="vacation-currency-select"
-            error={errors.currency ? errorNode('currency', errors.currency) : undefined}
+            error={!!errors.currency}
+            errorMessage={errors.currency}
+            errorId="field-error-currency"
           />
 
-          <Input
+          <TextInput
             label="Vacation days per year"
             type="text"
             inputMode="numeric"
             placeholder="20"
             value={days}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setDays(event.target.value);
               clearError('vacationDaysPerYear');
             }}
             onBlur={blurDays}
             readOnly={saving}
             data-testid="vacation-days-input"
-            aria-invalid={errors.vacationDaysPerYear ? true : undefined}
-            aria-describedby={errors.vacationDaysPerYear ? 'field-error-vacationDaysPerYear' : undefined}
-            error={
-              errors.vacationDaysPerYear
-                ? errorNode('vacationDaysPerYear', errors.vacationDaysPerYear)
-                : undefined
-            }
-            style={saving ? { opacity: 0.55 } : undefined}
+            error={errors.vacationDaysPerYear}
+            errorId="field-error-vacationDaysPerYear"
             wrapperStyle={{ gap: 0 }}
           />
 
           <div>
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 'var(--ls-wider)',
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-                marginBottom: 'var(--sp-4)',
+            {/* §87 — the reserve mode is two answers that both stay on screen and where
+                unchecking one means checking the other, which is `ToggleButton`'s shape and
+                not `Switch`'s (§88). The pair used to be two bare radios under a note saying
+                the system could not tag its options; §31 has given every segment a test id
+                of its own since before that note was written. */}
+            <ToggleButton
+              label="Reserve percentage"
+              options={[
+                { value: 'auto', label: 'Auto-calculate', testId: 'vacation-reserve-mode-auto' },
+                { value: 'manual', label: 'Set manually', testId: 'vacation-reserve-mode-manual' },
+              ]}
+              selectedValue={manual ? 'manual' : 'auto'}
+              onChange={(value) => {
+                setManual(value === 'manual');
+                if (value === 'auto') clearError('vacationReservePercent');
               }}
-            >
-              Reserve percentage
-            </div>
+              style={{ marginBottom: 'var(--space-5)' }}
+            />
 
-            {/* Two individual radios sharing one `name` — the DS `RadioGroup` cannot tag
-                its options with a `data-testid`, and the spec needs one on each radio. */}
-            <div style={{ display: 'flex', gap: 'var(--sp-8)', marginBottom: 'var(--sp-6)' }}>
-              <Radio
-                name="reserve-mode"
-                value="auto"
-                label="Auto-calculate"
-                checked={!manual}
-                disabled={saving}
-                onChange={() => {
-                  setManual(false);
-                  clearError('vacationReservePercent');
-                }}
-                data-testid="vacation-reserve-mode-auto"
-              />
-              <Radio
-                name="reserve-mode"
-                value="manual"
-                label="Set manually"
-                checked={manual}
-                disabled={saving}
-                onChange={() => setManual(true)}
-                data-testid="vacation-reserve-mode-manual"
-              />
-            </div>
-
-            <Input
+            <TextInput
               label="Reserve percentage (manual)"
               type="text"
               inputMode="decimal"
               placeholder="3.33"
               value={reservePercent}
-              onChange={(event: { target: { value: string } }) => {
+              onChange={(event) => {
                 setReservePercent(event.target.value);
                 clearError('vacationReservePercent');
               }}
               onBlur={blurReservePercent}
-              disabled={!manual || saving}
+              disabled={!manual}
               readOnly={saving}
-              trailing={<span style={{ color: 'var(--text-muted)' }}>%</span>}
+              trailing={<span style={{ color: 'var(--text-secondary)' }}>%</span>}
               data-testid="vacation-reserve-percent-input"
-              aria-invalid={errors.vacationReservePercent ? true : undefined}
-              aria-describedby={
-                errors.vacationReservePercent ? 'field-error-vacationReservePercent' : undefined
-              }
-              error={
-                errors.vacationReservePercent
-                  ? errorNode('vacationReservePercent', errors.vacationReservePercent)
-                  : undefined
-              }
+              error={errors.vacationReservePercent}
+              errorId="field-error-vacationReservePercent"
               wrapperStyle={{ gap: 0 }}
             />
 
@@ -404,15 +344,36 @@ export function VacationFinancialsModal({
               <div
                 data-testid="vacation-reserve-preview"
                 style={{
-                  marginTop: 'var(--sp-4)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text-sub)',
+                  marginTop: 'var(--space-3)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-tertiary)',
                 }}
               >
                 {previewText()}
               </div>
             )}
           </div>
+        </div>
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button
+              type="button"
+              onClick={handleClose}
+              disabled={saving}
+              data-testid="vacation-financials-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={saving}
+              data-testid="vacation-financials-save-btn"
+            >
+              {saving ? 'Saving' : 'Save changes'}
+            </Button>
+          </FormActions>
         </div>
       </form>
     </Modal>

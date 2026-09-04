@@ -1,6 +1,6 @@
 'use client';
 
-import { Select } from '@/ds';
+import { Select } from '@devscribed/ds';
 import type { Role } from '@devscribed/validation';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -16,25 +16,25 @@ const ROLE_LABELS: Record<Role, string> = {
  * of truth for which roles a caller may assign to a given target (the admin/manager
  * authority matrix, requirement 8), so this component never re-derives that matrix.
  *
- * `guarded` disables the picker without hiding it (requirement 9's zero-admin guard —
- * the picker stays rendered per the business spec, just non-interactive), and carries
- * the guard message as a native `title` tooltip via `Select`'s prop pass-through —
- * see the design doc's DS gaps for why that is a pass-through rather than a first-class
- * `Select` tooltip prop.
+ * `disabled` blocks the picker without hiding it (requirement 9's zero-admin guard — the
+ * picker stays rendered per the business spec, just non-interactive). It no longer carries
+ * the reason: it used to pass one as a native `title`, which §62 rules out because a
+ * `title` is not keyboard-reachable in any major browser — but the fix here is not §62's
+ * bubble. The screen already renders the guard message as an `InfoBanner` directly
+ * beneath this control, permanently and for every reader, which is what the bubble would
+ * have been reaching for. A third copy of one sentence is not an accessibility gain.
  */
 export function RoleSelect({
   memberId,
   value,
   availableRoles,
   disabled,
-  guardMessage,
   onChange,
 }: {
   memberId: string;
   value: Role;
   availableRoles: Role[];
   disabled: boolean;
-  guardMessage?: string;
   onChange: (role: Role) => void;
 }) {
   const options = availableRoles.map((role) => ({ value: role, label: ROLE_LABELS[role] }));
@@ -42,10 +42,12 @@ export function RoleSelect({
     <Select
       label="Role"
       value={value}
-      onChange={(next: string) => onChange(next as Role)}
+      onChange={(option) =>
+        onChange((typeof option === 'string' ? option : (option as { value: string }).value) as Role)
+      }
       options={options}
-      disabled={disabled}
-      title={disabled ? guardMessage : undefined}
+      isDisabled={disabled}
+      variant="formik"
       data-testid={`member-role-select-${memberId}`}
     />
   );

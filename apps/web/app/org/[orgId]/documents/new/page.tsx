@@ -24,7 +24,7 @@ import {
   type EnvelopeDetail,
 } from '@/documents/envelopes';
 import { FillForm, type MemberChoice, type TemplateChoice } from '@/documents/FillForm';
-import { ToastProvider, useToast } from '@/documents/toast';
+import { useToast } from '@/toast';
 
 /**
  * `/api/organizations/{orgId}/members` — the subject picker's source (spec 03 autofill).
@@ -48,16 +48,12 @@ interface MemberListResponse {
 
 export default function NewDocumentPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
-  return (
-    <ToastProvider>
-      <NewDocumentScreen orgId={orgId} />
-    </ToastProvider>
-  );
+  return <NewDocumentScreen orgId={orgId} />;
 }
 
 function NewDocumentScreen({ orgId }: { orgId: string }) {
   const router = useRouter();
-  const toast = useToast();
+  const { showToast } = useToast();
   const { role } = useSession();
 
   const [templates, setTemplates] = useState<TemplateChoice[]>([]);
@@ -146,18 +142,17 @@ function NewDocumentScreen({ orgId }: { orgId: string }) {
     if (!created.ok) {
       setCreating(false);
       setTemplateId('');
-      toast.show({
-        testId: 'toast-envelope-error',
-        message:
-          created.failure.error === 'template_not_published'
-            ? ENVELOPE_MESSAGES.template.notPublished
-            : created.failure.error === 'template_archived'
-              ? ENVELOPE_MESSAGES.template.archived
-              : created.failure.error === 'subject_not_found'
-                ? PROFILE_MESSAGES.subject.missing
-                : failureMessage(created.failure),
-        tone: 'error',
-      });
+      showToast(
+        'toast-envelope-error',
+        created.failure.error === 'template_not_published'
+          ? ENVELOPE_MESSAGES.template.notPublished
+          : created.failure.error === 'template_archived'
+            ? ENVELOPE_MESSAGES.template.archived
+            : created.failure.error === 'subject_not_found'
+              ? PROFILE_MESSAGES.subject.missing
+              : failureMessage(created.failure),
+        'error',
+      );
       return;
     }
 
@@ -175,11 +170,7 @@ function NewDocumentScreen({ orgId }: { orgId: string }) {
     const loaded = await apiRequest<EnvelopeDetail>(envelopeUrl(orgId, created.data.id));
     setCreating(false);
     if (!loaded.ok) {
-      toast.show({
-        testId: 'toast-envelope-error',
-        message: failureMessage(loaded.failure),
-        tone: 'error',
-      });
+      showToast('toast-envelope-error', failureMessage(loaded.failure), 'error');
       return;
     }
     setDetail(loaded.data);

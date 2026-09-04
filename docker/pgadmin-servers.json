@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Devscribed (local)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "devscribed_dev",
+      "Username": "devscribed",
+      "SSLMode": "prefer",
+      "Comment": "Reached over the compose network, so it is the container's own 5432 here - not the 5433 the host sees."
+    }
+  }
+}

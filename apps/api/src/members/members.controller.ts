@@ -50,6 +50,11 @@ export class MembersController {
     return this.members.updateDetail(req.session!, memberId, body);
   }
 
+  /**
+   * Soft-delete, per user-management spec 04. Hiring's cross-spec guard lives inside
+   * the service: a member who is the assigned interviewer on an open vacancy cannot be
+   * removed until those vacancies are reassigned or closed (01 §06.17).
+   */
   @Delete('members/:memberId')
   @HttpCode(200)
   async remove(@Req() req: AuthenticatedRequest, @Param('memberId') memberId: string) {

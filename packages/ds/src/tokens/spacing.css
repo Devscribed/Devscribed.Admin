@@ -1,0 +1,48 @@
+/* Spacing and radius tokens.
+
+   The spacing scale is deliberately **not** a 4/8 grid: it is the set of gaps the product
+   actually uses, which includes 6, 10 and 25. Rounding them to a grid would move real layouts
+   to make a table look tidy. Add a step only when a real layout needs one. */
+
+:root {
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 25px;
+  --space-10: 30px;
+  --space-11: 36px;
+  --space-12: 40px;
+
+  /* §70 — the height every interactive control is, and the border width every one of them
+     draws. One name, so a control added later lands on the same line as the ones already there
+     instead of on a number somebody copied out of a neighbour. */
+  --control-height: 44px;
+  --border-width-control: 1.5px;
+  /* The other border width: the hairline that separates one thing from the next, where
+     `--border-width-control` draws the edge of something you can type in. Two widths is the
+     whole set — a third would be a border nobody can place. */
+  --border-width-hairline: 1px;
+
+  /* The app frame's fixed dimensions, and the one breakpoint between them. See `base.css`. */
+  --layout-sidebar-width: 290px;
+  --layout-navbar-height-mobile: 60px;
+  --layout-navbar-height-desktop: 80px;
+  --layout-breakpoint-desktop: 1200px;
+
+  /* Radii. Each names what it is for; they are not a scale to interpolate between. */
+  --radius-s: 4px;    /* badges, calendar cells — the smallest things that round at all */
+  --radius-m: 6px;    /* popovers, drawers — floating panels */
+  --radius-l: 8px;    /* the workhorse: buttons, inputs, cards, modals */
+  /* §66 — the radius of a *large* white section (`Card variant="panel"`). Numerically
+     `--radius-pill`, and deliberately not it: that one is a 36px control rounded until it is a
+     capsule, and this is an 880px panel. A section that took the pill token would follow it the
+     day a capsule stopped being 20px. */
+  --radius-xl: 20px;
+  --radius-pill: 20px; /* ToggleButton segmented control */
+  --radius-circle: 50%; /* tracker start/stop button, avatar chips */
+}

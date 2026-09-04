@@ -73,6 +73,15 @@ Members log time spent on projects by starting a **running timer** or adding **m
 
 20. The app shell's topbar shows a **timer indicator** when the current user has a running timer. It appears to the left of the account button.
 21. The indicator shows: elapsed time in `HH:MM:SS` format (updating every second, computed client-side from `startedAt`), truncated project name (or "No project"), and a **stop** button.
+
+    > **Amended by the design-system merge, ruling E2/D1.** The three are drawn across two
+    > controls rather than one: the bar's pill shows the clock and **discloses** the design
+    > system's `Tracker` (decisions §89, §92), which shows the project — "No project" when there
+    > is none — and holds the stop button. Every fact in this requirement still holds; what
+    > changed is that one of them takes a click to reach. `topbar-timer-project` and
+    > `topbar-timer-stop-btn` are unchanged in meaning. The design counterpart at
+    > [12-time-tracking.design.md](12-time-tracking.design.md#topbar-timer-indicator) carries the
+    > full amendment.
 22. Clicking the elapsed time or project name navigates to `/org/{orgId}/time-tracking`.
 23. Clicking the stop button calls `POST .../timer/stop` and removes the indicator. A toast "Timer stopped — {duration} logged" is shown.
 24. The timer data is fetched via `GET /api/organizations/{orgId}/timer` on app shell mount (after `/api/me` resolves). No polling — the indicator is initialized once and maintained client-side.
@@ -775,6 +784,14 @@ Server-side validation: all rules enforced regardless of UI state.
 
 - Always visible on the TT page, positioned between the view content and the "Add entry" button.
 - **Idle state:** project selector, task input, description input, "Start timer" button.
+
+  > **Amended by the design-system merge, ruling E2/D1.** "Start timer" is the system's
+  > `Button variant="primary"`, not an amber one. The amber existed because the mock's accent
+  > was violet and the timer had to stand apart from it; here the accent *is* the action colour
+  > and this is the bar's one committing control. `--color-tracker-blue` is spent on the
+  > *running readout* — the clock, the dot beside it, and the panel's edge while a timer runs —
+  > which is the ink `MiniTracker` already paints its counter with, so the two clocks that show
+  > the same number show it the same way.
 - **Running state:** elapsed time display (HH:MM:SS, updating every second), project/task/description fields (editable — saves on blur via `PUT .../timer`), "Discard" and "Stop & save" buttons.
 
 ### Add/Edit Time Entry Modal

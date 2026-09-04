@@ -3,6 +3,7 @@ import {
   API,
   VALID,
   assignProjectMembersViaApi,
+  clickNav,
   findMember,
   inviteAndAcceptViaApi,
   login,
@@ -153,7 +154,7 @@ test.describe('13 — Kanban Board & Tasks', () => {
     const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
 
     await signInUi(page, adminEmail);
-    await page.getByTestId('nav-projects').click();
+    await clickNav(page, 'Project management', 'nav-projects');
     await page.waitForURL('**/projects');
 
     // Fill the modal — the key field is spec-13's addition to spec-11's Create Project.
@@ -432,24 +433,24 @@ test.describe('13 — Kanban Board & Tasks', () => {
     // Close settings via the DS Modal's Close button, then verify the column on the board.
     await page.getByTestId('board-settings-modal').getByRole('button', { name: 'Close' }).click();
     await expect(page.getByTestId('board-settings-modal')).toHaveCount(0);
-    await expect(page.locator('[data-testid^="board-column-header-"]', { hasText: 'Code Review' })).toBeVisible();
+    // §43 draws the column head itself and tags the column, not the head — so the column is
+    // what a name is looked for in. `board-column-{id}` and `board-column-count-{id}` are
+    // unchanged; `board-column-header-{id}` was this screen's own and is gone with it.
+    await expect(page.locator('[data-testid^="board-column-"]', { hasText: 'Code Review' })).toHaveCount(1);
 
     // Delete the new (empty) column via settings.
     await page.getByTestId('board-settings-btn').click();
     const board = await getBoard(request, org.organizationId, project.id);
     const codeReview = board.columns.find((c) => c.name === 'Code Review')!;
     await page.getByTestId(`board-settings-column-delete-${codeReview.id}`).click();
-    // A confirm modal opens (testid `board-settings-column-delete-confirm`); its primary
-    // action button carries the "Delete column" label — matched inside the modal only,
-    // since the row-level trash icons share the same aria-label.
-    await page
-      .getByTestId('board-settings-column-delete-confirm')
-      .getByRole('button', { name: 'Delete column', exact: true })
-      .click();
+    // A `ConfirmDialog` opens (§40). It draws its own two buttons, so it is the only thing
+    // that can tag them — which is what `acceptTestId` is, and what this now presses.
+    await expect(page.getByTestId('board-settings-column-delete-confirm')).toBeVisible();
+    await page.getByTestId('board-settings-column-delete-confirm-btn').click();
     await expect(page.getByTestId('toast-column-deleted')).toBeVisible();
     // Close the settings modal so the board underneath can be observed.
     await page.getByTestId('board-settings-modal').getByRole('button', { name: 'Close' }).click();
-    await expect(page.locator('[data-testid^="board-column-header-"]', { hasText: 'Code Review' })).toHaveCount(0);
+    await expect(page.locator('[data-testid^="board-column-"]', { hasText: 'Code Review' })).toHaveCount(0);
   });
 
   // -----------------------------------------------------------------------------------
@@ -499,14 +500,17 @@ test.describe('13 — Kanban Board & Tasks', () => {
 
     await signInUi(page, adminEmail);
     await page.goto(`/org/${org.organizationId}/projects/${project.id}/board`);
-    await page.getByTestId('board-view-toggle').getByRole('button', { name: 'List' }).click();
+    // §31 — the switch is a `radiogroup`, so its segments are radios rather than buttons.
+    // The per-segment test ids the component ships are what a suite reaches for.
+    await page.getByTestId('board-view-toggle-list').click();
     await page.waitForURL(/\/list$/);
     await expect(page.getByTestId('list-view')).toBeVisible();
     await expect(page.locator('[data-testid^="list-task-row-"]')).toHaveCount(2);
 
-    // Filter by Bug.
+    // Filter by Bug. The filters collapsed onto `Select isMulti`, so an option is a row in
+    // a listbox rather than a checkbox, and it is chosen by the test id the option carries.
     await page.getByTestId('list-filter-type').click();
-    await page.getByLabel('Bug').check({ force: true });
+    await page.getByTestId('list-filter-type-item-bug').click();
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-testid^="list-task-row-"]')).toHaveCount(1);
     await expect(page.locator('[data-testid^="list-task-row-"]').first()).toContainText('Login fails on Safari');
@@ -717,26 +721,30 @@ test.describe('13 — Kanban Board & Tasks', () => {
 
     // Type = Bug ⇒ 2 cards.
     await page.getByTestId('board-filter-type').click();
-    await page.getByLabel('Bug').check({ force: true });
+    await page.getByTestId('board-filter-type-item-bug').click();
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-testid^="board-task-card-"]')).toHaveCount(2);
     await expect(page.getByTestId(`board-task-card-${taskHigh.id}`)).toHaveCount(0);
 
     // + Priority = High ⇒ 1 card.
     await page.getByTestId('board-filter-priority').click();
-    await page.getByLabel('High').check({ force: true });
+    await page.getByTestId('board-filter-priority-item-high').click();
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-testid^="board-task-card-"]')).toHaveCount(1);
     await expect(page.getByTestId(`board-task-card-${bugHigh.id}`)).toBeVisible();
     await expect(page.getByTestId(`board-task-card-${bugLow.id}`)).toHaveCount(0);
 
-    // Clear both ⇒ all 3 back.
-    await page.getByTestId('board-filter-type').click();
-    await page.getByLabel('Bug').uncheck({ force: true });
-    await page.keyboard.press('Escape');
-    await page.getByTestId('board-filter-priority').click();
-    await page.getByLabel('High').uncheck({ force: true });
-    await page.keyboard.press('Escape');
+    // Clear both ⇒ all 3 back. A chosen option leaves the list and becomes a chip inside the
+    // control (§21), so it is unchosen through that chip's cross rather than by clicking the
+    // row again. `Chip` draws the cross itself and names it "Remove {label}" (§37).
+    await page
+      .getByTestId('board-filter-type-chip-bug')
+      .getByRole('button', { name: 'Remove Bug' })
+      .click();
+    await page
+      .getByTestId('board-filter-priority-chip-high')
+      .getByRole('button', { name: 'Remove High' })
+      .click();
     await expect(page.locator('[data-testid^="board-task-card-"]')).toHaveCount(3);
   });
 

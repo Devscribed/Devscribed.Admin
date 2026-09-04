@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import {
   API,
   VALID,
+  clickNav,
   findMember,
   inviteAndAcceptViaApi,
   login,
@@ -54,8 +55,11 @@ async function createProjectViaApi(
 
 /** Opens the Projects page via the sidebar row and waits for the list frame to mount. */
 async function openProjectsPage(page: Page): Promise<void> {
+  // E4 put `Projects` under the **Project management** group, and §13's sections render
+  // nothing when closed — so the row has to be disclosed before it can be clicked. Same seam
+  // the hiring cases use, and the one `requests-page` needed for the same reason.
   await expect(async () => {
-    await page.getByTestId('nav-projects').click();
+    await clickNav(page, 'Project management', 'nav-projects');
     await page.waitForURL('**/projects', { timeout: 2000 });
   }).toPass({ timeout: 15000 });
   await expect(page.getByTestId('projects-page')).toBeVisible();
@@ -173,8 +177,11 @@ test.describe('11 — Projects', () => {
 
     await signInUi(page, userEmail);
 
-    // The sidebar renders, but the Projects row is omitted for this role.
+    // The sidebar renders, but nothing project-shaped is in it for this role. The **group**
+    // is what is asserted absent rather than the row: a closed group holds no rows either, so
+    // an assertion on the row alone would pass for a role that simply had not opened it.
     await expect(page.getByTestId('app-sidebar')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Project management', exact: true })).toHaveCount(0);
     await expect(page.getByTestId('nav-projects')).toHaveCount(0);
 
     // Direct navigation does not render the projects surface (notFound()).

@@ -2,61 +2,49 @@ import { expect, test } from './fixtures';
 import { registerAccount, uniqueEmail } from './helpers';
 
 /**
- * InfoBanner's four tone triplets used to be twelve inline values inside the component —
- * eight of them raw `oklch(...)` literals. They are tokens now
- * (`--banner-{tone}-{bg,border,ink}`), and the whole point of that move is that **nothing
- * renders differently**.
+ * `InfoBanner` paints each tone from tokens rather than from literals, and the whole point of
+ * that is that **nothing renders differently** from one route to the next.
  *
- * A text diff cannot show that. Two failures survive one:
+ * A text diff cannot show that. The failure it misses is a token that resolves to nothing on a
+ * route whose stylesheet never loaded it — the banner then paints transparent-on-transparent
+ * and the page still "works". `@devscribed/ds/styles.css` is imported exactly once, in the root
+ * layout, so every route in the product depends on that one import being reached; a banner is
+ * the cheapest place to catch it having not been.
  *
- *  1. a token that resolves to nothing on a route whose CSS never loaded it — the banner
- *     then paints transparent-on-transparent and the page still "works";
- *  2. a background quietly snapped to the nearest existing scale step (`--error-100`
- *     instead of a new `--error-50`), which is six sRGB units and looks like tidying.
- *
- * So the assertions run in a real browser and compare colours the browser resolved, never
- * a hand-typed `rgb()` string: an `rgb()` constant would fail on a serialisation change in
+ * So the assertions run in a real browser and compare colours the browser resolved, never a
+ * hand-typed `rgb()` string: an `rgb()` constant would fail on a serialisation change in
  * Chromium and pass on a genuine regression measured in a couple of units.
  *
- * `EXPECTED` is the pre-refactor source of `1_DS for dev/components/feedback/InfoBanner.jsx`,
- * copied character for character. Comparing each token against it *through the browser's own
- * colour pipeline* is what pins requirement 2 — the promotion changed no value.
+ * **What this case used to assert, and no longer can.** It was written against
+ * `1_DS for dev/components/feedback/InfoBanner.jsx` and pinned twelve `--banner-{tone}-{slot}`
+ * tokens to the eight `oklch(...)` literals a refactor had just promoted them out of — the
+ * claim being that the promotion changed no value. That component, those twelve tokens and the
+ * `--accent` / `--amber-800` / `--error-500` / `--success-700` the comparison read are all
+ * deleted; the refactor they guarded has no subject left to regress. That half is
+ * **retired**, and what replaces it is `ds:check`, which fails on any value in `packages/ds`
+ * outside the token vocabulary unless it carries a stated `@literal` reason — a static gate
+ * over every component rather than an eight-second browser check over one.
+ *
+ * The half that survives the repaint is the one above, because it is a claim about *the
+ * stylesheet reaching the route*, which no design system makes untrue.
  */
 
-/** tone → slot → the value the component applied before the tokens existed. */
-const EXPECTED: Record<string, Record<string, string>> = {
-  info: {
-    border: 'oklch(0.85 0.06 292)',
-    bg: 'oklch(0.97 0.02 292)',
-    ink: 'var(--accent)',
-  },
-  warning: {
-    border: 'oklch(0.82 0.09 74)',
-    bg: 'oklch(0.96 0.04 74)',
-    ink: 'var(--amber-800)',
-  },
-  error: {
-    border: 'oklch(0.8 0.1 25)',
-    bg: 'oklch(0.96 0.03 25)',
-    ink: 'var(--error-500)',
-  },
-  success: {
-    border: 'oklch(0.8 0.08 160)',
-    bg: 'oklch(0.96 0.03 160)',
-    ink: 'var(--success-700)',
-  },
+/** tone → the two tokens the banner paints from. §7 — `warning` and `error` are one
+ *  treatment under two names, which is why they name the same pair. */
+const TONES: Record<string, { fill: string; line: string }> = {
+  info: { fill: 'var(--color-info-tint)', line: 'var(--status-info)' },
+  warning: { fill: 'var(--color-error-tint)', line: 'var(--status-error)' },
+  error: { fill: 'var(--color-error-tint)', line: 'var(--status-error)' },
+  success: { fill: 'rgba(39, 199, 154, 0.1)', line: 'var(--status-success)' },
 };
-
-const TONES = Object.keys(EXPECTED);
-const SLOTS = ['bg', 'border', 'ink'];
 
 /**
  * Paints a colour on a throwaway element and hands back what the browser computed.
  *
- * Both sides of every comparison below go through here, so the assertion is about the
- * colour and not about how this Chromium happens to serialise one. `transparent` comes
- * back for a value the browser could not resolve — an undefined custom property, most of
- * all — which is exactly the first failure mode this test exists to catch.
+ * Both sides of every comparison below go through here, so the assertion is about the colour
+ * and not about how this Chromium happens to serialise one. `transparent` comes back for a
+ * value the browser could not resolve — an undefined custom property, most of all — which is
+ * exactly the failure mode this test exists to catch.
  */
 const paint = (page: import('@playwright/test').Page, values: string[]) =>
   page.evaluate((list) => {
@@ -77,7 +65,7 @@ const paint = (page: import('@playwright/test').Page, values: string[]) =>
 
 test.describe('DS — InfoBanner tone tokens', () => {
   // TC-DS-BANNER-E2E-01
-  test('the twelve --banner-* tokens resolve, hold their original values, and are what the banner paints', async ({
+  test('every tone token resolves on a real route, and is what the banner paints', async ({
     page,
     request,
   }) => {
@@ -86,27 +74,27 @@ test.describe('DS — InfoBanner tone tokens', () => {
 
     await page.goto('/login');
 
-    // (a) Every token is defined on this route and resolves to a real colour.
-    const declared = await page.evaluate((names) => {
-      const root = getComputedStyle(document.documentElement);
-      return names.map((name) => root.getPropertyValue(name).trim());
-    }, TONES.flatMap((tone) => SLOTS.map((slot) => `--banner-${tone}-${slot}`)));
-    expect(declared).not.toContain('');
+    // (a) Every token each tone paints from resolves to a real colour on this route.
+    const values = Object.values(TONES).flatMap((tone) => [tone.fill, tone.line]);
+    const names = Object.entries(TONES).flatMap(([tone]) => [`${tone}.fill`, `${tone}.line`]);
+    const resolved = await paint(page, values);
 
-    // …and each resolves to the same colour the component applied before the promotion.
-    const names = TONES.flatMap((tone) => SLOTS.map((slot) => `--banner-${tone}-${slot}`));
-    const originals = TONES.flatMap((tone) => SLOTS.map((slot) => EXPECTED[tone][slot]));
-    const resolved = await paint(
-      page,
-      names.map((name) => `var(${name})`).concat(originals),
-    );
-    const actual = resolved.slice(0, names.length);
-    const expected = resolved.slice(names.length);
-
-    expect(actual).not.toContain('rgba(0, 0, 0, 0)'); // an undefined token paints transparent
     for (const [index, name] of names.entries()) {
-      expect(actual[index], `${name} must still be ${originals[index]}`).toBe(expected[index]);
+      expect(resolved[index], `${name} (${values[index]}) must resolve to a colour`).not.toBe(
+        'rgba(0, 0, 0, 0)',
+      );
     }
+
+    // …and §7's claim holds in the browser rather than only in the source: `warning` and
+    // `error` are one treatment under two names, so they resolve to the same two colours.
+    const [warningFill, warningLine, errorFill, errorLine] = await paint(page, [
+      TONES.warning.fill,
+      TONES.warning.line,
+      TONES.error.fill,
+      TONES.error.line,
+    ]);
+    expect(warningFill).toBe(errorFill);
+    expect(warningLine).toBe(errorLine);
 
     // (b) The rendered banner paints from those tokens and nothing else.
     await page.getByTestId('login-email-input').fill(email);
@@ -121,8 +109,8 @@ test.describe('DS — InfoBanner tone tokens', () => {
       return { background: style.backgroundColor, border: style.borderTopColor };
     });
     const [tokenBackground, tokenBorder] = await paint(page, [
-      'var(--banner-error-bg)',
-      'var(--banner-error-border)',
+      TONES.error.fill,
+      TONES.error.line,
     ]);
 
     expect(painted.background).toBe(tokenBackground);

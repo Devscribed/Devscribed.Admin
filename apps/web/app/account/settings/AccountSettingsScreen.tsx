@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, InfoBanner, Input, SectionLabel, Select } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, Card, InfoBanner, Preloader, Select, TextInput } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
+import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
 import {
   ACCOUNT_SETTINGS_FIELD_ORDER,
@@ -46,7 +47,7 @@ const FIELD_TEST_ID: Record<AccountSettingsField, string> = {
   firstDayOfWeek: 'edit-first-day-select',
 };
 
-const FIELD_GAP = { display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' } as const;
+const FIELD_GAP = { display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' } as const;
 
 export function AccountSettingsScreen() {
   const { showToast } = useToast();
@@ -252,34 +253,38 @@ export function AccountSettingsScreen() {
       {loading ? (
         <LoadingSkeleton />
       ) : (
-        <Card>
-          <div style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setEmailOpen(true)}
-              data-testid="change-email-open-button"
-            >
-              Change email
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setPasswordOpen(true)}
-              data-testid="change-password-open-button"
-            >
-              Change password
-            </Button>
-          </div>
+        <>
+          <Card>
+            <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+              <Button
+                type="button"
+                onClick={() => setEmailOpen(true)}
+                data-testid="change-email-open-button"
+              >
+                Change email
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setPasswordOpen(true)}
+                data-testid="change-password-open-button"
+              >
+                Change password
+              </Button>
+            </div>
+          </Card>
 
-          <div style={{ marginTop: 'var(--sp-10)' }}>
-            <SectionLabel>EDIT INFORMATION</SectionLabel>
-          </div>
-
+          {/* `EDIT INFORMATION` was a `SectionLabel`, and `SectionLabel` is gone (D4). It
+              captioned the whole form rather than a block inside a titled panel, which is
+              the case the first migration's Phase 3 settled: the caption becomes that
+              surface's own `Card` title at `<h2>` (§27). So the actions and the form become
+              the two cards they always were, and the page's outline is `PageTitle`'s `<h1>`
+              → this. `clip={false}` because the card hosts three `Select`s, and a card that
+              clips cuts their menus off at its edge. */}
+          <Card title="Edit information" clip={false} style={{ marginTop: 'var(--space-7)' }}>
           {serverError && (
-            <div style={{ marginTop: 'var(--sp-7)' }}>
+            <div style={{ marginBottom: 'var(--space-7)' }}>
               <InfoBanner
-                tone="error"
+                variant="error"
                 role="alert"
                 aria-live="polite"
                 data-testid="account-error-message"
@@ -289,11 +294,11 @@ export function AccountSettingsScreen() {
             </div>
           )}
 
-          <div style={{ ...FIELD_GAP, marginTop: 'var(--sp-7)' }}>
-            <Input
+          <div style={FIELD_GAP}>
+            <TextInput
               label="First name"
               value={firstName}
-              onChange={(event: { target: { value: string } }) => {
+              onChange={(event) => {
                 setFirstName(event.target.value);
                 clearServerError();
                 if (errors.firstName) setFieldError('firstName', null);
@@ -303,14 +308,14 @@ export function AccountSettingsScreen() {
               data-testid="edit-first-name-input"
               aria-invalid={errors.firstName ? true : undefined}
               aria-describedby={errors.firstName ? 'field-error-firstName' : undefined}
-              error={errors.firstName ? errorNode('firstName', errors.firstName) : undefined}
-              wrapperStyle={{ gap: 0 }}
+              error={errors.firstName}
+              errorId="field-error-firstName"
             />
 
-            <Input
+            <TextInput
               label="Last name"
               value={lastName}
-              onChange={(event: { target: { value: string } }) => {
+              onChange={(event) => {
                 setLastName(event.target.value);
                 clearServerError();
                 if (errors.lastName) setFieldError('lastName', null);
@@ -320,30 +325,33 @@ export function AccountSettingsScreen() {
               data-testid="edit-last-name-input"
               aria-invalid={errors.lastName ? true : undefined}
               aria-describedby={errors.lastName ? 'field-error-lastName' : undefined}
-              error={errors.lastName ? errorNode('lastName', errors.lastName) : undefined}
-              wrapperStyle={{ gap: 0 }}
+              error={errors.lastName}
+              errorId="field-error-lastName"
             />
 
+            {/* The system's `Select` deals in options rather than the values behind them, so
+                each of the three crosses that boundary with `optionFor` / `valueOf` (`@/select`).
+                `variant="formik"` is the in-a-form control, which is what matches the
+                `TextInput`s above and below it. */}
             <Select
               label="Country"
-              value={phoneCountryCode}
-              onChange={changeCountry}
+              value={optionFor(COUNTRY_OPTIONS, phoneCountryCode)}
+              onChange={(option) => changeCountry(valueOf(option))}
               options={COUNTRY_OPTIONS}
               placeholder="Select a country"
-              disabled={saving}
+              isDisabled={saving}
+              variant="formik"
               data-testid="edit-phone-country-select"
-              error={
-                errors.phoneCountryCode
-                  ? errorNode('phoneCountryCode', errors.phoneCountryCode)
-                  : undefined
-              }
+              error={errors.phoneCountryCode ? true : undefined}
+              errorMessage={errors.phoneCountryCode}
+              errorId="field-error-phoneCountryCode"
             />
 
-            <Input
+            <TextInput
               label="Phone number"
               type="tel"
               value={phoneNumber}
-              onChange={(event: { target: { value: string } }) => {
+              onChange={(event) => {
                 setPhoneNumber(event.target.value);
                 clearServerError();
                 if (errors.phoneNumber) setFieldError('phoneNumber', null);
@@ -353,14 +361,15 @@ export function AccountSettingsScreen() {
               data-testid="edit-phone-number-input"
               aria-invalid={errors.phoneNumber ? true : undefined}
               aria-describedby={errors.phoneNumber ? 'field-error-phoneNumber' : undefined}
-              error={errors.phoneNumber ? errorNode('phoneNumber', errors.phoneNumber) : undefined}
-              wrapperStyle={{ gap: 0 }}
+              error={errors.phoneNumber}
+              errorId="field-error-phoneNumber"
             />
 
             <Select
               label="Timezone"
-              value={timezone}
-              onChange={(value: string) => {
+              value={optionFor(timezoneOptions, timezone)}
+              onChange={(option) => {
+                const value = valueOf(option);
                 setTimezone(value);
                 clearServerError();
                 const result = validateTimezone(value);
@@ -368,46 +377,49 @@ export function AccountSettingsScreen() {
               }}
               options={timezoneOptions}
               placeholder="Select a timezone"
-              disabled={saving}
+              isDisabled={saving}
+              variant="formik"
               data-testid="edit-timezone-select"
-              error={errors.timezone ? errorNode('timezone', errors.timezone) : undefined}
+              error={errors.timezone ? true : undefined}
+              errorMessage={errors.timezone}
+              errorId="field-error-timezone"
             />
 
             <Select
               label="First day of week"
-              value={firstDayOfWeek}
-              onChange={(value: string) => {
+              value={optionFor(FIRST_DAY_OPTIONS, firstDayOfWeek)}
+              onChange={(option) => {
+                const value = valueOf(option);
                 setFirstDayOfWeek(value);
                 clearServerError();
                 const result = validateFirstDayOfWeek(value);
                 setFieldError('firstDayOfWeek', result.valid ? null : result.error);
               }}
               options={FIRST_DAY_OPTIONS}
-              disabled={saving}
+              isDisabled={saving}
+              variant="formik"
               data-testid="edit-first-day-select"
-              error={
-                errors.firstDayOfWeek
-                  ? errorNode('firstDayOfWeek', errors.firstDayOfWeek)
-                  : undefined
-              }
+              error={errors.firstDayOfWeek ? true : undefined}
+              errorMessage={errors.firstDayOfWeek}
+              errorId="field-error-firstDayOfWeek"
             />
           </div>
 
-          <div style={{ marginTop: 'var(--sp-10)' }}>
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              onClick={handleSave}
-              loading={saving}
-              disabled={saving || requiredInvalid}
-              data-testid="account-save-button"
-              style={{ width: '100%' }}
-            >
-              {saving ? 'Saving' : 'Save'}
-            </Button>
-          </div>
-        </Card>
+            <div style={{ marginTop: 'var(--space-7)' }}>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleSave}
+                preloader={saving}
+                disabled={saving || requiredInvalid}
+                data-testid="account-save-button"
+                style={{ width: '100%' }}
+              >
+                {saving ? 'Saving' : 'Save'}
+              </Button>
+            </div>
+          </Card>
+        </>
       )}
 
       <ChangeEmailModal
@@ -421,35 +433,26 @@ export function AccountSettingsScreen() {
 }
 
 /**
- * Static token-colored blocks (no shimmer — the app has no `Skeleton` primitive, the same
- * gap specs 04/05 recorded). Covers the `GET /api/account/settings` fetch inside the shell.
+ * Covers the `GET /api/account/settings` fetch inside an already-rendered shell.
+ *
+ * It was ten grey blocks standing in for the form, on the "the app has no `Skeleton`
+ * primitive" gap specs 04/05 recorded. The system's answer for waiting is `Preloader`
+ * (§23, §69), and the one place the design system's record leaves an outline standing is a
+ * *list* that already knows its own shape — where the outline says more than dots do. Six
+ * identical field bars are not that: they say "a form is coming", which is what the card
+ * around them already said. So the blocks go and the dots stay, and the state keeps the
+ * test id spec 06 named for it.
  */
 function LoadingSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
   return (
     <Card>
       <div
+        role="status"
         data-testid="account-settings-loading-skeleton"
         aria-label="Loading your account settings"
-        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}
+        style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-9) 0' }}
       >
-        <div style={{ display: 'flex', gap: 'var(--sp-5)' }}>
-          <div style={block(140, 40)} />
-          <div style={block(160, 40)} />
-        </div>
-        <div style={{ width: '100%', height: 1, background: 'var(--divider)', margin: 'var(--sp-4) 0' }} />
-        <div style={block(120, 14)} />
-        <div style={block('100%', 46)} />
-        <div style={block('100%', 46)} />
-        <div style={block('100%', 46)} />
-        <div style={block('100%', 46)} />
-        <div style={block('100%', 46)} />
-        <div style={block('100%', 48)} />
+        <Preloader />
       </div>
     </Card>
   );

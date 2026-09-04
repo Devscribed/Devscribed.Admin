@@ -3,6 +3,7 @@ import { CLIENT_MESSAGES } from '@devscribed/validation';
 import {
   API,
   VALID,
+  clickNav,
   createProjectViaApi,
   inviteAndAcceptViaApi,
   login,
@@ -85,7 +86,9 @@ async function setProjectClientViaApi(
  * rather than tight — a single click with a long wait, no click retry loop.
  */
 async function openClientsPage(page: Page): Promise<void> {
-  await page.getByTestId('nav-clients').click();
+  // E4 put `Clients` under the **Project management** group, whose rows are not in the
+  // document while it is closed.
+  await clickNav(page, 'Project management', 'nav-clients');
   await page.waitForURL('**/clients**', { timeout: 30000 });
   await expect(page.getByTestId('clients-page')).toBeVisible({ timeout: 30000 });
 }
@@ -148,7 +151,7 @@ test.describe('01 — Clients', () => {
     await expect(page.getByTestId(`clients-row-${acme!.id}`)).toContainText('Acme Corp');
 
     // Navigate to the project via the sidebar/list and open the edit modal.
-    await page.getByTestId('nav-projects').click();
+    await clickNav(page, 'Project management', 'nav-projects');
     await page.waitForURL('**/projects');
     await page.getByTestId(`projects-row-${project.id}`).click();
     await page.waitForURL(`**/projects/${project.id}`);
@@ -287,7 +290,7 @@ test.describe('01 — Clients', () => {
     await archiveClientViaApi(request, org.organizationId, archived.id);
 
     await signInUi(page, adminEmail);
-    await page.getByTestId('nav-projects').click();
+    await clickNav(page, 'Project management', 'nav-projects');
     await page.waitForURL('**/projects');
     await expect(page.getByTestId('projects-page')).toBeVisible();
 
@@ -337,8 +340,10 @@ test.describe('01 — Clients', () => {
 
     await signInUi(page, userEmail);
 
-    // Sidebar renders — the Clients row is omitted for this role.
+    // Sidebar renders — nothing project-shaped is in it for this role. The group is what is
+    // asserted absent; a closed group holds no rows either, so the row alone proves nothing.
     await expect(page.getByTestId('app-sidebar')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Project management', exact: true })).toHaveCount(0);
     await expect(page.getByTestId('nav-clients')).toHaveCount(0);
 
     // A direct URL does not render the clients page (notFound() short-circuit).

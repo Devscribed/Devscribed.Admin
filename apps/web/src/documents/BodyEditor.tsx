@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { Button } from '@/ds';
+import { Button } from '@devscribed/ds';
 
 interface ToolbarAction {
   label: string;
@@ -79,28 +79,26 @@ export function BodyEditor({
   return (
     <div
       style={{
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-l)',
         overflow: 'hidden',
-        background: 'var(--bg-panel)',
+        background: 'var(--surface-card)',
       }}
     >
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 'var(--sp-2)',
-          padding: 'var(--sp-4) var(--sp-5)',
-          borderBottom: '1px solid var(--divider)',
-          background: 'var(--bg-header)',
+          gap: 'var(--space-1)',
+          padding: 'var(--space-3) var(--space-4)',
+          borderBottom: '1px solid var(--border-subtle)',
+          background: 'var(--surface-sunken)',
         }}
       >
         {ACTIONS.map((action) => (
           <Button
             key={action.title}
             type="button"
-            variant="ghost"
-            size="sm"
             title={action.title}
             aria-label={action.title}
             disabled={readOnly}
@@ -126,12 +124,12 @@ export function BodyEditor({
           border: 'none',
           outline: 'none',
           resize: 'vertical',
-          padding: 'var(--sp-8) var(--sp-10)',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 'var(--fs-14)',
-          lineHeight: 'var(--lh-loose)',
-          color: 'var(--text)',
-          background: readOnly ? 'var(--bg-sunken)' : 'var(--bg-panel)',
+          padding: 'var(--space-6) var(--space-7)',
+          fontFamily: 'var(--font-family-mono)',
+          fontSize: 'var(--font-size-s)',
+          lineHeight: 'var(--line-height-base)',
+          color: 'var(--text-primary)',
+          background: readOnly ? 'var(--surface-sunken)' : 'var(--surface-card)',
         }}
       />
     </div>

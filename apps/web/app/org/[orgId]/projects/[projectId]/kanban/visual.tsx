@@ -2,8 +2,22 @@
 
 /**
  * Spec 13 §Task type icon system + §Priority icon system. Maps the enums to icon
- * components and their ink colors. Meridian's house rule: no blue anywhere, so
- * `task` uses the same teal as spec 12's project-color palette (see design's DS gaps).
+ * components and their ink colors.
+ *
+ * The house rule this file used to state — *no blue anywhere* — was the previous design's, and
+ * it is the opposite of this one's: blue is the action colour here, and `task`, the default
+ * type, is the one that should wear it.
+ *
+ * Two of these maps are **status** and one is **category**, and they are painted differently on
+ * purpose. Priority runs low → critical, which is a scale of how badly something is going, so
+ * it takes the status palette. A task's *type* is a label on an object (§59) — a bug is not
+ * worse than a story — so those hues say only "not the one next to it", except `bug`, which
+ * genuinely is the one thing on a board that reports something wrong.
+ *
+ * This module is Phase 6's, and it is repainted here because Phase 4 renders two of its
+ * exports: the task selector draws `TaskTypeGlyph` and `TASK_TYPE_COLOR` inside the timer bar
+ * and the entry modal. Leaving the other half in the previous design's tokens would be a file
+ * half-repainted, which is worse than either state.
  */
 
 import type { TaskPriority, TaskType } from '@devscribed/validation';
@@ -21,11 +35,11 @@ import {
 } from '@/layout/icons';
 
 export const TASK_TYPE_COLOR: Record<TaskType, string> = {
-  epic: 'var(--accent)',
-  task: 'oklch(0.55 0.11 180)',
-  bug: 'var(--error-500)',
-  story: 'var(--success-500)',
-  subtask: 'var(--text-muted)',
+  epic: 'oklch(0.5 0.2 300)',
+  task: 'var(--color-blue)',
+  bug: 'var(--status-error)',
+  story: 'oklch(0.58 0.11 160)',
+  subtask: 'var(--text-secondary)',
 };
 
 export const TASK_TYPE_LABEL: Record<TaskType, string> = {
@@ -58,10 +72,10 @@ export function TaskTypeGlyph({ type, size = 16 }: { type: TaskType; size?: numb
 }
 
 export const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  low: 'var(--success-500)',
-  medium: 'var(--amber-700)',
-  high: 'var(--error-400)',
-  critical: 'var(--error-500)',
+  low: 'var(--status-success)',
+  medium: 'var(--status-warning)',
+  high: 'var(--status-error)',
+  critical: 'var(--status-error)',
 };
 
 export const PRIORITY_LABEL: Record<TaskPriority, string> = {
@@ -80,7 +94,7 @@ export function PriorityGlyph({
 }) {
   if (priority === null) {
     return (
-      <span aria-hidden style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-13)' }}>
+      <span aria-hidden style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)' }}>
         —
       </span>
     );
@@ -107,11 +121,11 @@ export function PriorityGlyph({
 export function columnCategoryBorder(category: string): string {
   switch (category) {
     case 'in_progress':
-      return 'var(--accent)';
+      return 'var(--color-blue)';
     case 'done':
-      return 'var(--success-500)';
+      return 'var(--status-success)';
     default:
-      return 'var(--border-strong)';
+      return 'var(--border-default)';
   }
 }
 

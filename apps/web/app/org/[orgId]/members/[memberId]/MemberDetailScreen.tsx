@@ -1,9 +1,22 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, InfoBanner, Input, Tabs } from '@/ds';
-import { errorNode } from '@/field-error';
+import {
+  Avatar,
+  BackTo,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  FieldLabel,
+  InfoBanner,
+  MailOutlineIcon,
+  PageTabs,
+  Preloader,
+  TextInput,
+  TimeOutlineIcon,
+} from '@devscribed/ds';
 import { useToast } from '@/toast';
 import {
   MEMBER_MESSAGES,
@@ -14,9 +27,6 @@ import {
 } from '@devscribed/validation';
 import { useSession } from '@/layout/session-context';
 import { ContractDetails } from '@/members/ContractDetails';
-import { ToastProvider as DocumentsToastProvider } from '@/documents/toast';
-import { AvatarInitials } from './AvatarInitials';
-import { ClockIcon, MailIcon } from './icons';
 import { RoleSelect } from './RoleSelect';
 import { VacationPanel } from './VacationPanel';
 
@@ -103,6 +113,7 @@ function initialTab(): string {
 }
 
 export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberId: string }) {
+  const router = useRouter();
   const session = useSession();
   const { showToast } = useToast();
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
@@ -217,66 +228,47 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
 
   return (
     <div data-testid="member-detail" style={{ maxWidth: 600, margin: '0 auto' }}>
-      <Link
-        href={`/org/${orgId}/members`}
-        data-testid="member-detail-back-link"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text-sub)',
-          textDecoration: 'none',
-          marginBottom: 'var(--sp-10)',
-        }}
-      >
-        <span aria-hidden style={{ fontSize: 18, lineHeight: 1 }}>
-          &#8592;
-        </span>
-        Back to members
-      </Link>
+      <div style={{ marginBottom: 'var(--space-7)' }}>
+        <BackTo
+          label="Back to members"
+          href={`/org/${orgId}/members`}
+          data-testid="member-detail-back-link"
+          onClick={(event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            router.push(`/org/${orgId}/members`);
+          }}
+        />
+      </div>
 
-      {state.kind === 'loading' && <LoadingSkeleton />}
+      {state.kind === 'loading' && <Preloader data-testid="member-detail-loading" />}
 
       {state.kind === 'error' && (
-        <div
-          data-testid="member-detail-not-found"
-          style={{ padding: 'var(--sp-12) 0', color: 'var(--text-muted)', fontSize: 'var(--fs-15)' }}
-        >
-          {state.message}
-        </div>
+        <EmptyState data-testid="member-detail-not-found">{state.message}</EmptyState>
       )}
 
       {detail && (
-        <Card>
+        /* §12 — `clip` off, because the About tab hosts `RoleSelect`: a card that clips to its
+           radius cuts off a `Select` popover opened inside it. */
+        <Card clip={false}>
           <Header detail={detail} />
 
-          <div style={{ marginTop: 'var(--sp-10)' }}>
-            <Tabs items={tabs} value={shownTab} onChange={setActiveTab} />
+          <div style={{ marginTop: 'var(--space-7)' }}>
+            <PageTabs tabs={tabs} active={shownTab} onChange={setActiveTab} label="Member sections" />
           </div>
 
-          <div style={{ paddingTop: 'var(--sp-10)' }}>
+          <div style={{ paddingTop: 'var(--space-7)' }}>
             {shownTab === 'vacation' ? (
               <VacationPanel orgId={orgId} memberId={memberId} memberName={detail.fullName} />
             ) : shownTab === 'contract-details' ? (
-              // Wrapped in the documents area's own toast provider, because there are two
-              // in this application: this screen uses `@/toast`, and `ContractDetails`
-              // came from the documents area, which has its own. Unifying them is worth
-              // doing and is not this merge's job — wrapping is the honest minimum, and
-              // leaving the panel to throw "useToast must be used inside a ToastProvider"
-              // is not.
-              <DocumentsToastProvider>
-                <ContractDetails
-                  orgId={orgId}
-                  memberId={detail.id}
-                  role={session.role ?? ''}
-                  isSelf={detail.isSelf}
-                />
-              </DocumentsToastProvider>
+              <ContractDetails
+                orgId={orgId}
+                memberId={detail.id}
+                role={session.role ?? ''}
+                isSelf={detail.isSelf}
+              />
             ) : showForm ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                 {detail.canEditRole && (
                   <div>
                     <RoleSelect
@@ -284,13 +276,12 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
                       value={role ?? detail.role}
                       availableRoles={detail.availableRoles}
                       disabled={roleGuarded || saving}
-                      guardMessage={MEMBER_MESSAGES.lastAdminGuard}
                       onChange={setRole}
                     />
                     {roleGuarded && (
-                      <div style={{ marginTop: 'var(--sp-4)' }}>
+                      <div style={{ marginTop: 'var(--space-3)' }}>
                         <InfoBanner
-                          tone="warning"
+                          variant="warning"
                           role="status"
                           aria-live="polite"
                           data-testid="role-change-guard-message"
@@ -303,18 +294,15 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
                 )}
 
                 {detail.canEditJobTitle && (
-                  <Input
+                  <TextInput
                     label="Job title"
                     placeholder="Enter a job title"
                     value={jobTitle}
-                    onChange={(event: { target: { value: string } }) =>
-                      handleJobTitleChange(event.target.value)
-                    }
-                    disabled={saving}
+                    onChange={(event) => handleJobTitleChange(event.target.value)}
+                    readOnly={saving}
                     data-testid="job-title-input"
-                    aria-invalid={jobTitleErr ? true : undefined}
-                    aria-describedby={jobTitleErr ? 'field-error-jobTitle' : undefined}
-                    error={jobTitleErr ? errorNode('jobTitle', jobTitleErr) : undefined}
+                    error={jobTitleErr ?? undefined}
+                    errorId="field-error-jobTitle"
                   />
                 )}
 
@@ -322,7 +310,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
                   <Button
                     variant="primary"
                     onClick={handleSave}
-                    loading={saving}
+                    preloader={saving}
                     disabled={saving || !!jobTitleErr || !dirty}
                     data-testid="job-title-save-button"
                   >
@@ -354,37 +342,39 @@ function Header({ detail }: { detail: MemberDetail }) {
         flexDirection: 'column',
         alignItems: 'center',
         textAlign: 'center',
-        gap: 'var(--sp-3)',
+        gap: 'var(--space-2)',
       }}
     >
-      <AvatarInitials fullName={detail.fullName} initials={detail.avatarInitials} />
+      <Avatar name={detail.fullName} initials={detail.avatarInitials} size={64} decorative />
 
-      <div
+      <h2
         data-testid="member-detail-name"
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-20)',
-          letterSpacing: '-.4px',
-          color: 'var(--text)',
-          marginTop: 'var(--sp-4)',
+          margin: 0,
+          marginTop: 'var(--space-2)',
+          fontSize: 'var(--headline-5-size)',
+          lineHeight: 'var(--headline-5-line)',
+          letterSpacing: 'var(--headline-5-tracking)',
+          fontWeight: 'var(--headline-5-weight)',
+          color: 'var(--text-primary)',
         }}
       >
         {detail.fullName}
-      </div>
+      </h2>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* §59 — a role is a label on a person, not a status about them, which is the call
+            the members list already made on the same value. */}
         <Badge
-          tone="info"
-          dot={false}
-          outline
+          status="neutral"
+          outlined
           data-testid="member-detail-role-badge"
           style={{ textTransform: 'capitalize' }}
         >
           {detail.role}
         </Badge>
         {detail.status === 'removed' && (
-          <Badge tone="inactive" data-testid="member-detail-removed-badge">
+          <Badge status="inactive" data-testid="member-detail-removed-badge">
             Removed
           </Badge>
         )}
@@ -392,29 +382,29 @@ function Header({ detail }: { detail: MemberDetail }) {
 
       <div
         style={{
-          marginTop: 'var(--sp-6)',
+          marginTop: 'var(--space-5)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 'var(--sp-3)',
+          gap: 'var(--space-2)',
           alignItems: 'center',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-tertiary)',
         }}
       >
-        <div data-testid="member-detail-joined" style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          Joined {joined}
-        </div>
+        <div data-testid="member-detail-joined">Joined {joined}</div>
         <div
           data-testid="member-detail-email"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
         >
-          <MailIcon />
+          <MailOutlineIcon aria-hidden style={{ flexShrink: 0 }} />
           {detail.email}
         </div>
         <div
           data-testid="member-detail-timezone"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
         >
-          <ClockIcon />
-          {detail.timezone ?? '—'}
+          <TimeOutlineIcon aria-hidden style={{ flexShrink: 0 }} />
+          {detail.timezone ?? '\u2014'}
         </div>
       </div>
     </div>
@@ -433,46 +423,10 @@ function ReadonlyJobTitle({ jobTitle }: { jobTitle: string | null }) {
   if (!jobTitle) return null;
   return (
     <div>
-      <div
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-11)',
-          letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: 'var(--text-muted)',
-          marginBottom: 4,
-        }}
-      >
-        Job title
-      </div>
-      <div data-testid="job-title-readonly" style={{ fontSize: 'var(--fs-15)', color: 'var(--text)' }}>
+      <FieldLabel>Job title</FieldLabel>
+      <div data-testid="job-title-readonly" style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-primary)' }}>
         {jobTitle}
       </div>
-    </div>
-  );
-}
-
-function LoadingSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
-  return (
-    <div
-      data-testid="member-detail-loading-skeleton"
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--sp-6)', padding: 'var(--sp-12) 0' }}
-    >
-      <div style={block(64, 64, 999)} />
-      <div style={block(160, 20)} />
-      <div style={block(80, 20, 20)} />
-      <div style={block(140, 14)} />
-      <div style={block(180, 14)} />
-      <div style={{ width: '100%', height: 1, background: 'var(--divider)', margin: 'var(--sp-8) 0' }} />
-      <div style={block('100%', 46)} />
-      <div style={block('100%', 46)} />
-      <div style={block(140, 44)} />
     </div>
   );
 }

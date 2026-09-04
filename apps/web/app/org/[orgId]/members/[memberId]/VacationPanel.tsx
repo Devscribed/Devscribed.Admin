@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Modal } from '@/ds';
+import { Badge, Button, Card, ConfirmDialog, EmptyState, fieldLabelStyle, Preloader } from '@devscribed/ds';
 import { MESSAGES, REQUEST_MESSAGES, type VacationRequestStatus } from '@devscribed/validation';
 import { useToast } from '@/toast';
 import { VacationFinancialsModal } from './VacationFinancialsModal';
@@ -106,20 +106,9 @@ function formatCurrency(amount: number, currency: string): string {
 
 /** Card-shaped bordered block — nested inside spec 05's outer `Card`, so it is a plain
  * `<section>` rather than a second DS `Card` (which would double-frame). */
-function cardStyle(): React.CSSProperties {
-  return {
-    border: '1px solid var(--divider)',
-    borderRadius: 'var(--radius-xl)',
-    padding: 'var(--sp-8)',
-  };
-}
 
-const microLabel: React.CSSProperties = {
-  fontFamily: 'var(--font-display)',
-  fontWeight: 600,
-  fontSize: 'var(--fs-15)',
-  color: 'var(--text)',
-};
+
+
 
 /**
  * The Vacation tab panel (spec 07). Fetches `GET .../vacation` on mount, then renders
@@ -226,11 +215,11 @@ export function VacationPanel({
     setCancelSaving(false);
   }
 
-  if (state.kind === 'loading') return <VacationSkeleton />;
+  if (state.kind === 'loading') return <Preloader data-testid="vacation-loading" />;
 
   if (state.kind === 'error') {
     return (
-      <div style={{ padding: 'var(--sp-8) 0', color: 'var(--text-muted)', fontSize: 'var(--fs-15)' }}>
+      <div style={{ padding: 'var(--space-6) 0', color: 'var(--text-secondary)', fontSize: 'var(--font-size-base)' }}>
         {state.message}
       </div>
     );
@@ -251,9 +240,9 @@ export function VacationPanel({
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         {unconfigured ? (
-          <EmptyState canEdit={canEdit} onSetup={() => setModalOpen(true)} />
+          <VacationEmptyState canEdit={canEdit} onSetup={() => setModalOpen(true)} />
         ) : (
           <>
             {financials && canEdit && (
@@ -341,33 +330,23 @@ export function VacationPanel({
   );
 }
 
-function EmptyState({ canEdit, onSetup }: { canEdit: boolean; onSetup: () => void }) {
+function VacationEmptyState({ canEdit, onSetup }: { canEdit: boolean; onSetup: () => void }) {
   const message = canEdit
     ? // admin/manager empty copy — fixed verbatim by the business spec.
       'Vacation tracking has not been set up for this member yet.'
     : // user-own empty copy — fixed verbatim by the business spec.
       'Vacation tracking has not been set up for your account yet. Please contact your manager.';
   return (
-    <div
-      data-testid="vacation-empty-state"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 'var(--sp-6)',
-        textAlign: 'center',
-        padding: 'var(--sp-12) var(--sp-8)',
-      }}
-    >
-      <p style={{ color: 'var(--text-sub)', fontSize: 'var(--fs-15)', margin: 0, maxWidth: 360 }}>
-        {message}
-      </p>
+    <EmptyState data-testid="vacation-empty-state">
+      {message}
       {canEdit && (
-        <Button variant="primary" onClick={onSetup} data-testid="vacation-setup-btn">
-          Set up financials
-        </Button>
+        <div style={{ marginTop: 'var(--space-6)' }}>
+          <Button variant="primary" onClick={onSetup} data-testid="vacation-setup-btn">
+            Set up financials
+          </Button>
+        </div>
       )}
-    </div>
+    </EmptyState>
   );
 }
 
@@ -380,21 +359,16 @@ function FinancialsCard({
 }) {
   const reserveSuffix = financials.isReservePercentManual ? '(manual)' : '(auto)';
   return (
-    <section data-testid="vacation-financials-card" style={cardStyle()}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--sp-6)',
-        }}
-      >
-        <div style={microLabel}>Financial Settings</div>
-        <Button variant="secondary" size="sm" onClick={onEdit} data-testid="vacation-financials-edit-btn">
+    <Card
+      data-testid="vacation-financials-card"
+      title="Financial Settings"
+      action={
+        <Button onClick={onEdit} data-testid="vacation-financials-edit-btn">
           Edit
         </Button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <Row label="Monthly salary" value={formatCurrency(financials.monthlySalary, financials.currency)} />
         <Row label="Client hourly rate" value={formatCurrency(financials.clientHourlyRate, financials.currency)} />
         <Row
@@ -403,25 +377,23 @@ function FinancialsCard({
         />
         <Row label="Vacation days per year" value={String(financials.vacationDaysPerYear)} />
       </div>
-    </section>
+    </Card>
   );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--sp-6)' }}>
-      <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-13)' }}>{label}</span>
-      <span style={{ color: 'var(--text)', fontSize: 'var(--fs-15)', textAlign: 'right' }}>{value}</span>
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-5)' }}>
+      <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-s)' }}>{label}</span>
+      <span style={{ color: 'var(--text-primary)', fontSize: 'var(--font-size-base)', textAlign: 'right' }}>{value}</span>
     </div>
   );
 }
 
 function BalanceCard({ balance, currency }: { balance: VacationBalance; currency: string | null }) {
   return (
-    <section data-testid="vacation-balance-card" style={cardStyle()}>
-      <div style={{ ...microLabel, marginBottom: 'var(--sp-6)' }}>Vacation Balance</div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-10)' }}>
+    <Card data-testid="vacation-balance-card" title="Vacation Balance">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-7)' }}>
         <Stat testId="vacation-available-days" value={balance.availableDays} label="available" large />
         <Stat testId="vacation-used-days" value={balance.usedDays} label="used" />
         <Stat testId="vacation-pending-days" value={balance.pendingDays} label="pending" />
@@ -432,9 +404,9 @@ function BalanceCard({ balance, currency }: { balance: VacationBalance; currency
         <div
           data-testid="vacation-reserve-amount"
           style={{
-            marginTop: 'var(--sp-8)',
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text)',
+            marginTop: 'var(--space-6)',
+            fontSize: 'var(--font-size-base)',
+            color: 'var(--text-primary)',
           }}
         >
           Reserve {formatCurrency(balance.reserveBalance, currency ?? 'USD')}
@@ -445,15 +417,15 @@ function BalanceCard({ balance, currency }: { balance: VacationBalance; currency
       {balance.reserveBalance == null && (
         <div
           style={{
-            marginTop: 'var(--sp-8)',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--text-sub)',
+            marginTop: 'var(--space-6)',
+            fontSize: 'var(--font-size-s)',
+            color: 'var(--text-tertiary)',
           }}
         >
           out of {balance.totalDaysPerYear} per year
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -477,30 +449,25 @@ function TransactionsTable({
   transactions: VacationTransaction[];
   currency: string;
 }) {
+  /* The column headings take the field-label treatment (§74) — the same small-caps the rest
+     of the system labels a value with — rather than a fourth uppercase style of their own. */
   const th: React.CSSProperties = {
+    ...fieldLabelStyle,
     textAlign: 'left',
-    fontFamily: 'var(--font-display)',
-    fontWeight: 600,
-    fontSize: 'var(--fs-11)',
-    letterSpacing: 'var(--ls-wider)',
-    textTransform: 'uppercase',
-    color: 'var(--text-muted)',
-    padding: '0 0 var(--sp-4)',
+    padding: '0 0 var(--space-3)',
   };
   const td: React.CSSProperties = {
-    padding: 'var(--sp-4) 0',
-    borderTop: '1px solid var(--divider)',
+    padding: 'var(--space-3) 0',
+    borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
     verticalAlign: 'top',
   };
 
   return (
-    <section data-testid="vacation-transactions-table" style={cardStyle()}>
-      <div style={{ ...microLabel, marginBottom: 'var(--sp-6)' }}>Reserve Transactions</div>
-
+    <Card data-testid="vacation-transactions-table" title="Reserve Transactions">
       {transactions.length === 0 ? (
         <div
           data-testid="vacation-no-transactions"
-          style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-15)' }}
+          style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-base)' }}
         >
           No reserve transactions yet.
         </div>
@@ -527,19 +494,18 @@ function TransactionsTable({
                   <td
                     style={{
                       ...td,
-                      fontFamily: 'var(--font-display)',
-                      fontWeight: 600,
-                      fontSize: 'var(--fs-15)',
-                      color: 'var(--text)',
+                      fontWeight: 'var(--font-weight-semibold)',
+                      fontSize: 'var(--font-size-base)',
+                      color: 'var(--text-primary)',
                       whiteSpace: 'nowrap',
                     }}
                   >
                     {formatTxnDate(t.createdAt)}
                   </td>
-                  <td style={{ ...td, fontSize: 'var(--fs-15)', color: 'var(--text)' }}>
+                  <td style={{ ...td, fontSize: 'var(--font-size-base)', color: 'var(--text-primary)' }}>
                     {typeLabel}
                     {t.isAutoGenerated && (
-                      <span style={{ marginLeft: 'var(--sp-2)', fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+                      <span style={{ marginLeft: 'var(--space-1)', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
                         (auto)
                       </span>
                     )}
@@ -549,10 +515,9 @@ function TransactionsTable({
                       ...td,
                       textAlign: 'right',
                       whiteSpace: 'nowrap',
-                      fontFamily: 'var(--font-display)',
-                      fontWeight: 600,
-                      fontSize: 'var(--fs-15)',
-                      color: isPositive ? 'var(--success-700)' : 'var(--error-600)',
+                      fontWeight: 'var(--font-weight-semibold)',
+                      fontSize: 'var(--font-size-base)',
+                      color: isPositive ? 'var(--status-success)' : 'var(--status-error)',
                     }}
                   >
                     {sign}
@@ -562,14 +527,13 @@ function TransactionsTable({
                     style={{
                       ...td,
                       minWidth: 0,
-                      fontFamily: 'var(--font-text)',
-                      fontSize: 'var(--fs-15)',
-                      color: 'var(--text)',
+                      fontSize: 'var(--font-size-base)',
+                      color: 'var(--text-primary)',
                     }}
                   >
                     {t.description ?? ''}
                   </td>
-                  <td style={{ ...td, fontSize: 'var(--fs-13)', color: 'var(--text-sub)', whiteSpace: 'nowrap' }}>
+                  <td style={{ ...td, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
                     {t.createdBy ?? 'System'}
                   </td>
                 </tr>
@@ -578,7 +542,7 @@ function TransactionsTable({
           </tbody>
         </table>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -625,13 +589,11 @@ function RequestsCard({
 }) {
   const heading = canSubmitRequest ? 'My Requests' : 'Vacation Requests';
   return (
-    <section data-testid="vacation-requests-list" style={cardStyle()}>
-      <div style={{ ...microLabel, marginBottom: 'var(--sp-6)' }}>{heading}</div>
-
+    <Card data-testid="vacation-requests-list" title={heading}>
       {requests.length === 0 ? (
         <div
           data-testid="vacation-no-requests"
-          style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-15)' }}
+          style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-base)' }}
         >
           {REQUEST_MESSAGES.noRequests}
         </div>
@@ -655,7 +617,7 @@ function RequestsCard({
           ))}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -700,21 +662,20 @@ function RequestRow({
     <div
       data-testid={`vacation-request-row-${request.id}`}
       style={{
-        borderTop: first ? undefined : '1px solid var(--divider)',
-        padding: 'var(--sp-5) 0',
+        borderTop: first ? undefined : 'var(--border-width-hairline) solid var(--border-subtle)',
+        padding: 'var(--space-4) 0',
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--sp-3)',
+        gap: 'var(--space-2)',
       }}
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
         <span
           data-testid={`vacation-request-dates-${request.id}`}
           style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text)',
+            fontWeight: 'var(--font-weight-semibold)',
+            fontSize: 'var(--font-size-base)',
+            color: 'var(--text-primary)',
             whiteSpace: 'nowrap',
           }}
         >
@@ -722,11 +683,11 @@ function RequestRow({
         </span>
         <span
           data-testid={`vacation-request-days-${request.id}`}
-          style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+          style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
         >
           {formatWorkingDays(request.workingDays)}
         </span>
-        <Badge tone={meta.tone} data-testid={`vacation-request-status-${request.id}`}>
+        <Badge status={meta.tone} data-testid={`vacation-request-status-${request.id}`}>
           {meta.label}
         </Badge>
 
@@ -735,17 +696,16 @@ function RequestRow({
             marginLeft: 'auto',
             display: 'flex',
             alignItems: 'center',
-            gap: 'var(--sp-4)',
+            gap: 'var(--space-3)',
             flexWrap: 'wrap',
           }}
         >
           {showMoney && (
             <span
               style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: 'var(--fs-15)',
-                color: 'var(--text)',
+                fontWeight: 'var(--font-weight-semibold)',
+                fontSize: 'var(--font-size-base)',
+                color: 'var(--text-primary)',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -754,13 +714,12 @@ function RequestRow({
           )}
 
           {hasActions && (
-            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
               {showApproveReject && (
                 <>
                   <Button
                     variant="primary"
-                    size="sm"
-                    loading={approving}
+                    preloader={approving}
                     disabled={actionsBusy && !approving}
                     onClick={() => onApprove(request)}
                     data-testid={`vacation-request-approve-${request.id}`}
@@ -768,8 +727,6 @@ function RequestRow({
                     Approve
                   </Button>
                   <Button
-                    variant="secondary"
-                    size="sm"
                     disabled={actionsBusy}
                     onClick={() => onReject(request)}
                     data-testid={`vacation-request-reject-${request.id}`}
@@ -780,8 +737,7 @@ function RequestRow({
               )}
               {showCancel && (
                 <Button
-                  variant="danger"
-                  size="sm"
+                  variant="delete"
                   disabled={actionsBusy}
                   onClick={() => onCancel(request)}
                   data-testid={`vacation-request-cancel-${request.id}`}
@@ -797,7 +753,7 @@ function RequestRow({
       {request.status === 'rejected' && request.reviewerComment && (
         <div
           data-testid={`vacation-request-reviewer-comment-${request.id}`}
-          style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-13)', color: 'var(--text-sub)' }}
+          style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
         >
           &ldquo;{request.reviewerComment}&rdquo;
         </div>
@@ -807,9 +763,11 @@ function RequestRow({
 }
 
 /**
- * Cancel confirmation dialog (spec 09) — a small `Modal` composition following the
- * `DeleteConfirmDialog` precedent. Body copy differs for a pending vs an approved request
- * (the approved variant warns about the reserve refund). Confirm PUTs `.../cancel`.
+ * The cancel confirmation (spec 09), on `ConfirmDialog` — the same collapse
+ * `DeleteConfirmDialog` made, and §41 for the same reason: this dialog awaits a result the
+ * reader has to see, so it passes `busy` and `closeOnAccept={false}` and the panel closes it
+ * on the answer. Body copy still differs for a pending versus an approved request, because
+ * only the approved one refunds a reserve.
  */
 function CancelRequestDialog({
   request,
@@ -823,46 +781,25 @@ function CancelRequestDialog({
   onConfirm: () => void;
 }) {
   const isApproved = request?.status === 'approved';
-  const body = isApproved
-    ? 'Cancel this approved vacation? The reserve will be refunded.'
-    : 'Cancel this vacation request?';
   return (
-    <Modal
+    <ConfirmDialog
       open={request !== null}
       title="Cancel request"
-      onClose={onClose}
-      data-testid="vacation-cancel-confirm-dialog"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={onClose}
-            disabled={saving}
-            data-testid="vacation-cancel-dismiss-btn"
-            style={{ flex: 1 }}
-          >
-            Keep it
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="lg"
-            loading={saving}
-            onClick={onConfirm}
-            data-testid="vacation-cancel-confirm-btn"
-            style={{ flex: 1 }}
-          >
-            {saving ? 'Cancelling' : 'Cancel request'}
-          </Button>
-        </>
+      description={
+        isApproved
+          ? 'Cancel this approved vacation? The reserve will be refunded.'
+          : 'Cancel this vacation request?'
       }
-    >
-      <p style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
-        {body}
-      </p>
-    </Modal>
+      acceptBtnText={saving ? 'Cancelling' : 'Cancel request'}
+      declineBtnText="Keep it"
+      busy={saving}
+      closeOnAccept={false}
+      onClose={onClose}
+      onAccept={onConfirm}
+      data-testid="vacation-cancel-confirm-dialog"
+      acceptTestId="vacation-cancel-confirm-btn"
+      declineTestId="vacation-cancel-dismiss-btn"
+    />
   );
 }
 
@@ -878,48 +815,21 @@ function Stat({
   large?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
       <div
         data-testid={testId}
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: large ? 'var(--fs-34)' : 'var(--fs-22)',
+          fontSize: large ? 'var(--headline-4-size)' : 'var(--headline-5-size)',
+          fontWeight: large ? 'var(--headline-4-weight)' : 'var(--headline-5-weight)',
+          letterSpacing: large ? 'var(--headline-4-tracking)' : 'var(--headline-5-tracking)',
           lineHeight: 1,
-          color: 'var(--text)',
+          color: 'var(--text-primary)',
         }}
       >
         {value}
       </div>
-      <div style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>{label}</div>
+      <div style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>{label}</div>
     </div>
   );
 }
 
-/** Static token-colored blocks — the app ships no shimmer/skeleton primitive, matching
- * spec 05's `LoadingSkeleton`. */
-function VacationSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
-  return (
-    <div
-      data-testid="vacation-loading-skeleton"
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)', padding: 'var(--sp-4) 0' }}
-    >
-      <div style={{ ...cardStyle(), display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-        <div style={block(160, 18)} />
-        <div style={block('100%', 14)} />
-        <div style={block('100%', 14)} />
-        <div style={block('70%', 14)} />
-      </div>
-      <div style={{ ...cardStyle(), display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-        <div style={block(140, 18)} />
-        <div style={block('60%', 28)} />
-      </div>
-    </div>
-  );
-}

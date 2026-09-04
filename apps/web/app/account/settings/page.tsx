@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Spinner } from '@/ds';
+import { Preloader } from '@devscribed/ds';
 import { AppShell } from '@/layout/AppShell';
 import { PageHeader } from '@/layout/PageHeader';
 import type { Session } from '@/layout/session-context';
@@ -57,10 +57,9 @@ export default function AccountSettingsPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--accent)',
         }}
       >
-        <Spinner size={28} />
+        <Preloader />
       </div>
     );
   }

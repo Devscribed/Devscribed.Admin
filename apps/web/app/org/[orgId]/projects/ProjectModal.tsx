@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Input, Modal, Select } from '@/ds';
-import { errorNode } from '@/field-error';
+import { Button, FormActions, Modal, Select, TextInput, type SelectOption } from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
 import {
   CLIENT_MESSAGES,
@@ -269,34 +269,90 @@ export function ProjectModal({
     setSubmitting(false);
   }
 
+  const clientSelectOptions: SelectOption[] = [
+    { value: '', label: '— No client —' },
+    ...clientOptions.map((c) => ({ value: c.id, label: c.name })),
+  ];
+
   return (
     <Modal
       open={open}
       title={isEdit ? 'Edit Project' : 'New Project'}
       onClose={handleClose}
-      width={480}
       data-testid="projects-modal"
-      actions={
-        <>
+    >
+      <form
+        onSubmit={submit}
+        noValidate
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}
+      >
+        <TextInput
+          label="Project name"
+          placeholder="e.g. Client Website Redesign"
+          value={name}
+          onChange={(event) => handleNameChange(event.target.value)}
+          onBlur={blurName}
+          readOnly={submitting}
+          autoFocus
+          data-testid="projects-name-input"
+          error={nameError ?? undefined}
+          errorId="field-error-projectName"
+        />
+
+        {/* Client picker (spec organization/01 §Screens). Optional; the first
+            option clears any link. Alphabetical by name (backend returns them
+            sorted, spec 01 §List & search). Hidden when the caller has no
+            clients yet — the empty options list has just "— No client —". */}
+        <Select
+          label="Client (optional)"
+          /* `value` is an option: bound to the raw id this would draw the client's UUID.
+             `optionFor` also keeps `— No client —` *selected* rather than falling back to the
+             placeholder, which is the case its own note calls out — the empty string is a
+             value like any other when the list offers an option for it. */
+          value={optionFor(clientSelectOptions, clientId)}
+          onChange={(option) => {
+            setClientId(valueOf(option));
+            if (clientError) setClientError(null);
+          }}
+          options={clientSelectOptions}
+          isDisabled={submitting}
+          variant="formik"
+          error={clientError !== null}
+          errorMessage={clientError ?? undefined}
+          errorId="field-error-client"
+          data-testid="project-client-select"
+        />
+
+        {!isEdit && (
+          <TextInput
+            label="Project Key"
+            placeholder="e.g. MOB"
+            value={projectKey}
+            onChange={(event) => handleKeyChange(event.target.value)}
+            onBlur={blurKey}
+            readOnly={submitting}
+            data-testid="project-key-input"
+            error={keyError ?? undefined}
+            errorId="field-error-projectKey"
+            hint="2–10 uppercase letters. Enables the board once set."
+            hintId="project-key-hint"
+          />
+        )}
+
+        <FormActions>
           <Button
             type="button"
-            variant="secondary"
-            size="lg"
             onClick={handleClose}
             disabled={submitting}
             data-testid="projects-cancel-btn"
-            style={{ flex: 1 }}
           >
             Cancel
           </Button>
           <Button
             type="submit"
-            form="project-form"
             variant="primary"
-            size="lg"
-            loading={submitting}
+            preloader={submitting}
             data-testid={isEdit ? 'projects-save-btn' : 'projects-create-btn'}
-            style={{ flex: 1 }}
           >
             {isEdit
               ? submitting
@@ -306,91 +362,7 @@ export function ProjectModal({
                 ? 'Creating'
                 : 'Create project'}
           </Button>
-        </>
-      }
-    >
-      <form
-        id="project-form"
-        onSubmit={submit}
-        noValidate
-        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}
-      >
-        <Input
-          label="Project name"
-          placeholder="e.g. Client Website Redesign"
-          value={name}
-          onChange={(event: { target: { value: string } }) => handleNameChange(event.target.value)}
-          onBlur={blurName}
-          readOnly={submitting}
-          autoFocus
-          data-testid="projects-name-input"
-          aria-invalid={nameError ? true : undefined}
-          aria-describedby={nameError ? 'field-error-projectName' : undefined}
-          error={nameError ? errorNode('projectName', nameError) : undefined}
-          style={submitting ? { opacity: 0.55 } : undefined}
-          wrapperStyle={{ gap: 0 }}
-        />
-
-        {/* Client picker (spec organization/01 §Screens). Optional; the first
-            option clears any link. Alphabetical by name (backend returns them
-            sorted, spec 01 §List & search). Hidden when the caller has no
-            clients yet — the empty options list has just "— No client —". */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          <Select
-            label="Client (optional)"
-            value={clientId}
-            onChange={(value: string) => {
-              setClientId(value);
-              if (clientError) setClientError(null);
-            }}
-            options={[
-              { value: '', label: '— No client —' },
-              ...clientOptions.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-            disabled={submitting}
-            data-testid="project-client-select"
-          />
-          {clientError && (
-            <div
-              id="field-error-client"
-              data-testid="field-error-client"
-              style={{
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-12)',
-                color: 'var(--error-500)',
-                marginTop: 5,
-              }}
-            >
-              {clientError}
-            </div>
-          )}
-        </div>
-
-        {!isEdit && (
-          <Input
-            label="Project Key"
-            placeholder="e.g. MOB"
-            value={projectKey}
-            onChange={(event: { target: { value: string } }) => handleKeyChange(event.target.value)}
-            onBlur={blurKey}
-            readOnly={submitting}
-            data-testid="project-key-input"
-            aria-invalid={keyError ? true : undefined}
-            aria-describedby={keyError ? 'field-error-projectKey' : 'project-key-hint'}
-            error={keyError ? errorNode('projectKey', keyError) : undefined}
-            hint={
-              keyError
-                ? undefined
-                : ((
-                    <span id="project-key-hint">
-                      2–10 uppercase letters. Enables the board once set.
-                    </span>
-                  ) as unknown as string)
-            }
-            style={submitting ? { opacity: 0.55 } : undefined}
-            wrapperStyle={{ gap: 0 }}
-          />
-        )}
+        </FormActions>
       </form>
     </Modal>
   );

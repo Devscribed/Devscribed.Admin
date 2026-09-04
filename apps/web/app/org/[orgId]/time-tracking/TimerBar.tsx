@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Select } from '@/ds';
+import { Button, ConfirmDialog, Select, Switch, TextInput } from '@devscribed/ds';
 import { PlayIcon, StopIcon } from '@/layout/icons';
 import { useRunningTimer, type StoppedTimeEntry } from '@/layout/running-timer-context';
 import { useSession } from '@/layout/session-context';
 import { TaskSelector, type TaskSelectorValue } from '@/task-selector/TaskSelector';
+import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
 import {
   TIME_TRACKING_MESSAGES,
@@ -14,7 +15,6 @@ import {
   formatWallClockInTz,
   timerStoppedToast,
 } from '@devscribed/validation';
-import { ConfirmDialog } from './ConfirmDialog';
 import type { AssignableProject } from './types';
 
 const NO_PROJECT = '';
@@ -24,33 +24,23 @@ function projectOptions(projects: AssignableProject[]): { value: string; label: 
   return [{ value: NO_PROJECT, label: '— No project —' }, ...projects.map((p) => ({ value: p.id, label: p.name }))];
 }
 
-/** Amber-primary treatment for "Start timer" — the DS ships no amber `Button` variant
- * (spec 12 DS gap), so this reuses the timer-amber tokens with high-contrast dark ink. */
-const AMBER_BTN: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-  height: 'var(--field-h)',
-  padding: '0 20px',
-  border: '1.5px solid var(--amber-500)',
-  borderRadius: 'var(--radius-lg)',
-  background: 'var(--amber-500)',
-  color: 'var(--ink-900)',
-  fontFamily: 'var(--font-display)',
-  fontWeight: 600,
-  fontSize: 'var(--fs-15)',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-};
-
 /**
- * The quick-actions timer bar (spec 12 = `tt-timer-panel`), the mock's top placement. Two
- * states, both fed by the shared `RunningTimerProvider` so the topbar chip mirrors it:
+ * The quick-actions timer bar (spec 12 = `tt-timer-panel`). Two states, both fed by the shared
+ * `RunningTimerProvider` so the bar's pill and the floating tracker mirror it:
  *  - **Idle:** project select + task + description + "+ Add entry" (opens the modal) +
- *    amber "▶ Start timer".
- *  - **Running:** a large ticking elapsed chip, the editable project/task/description
- *    (PUT on blur), "Discard" (confirm), and red "■ Stop & save".
+ *    "▶ Start timer".
+ *  - **Running:** a ticking elapsed readout, the editable project/task/description
+ *    (PUT on blur), "Discard" (confirm), and "■ Stop & save".
+ *
+ * **"Start timer" is the primary action, not an amber one.** It was amber because the mock's
+ * accent was violet and the timer had to stand apart from it; here the accent *is* the action
+ * colour, and the bar's one committing control is what `variant="primary"` names.
+ *
+ * `--color-tracker-blue` is spent on the *running readout* rather than on any button: the
+ * clock, the dot beside it, and the panel's own edge while a timer is running. That is the
+ * colour `MiniTracker` already paints its counter with, so the clock in this bar and the clock
+ * in the bar above it are the same number in the same ink — which is the whole claim the two
+ * of them make about being one timer.
  *
  * Spec 15 wires a task selector below the project select whenever the chosen project has
  * a board `key`. Selecting a task pins `taskId` on the request body and freezes the
@@ -258,38 +248,46 @@ export function TimerBar({
       <div
         data-testid="tt-timer-panel"
         style={{
-          background: running ? 'var(--tracker-bg)' : 'var(--bg-panel)',
-          border: `1px solid ${running ? 'var(--tracker-border)' : 'var(--border)'}`,
-          borderRadius: 'var(--radius-2xl)',
-          padding: '14px 16px',
-          marginBottom: 18,
+          background: 'var(--surface-card)',
+          // The edge is what says the bar is live: `--border-width-control` in the tracker's
+          // own blue while a timer runs, the hairline every card takes when it does not.
+          border: running
+            ? 'var(--border-width-control) solid var(--color-tracker-blue)'
+            : 'var(--border-width-hairline) solid var(--border-default)',
+          borderRadius: 'var(--radius-l)',
+          padding: 'var(--space-5) var(--space-6)',
+          marginBottom: 'var(--space-6)',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
-          gap: 12,
+          gap: 'var(--space-5)',
         }}
       >
         {running ? (
           <>
             {/* Elapsed chip */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
               <span
                 aria-hidden
                 style={{
                   width: 9,
                   height: 9,
-                  borderRadius: '50%',
-                  background: 'var(--tracker)',
-                  animation: 'tt-pulse 1.6s ease-in-out infinite',
+                  borderRadius: 'var(--radius-circle)',
+                  background: 'var(--color-tracker-blue)',
+                  // The keyframes are in `globals.css`, not appended to `<head>` from here —
+                  // §69's rule, and the reason this dot was static: `tt-pulse` was named at
+                  // this call site and defined nowhere, so it has never once pulsed.
+                  animation: 'tt-pulse 1.6s var(--ease-standard) infinite',
                 }}
               />
               <span
                 data-testid="tt-timer-elapsed"
                 style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 'var(--fs-18)',
-                  fontWeight: 600,
-                  color: 'var(--amber-700)',
+                  // §77 — a clock is a number, and a number that has to line up takes
+                  // tabular figures on the base family rather than a second, monospace one.
+                  fontSize: 'var(--font-size-l)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  color: 'var(--color-tracker-blue)',
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
@@ -299,11 +297,7 @@ export function TimerBar({
                   "Non-billable · started HH:MM" when off, "started HH:MM" when on. */}
               <span
                 data-testid="running-timer-status-line"
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-12)',
-                  color: 'var(--text-muted)',
-                }}
+                style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
               >
                 {runBillable ? '' : 'Non-billable · '}started{' '}
                 {timer ? formatWallClockInTz(timer.startedAt, tz) : ''}
@@ -312,10 +306,11 @@ export function TimerBar({
 
             <div style={{ minWidth: 180, flex: '1 1 180px' }}>
               <Select
-                value={runProjectId}
+                value={optionFor(options, runProjectId)}
                 options={options}
                 placeholder="Select project…"
-                onChange={(value: string) => {
+                onChange={(option) => {
+                  const value = valueOf(option);
                   setRunProjectId(value);
                   pushUpdate({ projectId: value });
                 }}
@@ -345,10 +340,11 @@ export function TimerBar({
               </div>
             )}
             <div style={{ minWidth: 160, flex: '1 1 160px' }}>
-              <Input
+              <TextInput
                 value={runTaskDisplay}
                 placeholder="What are you working on?"
-                onChange={(e: { target: { value: string } }) => {
+                aria-label="Task"
+                onChange={(e) => {
                   if (runTaskSelection) return; // readOnly when a task is linked
                   setRunTask(e.target.value);
                 }}
@@ -357,41 +353,38 @@ export function TimerBar({
                 }}
                 readOnly={runTaskSelection !== null}
                 data-testid="tt-timer-task-input"
-                wrapperStyle={{ gap: 0 }}
               />
             </div>
             <div style={{ minWidth: 160, flex: '1 1 200px' }}>
-              <Input
+              <TextInput
                 value={runDescription}
                 placeholder="Description"
-                onChange={(e: { target: { value: string } }) => setRunDescription(e.target.value)}
+                aria-label="Description"
+                onChange={(e) => setRunDescription(e.target.value)}
                 onBlur={() => pushUpdate({})}
                 data-testid="tt-timer-description-input"
-                wrapperStyle={{ gap: 0 }}
               />
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', marginLeft: 'auto', alignItems: 'center' }}>
               {/* Spec 16 §Layout — inline billable toggle before Stop. */}
-              <BillablePill
+              <Switch
                 checked={runBillable}
                 onChange={toggleRunningBillable}
-                testId="running-timer-billable-toggle"
+                label="Billable"
+                data-testid="running-timer-billable-toggle"
               />
-              <Button
-                variant="ghost"
-                onClick={() => setDiscardOpen(true)}
-                data-testid="tt-timer-discard-btn"
-              >
+              <Button onClick={() => setDiscardOpen(true)} data-testid="tt-timer-discard-btn">
                 Discard
               </Button>
               <Button
-                variant="danger"
-                loading={stopping}
+                variant="delete"
+                icon={<StopIcon />}
+                preloader={stopping}
                 onClick={() => void handleStop()}
                 data-testid="tt-timer-stop-btn"
               >
-                <StopIcon /> Stop &amp; save
+                Stop &amp; save
               </Button>
             </div>
           </>
@@ -399,11 +392,11 @@ export function TimerBar({
           <>
             <div style={{ minWidth: 180, flex: '1 1 180px' }}>
               <Select
-                value={projectId}
+                value={optionFor(options, projectId)}
                 options={options}
                 placeholder="Select project…"
-                onChange={(value: string) => {
-                  setProjectId(value);
+                onChange={(option) => {
+                  setProjectId(valueOf(option));
                   // Spec 15 FR-14/FR-16 — clearing/changing the project clears the
                   // task selection (a task belongs to exactly one project); the
                   // free-text `task` retains its current value and stays editable.
@@ -434,114 +427,71 @@ export function TimerBar({
               </div>
             )}
             <div style={{ minWidth: 160, flex: '1 1 160px' }}>
-              <Input
+              <TextInput
                 value={idleTaskDisplay}
                 placeholder="What are you working on?"
-                onChange={(e: { target: { value: string } }) => {
+                aria-label="Task"
+                onChange={(e) => {
                   if (taskSelection) return; // readOnly when a task is linked
                   setTask(e.target.value);
                 }}
                 readOnly={taskSelection !== null}
                 data-testid="tt-timer-task-input"
-                wrapperStyle={{ gap: 0 }}
               />
             </div>
             <div style={{ minWidth: 160, flex: '1 1 200px' }}>
-              <Input
+              <TextInput
                 value={description}
                 placeholder="Description"
-                onChange={(e: { target: { value: string } }) => setDescription(e.target.value)}
+                aria-label="Description"
+                onChange={(e) => setDescription(e.target.value)}
                 data-testid="tt-timer-description-input"
-                wrapperStyle={{ gap: 0 }}
               />
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', marginLeft: 'auto', alignItems: 'center' }}>
               {/* Spec 16 — the idle state's billable toggle seeds the start body. */}
-              <BillablePill
+              <Switch
                 checked={idleBillable}
                 onChange={setIdleBillable}
-                testId="tt-timer-idle-billable-toggle"
+                label="Billable"
+                data-testid="tt-timer-idle-billable-toggle"
               />
-              <Button variant="ghost" onClick={onAddEntry} data-testid="tt-add-entry-btn">
+              <Button onClick={onAddEntry} data-testid="tt-add-entry-btn">
                 + Add entry
               </Button>
-              <button
-                type="button"
-                onClick={() => void handleStart()}
+              <Button
+                variant="primary"
+                icon={<PlayIcon />}
+                preloader={starting}
                 disabled={starting}
+                onClick={() => void handleStart()}
                 data-testid="tt-timer-start-btn"
-                style={{ ...AMBER_BTN, opacity: starting ? 0.55 : 1, cursor: starting ? 'progress' : 'pointer' }}
               >
-                <PlayIcon /> Start timer
-              </button>
+                Start timer
+              </Button>
             </div>
           </>
         )}
       </div>
 
+      {/* §41 — the timer is gone only when the server says so, so this one awaits its result:
+          `busy` blocks both controls and `closeOnAccept={false}` leaves the dialog standing
+          until `handleDiscardConfirm` closes it. */}
       <ConfirmDialog
         open={discardOpen}
         title="Discard timer"
-        message={TIME_TRACKING_MESSAGES.discardConfirm}
-        confirmLabel="Discard"
+        description={TIME_TRACKING_MESSAGES.discardConfirm}
+        acceptBtnText="Discard"
+        declineBtnText="Cancel"
+        acceptTestId="tt-timer-discard-confirm"
+        declineTestId="tt-timer-discard-cancel"
         busy={discarding}
-        onConfirm={() => void handleDiscardConfirm()}
+        closeOnAccept={false}
+        onAccept={() => void handleDiscardConfirm()}
         onClose={() => setDiscardOpen(false)}
       />
     </>
-  );
-}
-
-/**
- * Spec 16 — a compact billable pill for the timer bar. Uses the same `role="switch"`
- * primitive as the entry modal's BillableSwitch (kept inline in each surface — two call
- * sites don't yet warrant a shared component; a third would). Painted narrower to fit
- * the crowded running-timer row.
- */
-function BillablePill({
-  checked,
-  onChange,
-  testId,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  testId: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      data-testid={testId}
-      onClick={() => onChange(!checked)}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        height: 34,
-        padding: '0 12px',
-        border: `1.5px solid ${checked ? 'var(--accent)' : 'var(--border-strong)'}`,
-        borderRadius: 'var(--radius-lg)',
-        background: checked ? 'var(--accent-soft)' : 'var(--bg-panel)',
-        color: checked ? 'var(--accent)' : 'var(--text-sub)',
-        fontFamily: 'var(--font-display)',
-        fontWeight: 500,
-        fontSize: 'var(--fs-13)',
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          background: checked ? 'var(--accent)' : 'var(--text-muted)',
-        }}
-      />
-      Billable
-    </button>
   );
 }
 

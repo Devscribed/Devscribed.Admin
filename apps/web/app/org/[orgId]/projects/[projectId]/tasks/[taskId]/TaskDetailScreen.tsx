@@ -5,9 +5,25 @@ import Link from 'next/link';
 import { notFound, useRouter } from 'next/navigation';
 import { marked } from 'marked';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, InfoBanner, Input, Modal, Select, Spinner } from '@/ds';
 import {
-  BackArrowIcon,
+  Avatar,
+  BackTo,
+  Button,
+  Chip,
+  ConfirmDialog,
+  IconButton,
+  Popover,
+  InfoBanner,
+  fieldLabelStyle,
+  PageTitle,
+  Preloader,
+  Select,
+  TextArea,
+  TextInput,
+  type SelectOption,
+} from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
+import {
   CheckIcon,
   EyeIcon,
   PencilIcon,
@@ -33,14 +49,12 @@ import {
   validateTaskDescription,
   validateTaskTitle,
   type Role,
-  type TaskPriority,
   type TaskType,
 } from '@devscribed/validation';
 import { useRunningTimer } from '@/layout/running-timer-context';
-import { AvatarInitials } from '../../../../members/[memberId]/AvatarInitials';
 import type { MemberListResponse } from '../../../../members/types';
 import { CreateTaskModal, type OrgMember } from '../../kanban/CreateTaskModal';
-import { LabelChip } from '../../kanban/LabelChip';
+import { labelChipStyle } from '../../kanban/LabelStrip';
 import type {
   BoardResponse,
   KanbanColumn,
@@ -56,7 +70,6 @@ import type {
 } from '../../kanban/types';
 import {
   PRIORITY_LABEL,
-  PriorityGlyph,
   TASK_TYPE_LABEL,
   TaskTypeGlyph,
   formatDateLong,
@@ -676,59 +689,72 @@ export function TaskDetailScreen({
 
   if (error && !task) {
     return (
-      <div data-testid="task-detail" style={{ padding: 'var(--sp-8)' }}>
-        <InfoBanner tone="error">{error}</InfoBanner>
+      <div data-testid="task-detail" style={{ padding: 'var(--space-8)' }}>
+        <InfoBanner variant="error">{error}</InfoBanner>
       </div>
     );
   }
 
   if (!task) {
     return (
-      <div data-testid="task-detail" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--sp-12)' }}>
-        <Spinner />
+      <div data-testid="task-detail" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-12)' }}>
+        <Preloader aria-label="Loading task" />
       </div>
     );
   }
 
   const displayKey = project ? formatTaskKey(project.key, task.taskNumber) : task.key;
 
+  /* `Select` deals in options, not in the values behind them: `value` is rendered with the
+     option's own label, so binding these directly would draw `task`, `high` and a membership
+     UUID where the lists say `Task`, `High` and a person's name. `optionFor` is the crossing,
+     and the lists are hoisted so both sides read the same array. */
+  const statusOptions: SelectOption[] = columns.map((c) => ({ value: c.id, label: c.name }));
+  const assigneeOptions: SelectOption[] = [
+    { value: '', label: 'Unassigned' },
+    ...members.map((m) => ({
+      value: m.membershipId,
+      label: `${m.firstName} ${m.lastName}`,
+    })),
+  ];
+  const priorityOptions: SelectOption[] = [
+    { value: '', label: 'None' },
+    ...TASK_PRIORITIES.map((pr) => ({ value: pr, label: PRIORITY_LABEL[pr] })),
+  ];
+  const typeOptions: SelectOption[] = TASK_TYPES.map((t) => ({
+    value: t,
+    label: TASK_TYPE_LABEL[t],
+  }));
+
   return (
     <div data-testid="task-detail" style={{ maxWidth: 1200, margin: '0 auto' }}>
-      <Link
+      <BackTo
+        label="Back to board"
         href={`/org/${orgId}/projects/${projectId}/board`}
         data-testid="task-back-link"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: 'var(--fs-14)',
-          color: 'var(--accent)',
-          textDecoration: 'none',
-          marginBottom: 'var(--sp-6)',
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+          event.preventDefault();
+          router.push(`/org/${orgId}/projects/${projectId}/board`);
         }}
-      >
-        <BackArrowIcon />
-        Back to board
-      </Link>
+      />
 
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 3fr) minmax(280px, 2fr)',
-          gap: 'var(--sp-8)',
+          gap: 'var(--space-8)',
         }}
       >
         {/* Left column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
             <span
               data-testid="task-key"
               style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-family-mono)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-secondary)',
               }}
             >
               {displayKey}
@@ -739,13 +765,12 @@ export function TaskDetailScreen({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                background: 'var(--bg-sunken)',
+                background: 'var(--surface-sunken)',
                 borderRadius: 999,
                 padding: '2px 10px',
-                fontSize: 'var(--fs-12)',
-                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--font-size-xs)',
                 fontWeight: 500,
-                color: 'var(--text-muted)',
+                color: 'var(--text-secondary)',
               }}
             >
               <TaskTypeGlyph type={task.type} size={14} />
@@ -755,10 +780,10 @@ export function TaskDetailScreen({
 
           {/* Title */}
           {editingTitle && !readOnly ? (
-            <Input
+            <TextInput
               autoFocus
               value={titleDraft}
-              onChange={(event: { target: { value: string } }) => {
+              onChange={(event) => {
                 setTitleDraft(event.target.value);
                 if (titleError) setTitleError(null);
               }}
@@ -771,28 +796,23 @@ export function TaskDetailScreen({
                 }
               }}
               onBlur={() => saveTitle()}
+              aria-label="Task title"
               data-testid="task-title-input"
-              aria-invalid={titleError ? true : undefined}
               error={titleError ?? undefined}
-              style={{ fontSize: 'var(--fs-22)' }}
-              wrapperStyle={{ gap: 0 }}
+              errorId="field-error-task-title"
+              style={{ fontSize: 'var(--font-size-l)' }}
             />
           ) : (
-            <h1
+            /* §17 — the page's one `<h1>`, whose type steps with the viewport. The screen was
+               fixing it at 27px, which is a size the scale does not have and a heading that
+               does not step. */
+            <PageTitle
               data-testid="task-title"
               onClick={() => !readOnly && setEditingTitle(true)}
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: 'var(--fs-27)',
-                letterSpacing: '-.6px',
-                color: 'var(--text)',
-                margin: 0,
-                cursor: readOnly ? 'default' : 'pointer',
-              }}
+              style={{ margin: 0, cursor: readOnly ? 'default' : 'pointer' }}
             >
               {task.title}
-            </h1>
+            </PageTitle>
           )}
 
           {/* Description */}
@@ -802,80 +822,55 @@ export function TaskDetailScreen({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: 'var(--sp-3)',
+                marginBottom: 'var(--space-4)',
               }}
             >
               <span
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-11)',
-                  letterSpacing: 1,
-                  textTransform: 'uppercase',
-                  color: 'var(--text-muted)',
-                }}
+                style={fieldLabelStyle}
               >
                 Description
               </span>
               {!editingDescription && !readOnly && (
-                <button
-                  type="button"
+                <IconButton
+                  label="Edit description"
                   onClick={() => {
                     setEditingDescription(true);
                     setDescriptionDraft(task.description ?? '');
                     setDescriptionError(null);
                   }}
                   data-testid="task-description-edit-btn"
-                  aria-label="Edit description"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-muted)',
-                    padding: 4,
-                  }}
                 >
                   <PencilIcon />
-                </button>
+                </IconButton>
               )}
             </div>
             {editingDescription ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-                <textarea
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                {/* §25 — the box, its ring, its error node and the `aria-describedby` that
+                    ties them together are the component's. The monospace face stays: this
+                    holds Markdown, which is source text, and that is §77's mono half. */}
+                <TextArea
                   data-testid="task-description-input"
+                  aria-label="Description"
                   value={descriptionDraft}
                   onChange={(e) => {
                     setDescriptionDraft(e.target.value);
                     if (descriptionError) setDescriptionError(null);
                   }}
                   rows={10}
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--fs-13)',
-                    color: 'var(--text)',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '12px',
-                    resize: 'vertical',
-                  }}
+                  error={descriptionError ?? undefined}
+                  errorId="field-error-task-description"
+                  style={{ fontFamily: 'var(--font-family-mono)' }}
                 />
-                {descriptionError && (
-                  <span style={{ color: 'var(--error-500)', fontSize: 'var(--fs-12)' }}>
-                    {descriptionError}
-                  </span>
-                )}
-                <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
                   <Button
                     variant="primary"
-                    size="sm"
                     onClick={saveDescription}
                     data-testid="task-description-save-btn"
                   >
                     Save
                   </Button>
                   <Button
-                    variant="ghost"
-                    size="sm"
                     onClick={() => {
                       setEditingDescription(false);
                       setDescriptionDraft(task.description ?? '');
@@ -891,12 +886,12 @@ export function TaskDetailScreen({
               <div
                 data-testid="task-description"
                 style={{
-                  padding: task.description ? 'var(--sp-4)' : 0,
-                  background: task.description ? 'var(--bg-panel-2)' : 'transparent',
-                  border: task.description ? '1px solid var(--divider)' : 'none',
-                  borderRadius: 'var(--radius-lg)',
-                  fontSize: 'var(--fs-14)',
-                  color: task.description ? 'var(--text)' : 'var(--text-faint)',
+                  padding: task.description ? 'var(--space-5)' : 0,
+                  background: task.description ? 'var(--surface-sunken)' : 'transparent',
+                  border: task.description ? '1px solid var(--border-subtle)' : 'none',
+                  borderRadius: 'var(--radius-l)',
+                  fontSize: 'var(--font-size-s)',
+                  color: task.description ? 'var(--text-primary)' : 'var(--text-tertiary)',
                   fontStyle: task.description ? 'normal' : 'italic',
                   lineHeight: 1.55,
                 }}
@@ -913,14 +908,7 @@ export function TaskDetailScreen({
           {/* Children */}
           <div data-testid="task-children-section">
             <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-                marginBottom: 'var(--sp-3)',
-              }}
+              style={{ ...fieldLabelStyle, marginBottom: 'var(--space-4)' }}
             >
               Children ({task.children.length})
             </div>
@@ -928,10 +916,10 @@ export function TaskDetailScreen({
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                border: task.children.length ? '1px solid var(--divider)' : 'none',
-                borderRadius: 'var(--radius-lg)',
+                border: task.children.length ? '1px solid var(--border-subtle)' : 'none',
+                borderRadius: 'var(--radius-l)',
                 overflow: 'hidden',
-                marginBottom: 'var(--sp-3)',
+                marginBottom: 'var(--space-4)',
               }}
             >
               {task.children.map((child, i) => (
@@ -949,8 +937,6 @@ export function TaskDetailScreen({
             </div>
             {!readOnly && task.type !== 'epic' && task.type !== 'subtask' && (
               <Button
-                variant="ghost"
-                size="sm"
                 onClick={() => setAddSubtaskOpen(true)}
                 data-testid="task-add-subtask-btn"
               >
@@ -1024,7 +1010,7 @@ export function TaskDetailScreen({
             top: 20,
             display: 'flex',
             flexDirection: 'column',
-            gap: 'var(--sp-5)',
+            gap: 'var(--space-6)',
             alignSelf: 'flex-start',
           }}
         >
@@ -1037,16 +1023,19 @@ export function TaskDetailScreen({
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 'var(--sp-2)',
+                  gap: 'var(--space-3)',
                   alignSelf: 'flex-start',
-                  padding: '8px 14px',
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--tracker-bg)',
-                  border: '1px solid var(--tracker-border)',
-                  color: 'var(--amber-700)',
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 600,
-                  fontSize: 'var(--fs-13)',
+                  padding: 'var(--space-4) var(--space-6)',
+                  borderRadius: 'var(--radius-l)',
+                  /* The amber tracker family does not survive the merge. Phase 4 spent
+                     `--color-tracker-blue` on the running readout — the clock in the timer bar
+                     and the one in the navbar — and this link is the third place the same
+                     timer says it is running, so it is the same ink. */
+                  background: 'var(--surface-card)',
+                  border: 'var(--border-width-control) solid var(--color-tracker-blue)',
+                  color: 'var(--color-tracker-blue)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  fontSize: 'var(--font-size-xs)',
                   textDecoration: 'none',
                 }}
               >
@@ -1055,7 +1044,7 @@ export function TaskDetailScreen({
             ) : (
               <Button
                 variant="primary"
-                loading={startingTimer}
+                preloader={startingTimer}
                 onClick={() => void handleStartTimer()}
                 data-testid="task-start-timer-btn"
               >
@@ -1069,87 +1058,84 @@ export function TaskDetailScreen({
 
           <SidePanelField label="Status">
             <Select
-              value={task.columnId}
-              options={columns.map((c) => ({ value: c.id, label: c.name }))}
-              onChange={(v) => void patchTask({ columnId: v })}
-              disabled={readOnly}
+              value={optionFor(statusOptions, task.columnId)}
+              options={statusOptions}
+              onChange={(v) => void patchTask({ columnId: valueOf(v) })}
+              isDisabled={readOnly}
+              variant="formik"
               data-testid="task-status-select"
             />
           </SidePanelField>
 
           <SidePanelField label="Assignee">
             <Select
-              value={task.assignee?.membershipId ?? ''}
+              value={optionFor(assigneeOptions, task.assignee?.membershipId ?? '')}
               placeholder="Unassigned"
-              options={[
-                { value: '', label: 'Unassigned' },
-                ...members.map((m) => ({
-                  value: m.membershipId,
-                  label: `${m.firstName} ${m.lastName}`,
-                })),
-              ]}
-              onChange={(v) => void patchTask({ assigneeId: v || null })}
-              disabled={readOnly}
+              options={assigneeOptions}
+              onChange={(v) => void patchTask({ assigneeId: valueOf(v) || null })}
+              isDisabled={readOnly}
+              /* Deliberately not `isSearchable`: §21 puts the control's own attributes on the
+                 inner `<input>` when it is, and the chosen value then sits in a sibling span —
+                 so the picker stops *containing* the name it is showing. */
+              variant="formik"
               data-testid="task-assignee-select"
             />
           </SidePanelField>
 
           <SidePanelField label="Priority">
             <Select
-              value={task.priority ?? ''}
+              value={optionFor(priorityOptions, task.priority ?? '')}
               placeholder="None"
-              options={[
-                { value: '', label: 'None' },
-                ...TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] })),
-              ]}
-              onChange={(v) => void patchTask({ priority: v || null })}
-              disabled={readOnly}
+              options={priorityOptions}
+              onChange={(v) => void patchTask({ priority: valueOf(v) || null })}
+              isDisabled={readOnly}
+              variant="formik"
               data-testid="task-priority-select"
             />
           </SidePanelField>
 
           <SidePanelField label="Type">
             <Select
-              value={task.type}
-              options={TASK_TYPES.map((t) => ({ value: t, label: TASK_TYPE_LABEL[t] }))}
-              onChange={(v) => void patchTask({ type: v as TaskType })}
-              disabled={readOnly}
+              value={optionFor(typeOptions, task.type)}
+              options={typeOptions}
+              onChange={(v) => void patchTask({ type: valueOf(v) as TaskType })}
+              isDisabled={readOnly}
+              variant="formik"
               data-testid="task-type-select"
             />
           </SidePanelField>
 
           <SidePanelField label="Story Points">
-            <Input
+            <TextInput
               type="number"
               min={0}
               max={999}
               step={1}
               value={storyPointsDraft}
-              onChange={(event: { target: { value: string } }) =>
-                handleStoryPointsChange(event.target.value)
-              }
+              onChange={(event) => handleStoryPointsChange(event.target.value)}
               readOnly={readOnly}
               disabled={readOnly}
+              aria-label="Story points"
               data-testid="task-story-points-input"
-              aria-invalid={storyPointsError ? true : undefined}
               error={storyPointsError ?? undefined}
-              wrapperStyle={{ gap: 0 }}
+              errorId="field-error-task-story-points"
             />
           </SidePanelField>
 
           <SidePanelField label="Due Date">
-            <Input
+            {/* §4 carries the whole field treatment through `type`; the control under it is
+                still the platform's date input, which is the shape Phase 5 settled when it
+                refused `DateField`. */}
+            <TextInput
               type="date"
               value={dueDateDraft}
-              onChange={(event: { target: { value: string } }) =>
-                handleDueDateChange(event.target.value)
-              }
+              onChange={(event) => handleDueDateChange(event.target.value)}
               readOnly={readOnly}
               disabled={readOnly}
+              aria-label="Due date"
               data-testid="task-due-date-input"
-              aria-invalid={dueDateError ? true : undefined}
               error={dueDateError ?? undefined}
-              wrapperStyle={{ gap: 0 }}
+              errorId="field-error-task-due-date"
             />
           </SidePanelField>
 
@@ -1159,16 +1145,15 @@ export function TaskDetailScreen({
                 href={`/org/${orgId}/projects/${projectId}/tasks/${task.parent.id}`}
                 data-testid="task-parent-link"
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--accent)',
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--color-blue)',
                   textDecoration: 'none',
                 }}
               >
                 {task.parent.key}: {task.parent.title}
               </Link>
             ) : (
-              <span data-testid="task-parent-link" style={{ color: 'var(--text-faint)' }}>
+              <span data-testid="task-parent-link" style={{ color: 'var(--text-tertiary)' }}>
                 None
               </span>
             )}
@@ -1178,20 +1163,20 @@ export function TaskDetailScreen({
             {task.reporter ? (
               <div
                 data-testid="task-reporter"
-                style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}
               >
-                <AvatarInitials
-                  fullName={`${task.reporter.firstName} ${task.reporter.lastName}`}
+                <Avatar
+                  name={`${task.reporter.firstName} ${task.reporter.lastName}`}
                   initials={initialsOfMember(task.reporter)}
                   size={22}
                   data-testid={`task-reporter-avatar-${task.reporter.membershipId}`}
                 />
-                <span style={{ fontSize: 'var(--fs-13)', color: 'var(--text)' }}>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)' }}>
                   {task.reporter.firstName} {task.reporter.lastName}
                 </span>
               </div>
             ) : (
-              <span data-testid="task-reporter" style={{ color: 'var(--text-faint)' }}>
+              <span data-testid="task-reporter" style={{ color: 'var(--text-tertiary)' }}>
                 —
               </span>
             )}
@@ -1200,7 +1185,7 @@ export function TaskDetailScreen({
           <SidePanelField label="Created">
             <span
               data-testid="task-created-date"
-              style={{ fontSize: 'var(--fs-13)', color: 'var(--text)' }}
+              style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)' }}
             >
               {formatDateLong(task.createdAt)}
             </span>
@@ -1213,126 +1198,88 @@ export function TaskDetailScreen({
             style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}
           >
             <span
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-              }}
+              style={fieldLabelStyle}
             >
               Labels
             </span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
               {(task.labels ?? []).map((label) => (
-                <LabelChip
+                <Chip
                   key={label.id}
-                  label={label}
-                  size="md"
-                  testId={`task-label-chip-${label.id}`}
+                  label={label.name}
+                  data-testid={`task-label-chip-${label.id}`}
                   removeTestId={`task-label-remove-${label.id}`}
+                  removeLabel={`Remove label ${label.name}`}
                   onRemove={!readOnly ? () => void removeLabel(label.id) : undefined}
+                  style={labelChipStyle(label.color)}
                 />
               ))}
               {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => setLabelPickerOpen((v) => !v)}
+                /* §22 — the third hand-built anchored menu this merge has collapsed, after
+                    `MemberRowActions` and `RowMenu`. It was a trigger, a panel, an
+                    outside-click listener and a row loop, with no arrow keys, no `Escape` and
+                    no focus return; `Popover` has all three and escapes its scroller through
+                    the body (§55), which matters in a side panel that scrolls.
+                    The panel itself is `role="menu"` and the component does not tag it — see
+                    the note in the record about `task-label-picker`. */
+                <Popover
+                  label="Add label"
                   data-testid="task-label-add-btn"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    background: 'transparent',
-                    border: '1px dashed var(--border)',
-                    borderRadius: 999,
-                    padding: '3px 10px',
-                    color: 'var(--text-muted)',
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 'var(--fs-12)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <PlusIcon size={10} />
-                  Add label
-                </button>
-              )}
-              {(task.labels ?? []).length === 0 && readOnly && (
-                <span style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-13)' }}>—</span>
-              )}
-            </div>
-            {labelPickerOpen && !readOnly && (
-              <div
-                data-testid="task-label-picker"
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 6px)',
-                  left: 0,
-                  right: 0,
-                  zIndex: 40,
-                  background: 'var(--bg-panel)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-pop)',
-                  padding: 'var(--sp-2)',
-                  maxHeight: 240,
-                  overflowY: 'auto',
-                }}
-              >
-                {availableLabels.length === 0 ? (
-                  <div
-                    style={{
-                      padding: 'var(--sp-3)',
-                      color: 'var(--text-muted)',
-                      fontSize: 'var(--fs-12)',
-                    }}
-                  >
-                    No labels available.
-                  </div>
-                ) : (
-                  availableLabels.map((label) => (
-                    <button
-                      key={label.id}
-                      type="button"
-                      onClick={() => void assignLabel(label)}
-                      data-testid={`task-label-picker-option-${label.id}`}
+                  trigger={
+                    <span
                       style={{
-                        display: 'flex',
+                        display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 8,
-                        width: '100%',
-                        padding: '6px 8px',
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        borderRadius: 'var(--radius-sm)',
-                        textAlign: 'left',
+                        gap: 'var(--space-1)',
+                        border: 'var(--border-width-hairline) dashed var(--border-default)',
+                        borderRadius: 'var(--radius-pill)',
+                        padding: 'var(--space-1) var(--space-4)',
+                        color: 'var(--text-secondary)',
+                        fontSize: 'var(--font-size-xs)',
                       }}
                     >
-                      <span
-                        aria-hidden
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          background: label.color,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-display)',
-                          fontSize: 'var(--fs-13)',
-                          color: 'var(--text)',
-                        }}
-                      >
-                        {label.name}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+                      <PlusIcon size={10} />
+                      Add label
+                    </span>
+                  }
+                  items={
+                    availableLabels.length === 0
+                      ? [{ label: 'No labels available.', disabled: true }]
+                      : availableLabels.map((label) => ({
+                          key: label.id,
+                          testId: `task-label-picker-option-${label.id}`,
+                          onSelect: () => void assignLabel(label),
+                          label: (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-3)',
+                              }}
+                            >
+                              <span
+                                aria-hidden
+                                style={{
+                                  /* @literal a 10px dot, sized against the row's own text
+                                     rather than against the page. */
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: 'var(--radius-circle)',
+                                  background: label.color,
+                                  flexShrink: 0,
+                                }}
+                              />
+                              {label.name}
+                            </span>
+                          ),
+                        }))
+                  }
+                />
+              )}
+              {(task.labels ?? []).length === 0 && readOnly && (
+                <span style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-size-xs)' }}>—</span>
+              )}
+            </div>
           </div>
 
           {/* Watchers section (spec 14 — side panel). */}
@@ -1345,12 +1292,11 @@ export function TaskDetailScreen({
 
           {!readOnly && (
             <>
-              <div style={{ borderTop: '1px solid var(--divider)', margin: '0' }} />
+              <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '0' }} />
               <Button
-                variant="ghost"
                 onClick={() => setDeleteOpen(true)}
                 data-testid="task-delete-btn"
-                style={{ color: 'var(--error-500)' }}
+                style={{ color: 'var(--status-error)' }}
               >
                 Delete task
               </Button>
@@ -1359,40 +1305,23 @@ export function TaskDetailScreen({
         </aside>
       </div>
 
-      <Modal
+      {/* Both confirmations take §41's pair: each awaits a result the reader has to see, so
+          `busy` blocks the controls and `closeOnAccept={false}` leaves the dialog standing
+          until the screen has the answer. */}
+      <ConfirmDialog
         open={deleteOpen}
-        onClose={() => !deleting && setDeleteOpen(false)}
         title="Delete task"
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              size="lg"
-              disabled={deleting}
-              onClick={() => setDeleteOpen(false)}
-              data-testid="task-delete-cancel"
-              style={{ flex: 1 }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="lg"
-              loading={deleting}
-              onClick={confirmDelete}
-              data-testid="task-delete-confirm"
-              style={{ flex: 1 }}
-            >
-              Delete task
-            </Button>
-          </>
-        }
-      >
-        <p style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
-          Are you sure you want to delete &quot;{displayKey}: {task.title}&quot;? This action
-          cannot be undone. Subtasks will be detached.
-        </p>
-      </Modal>
+        description={`Are you sure you want to delete "${displayKey}: ${task.title}"? This action cannot be undone. Subtasks will be detached.`}
+        acceptBtnText={deleting ? 'Deleting' : 'Delete task'}
+        declineBtnText="Cancel"
+        busy={deleting}
+        closeOnAccept={false}
+        onClose={() => !deleting && setDeleteOpen(false)}
+        onAccept={confirmDelete}
+        data-testid="task-delete-dialog"
+        acceptTestId="task-delete-confirm"
+        declineTestId="task-delete-cancel"
+      />
 
       {addSubtaskOpen && (
         <CreateTaskModal
@@ -1409,41 +1338,20 @@ export function TaskDetailScreen({
         />
       )}
 
-      <Modal
+      <ConfirmDialog
         open={deleteCommentTarget !== null}
-        onClose={() => !deletingComment && setDeleteCommentTarget(null)}
         title="Delete comment"
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              size="lg"
-              disabled={deletingComment}
-              onClick={() => setDeleteCommentTarget(null)}
-              data-testid="task-comment-delete-cancel"
-              style={{ flex: 1 }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="lg"
-              loading={deletingComment}
-              onClick={() =>
-                deleteCommentTarget && void confirmDeleteComment(deleteCommentTarget)
-              }
-              data-testid="task-comment-delete-confirm"
-              style={{ flex: 1 }}
-            >
-              Delete comment
-            </Button>
-          </>
-        }
-      >
-        <p style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
-          {COMMENT_DELETE_CONFIRM}
-        </p>
-      </Modal>
+        description={COMMENT_DELETE_CONFIRM}
+        acceptBtnText={deletingComment ? 'Deleting' : 'Delete comment'}
+        declineBtnText="Cancel"
+        busy={deletingComment}
+        closeOnAccept={false}
+        onClose={() => !deletingComment && setDeleteCommentTarget(null)}
+        onAccept={() => deleteCommentTarget && void confirmDeleteComment(deleteCommentTarget)}
+        data-testid="task-comment-delete-dialog"
+        acceptTestId="task-comment-delete-confirm"
+        declineTestId="task-comment-delete-cancel"
+      />
     </div>
   );
 }
@@ -1458,13 +1366,7 @@ function SidePanelField({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-11)',
-          letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: 'var(--text-muted)',
-        }}
+        style={fieldLabelStyle}
       >
         {label}
       </span>
@@ -1491,9 +1393,9 @@ function ChildRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 'var(--sp-3)',
+        gap: 'var(--space-4)',
         padding: '10px 14px',
-        borderTop: first ? 'none' : '1px solid var(--divider)',
+        borderTop: first ? 'none' : '1px solid var(--border-subtle)',
         background: 'transparent',
         border: 'none',
         borderTopWidth: first ? 0 : 1,
@@ -1505,9 +1407,9 @@ function ChildRow({
         style={{
           width: 18,
           height: 18,
-          borderRadius: 'var(--radius-sm)',
-          border: `1px solid ${isDone ? 'var(--success-500)' : 'var(--border)'}`,
-          color: isDone ? 'var(--success-500)' : 'transparent',
+          borderRadius: 'var(--radius-s)',
+          border: `1px solid ${isDone ? 'var(--status-success)' : 'var(--border-default)'}`,
+          color: isDone ? 'var(--status-success)' : 'transparent',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -1518,9 +1420,9 @@ function ChildRow({
       </span>
       <span
         style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 'var(--fs-12)',
-          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-family-mono)',
+          fontSize: 'var(--font-size-xs)',
+          color: 'var(--text-secondary)',
           minWidth: 60,
         }}
       >
@@ -1530,8 +1432,8 @@ function ChildRow({
       <span
         style={{
           flex: 1,
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text)',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-primary)',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -1540,8 +1442,8 @@ function ChildRow({
         {child.title}
       </span>
       {child.assignee && (
-        <AvatarInitials
-          fullName={`${child.assignee.firstName} ${child.assignee.lastName}`}
+        <Avatar
+          name={`${child.assignee.firstName} ${child.assignee.lastName}`}
           initials={initialsOfMember(child.assignee)}
           size={22}
           data-testid={`task-child-assignee-${child.id}`}
@@ -1596,52 +1498,31 @@ function CommentsSection({
 }) {
   const canDeleteAny = role === 'admin' || role === 'manager';
   return (
-    <div data-testid="task-comments-section" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+    <div data-testid="task-comments-section" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <div
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-11)',
-          letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: 'var(--text-muted)',
-        }}
+        style={fieldLabelStyle}
       >
         Comments ({comments.length})
       </div>
       {!readOnly && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-          <textarea
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {/* §25 — the third hand-built `<textarea>` on this screen, and the last. The ring,
+              the error node and the `aria-describedby` between them are the component's. */}
+          <TextArea
             data-testid="task-comment-composer"
+            aria-label="Write a comment"
             value={commentDraft}
             onChange={(e) => onDraftChange(e.target.value)}
             placeholder="Write a comment... (markdown)"
             rows={3}
-            style={{
-              fontFamily: 'var(--font-text)',
-              fontSize: 'var(--fs-14)',
-              color: 'var(--text)',
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)',
-              padding: '10px 12px',
-              resize: 'vertical',
-              minHeight: 72,
-            }}
+            error={commentError ?? undefined}
+            errorId="task-comment-composer-error"
           />
-          {commentError && (
-            <span
-              style={{ color: 'var(--error-500)', fontSize: 'var(--fs-12)' }}
-              data-testid="task-comment-composer-error"
-            >
-              {commentError}
-            </span>
-          )}
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               type="button"
               variant="primary"
-              size="sm"
-              loading={postingComment}
+              preloader={postingComment}
               onClick={onSubmit}
               data-testid="task-comment-submit-btn"
             >
@@ -1650,17 +1531,17 @@ function CommentsSection({
           </div>
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {comments.length === 0 ? (
           <div
             style={{
-              padding: 'var(--sp-4)',
-              color: 'var(--text-faint)',
-              fontSize: 'var(--fs-13)',
+              padding: 'var(--space-5)',
+              color: 'var(--text-tertiary)',
+              fontSize: 'var(--font-size-xs)',
               fontStyle: 'italic',
-              background: 'var(--bg-panel-2)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--divider)',
+              background: 'var(--surface-sunken)',
+              borderRadius: 'var(--radius-l)',
+              border: '1px solid var(--border-subtle)',
             }}
           >
             {COLLAB_MESSAGES.emptyComments}
@@ -1732,104 +1613,74 @@ function CommentRow({
       data-testid={`task-comment-${comment.id}`}
       style={{
         display: 'flex',
-        gap: 'var(--sp-3)',
-        padding: 'var(--sp-4)',
-        background: 'var(--bg-panel-2)',
-        border: '1px solid var(--divider)',
-        borderRadius: 'var(--radius-lg)',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-5)',
+        background: 'var(--surface-sunken)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-l)',
       }}
     >
-      <AvatarInitials fullName={fullName} initials={initials} size={28} data-testid={`task-comment-avatar-${comment.id}`} />
+      <Avatar name={fullName} initials={initials} size={28} data-testid={`task-comment-avatar-${comment.id}`} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span
             data-testid={`task-comment-author-${comment.id}`}
             style={{
-              fontFamily: 'var(--font-display)',
               fontWeight: 600,
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-primary)',
             }}
           >
             {fullName}
           </span>
-          <span style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
             {formatCommentTimestamp(comment.createdAt)}
           </span>
           {wasEdited && (
             <span
               data-testid={`task-comment-edited-badge-${comment.id}`}
-              style={{ fontSize: 'var(--fs-12)', color: 'var(--text-faint)' }}
+              style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}
             >
               (edited)
             </span>
           )}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
             {!editing && canEdit && (
-              <button
-                type="button"
+              <IconButton
+                label="Edit comment"
                 onClick={onStartEdit}
                 data-testid={`task-comment-edit-btn-${comment.id}`}
-                aria-label="Edit comment"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                  padding: 4,
-                }}
               >
                 <PencilIcon />
-              </button>
+              </IconButton>
             )}
             {!editing && canDelete && (
-              <button
-                type="button"
+              <IconButton
+                label="Delete comment"
                 onClick={onRequestDelete}
                 data-testid={`task-comment-delete-btn-${comment.id}`}
-                aria-label="Delete comment"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                  padding: 4,
-                }}
               >
                 <TrashIcon />
-              </button>
+              </IconButton>
             )}
           </div>
         </div>
         {editing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)' }}>
-            <textarea
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+            <TextArea
               data-testid={`task-comment-edit-composer-${comment.id}`}
+              aria-label="Edit comment"
               value={editDraft}
               onChange={(e) => onEditDraftChange(e.target.value)}
               rows={3}
-              style={{
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text)',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '10px 12px',
-                resize: 'vertical',
-              }}
+              error={editError ?? undefined}
+              errorId={`field-error-task-comment-edit-${comment.id}`}
             />
-            {editError && (
-              <span style={{ color: 'var(--error-500)', fontSize: 'var(--fs-12)' }}>
-                {editError}
-              </span>
-            )}
-            <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
               <Button
                 type="button"
                 variant="primary"
-                size="sm"
-                loading={saving}
+                preloader={saving}
                 onClick={onEditSave}
                 data-testid={`task-comment-edit-save-${comment.id}`}
               >
@@ -1837,8 +1688,6 @@ function CommentRow({
               </Button>
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
                 onClick={onEditCancel}
                 data-testid={`task-comment-edit-cancel-${comment.id}`}
               >
@@ -1850,8 +1699,8 @@ function CommentRow({
           <div
             data-testid={`task-comment-content-${comment.id}`}
             style={{
-              fontSize: 'var(--fs-14)',
-              color: 'var(--text)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-primary)',
               marginTop: 6,
               lineHeight: 1.55,
               wordBreak: 'break-word',
@@ -1883,45 +1732,27 @@ function WatchersSection({
       style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
     >
       <span
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-11)',
-          letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: 'var(--text-muted)',
-        }}
+        style={fieldLabelStyle}
       >
         Watchers (
         <span data-testid="task-watchers-count">{watchers.length}</span>)
       </span>
-      <button
+      {/* §71 — `pressed` *is* this control: the tint of the emphasis colour, a border in it,
+          ink in it, and `aria-pressed`. That is the collapse Phase 3 made when `ToggleChip`
+          went, arriving on its second consumer. */}
+      <Button
         type="button"
+        pressed={isWatching}
+        icon={<EyeIcon size={14} />}
         onClick={onToggle}
         disabled={disabled}
         data-testid="task-watch-toggle-btn"
-        aria-pressed={isWatching}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          alignSelf: 'flex-start',
-          padding: '6px 12px',
-          borderRadius: 999,
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-12)',
-          fontWeight: 500,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          background: isWatching ? 'var(--accent-soft)' : 'var(--bg-input)',
-          color: isWatching ? 'var(--accent)' : 'var(--text)',
-          border: `1px solid ${isWatching ? 'var(--accent)' : 'var(--border)'}`,
-          opacity: disabled ? 0.6 : 1,
-        }}
+        style={{ alignSelf: 'flex-start' }}
       >
-        <EyeIcon size={14} />
         {isWatching ? 'Watching' : 'Watch'}
-      </button>
+      </Button>
       {watchers.length === 0 ? (
-        <span style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-12)' }}>
+        <span style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-size-xs)' }}>
           {COLLAB_MESSAGES.emptyWatchers}
         </span>
       ) : (
@@ -1929,11 +1760,11 @@ function WatchersSection({
           {visible.map((w, i) => (
             <span
               key={w.membershipId}
-              title={`${w.firstName} ${w.lastName}`}
+              /* @literal -6px, the overlap this one 24px mark is measured against. */
               style={{ marginLeft: i === 0 ? 0 : -6 }}
             >
-              <AvatarInitials
-                fullName={`${w.firstName} ${w.lastName}`}
+              <Avatar
+                name={`${w.firstName} ${w.lastName}`}
                 initials={`${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase()}
                 size={24}
                 data-testid={`task-watcher-avatar-${w.membershipId}`}
@@ -1944,9 +1775,8 @@ function WatchersSection({
             <span
               style={{
                 marginLeft: 6,
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-11)',
-                color: 'var(--text-muted)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-secondary)',
               }}
             >
               +{overflow} more
@@ -1972,28 +1802,22 @@ function ActivitySection({
   resolveTask: (id: string | null) => string;
 }) {
   return (
-    <div data-testid="task-activity-section" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+    <div data-testid="task-activity-section" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-11)',
-          letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: 'var(--text-muted)',
-        }}
+        style={fieldLabelStyle}
       >
         Activity
       </div>
       {activity.length === 0 ? (
         <div
           style={{
-            padding: 'var(--sp-4)',
-            color: 'var(--text-faint)',
-            fontSize: 'var(--fs-13)',
+            padding: 'var(--space-5)',
+            color: 'var(--text-tertiary)',
+            fontSize: 'var(--font-size-xs)',
             fontStyle: 'italic',
-            background: 'var(--bg-panel-2)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--divider)',
+            background: 'var(--surface-sunken)',
+            borderRadius: 'var(--radius-l)',
+            border: '1px solid var(--border-subtle)',
           }}
         >
           {COLLAB_MESSAGES.emptyActivity}
@@ -2003,11 +1827,11 @@ function ActivitySection({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 'var(--sp-3)',
-            padding: 'var(--sp-4)',
-            background: 'var(--bg-panel-2)',
-            border: '1px solid var(--divider)',
-            borderRadius: 'var(--radius-lg)',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-5)',
+            background: 'var(--surface-sunken)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-l)',
             maxHeight: 400,
             overflowY: 'auto',
           }}
@@ -2029,17 +1853,17 @@ function ActivitySection({
               <div
                 key={row.id}
                 data-testid={`task-activity-entry-${row.id}`}
-                style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'flex-start' }}
+                style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start' }}
               >
-                <AvatarInitials fullName={actorName} initials={initials} size={22} data-testid={`task-activity-actor-${row.id}`} />
+                <Avatar name={actorName} initials={initials} size={22} data-testid={`task-activity-actor-${row.id}`} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 'var(--fs-13)', color: 'var(--text)' }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600 }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)' }}>
+                    <span style={{ fontWeight: 600 }}>
                       {actorName}
                     </span>{' '}
                     {description}
                   </div>
-                  <div style={{ fontSize: 'var(--fs-11)', color: 'var(--text-muted)', marginTop: 2 }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginTop: 2 }}>
                     {formatCommentTimestamp(row.createdAt)}
                   </div>
                 </div>
@@ -2072,33 +1896,27 @@ function TimeLoggedSection({
   return (
     <div
       data-testid="task-time-logged-section"
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}
     >
       <div
         style={{
           display: 'flex',
           alignItems: 'baseline',
           justifyContent: 'space-between',
-          gap: 'var(--sp-3)',
+          gap: 'var(--space-4)',
         }}
       >
         <span
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-11)',
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            color: 'var(--text-muted)',
-          }}
+          style={fieldLabelStyle}
         >
           Time Logged
         </span>
         <span
           data-testid="task-time-logged-total"
           style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text)',
+            fontFamily: 'var(--font-family-mono)',
+            fontSize: 'var(--font-size-base)',
+            color: 'var(--text-primary)',
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -2109,13 +1927,13 @@ function TimeLoggedSection({
         <div
           data-testid="task-time-logged-empty"
           style={{
-            padding: 'var(--sp-4)',
-            color: 'var(--text-faint)',
-            fontSize: 'var(--fs-13)',
+            padding: 'var(--space-5)',
+            color: 'var(--text-tertiary)',
+            fontSize: 'var(--font-size-xs)',
             fontStyle: 'italic',
-            background: 'var(--bg-panel-2)',
-            border: '1px solid var(--divider)',
-            borderRadius: 'var(--radius-lg)',
+            background: 'var(--surface-sunken)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-l)',
           }}
         >
           {TIME_TRACKING_MESSAGES.emptyTimeLogged}
@@ -2125,8 +1943,8 @@ function TimeLoggedSection({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            border: '1px solid var(--divider)',
-            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-l)',
             overflow: 'hidden',
           }}
         >
@@ -2138,19 +1956,18 @@ function TimeLoggedSection({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--sp-3)',
+                gap: 'var(--space-4)',
                 padding: '10px 14px',
-                borderTop: i === 0 ? 'none' : '1px solid var(--divider)',
+                borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)',
                 textDecoration: 'none',
-                color: 'var(--text)',
+                color: 'var(--text-primary)',
                 background: 'transparent',
               }}
             >
               <span
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text)',
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--text-primary)',
                   minWidth: 110,
                 }}
               >
@@ -2158,9 +1975,9 @@ function TimeLoggedSection({
               </span>
               <span
                 style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text-muted)',
+                  fontFamily: 'var(--font-family-mono)',
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--text-secondary)',
                   fontVariantNumeric: 'tabular-nums',
                   minWidth: 70,
                 }}
@@ -2170,8 +1987,8 @@ function TimeLoggedSection({
               <span
                 style={{
                   flex: 1,
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text-sub)',
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--text-secondary)',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',

@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  HIRING_MESSAGES,
   MESSAGES,
   MEMBER_MESSAGES,
   can,
@@ -20,6 +21,7 @@ import {
 } from '@devscribed/validation';
 import { randomUUID } from 'crypto';
 import type { SessionPayload } from '../auth/session.service';
+import { VacanciesService } from '../hiring/vacancies.service';
 import { InvitationsService } from '../invitations/invitations.service';
 import { PrismaService } from '../prisma.service';
 import { VacationRequestsService } from '../vacation/vacation-requests.service';
@@ -96,6 +98,7 @@ export class MembersService {
     private readonly prisma: PrismaService,
     private readonly invitations: InvitationsService,
     private readonly vacationRequests: VacationRequestsService,
+    private readonly vacancies: VacanciesService,
   ) {}
 
   async list(session: SessionPayload, query: MemberListQuery): Promise<MemberListResult> {
@@ -188,6 +191,28 @@ export class MembersService {
             message: MEMBER_MESSAGES.lastAdminGuard,
           });
         }
+      }
+
+      // Hiring's guard (01 §06.17), checked last because it is the most expensive and
+      // the least likely to fire. A member who still holds open vacancies cannot be
+      // removed: soft-deleting them would leave every booking link pointing at a mailbox
+      // nobody is watching, and the candidate would never learn why.
+      //
+      // It reads outside this transaction's snapshot, which is the same guarantee it had
+      // before the merge — the row lock above serializes deletes and restores against
+      // each other, and nothing about it ever ordered a vacancy reassignment.
+      const openVacancies = await this.vacancies.openVacancyCount(
+        caller.organizationId,
+        target.accountId,
+      );
+      if (openVacancies > 0) {
+        throw new ConflictException({
+          error: 'interviewer_on_open_vacancies',
+          message: HIRING_MESSAGES.vacancy.interviewer.removalBlocked,
+          // The count travels beside the message rather than inside it, so the screen can
+          // name the number without this string having to guess at its own grammar.
+          openVacancies,
+        });
       }
 
       await tx.membership.update({ where: { id: target.id }, data: { status: 'removed' } });

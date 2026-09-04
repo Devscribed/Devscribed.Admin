@@ -2,11 +2,14 @@
 
 import { notFound, usePathname, useRouter } from 'next/navigation';
 import { use, useEffect, useState, type ReactNode } from 'react';
-import { Spinner } from '@/ds';
+import { Preloader } from '@devscribed/ds';
 import { AppShell } from '@/layout/AppShell';
 import type { Session } from '@/layout/session-context';
 
 type Resolution = { state: 'loading' } | { state: 'ready'; session: Session } | { state: 'gone' };
+
+const signInHref = (): string =>
+  `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
 
 /**
  * The gate for every signed-in screen. Nothing renders until `/api/me` has answered:
@@ -42,15 +45,18 @@ export default function OrgLayout({
     async function load(): Promise<void> {
       const response = await fetch('/api/me', { credentials: 'same-origin' });
 
+      // The address stays in the query so sign-in can return the visitor to it — the
+      // calendar invite's deep link to a candidate card arrives here signed out
+      // (hiring 04 §01.5).
       if (response.status === 401) {
-        router.replace('/login');
+        router.replace(signInHref());
         return;
       }
       if (cancelled) return;
 
       const session: Session | null = await response.json();
       if (!session) {
-        router.replace('/login');
+        router.replace(signInHref());
         return;
       }
       // `features` is newer than this shell. An API that has not grown it — or that sends
@@ -96,10 +102,10 @@ export default function OrgLayout({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--accent)',
         }}
       >
-        <Spinner size={28} />
+        {/* The system's loader paints its own colour; the well it sits on is the one AppShell paints. */}
+        <Preloader />
       </div>
     );
   }

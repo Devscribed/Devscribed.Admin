@@ -1,19 +1,24 @@
 'use client';
 
-import { Badge, Radio } from '@/ds';
+import { Badge } from '@devscribed/ds';
 import type { SigningProviderOption } from '@/documents/envelopes';
 
 /**
  * One selectable provider row.
  *
- * The design system ships **no selectable option row** — a bordered row carrying a radio,
- * a title, a description, a trailing status pill and a disabled state — so this is
- * composed from the primitives that do exist: `Radio` (which already takes `disabled`)
- * and `Badge` (whose `warning` tone is the DS's own reserved amber), with every spacing
- * and colour value from a token. The gap is recorded rather than improvised silently —
- * in the implementing run's handoff (`dsGaps`), because no spec in the documents
- * area carries a DS gaps table — so the second screen that needs one promotes it into
- * the design system as an `OptionRow` instead of copying this.
+ * **The design system has no `Radio`, and this screen is the only thing that wants one.**
+ * The previous system's was read before this was written and is not restorable: it painted
+ * its own circle and hid the real input behind `opacity: 0`, which is exactly what §79
+ * rejected for `Checkbox` — "the box itself is the browser's own: it is one of the few
+ * controls an operating system draws better than a stylesheet can, and a hand-painted one
+ * loses the platform's focus, contrast and high-contrast-mode behaviour." So the control
+ * here is a **native `<input type="radio">`**, taking the system's ink through
+ * `accent-color` and its geometry from tokens, and it stays local: one consumer is a
+ * composition wearing a component's name, and it moves into the package on the day a
+ * second screen wants it — rule 4, the same call `MembersLoadingSkeleton` carries.
+ *
+ * The row itself is a `<label>`, so the whole thing is the control's hit area and a click
+ * anywhere on it selects — which is also what the suite presses.
  *
  * An **unconfigured provider is rendered, visible, with its radio disabled and the
  * missing items named.** Deliberately not hidden: the admin needs to know the option
@@ -41,35 +46,50 @@ export function ProviderOption({
     <div
       data-testid={`signing-provider-option-${option.key}`}
       style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 'var(--sp-7)',
-        padding: 'var(--sp-8)',
-        borderTop: '1px solid var(--divider)',
+        borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
       }}
     >
-      <Radio
-        checked={selected}
-        disabled={!selectable}
-        name="signing-provider"
-        value={option.key}
-        onChange={() => onSelect(option.key)}
-        label={
-          <span style={{ display: 'block' }}>
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 'var(--space-7)',
+          padding: 'var(--space-6)',
+          cursor: selectable ? 'pointer' : 'not-allowed',
+          userSelect: 'none',
+        }}
+      >
+        <input
+          type="radio"
+          checked={selected}
+          disabled={!selectable}
+          name="signing-provider"
+          value={option.key}
+          onChange={() => onSelect(option.key)}
+          style={{
+            width: 18,
+            height: 18,
+            margin: 0,
+            flexShrink: 0,
+            // The platform draws the mark; this only tells it which ink to draw it in.
+            accentColor: 'var(--action-primary)',
+            cursor: selectable ? 'pointer' : 'not-allowed',
+          }}
+        />
+        <span style={{ display: 'block', opacity: selectable ? 1 : 0.55 }}>
             <span
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--sp-6)',
+                gap: 'var(--space-5)',
                 flexWrap: 'wrap',
               }}
             >
               <span
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 600,
-                  fontSize: 'var(--fs-16)',
-                  color: 'var(--text)',
+                  fontWeight: 'var(--headline-6-weight)',
+                  fontSize: 'var(--font-size-base)',
+                  color: 'var(--text-primary)',
                 }}
               >
                 {option.name}
@@ -79,9 +99,9 @@ export function ProviderOption({
             <span
               style={{
                 display: 'block',
-                marginTop: 'var(--sp-4)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text-sub)',
+                marginTop: 'var(--space-3)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-tertiary)',
               }}
             >
               {option.description}
@@ -90,9 +110,9 @@ export function ProviderOption({
               <span
                 style={{
                   display: 'block',
-                  marginTop: 'var(--sp-4)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text-muted)',
+                  marginTop: 'var(--space-3)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 {/* Live checks, shown beside the option and never a gate on it: no
@@ -108,19 +128,17 @@ export function ProviderOption({
                 data-testid={`signing-provider-missing-${option.key}`}
                 style={{
                   display: 'block',
-                  marginTop: 'var(--sp-4)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text-muted)',
+                  marginTop: 'var(--space-3)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 Missing: {option.missing.join(', ')}. Set them in the environment, then
                 reload this page.
               </span>
             )}
-          </span>
-        }
-        style={{ alignItems: 'flex-start' }}
-      />
+        </span>
+      </label>
     </div>
   );
 }
@@ -141,13 +159,13 @@ function StatusPill({ option, active }: { option: SigningProviderOption; active:
   return (
     <span
       data-testid={`signing-provider-status-${option.key}`}
-      style={{ display: 'inline-flex', gap: 'var(--sp-4)', flexWrap: 'wrap' }}
+      style={{ display: 'inline-flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}
     >
-      {!option.configured && <Badge tone="neutral">Not configured</Badge>}
-      {option.configured && active && <Badge tone="active">Active</Badge>}
-      {option.configured && option.testMode && <Badge tone="warning">Test mode</Badge>}
+      {!option.configured && <Badge status="neutral">Not configured</Badge>}
+      {option.configured && active && <Badge status="active">Active</Badge>}
+      {option.configured && option.testMode && <Badge status="warning">Test mode</Badge>}
       {option.configured && !active && !option.testMode && (
-        <Badge tone="neutral">Available</Badge>
+        <Badge status="neutral">Available</Badge>
       )}
     </span>
   );

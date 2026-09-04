@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { AuthLayout, InfoBanner, Spinner } from '@/ds';
+import { AuthLayout, InfoBanner, Preloader } from '@devscribed/ds';
 import { ACCOUNT_MESSAGES } from '@devscribed/validation';
 
 type Phase =
@@ -84,12 +84,12 @@ export function ConfirmEmailScreen() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 'var(--sp-5)',
-              padding: 'var(--sp-12) 0 var(--sp-10)',
+              gap: 'var(--space-4)',
+              padding: 'var(--space-8) 0 var(--space-7)',
             }}
           >
-            <Spinner size={28} style={{ color: 'var(--accent)' }} />
-            <p style={{ margin: 0, fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+            <Preloader />
+            <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
               Confirming your email change…
             </p>
           </div>
@@ -98,19 +98,15 @@ export function ConfirmEmailScreen() {
         {phase.kind === 'success' && (
           <>
             <InfoBanner
-              tone="success"
+              variant="success"
               role="alert"
               aria-live="polite"
               data-testid="confirm-email-success-message"
             >
               {phase.message}
             </InfoBanner>
-            <div style={{ marginTop: 'var(--sp-7)' }}>
-              <Link
-                href="/login"
-                data-testid="confirm-email-login-link"
-                style={{ textDecoration: 'none' }}
-              >
+            <div style={{ marginTop: 'var(--space-7)' }}>
+              <Link href="/login" data-testid="confirm-email-login-link">
                 Go to login
               </Link>
             </div>
@@ -119,7 +115,7 @@ export function ConfirmEmailScreen() {
 
         {phase.kind === 'error' && (
           <InfoBanner
-            tone="error"
+            variant="error"
             role="alert"
             aria-live="polite"
             data-testid="confirm-email-error"

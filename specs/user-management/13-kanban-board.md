@@ -735,7 +735,13 @@ Project detail page: key shown as read-only badge if set. If not set, admin/mana
 **Board view:**
 `board-view`, `board-create-task-btn`, `board-settings-btn`, `board-view-toggle`
 `board-filter-type`, `board-filter-priority`, `board-filter-assignee`, `board-search`
-`board-column-{id}`, `board-column-header-{id}`, `board-column-count-{id}`, `board-column-add`
+`board-column-{id}`, ~~`board-column-header-{id}`~~, `board-column-count-{id}`, `board-column-add`
+
+*Amended by the main merge, Phase 6:* **`board-column-header-{id}` is retired.**
+The column is the design system's `BoardColumn` (§43) now, which draws its own head and tags the
+column and the count — the two ids either side of this one, both unchanged — but not the head
+between them. Nothing was asserted about the head that the column does not contain, so the
+lookup moves out one level rather than the component growing a prop for it.
 `board-task-card-{id}`
 
 **List view:**

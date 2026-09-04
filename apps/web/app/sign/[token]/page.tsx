@@ -8,7 +8,19 @@ import {
   validateReason,
   validateSignature,
 } from '@devscribed/validation';
-import { Badge, Button, Card, Checkbox, Input, InfoBanner, Modal, Spinner } from '@/ds';
+import {
+  Badge,
+  BookingLayout,
+  Button,
+  Card,
+  Checkbox,
+  FormActions,
+  TextInput,
+  InfoBanner,
+  Modal,
+  PageTitle,
+  Preloader,
+} from '@devscribed/ds';
 import { apiRequest, failureMessage, type ApiFailure } from '@/documents/api';
 import { DocumentFrame } from '@/documents/DocumentFrame';
 import {
@@ -23,9 +35,9 @@ import {
 } from '@/documents/envelopes';
 import { FieldInput, validateFieldValues } from '@/documents/FieldInput';
 import { SignaturePad, type SignatureMode } from '@/documents/SignaturePad';
-import { ToastProvider, useToast } from '@/documents/toast';
+import { useToast } from '@/toast';
 import { EmbeddedSigning } from './EmbeddedSigning';
-import { SigningLayout } from './SigningLayout';
+
 
 /** The documented failure bodies carry a little more than the shared shape names. */
 type SigningFailure = ApiFailure & {
@@ -37,15 +49,11 @@ type SigningFailure = ApiFailure & {
 
 export default function SigningPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
-  return (
-    <ToastProvider>
-      <SigningScreen token={token} />
-    </ToastProvider>
-  );
+  return <SigningScreen token={token} />;
 }
 
 function SigningScreen({ token }: { token: string }) {
-  const toast = useToast();
+  const { showToast } = useToast();
 
   const [payload, setPayload] = useState<SigningPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,14 +133,14 @@ function SigningScreen({ token }: { token: string }) {
 
   if (loading) {
     return (
-      <SigningLayout>
+      <BookingLayout>
         <div
           data-testid="signing-loading"
-          style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}
+          style={{ display: 'flex', justifyContent: 'center', color: 'var(--action-primary)' }}
         >
-          <Spinner size={28} />
+          <Preloader size={28} />
         </div>
-      </SigningLayout>
+      </BookingLayout>
     );
   }
 
@@ -140,7 +148,7 @@ function SigningScreen({ token }: { token: string }) {
   // else: we do not know which envelope this is, so the page names no organization.
   if (providerDown) {
     return (
-      <SigningLayout>
+      <BookingLayout>
         <EmbeddedSigning
           url={null}
           error
@@ -151,19 +159,19 @@ function SigningScreen({ token }: { token: string }) {
           }}
           onCompleted={() => undefined}
         />
-      </SigningLayout>
+      </BookingLayout>
     );
   }
 
   if (rateLimited) {
     return (
-      <SigningLayout>
+      <BookingLayout>
         <Card title="Please slow down">
-          <p style={{ margin: 0, fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-tertiary)' }}>
             {ENVELOPE_MESSAGES.signing.rateLimited}
           </p>
         </Card>
-      </SigningLayout>
+      </BookingLayout>
     );
   }
 
@@ -253,11 +261,7 @@ function SigningScreen({ token }: { token: string }) {
           downloadAvailable: result.data.downloadAvailable,
         };
       });
-      toast.show({
-        testId: 'toast-signing-signed',
-        message: ENVELOPE_MESSAGES.toast.signed,
-        tone: 'success',
-      });
+      showToast('toast-signing-signed', ENVELOPE_MESSAGES.toast.signed);
       return;
     }
 
@@ -322,11 +326,7 @@ function SigningScreen({ token }: { token: string }) {
     setPayload((current) =>
       current ? { ...current, state: 'declined', declinedAt: response.data.declinedAt } : current,
     );
-    toast.show({
-      testId: 'toast-signing-declined',
-      message: ENVELOPE_MESSAGES.toast.declined,
-      tone: 'success',
-    });
+    showToast('toast-signing-declined', ENVELOPE_MESSAGES.toast.declined);
   }
 
   async function requestNewLink(): Promise<void> {
@@ -355,7 +355,7 @@ function SigningScreen({ token }: { token: string }) {
 
   if (state !== 'ready_to_sign') {
     return (
-      <SigningLayout organizationName={branding}>
+      <BookingLayout wordmark={branding ?? 'Devscribed'}>
         <div data-testid="signing-page">
           {state === 'invalid' && (
             <Panel testId="signing-state-invalid" title="This signing link is not valid.">
@@ -375,7 +375,7 @@ function SigningScreen({ token }: { token: string }) {
               ) : (
                 <Button
                   variant="primary"
-                  loading={requestingLink}
+                  preloader={requestingLink}
                   data-testid="signing-request-new-link-btn"
                   onClick={() => void requestNewLink()}
                 >
@@ -412,7 +412,7 @@ function SigningScreen({ token }: { token: string }) {
           {(state === 'already_signed' || state === 'completed') && (
             <>
               {envelope?.renderedHtml && (
-                <div style={{ marginBottom: 'var(--sp-8)' }}>
+                <div style={{ marginBottom: 'var(--space-6)' }}>
                   <DocumentFrame
                     html={envelope.renderedHtml}
                     testId="signing-document-frame"
@@ -443,13 +443,13 @@ function SigningScreen({ token }: { token: string }) {
                   </p>
                 )}
                 {formError && (
-                  <p style={{ ...PARAGRAPH, color: 'var(--error-500)' }}>{formError}</p>
+                  <p style={{ ...PARAGRAPH, color: 'var(--status-error)' }}>{formError}</p>
                 )}
               </Panel>
             </>
           )}
         </div>
-      </SigningLayout>
+      </BookingLayout>
     );
   }
 
@@ -465,35 +465,24 @@ function SigningScreen({ token }: { token: string }) {
    */
   if (payload?.surface === 'embedded') {
     return (
-      <SigningLayout organizationName={envelope?.senderOrganizationName} wide>
+      <BookingLayout wordmark={envelope?.senderOrganizationName ?? 'Devscribed'} wide>
         {/* Tighter than our own surface: the widget repeats the document's name in its own
             header, so the band between our title and its is spent twice. */}
-        <div data-testid="signing-page" style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+        <div data-testid="signing-page" style={{ display: 'grid', gap: 'var(--space-4)' }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 'var(--sp-6)',
+              gap: 'var(--space-5)',
               flexWrap: 'wrap',
             }}
           >
-            <h1
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: 'var(--fs-27)',
-                letterSpacing: '-.6px',
-                margin: 0,
-                color: 'var(--text)',
-              }}
-            >
-              {envelope?.title}
-            </h1>
+            <PageTitle style={{ margin: 0 }}>{envelope?.title}</PageTitle>
             {/* A test-mode document has no legal weight and must never be mistaken for
                 one that does, so the badge carries its own words rather than a colour. */}
             {payload?.testMode && (
-              <Badge tone="warning" data-testid="sign-test-badge">
+              <Badge status="warning" data-testid="sign-test-badge">
                 {SIGNING_PROVIDER_MESSAGES.signing.testModeBanner}
               </Badge>
             )}
@@ -524,10 +513,10 @@ function SigningScreen({ token }: { token: string }) {
           <footer
             style={{
               display: 'flex',
-              gap: 'var(--sp-8)',
+              gap: 'var(--space-6)',
               flexWrap: 'wrap',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-muted)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-secondary)',
             }}
           >
             <span data-testid="sign-provider-attribution">
@@ -539,7 +528,7 @@ function SigningScreen({ token }: { token: string }) {
             <span>Link expires {formatLongDate(envelope?.expiresAt)}</span>
           </footer>
         </div>
-      </SigningLayout>
+      </BookingLayout>
     );
   }
 
@@ -548,22 +537,11 @@ function SigningScreen({ token }: { token: string }) {
   const fields = payload?.fields ?? [];
 
   return (
-    <SigningLayout organizationName={envelope?.senderOrganizationName}>
-      <div data-testid="signing-page" style={{ display: 'grid', gap: 'var(--sp-10)' }}>
+    <BookingLayout wordmark={envelope?.senderOrganizationName ?? 'Devscribed'}>
+      <div data-testid="signing-page" style={{ display: 'grid', gap: 'var(--space-7)' }}>
         <div>
-          <h1
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-27)',
-              letterSpacing: '-.6px',
-              margin: '0 0 6px',
-              color: 'var(--text)',
-            }}
-          >
-            {envelope?.title}
-          </h1>
-          <p style={{ margin: 0, fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
+          <PageTitle style={{ margin: '0 0 var(--space-2)' }}>{envelope?.title}</PageTitle>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-tertiary)' }}>
             {envelope?.senderOrganizationName} has sent you this document to sign
             {payload?.signer ? ` as ${payload.signer.roleLabel}` : ''}.
           </p>
@@ -580,7 +558,7 @@ function SigningScreen({ token }: { token: string }) {
 
         {fields.length > 0 && (
           <Card title="Your details">
-            <div data-testid="signing-fields-form" style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+            <div data-testid="signing-fields-form" style={{ display: 'grid', gap: 'var(--space-7)' }}>
               {fields.map((field) => (
                 <FieldInput
                   key={field.key}
@@ -610,32 +588,31 @@ function SigningScreen({ token }: { token: string }) {
           <Checkbox
             checked={consent}
             disabled={submitting}
-            onChange={setConsent}
+            onChange={(event) => setConsent(event.target.checked)}
             data-testid="signing-consent-checkbox"
             label={payload?.consentText ?? ENVELOPE_MESSAGES.signing.consentText}
           />
           {consentError && (
             <p
               data-testid="signing-consent-error"
-              style={{ margin: '6px 0 0', fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}
+              style={{ margin: '6px 0 0', fontSize: 'var(--font-size-s)', color: 'var(--status-error)' }}
             >
               {consentError}
             </p>
           )}
         </div>
 
-        {formError && <InfoBanner tone="error">{formError}</InfoBanner>}
+        {formError && <InfoBanner variant="error">{formError}</InfoBanner>}
 
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            gap: 'var(--sp-6)',
+            gap: 'var(--space-5)',
             flexWrap: 'wrap',
           }}
         >
           <Button
-            variant="secondary"
             disabled={submitting}
             data-testid="signing-decline-btn"
             onClick={() => setDeclineOpen(true)}
@@ -646,7 +623,7 @@ function SigningScreen({ token }: { token: string }) {
               empty field. Clicking is how the signer learns what is missing. */}
           <Button
             variant="primary"
-            loading={submitting}
+            preloader={submitting}
             data-testid="signing-submit-btn"
             onClick={() => void sign()}
           >
@@ -657,10 +634,10 @@ function SigningScreen({ token }: { token: string }) {
         <footer
           style={{
             display: 'flex',
-            gap: 'var(--sp-8)',
+            gap: 'var(--space-6)',
             flexWrap: 'wrap',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--text-muted)',
+            fontSize: 'var(--font-size-s)',
+            color: 'var(--text-secondary)',
           }}
         >
           <span data-testid="signing-document-hash" title={envelope?.documentHash ?? undefined}>
@@ -670,50 +647,51 @@ function SigningScreen({ token }: { token: string }) {
         </footer>
       </div>
 
-      <Modal
-        open={declineOpen}
-        title="Decline to sign"
-        onClose={() => setDeclineOpen(false)}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setDeclineOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              loading={declining}
-              data-testid="signing-decline-confirm-btn"
-              onClick={() => void decline()}
-            >
-              Decline
-            </Button>
-          </>
-        }
-      >
+      {/* Not `ConfirmDialog`: this asks a question *and* takes a value, and a dialog that
+          collects something is a form in a `Modal` (§8) with §63's action row. */}
+      <Modal open={declineOpen} title="Decline to sign" onClose={() => setDeclineOpen(false)}>
         <div data-testid="signing-decline-modal">
-          <p style={{ margin: '0 0 var(--sp-8)', fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
+          <p style={{ margin: '0 0 var(--space-6)', fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
             Declining ends the signing process for everyone. The sender is notified. You can add a
             reason, but you do not have to.
           </p>
-          <Input
+          <TextInput
             label="Reason (optional)"
             value={declineReason}
             maxLength={ENVELOPE_LIMITS.reasonMax}
             data-testid="signing-decline-reason-input"
             onChange={(event) => setDeclineReason(event.target.value)}
             error={declineError ?? undefined}
+            errorId="field-error-decline-reason"
             wrapperStyle={{ gap: 0 }}
           />
+
+          <div style={{ marginTop: 'var(--space-9)' }}>
+            <FormActions>
+              <Button type="button" onClick={() => setDeclineOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="delete"
+                preloader={declining}
+                data-testid="signing-decline-confirm-btn"
+                onClick={() => void decline()}
+              >
+                Decline
+              </Button>
+            </FormActions>
+          </div>
         </div>
       </Modal>
-    </SigningLayout>
+    </BookingLayout>
   );
 }
 
 const PARAGRAPH = {
-  margin: 'var(--sp-5) 0 0',
-  fontSize: 'var(--fs-15)',
-  color: 'var(--text-sub)',
+  margin: 'var(--space-4) 0 0',
+  fontSize: 'var(--font-size-base)',
+  color: 'var(--text-tertiary)',
 } as const;
 
 /** Every terminal state is the same card: one sentence, and at most one action. */
@@ -727,21 +705,8 @@ function Panel({
   children?: ReactNode;
 }) {
   return (
-    <Card>
-      <div data-testid={testId}>
-        <p
-          style={{
-            margin: 0,
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-21)',
-            color: 'var(--text)',
-          }}
-        >
-          {title}
-        </p>
-        {children}
-      </div>
+    <Card title={title} data-testid={testId}>
+      {children}
     </Card>
   );
 }

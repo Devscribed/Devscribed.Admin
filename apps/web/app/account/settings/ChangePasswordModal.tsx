@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, InfoBanner, Input, Modal } from '@/ds';
-import { errorNode, focusByTestId, hintNode } from '@/field-error';
+import { Button, FormActions, InfoBanner, Modal, TextInput } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import {
   ACCOUNT_MESSAGES,
   AUTH_MESSAGES,
@@ -17,10 +17,7 @@ const CURRENT_TEST_ID = 'change-password-current-input';
 const NEW_TEST_ID = 'change-password-new-input';
 const CONFIRM_TEST_ID = 'change-password-confirm-input';
 
-const passwordHint = hintNode(
-  'change-password-hint',
-  'At least 8 characters, with one letter and one digit.',
-);
+const PASSWORD_HINT = 'At least 8 characters, with one letter and one digit.';
 
 /** Server messages that name a specific field route to that field's inline error; every
  * other 400 (notably "Current password is incorrect") lands in the form-level banner. */
@@ -165,68 +162,38 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
 
   if (done) {
     return (
-      <Modal
-        open={open}
-        title="Change password"
-        onClose={handleClose}
-        width={480}
-        actions={
-          <Button type="button" variant="primary" size="lg" onClick={handleClose} style={{ flex: 1 }}>
-            Close
-          </Button>
-        }
-      >
+      <Modal open={open} title="Change password" onClose={handleClose}>
         <div
           role="alert"
           aria-live="polite"
-          style={{ fontSize: 'var(--fs-15)', lineHeight: 'var(--lh-normal)', color: 'var(--text-sub)' }}
+          style={{
+            fontSize: 'var(--font-size-base)',
+            lineHeight: 'var(--line-height-base)',
+            color: 'var(--text-tertiary)',
+          }}
         >
           Your password has been changed.
+        </div>
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" variant="primary" onClick={handleClose}>
+              Close
+            </Button>
+          </FormActions>
         </div>
       </Modal>
     );
   }
 
   return (
-    <Modal
-      open={open}
-      title="Change password"
-      onClose={handleClose}
-      width={480}
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={submitting}
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="change-password-form"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            disabled={!allValid}
-            data-testid="change-password-submit-button"
-            style={{ flex: 1 }}
-          >
-            {submitting ? 'Saving' : 'Change password'}
-          </Button>
-        </>
-      }
-    >
+    <Modal open={open} title="Change password" onClose={handleClose}>
       <form id="change-password-form" onSubmit={submit} noValidate data-testid="change-password-form">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
-          <Input
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          <TextInput
             label="Current password"
             type="password"
             value={currentPassword}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setCurrentPassword(event.target.value);
               clearBanner();
               if (currentError) setCurrentError(null);
@@ -236,16 +203,16 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
             data-testid={CURRENT_TEST_ID}
             aria-invalid={currentError ? true : undefined}
             aria-describedby={currentError ? 'field-error-currentPassword' : undefined}
-            error={currentError ? errorNode('currentPassword', currentError) : undefined}
+            error={currentError ?? undefined}
+            errorId="field-error-currentPassword"
             style={submitting ? { opacity: 0.55 } : undefined}
-            wrapperStyle={{ gap: 0 }}
           />
 
-          <Input
+          <TextInput
             label="New password"
             type="password"
             value={newPassword}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setNewPassword(event.target.value);
               clearBanner();
               if (newError) setNewError(null);
@@ -255,19 +222,22 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
             onBlur={blurNew}
             readOnly={submitting}
             data-testid={NEW_TEST_ID}
-            hint={passwordHint}
+            // §4 — the hint shares the error's slot and its geometry, so the field does not
+            // move when one replaces the other, and both are `aria-describedby` targets.
+            hint={PASSWORD_HINT}
+            hintId="change-password-hint"
             aria-invalid={newError ? true : undefined}
             aria-describedby={newError ? 'field-error-newPassword' : 'change-password-hint'}
-            error={newError ? errorNode('newPassword', newError) : undefined}
+            error={newError ?? undefined}
+            errorId="field-error-newPassword"
             style={submitting ? { opacity: 0.55 } : undefined}
-            wrapperStyle={{ gap: 0 }}
           />
 
-          <Input
+          <TextInput
             label="Confirm new password"
             type="password"
             value={confirmation}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setConfirmation(event.target.value);
               clearBanner();
               if (confirmError) checkConfirmation(event.target.value);
@@ -277,19 +247,41 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
             data-testid={CONFIRM_TEST_ID}
             aria-invalid={confirmError ? true : undefined}
             aria-describedby={confirmError ? 'field-error-passwordConfirmation' : undefined}
-            error={confirmError ? errorNode('passwordConfirmation', confirmError) : undefined}
+            error={confirmError ?? undefined}
+            errorId="field-error-passwordConfirmation"
             style={submitting ? { opacity: 0.55 } : undefined}
-            wrapperStyle={{ gap: 0 }}
           />
         </div>
 
         {banner && (
-          <div style={{ marginTop: 'var(--sp-8)' }}>
-            <InfoBanner tone="error" role="alert" aria-live="polite" data-testid="change-password-error">
+          <div style={{ marginTop: 'var(--space-6)' }}>
+            <InfoBanner
+              variant="error"
+              role="alert"
+              aria-live="polite"
+              data-testid="change-password-error"
+            >
               {banner}
             </InfoBanner>
           </div>
         )}
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" onClick={handleClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={submitting}
+              disabled={!allValid}
+              data-testid="change-password-submit-button"
+            >
+              {submitting ? 'Saving' : 'Change password'}
+            </Button>
+          </FormActions>
+        </div>
       </form>
     </Modal>
   );

@@ -1,10 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Checkbox, Modal, SearchField } from '@/ds';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Checkbox,
+  EmptyState,
+  FormActions,
+  Modal,
+  Preloader,
+  SearchInput,
+} from '@devscribed/ds';
 import { useToast } from '@/toast';
 import { PROJECT_MESSAGES, type Role } from '@devscribed/validation';
-import { AvatarInitials } from '../../members/[memberId]/AvatarInitials';
 import type { Member, MemberListResponse } from '../../members/types';
 
 /** First + last initial of a full name, for the picker avatars. */
@@ -117,41 +126,15 @@ export function AddMembersModal({
       onClose={() => {
         if (!submitting) onClose();
       }}
-      width={520}
       data-testid="projects-add-members-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={onClose}
-            disabled={submitting}
-            data-testid="projects-add-members-cancel-btn"
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            disabled={selected.size === 0}
-            onClick={() => void submit()}
-            data-testid="projects-add-members-btn"
-            style={{ flex: 1 }}
-          >
-            Add selected ({selected.size})
-          </Button>
-        </>
-      }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
-        <SearchField
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+        <SearchInput
           value={search}
-          onChange={(event: { target: { value: string } }) => setSearch(event.target.value)}
+          onChange={(event) => setSearch(event.target.value)}
+          onClear={() => setSearch('')}
           placeholder="Search by name..."
+          aria-label="Search members"
           data-testid="projects-member-search"
         />
 
@@ -159,75 +142,92 @@ export function AddMembersModal({
           style={{
             maxHeight: 280,
             overflowY: 'auto',
-            border: '1px solid var(--divider)',
-            borderRadius: 'var(--radius-lg)',
+            border: 'var(--border-width-hairline) solid var(--border-subtle)',
+            borderRadius: 'var(--radius-l)',
           }}
         >
           {members === null ? (
-            <div style={{ padding: 'var(--sp-8)', color: 'var(--text-muted)', fontSize: 'var(--fs-14)' }}>
-              Loading…
-            </div>
+            <Preloader aria-label="Loading members" />
           ) : filtered.length === 0 ? (
-            <div style={{ padding: 'var(--sp-8)', color: 'var(--text-faint)', fontSize: 'var(--fs-14)' }}>
-              No members found
-            </div>
+            <EmptyState style={{ padding: 'var(--space-8)' }}>No members found</EmptyState>
           ) : (
-            filtered.map((m) => {
+            filtered.map((m, i) => {
               const alreadyAdded = assignedIds.has(m.id);
               const checked = alreadyAdded || selected.has(m.id);
               return (
-                <label
+                <div
                   key={m.id}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 'var(--sp-4)',
-                    padding: '10px 14px',
-                    borderBottom: '1px solid var(--divider)',
-                    cursor: alreadyAdded ? 'not-allowed' : 'pointer',
+                    gap: 'var(--space-5)',
+                    padding: 'var(--space-4) var(--space-6)',
+                    borderTop:
+                      i === 0 ? 'none' : 'var(--border-width-hairline) solid var(--border-subtle)',
                     opacity: alreadyAdded ? 0.5 : 1,
                   }}
                 >
+                  {/* The name is the checkbox's own label now, so the mark repeats it and
+                      §93 hides it. It also *has* a label for the first time: the box was
+                      previously unlabelled, with an outer `<label>` wrapping the whole row —
+                      which made its accessible name the row's entire text. */}
+                  <Avatar
+                    name={m.fullName}
+                    initials={initialsOf(m.fullName)}
+                    size={28}
+                    decorative
+                    data-testid={`projects-member-avatar-${m.id}`}
+                  />
                   <Checkbox
+                    label={m.fullName}
                     checked={checked}
                     disabled={alreadyAdded}
                     onChange={() => toggle(m.id)}
                     data-testid={`projects-member-checkbox-${m.id}`}
+                    wrapperStyle={{ flex: 1, minWidth: 0 }}
                   />
-                  <AvatarInitials
-                    fullName={m.fullName}
-                    initials={initialsOf(m.fullName)}
-                    size={28}
-                    data-testid={`projects-member-avatar-${m.id}`}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                  {alreadyAdded && (
                     <span
                       style={{
-                        fontFamily: 'var(--font-display)',
-                        fontWeight: 500,
-                        fontSize: 'var(--fs-14)',
-                        color: 'var(--text)',
+                        fontSize: 'var(--font-size-xs)',
+                        color: 'var(--text-secondary)',
                         whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
                       }}
                     >
-                      {m.fullName}
+                      Already added
                     </span>
-                    {alreadyAdded && (
-                      <span style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}>
-                        Already added
-                      </span>
-                    )}
-                  </div>
-                  <Badge tone="info" dot={false} outline style={{ textTransform: 'capitalize' }}>
+                  )}
+                  {/* §59 — a role is a label on a person, which is the tone every other
+                      screen in this merge settled on for it. */}
+                  <Badge status="neutral" size="s" outlined style={{ textTransform: 'capitalize' }}>
                     {m.role as Role}
                   </Badge>
-                </label>
+                </div>
               );
             })
           )}
         </div>
+
+        <FormActions>
+          <Button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            data-testid="projects-add-members-cancel-btn"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            preloader={submitting}
+            disabled={selected.size === 0}
+            onClick={() => void submit()}
+            data-testid="projects-add-members-btn"
+          >
+            Add selected ({selected.size})
+          </Button>
+        </FormActions>
       </div>
     </Modal>
   );

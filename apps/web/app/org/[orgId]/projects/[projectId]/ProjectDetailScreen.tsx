@@ -1,13 +1,22 @@
 'use client';
 
-import Link from 'next/link';
 import { notFound, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Badge, Button, Card, IconButton, Input } from '@/ds';
+import {
+  Avatar,
+  BackTo,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  fieldLabelStyle,
+  IconButton,
+  Preloader,
+  TextInput,
+} from '@devscribed/ds';
 import { PencilIcon } from '@/layout/icons';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
-import { errorNode } from '@/field-error';
 import {
   KANBAN_MESSAGES,
   PROJECT_MESSAGES,
@@ -15,7 +24,6 @@ import {
   validateProjectKey,
   type Role,
 } from '@devscribed/validation';
-import { AvatarInitials } from '../../members/[memberId]/AvatarInitials';
 import { ProjectModal } from '../ProjectModal';
 import type {
   ProjectListItem,
@@ -27,9 +35,10 @@ import type {
 import { AddMembersModal } from './AddMembersModal';
 import { ArchiveConfirmDialog } from './ArchiveConfirmDialog';
 
-const STATUS_META: Record<ProjectStatus, { tone: 'active' | 'inactive'; label: string }> = {
-  active: { tone: 'active', label: 'Active' },
-  archived: { tone: 'inactive', label: 'Archived' },
+/** §32's own pair. */
+const STATUS_META: Record<ProjectStatus, { status: 'active' | 'inactive'; label: string }> = {
+  active: { status: 'active', label: 'Active' },
+  archived: { status: 'inactive', label: 'Archived' },
 };
 
 type ScreenState =
@@ -225,139 +234,130 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
 
   return (
     <div data-testid="project-detail-page" style={{ maxWidth: 640, margin: '0 auto' }}>
-      <Link
+      <BackTo
+        label="Back to projects"
         href={`/org/${orgId}/projects`}
         data-testid="project-back-link"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: 'var(--fs-14)',
-          color: 'var(--accent)',
-          textDecoration: 'none',
-          marginBottom: 'var(--sp-8)',
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+          event.preventDefault();
+          router.push(`/org/${orgId}/projects`);
         }}
-      >
-        <span aria-hidden style={{ fontSize: 18, lineHeight: 1 }}>
-          &#8592;
-        </span>
-        Back to projects
-      </Link>
+      />
 
-      {state.kind === 'loading' && <DetailSkeleton />}
+      {state.kind === 'loading' && (
+        <Preloader data-testid="project-detail-loading" aria-label="Loading project" />
+      )}
 
       {state.kind === 'error' && (
-        <div
-          data-testid="project-detail-error"
-          style={{ padding: 'var(--sp-12) 0', color: 'var(--text-muted)', fontSize: 'var(--fs-15)' }}
-        >
-          {state.message}
-        </div>
+        <EmptyState data-testid="project-detail-error">{state.message}</EmptyState>
       )}
 
       {state.kind === 'ready' && (
-        <Card>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-10)' }}>
-            {/* Title row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0, flexWrap: 'wrap' }}>
-              <h1
-                data-testid="project-detail-name"
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
+          {/* The header is `Card`'s own title row (§12) rather than a heading this screen
+              draws inside a card: the name, the key, the status and the rename control are
+              one line, which is what `title` and `action` are for. */}
+          <Card
+            title={
+              <span
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 600,
-                  fontSize: 'var(--fs-22)',
-                  letterSpacing: '-.4px',
-                  color: 'var(--text)',
-                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-5)',
                   minWidth: 0,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  flexWrap: 'wrap',
                 }}
               >
-                {state.project.name}
-              </h1>
-              {state.project.key ? (
                 <span
-                  data-testid="project-key-badge"
+                  data-testid="project-detail-name"
                   style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--fs-12)',
-                    color: 'var(--text-muted)',
-                    background: 'var(--bg-sunken)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '2px 8px',
-                    letterSpacing: 0.5,
+                    minWidth: 0,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}
                 >
-                  {state.project.key}
+                  {state.project.name}
                 </span>
-              ) : addingKey ? (
-                <form
-                  onSubmit={saveProjectKey}
-                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}
-                >
-                  <Input
-                    autoFocus
-                    value={keyDraft}
-                    onChange={(event: { target: { value: string } }) => {
-                      setKeyDraft(event.target.value.toUpperCase());
-                      if (keyError) setKeyError(null);
+                {state.project.key ? (
+                  <span
+                    data-testid="project-key-badge"
+                    style={{
+                      /* §77's literal half — a key is copied and typed, not compared. */
+                      fontFamily: 'var(--font-family-mono)',
+                      fontSize: 'var(--font-size-xs)',
+                      fontWeight: 'var(--font-weight-regular)',
+                      color: 'var(--text-secondary)',
+                      background: 'var(--surface-sunken)',
+                      borderRadius: 'var(--radius-s)',
+                      padding: 'var(--space-1) var(--space-4)',
                     }}
-                    placeholder="e.g. MOB"
-                    data-testid="project-key-input"
-                    aria-invalid={keyError ? true : undefined}
-                    aria-describedby={keyError ? 'field-error-projectKey' : undefined}
-                    error={keyError ? errorNode('projectKey', keyError) : undefined}
-                    style={{ width: 120 }}
-                    wrapperStyle={{ gap: 0 }}
-                  />
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    loading={savingKey}
-                    data-testid="project-key-save-btn"
                   >
-                    Save
-                  </Button>
+                    {state.project.key}
+                  </span>
+                ) : addingKey ? (
+                  <form
+                    onSubmit={saveProjectKey}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)' }}
+                  >
+                    <TextInput
+                      autoFocus
+                      value={keyDraft}
+                      onChange={(event) => {
+                        setKeyDraft(event.target.value.toUpperCase());
+                        if (keyError) setKeyError(null);
+                      }}
+                      placeholder="e.g. MOB"
+                      aria-label="Project key"
+                      data-testid="project-key-input"
+                      error={keyError ?? undefined}
+                      errorId="field-error-projectKey"
+                      wrapperStyle={{ width: 140 }}
+                    />
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      preloader={savingKey}
+                      data-testid="project-key-save-btn"
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={savingKey}
+                      onClick={() => {
+                        setAddingKey(false);
+                        setKeyDraft('');
+                        setKeyError(null);
+                      }}
+                      data-testid="project-key-cancel-btn"
+                    >
+                      Cancel
+                    </Button>
+                  </form>
+                ) : (
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={savingKey}
                     onClick={() => {
-                      setAddingKey(false);
+                      setAddingKey(true);
                       setKeyDraft('');
                       setKeyError(null);
                     }}
-                    data-testid="project-key-cancel-btn"
+                    data-testid="project-add-key-btn"
                   >
-                    Cancel
+                    Add Key
                   </Button>
-                </form>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setAddingKey(true);
-                    setKeyDraft('');
-                    setKeyError(null);
-                  }}
-                  data-testid="project-add-key-btn"
+                )}
+                <Badge
+                  status={STATUS_META[state.project.status].status}
+                  size="s"
+                  data-testid="project-status-badge"
                 >
-                  Add Key
-                </Button>
-              )}
-              <Badge
-                tone={STATUS_META[state.project.status].tone}
-                data-testid="project-status-badge"
-              >
-                {STATUS_META[state.project.status].label}
-              </Badge>
+                  {STATUS_META[state.project.status].label}
+                </Badge>
+              </span>
+            }
+            action={
               <IconButton
                 label="Rename project"
                 onClick={() => setEditOpen(true)}
@@ -365,195 +365,160 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
               >
                 <PencilIcon />
               </IconButton>
+            }
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
+              {/* Client label (spec organization/01 §UI, TC-01-E2E-01). Rendered
+                  only when a client is linked; omitted when null so the header
+                  stays compact. */}
+              {state.project.clientName ? (
+                <div
+                  data-testid="project-detail-client-label"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  Client:{' '}
+                  <span
+                    style={{
+                      color: 'var(--text-primary)',
+                      fontWeight: 'var(--font-weight-medium)',
+                    }}
+                  >
+                    {state.project.clientName}
+                  </span>
+                </div>
+              ) : null}
+
+              {/* Board / List. These go to two routes, so they are links wearing a control's
+                  paint — §38's `as="a"`, which keeps middle-click and open-in-new-tab. They
+                  are deliberately not `PageTabs` (§45): a tab selects a panel on this page,
+                  and neither of these is on this page. */}
+              {state.project.key && (
+                <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
+                  <Button
+                    as="a"
+                    href={`/org/${orgId}/projects/${projectId}/board`}
+                    data-testid="project-board-tab"
+                  >
+                    Board
+                  </Button>
+                  <Button
+                    as="a"
+                    href={`/org/${orgId}/projects/${projectId}/list`}
+                    data-testid="project-list-tab"
+                  >
+                    List
+                  </Button>
+                </div>
+              )}
             </div>
+          </Card>
 
-            {/* Client label (spec organization/01 §UI, TC-01-E2E-01). Rendered
-                only when a client is linked; omitted when null so the header
-                stays compact. */}
-            {state.project.clientName ? (
-              <div
-                data-testid="project-detail-client-label"
-                style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
-              >
-                Client: <span style={{ color: 'var(--text)', fontWeight: 500 }}>{state.project.clientName}</span>
-              </div>
-            ) : null}
-
-            {/* Board / List tabs — appear once the project has a key. */}
-            {state.project.key && (
-              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-                <Link
-                  href={`/org/${orgId}/projects/${projectId}/board`}
-                  data-testid="project-board-tab"
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 600,
-                    fontSize: 'var(--fs-13)',
-                    color: 'var(--accent)',
-                    background: 'var(--accent-soft)',
-                    padding: '8px 14px',
-                    borderRadius: 'var(--radius-lg)',
-                    textDecoration: 'none',
-                  }}
-                >
-                  Board
-                </Link>
-                <Link
-                  href={`/org/${orgId}/projects/${projectId}/list`}
-                  data-testid="project-list-tab"
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 600,
-                    fontSize: 'var(--fs-13)',
-                    color: 'var(--text-sub)',
-                    padding: '8px 14px',
-                    borderRadius: 'var(--radius-lg)',
-                    textDecoration: 'none',
-                  }}
-                >
-                  List
-                </Link>
-              </div>
-            )}
-
-            {/* Members section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-4)' }}>
-                <h2
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 600,
-                    fontSize: 'var(--fs-16)',
-                    color: 'var(--text)',
-                    margin: 0,
-                  }}
-                >
-                  Members ({state.members.length})
-                </h2>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setAddOpen(true)}
-                  data-testid="project-add-member-btn"
-                >
-                  + Add member
-                </Button>
-              </div>
-
-              <div
-                data-testid="project-members-list"
-                style={{
-                  border: '1px solid var(--divider)',
-                  borderRadius: 'var(--radius-lg)',
-                  overflow: 'hidden',
-                }}
-              >
-                {state.members.length === 0 ? (
-                  <div style={{ padding: 'var(--sp-8)', color: 'var(--text-faint)', fontSize: 'var(--fs-14)' }}>
-                    No members assigned yet
-                  </div>
-                ) : (
-                  state.members.map((m, i) => (
-                    <div
-                      key={m.membershipId}
-                      data-testid={`project-member-row-${m.membershipId}`}
+          {/* The roster is its own card. `padded={false}` lets the rows run to the card's
+              edge, which is what makes them read as a list rather than as a block of text. */}
+          <Card
+            title={`Members (${state.members.length})`}
+            action={
+              <Button onClick={() => setAddOpen(true)} data-testid="project-add-member-btn">
+                + Add member
+              </Button>
+            }
+            padded={false}
+          >
+            <div data-testid="project-members-list">
+              {state.members.length === 0 ? (
+                <EmptyState style={{ padding: 'var(--space-8)' }}>
+                  No members assigned yet
+                </EmptyState>
+              ) : (
+                state.members.map((m, i) => (
+                  <div
+                    key={m.membershipId}
+                    data-testid={`project-member-row-${m.membershipId}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-5)',
+                      padding: 'var(--space-5) var(--space-7)',
+                      borderTop:
+                        i === 0
+                          ? 'none'
+                          : 'var(--border-width-hairline) solid var(--border-subtle)',
+                    }}
+                  >
+                    {/* The name is written beside the mark, so §93 takes it back out of the
+                        tree rather than announcing the same person twice. */}
+                    <Avatar
+                      name={`${m.firstName} ${m.lastName}`}
+                      initials={initialsOf(m.firstName, m.lastName)}
+                      size={32}
+                      decorative
+                      data-testid={`project-member-avatar-${m.membershipId}`}
+                    />
+                    <span
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--sp-4)',
-                        padding: '12px 14px',
-                        borderTop: i === 0 ? 'none' : '1px solid var(--divider)',
+                        flex: 1,
+                        minWidth: 0,
+                        fontWeight: 'var(--font-weight-medium)',
+                        color: 'var(--text-primary)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                       }}
                     >
-                      <AvatarInitials
-                        fullName={`${m.firstName} ${m.lastName}`}
-                        initials={initialsOf(m.firstName, m.lastName)}
-                        size={32}
-                        data-testid={`project-member-avatar-${m.membershipId}`}
-                      />
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          fontFamily: 'var(--font-display)',
-                          fontWeight: 500,
-                          fontSize: 'var(--fs-14)',
-                          color: 'var(--text)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {m.firstName} {m.lastName}
-                      </span>
-                      <Badge tone="info" dot={false} outline style={{ textTransform: 'capitalize' }}>
-                        {m.role}
-                      </Badge>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={removingId === m.membershipId}
-                        disabled={removingId !== null && removingId !== m.membershipId}
-                        onClick={() => void handleRemove(m)}
-                        data-testid={`project-member-remove-${m.membershipId}`}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))
-                )}
-              </div>
+                      {m.firstName} {m.lastName}
+                    </span>
+                    {/* §59 — a role is a label on a person, not a status about them. The
+                        members list settled this tone; the roster follows it. */}
+                    <Badge status="neutral" size="s" outlined style={{ textTransform: 'capitalize' }}>
+                      {m.role}
+                    </Badge>
+                    <Button
+                      preloader={removingId === m.membershipId}
+                      disabled={removingId !== null}
+                      onClick={() => void handleRemove(m)}
+                      data-testid={`project-member-remove-${m.membershipId}`}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
+          </Card>
 
-            {/* Statistics — two backed tiles only (Total hours, Created); the design's
-                "This month" tile has no API field and is deferred. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-              <h2
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 600,
-                  fontSize: 'var(--fs-16)',
-                  color: 'var(--text)',
-                  margin: 0,
-                }}
-              >
-                Statistics
-              </h2>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 'var(--sp-6)',
-                  background: 'var(--bg-sunken)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: 'var(--sp-6)',
-                }}
-              >
-                <StatTile label="Total hours" value={`${state.project.totalHours} h`} testId="project-stat-total-hours" />
-                <StatTile label="Created" value={formatDate(state.project.createdAt)} testId="project-stat-created" />
-              </div>
-            </div>
-
-            {/* Status / archive line */}
+          {/* Statistics — two backed tiles only (Total hours, Created); the design's
+              "This month" tile has no API field and is deferred. */}
+          <Card title="Statistics">
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'flex-end',
-                paddingTop: 'var(--sp-6)',
-                borderTop: '1px solid var(--divider)',
+                gap: 'var(--space-9)',
+                background: 'var(--surface-sunken)',
+                borderRadius: 'var(--radius-l)',
+                padding: 'var(--space-7)',
               }}
             >
+              <StatTile
+                label="Total hours"
+                value={`${state.project.totalHours} h`}
+                testId="project-stat-total-hours"
+              />
+              <StatTile
+                label="Created"
+                value={formatDate(state.project.createdAt)}
+                testId="project-stat-created"
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-8)' }}>
               {state.project.status === 'active' ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => setArchiveOpen(true)}
-                  data-testid="project-archive-btn"
-                >
+                <Button onClick={() => setArchiveOpen(true)} data-testid="project-archive-btn">
                   Archive
                 </Button>
               ) : (
                 <Button
-                  variant="secondary"
-                  loading={restoring}
+                  preloader={restoring}
+                  disabled={restoring}
                   onClick={() => void handleRestore()}
                   data-testid="project-restore-btn"
                 >
@@ -561,8 +526,8 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
                 </Button>
               )}
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       )}
 
       {state.kind === 'ready' && (
@@ -601,52 +566,30 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
   );
 }
 
+/**
+ * One statistic: a micro-label over a value.
+ *
+ * The label takes `fieldLabelStyle` (§74) — the exported treatment, because this is a caption
+ * on a figure rather than a `<label>` for a control. That is where the first migration sent
+ * every uppercase micro-cap, and it takes the last of this screen's letter-spacing with it.
+ */
 function StatTile({ label, value, testId }: { label: string; value: string; testId: string }) {
   return (
-    <div data-testid={testId} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
+    <div
+      data-testid={testId}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
+    >
+      <span style={fieldLabelStyle}>{label}</span>
       <span
         style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--fs-11)',
-          letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: 'var(--text-muted)',
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-24)',
-          color: 'var(--text)',
+          fontSize: 'var(--font-size-xl)',
+          fontWeight: 'var(--font-weight-semibold)',
+          color: 'var(--text-primary)',
+          fontVariantNumeric: 'tabular-nums',
         }}
       >
         {value}
       </span>
     </div>
-  );
-}
-
-function DetailSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
-  return (
-    <Card>
-      <div data-testid="project-detail-loading-skeleton" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-          <div style={block(200, 24)} />
-          <div style={block(64, 22, 20)} />
-        </div>
-        <div style={block('100%', 46)} />
-        <div style={block('100%', 46)} />
-        <div style={block('60%', 60)} />
-      </div>
-    </Card>
   );
 }

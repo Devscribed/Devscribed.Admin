@@ -99,7 +99,22 @@ export type Capability =
   // `@RequireCapability` decorators name, the other is what `can(role, ...)` reads.
   // The refusal itself is raised in the topics service, because it must carry
   // `REQUEST_TOPIC_MESSAGES.manageForbidden` and `CapabilityGuard`'s message is fixed.
-  | 'ManageRequestTopics';
+  | 'ManageRequestTopics'
+  // Spec reports/01 — the nine reporting capabilities. Each report has a paired
+  // (All, My) capability so the report screen can be gated per owner-scope, plus
+  // two column-permission capabilities that shape the Time & Activity projection,
+  // plus `ExportReports` which gates every PDF endpoint. Duplicated in
+  // `MemberCapability` (lowercase-dashed) for the same reason as clients and
+  // holidays above.
+  | 'ViewAmountsOwed'
+  | 'ViewMyAmountsOwed'
+  | 'ViewTimeAndActivity'
+  | 'ViewMyTimeAndActivity'
+  | 'ViewTimeOff'
+  | 'ViewMyTimeOff'
+  | 'ViewTimeAndActivityBilled'
+  | 'ViewTimeAndActivitySpent'
+  | 'ExportReports';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -137,6 +152,17 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewOwnRequests',
     'ViewAllRequests',
     'ManageRequestTopics',
+    // Reports (spec reports/01). Admin sees everything, including the Spent column
+    // (pay-rate × hours), which manager does not.
+    'ViewAmountsOwed',
+    'ViewMyAmountsOwed',
+    'ViewTimeAndActivity',
+    'ViewMyTimeAndActivity',
+    'ViewTimeOff',
+    'ViewMyTimeOff',
+    'ViewTimeAndActivityBilled',
+    'ViewTimeAndActivitySpent',
+    'ExportReports',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -172,15 +198,35 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // Requests spec 02's matrix gives a manager the same curating rights as an admin:
     // the catalogue is the vocabulary of the day-to-day work the role exists for.
     'ManageRequestTopics',
+    // Spec reports/01's matrix: a manager sees every All-variant report and can
+    // export PDFs, but is denied the Spent column — pay rate is admin-only.
+    'ViewAmountsOwed',
+    'ViewMyAmountsOwed',
+    'ViewTimeAndActivity',
+    'ViewMyTimeAndActivity',
+    'ViewTimeOff',
+    'ViewMyTimeOff',
+    'ViewTimeAndActivityBilled',
+    'ExportReports',
   ],
   // Requests spec 01 is the first spec to put anything in these two rows. A member
   // reading and editing *their own* contract details is still authorized below by
   // `canReadProfile` and friends rather than from this table — see the note above those
-  // helpers for why "self" must never become a row here.
-  user: ['CreateRequest', 'ViewOwnRequests'],
+  // helpers for why "self" must never become a row here. Reports/01 adds the three "My"
+  // variants plus `ExportReports`, so a regular user can see and PDF their own payable,
+  // hours and time off.
+  user: [
+    'CreateRequest',
+    'ViewOwnRequests',
+    'ViewMyAmountsOwed',
+    'ViewMyTimeAndActivity',
+    'ViewMyTimeOff',
+    'ExportReports',
+  ],
   // Being asked something is not a privilege: a `viewer` sees the requests they raised
-  // or that are addressed to them, and may not raise one.
-  viewer: ['ViewOwnRequests'],
+  // or that are addressed to them, and may not raise one. Reports/01 adds "My Time Off"
+  // — the calendar that affects their own schedule — and no export.
+  viewer: ['ViewOwnRequests', 'ViewMyTimeOff'],
 };
 
 /* ------------------------------------------------------------------ *

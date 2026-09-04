@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Button, Input, Modal, Select } from '@/ds';
-import { errorNode } from '@/field-error';
+import { Button, FieldLabel, FormActions, Modal, Select, Switch, TextInput, ToggleButton } from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
 import { TaskSelector, type TaskSelectorValue } from '@/task-selector/TaskSelector';
 import { useToast } from '@/toast';
 import {
@@ -12,7 +12,6 @@ import {
   formatWallClockInTz,
   validateTimeEntry,
 } from '@devscribed/validation';
-import { SegmentedControl } from './SegmentedControl';
 import type { AssignableProject, TimeEntry } from './types';
 
 const NO_PROJECT = '';
@@ -269,92 +268,52 @@ export function TimeEntryModal({
     if (!submitting) onClose();
   }
 
-  const twoCol: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 };
+  const twoCol: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' };
 
   return (
     <Modal
       open={open}
       title={isEdit ? 'Edit Time Entry' : 'Add Time Entry'}
       onClose={handleClose}
-      width={520}
       data-testid="tt-entry-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={submitting}
-            data-testid="tt-entry-cancel-btn"
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="tt-entry-form"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            data-testid="tt-entry-save-btn"
-            style={{ flex: 1 }}
-          >
-            {isEdit ? 'Save changes' : 'Save entry'}
-          </Button>
-        </>
-      }
+      style={{ width: 520 }}
     >
+      {/* The buttons sit inside the form rather than in a shell slot, which is what lets the
+          save button be a real `type="submit"` instead of an `<button form=…>` pointing at a
+          form somewhere else in the tree. §63 owns the row's alignment. */}
       <form
-        id="tt-entry-form"
         onSubmit={submit}
         noValidate
-        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}
       >
         {/* Project */}
-        <div>
-          <Select
-            label="Project"
-            value={projectId}
-            options={options}
-            placeholder="Select project…"
-            onChange={(value: string) => {
-              setProjectId(value);
-              // Spec 15 FR-14/FR-16 — project change clears the task selection
-              // (a task belongs to exactly one project). Free-text `task` stays.
-              setTaskSelection(null);
-              clearError('projectId');
-              clearError('taskId');
-            }}
-            error={errors.projectId}
-            data-testid="tt-entry-project-select"
-          />
-          {errors.projectId && (
-            <div
-              data-testid="field-error-projectId"
-              style={{ marginTop: 5, fontSize: 'var(--fs-12)', color: 'var(--error-500)' }}
-            >
-              {errors.projectId}
-            </div>
-          )}
-        </div>
+        <Select
+          label="Project"
+          variant="formik"
+          value={optionFor(options, projectId)}
+          options={options}
+          placeholder="Select project…"
+          onChange={(option) => {
+            setProjectId(valueOf(option));
+            // Spec 15 FR-14/FR-16 — project change clears the task selection
+            // (a task belongs to exactly one project). Free-text `task` stays.
+            setTaskSelection(null);
+            clearError('projectId');
+            clearError('taskId');
+          }}
+          error={Boolean(errors.projectId)}
+          errorMessage={errors.projectId}
+          errorId="field-error-projectId"
+          aria-describedby={errors.projectId ? 'field-error-projectId' : undefined}
+          data-testid="tt-entry-project-select"
+        />
 
         {/* Spec 15 — Task selector, hidden when the project has no board key (FR-15). */}
         {selectedProject && selectedProject.key && (
           <div>
-            <label
-              style={{
-                display: 'block',
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-                marginBottom: 6,
-              }}
-            >
-              Task
-            </label>
+            {/* §74 — the system's own field-label treatment, so this caption sits on the same
+                line as the labels of the fields above and below it. */}
+            <FieldLabel>Task</FieldLabel>
             <TaskSelector
               orgId={orgId}
               projectId={selectedProject.id}
@@ -375,8 +334,9 @@ export function TimeEntryModal({
             />
             {errors.taskId && (
               <div
+                id="field-error-taskId"
                 data-testid="field-error-taskId"
-                style={{ marginTop: 5, fontSize: 'var(--fs-12)', color: 'var(--error-500)' }}
+                style={{ marginTop: 'var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--status-error)' }}
               >
                 {errors.taskId}
               </div>
@@ -386,84 +346,89 @@ export function TimeEntryModal({
 
         {/* Free-text task label. Hidden while a task is selected (spec 15 §UI). */}
         {!taskSelection && (
-          <Input
+          <TextInput
             label={selectedProject && selectedProject.key ? 'Task label' : 'Task'}
             placeholder="e.g. API development"
             value={task}
-            onChange={(e: { target: { value: string } }) => {
+            onChange={(e) => {
               setTask(e.target.value);
               clearError('task');
             }}
             readOnly={submitting}
             data-testid="tt-entry-task-input"
-            error={errors.task ? errorNode('task', errors.task) : undefined}
-            wrapperStyle={{ gap: 0 }}
+            error={errors.task}
+            errorId="field-error-task"
+            aria-describedby={errors.task ? 'field-error-task' : undefined}
           />
         )}
 
         {/* Date */}
-        <Input
+        <TextInput
           label="Date"
           type="date"
           value={date}
-          onChange={(e: { target: { value: string } }) => {
+          onChange={(e) => {
             setDate(e.target.value);
             clearError('date');
           }}
           readOnly={submitting}
           data-testid="tt-entry-date-input"
-          error={errors.date ? errorNode('date', errors.date) : undefined}
-          wrapperStyle={{ gap: 0 }}
+          error={errors.date}
+          errorId="field-error-date"
+          aria-describedby={errors.date ? 'field-error-date' : undefined}
         />
 
         {/* Mode toggle */}
-        <SegmentedControl<EntryMode>
-          ariaLabel="Entry mode"
-          value={mode}
-          onChange={(next) => {
-            setMode(next);
-            setErrors({});
-          }}
-          options={[
-            { value: 'timerange', label: 'Time range', testId: 'tt-entry-mode-timerange' },
-            { value: 'duration', label: 'Duration only', testId: 'tt-entry-mode-duration' },
-          ]}
+        {/* Two answers, so it is written as two — `value1` / `value2` is the spelling §87 kept
+            beside the list form for exactly this case. */}
+        <ToggleButton
+          aria-label="Entry mode"
+          selectedValue={mode}
+          value1="Time range"
+          value2="Duration only"
+          value1TestId="tt-entry-mode-timerange"
+          value2TestId="tt-entry-mode-duration"
+          onValue1Click={() => { setMode('timerange'); setErrors({}); }}
+          onValue2Click={() => { setMode('duration'); setErrors({}); }}
+          style={{ marginBottom: 0 }}
         />
 
         {mode === 'timerange' ? (
           <div>
             <div style={twoCol}>
-              <Input
+              <TextInput
                 label="Start time"
                 type="time"
                 value={startTime}
-                onChange={(e: { target: { value: string } }) => {
+                onChange={(e) => {
                   setStartTime(e.target.value);
                   clearError('startTime');
                   clearError('durationMinutes');
                 }}
                 readOnly={submitting}
                 data-testid="tt-entry-start-time"
-                error={errors.startTime ? errorNode('startTime', errors.startTime) : undefined}
-                wrapperStyle={{ gap: 0 }}
+                error={errors.startTime}
+                errorId="field-error-startTime"
+                aria-describedby={errors.startTime ? 'field-error-startTime' : undefined}
               />
-              <Input
+              <TextInput
                 label="End time"
                 type="time"
                 value={endTime}
-                onChange={(e: { target: { value: string } }) => {
+                onChange={(e) => {
                   setEndTime(e.target.value);
                   clearError('endTime');
                 }}
                 readOnly={submitting}
                 data-testid="tt-entry-end-time"
-                error={errors.endTime ? errorNode('endTime', errors.endTime) : undefined}
-                wrapperStyle={{ gap: 0 }}
+                error={errors.endTime}
+                errorId="field-error-endTime"
+                aria-describedby={errors.endTime ? 'field-error-endTime' : undefined}
               />
             </div>
             <div
               data-testid="tt-entry-duration-computed"
-              style={{ marginTop: 8, fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+              style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
             >
               Duration: {computed} (computed)
             </div>
@@ -471,8 +436,9 @@ export function TimeEntryModal({
                 validator; surface it here so it is never hidden. */}
             {errors.durationMinutes && (
               <div
+                id="field-error-durationMinutes"
                 data-testid="field-error-durationMinutes"
-                style={{ marginTop: 5, fontSize: 'var(--fs-12)', color: 'var(--error-500)' }}
+                style={{ marginTop: 'var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--status-error)' }}
               >
                 {errors.durationMinutes}
               </div>
@@ -481,38 +447,37 @@ export function TimeEntryModal({
         ) : (
           <div>
             <div style={twoCol}>
-              <Input
+              <TextInput
                 label="Hours"
                 type="number"
                 min={0}
                 value={hours}
-                onChange={(e: { target: { value: string } }) => {
+                onChange={(e) => {
                   setHours(e.target.value);
                   clearError('durationMinutes');
                 }}
                 readOnly={submitting}
                 data-testid="tt-entry-duration-hours"
-                wrapperStyle={{ gap: 0 }}
               />
-              <Input
+              <TextInput
                 label="Minutes"
                 type="number"
                 min={0}
                 max={59}
                 value={minutes}
-                onChange={(e: { target: { value: string } }) => {
+                onChange={(e) => {
                   setMinutes(e.target.value);
                   clearError('durationMinutes');
                 }}
                 readOnly={submitting}
                 data-testid="tt-entry-duration-minutes"
-                wrapperStyle={{ gap: 0 }}
               />
             </div>
             {errors.durationMinutes && (
               <div
+                id="field-error-durationMinutes"
                 data-testid="field-error-durationMinutes"
-                style={{ marginTop: 5, fontSize: 'var(--fs-12)', color: 'var(--error-500)' }}
+                style={{ marginTop: 'var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--status-error)' }}
               >
                 {errors.durationMinutes}
               </div>
@@ -521,18 +486,19 @@ export function TimeEntryModal({
         )}
 
         {/* Description */}
-        <Input
+        <TextInput
           label="Description"
           placeholder="Optional notes…"
           value={description}
-          onChange={(e: { target: { value: string } }) => {
+          onChange={(e) => {
             setDescription(e.target.value);
             clearError('description');
           }}
           readOnly={submitting}
           data-testid="tt-entry-description-input"
-          error={errors.description ? errorNode('description', errors.description) : undefined}
-          wrapperStyle={{ gap: 0 }}
+          error={errors.description}
+          errorId="field-error-description"
+          aria-describedby={errors.description ? 'field-error-description' : undefined}
         />
 
         {/* Spec 16 §UI — Billable toggle row. Bordered so it does not vanish in the
@@ -544,104 +510,62 @@ export function TimeEntryModal({
           style={{
             display: 'grid',
             gridTemplateColumns: '1fr auto',
-            gap: 12,
+            gap: 'var(--space-5)',
             alignItems: 'center',
-            padding: '12px 14px',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-panel-2)',
+            padding: 'var(--space-5) var(--space-6)',
+            border: 'var(--border-width-hairline) solid var(--border-default)',
+            borderRadius: 'var(--radius-l)',
+            background: 'var(--surface-sunken)',
           }}
         >
           <div>
-            <div
-              id="tt-billable-label"
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-13)',
-                color: 'var(--text)',
-              }}
-            >
+            <div id="tt-billable-label" style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-primary)' }}>
               Billable
             </div>
             <div
               id="tt-billable-desc"
               data-testid="time-entry-billable-toggle-label"
-              style={{ marginTop: 4, fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
+              style={{ marginTop: 'var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
             >
               {billable
                 ? "Counts toward the client's Billed Amount on reports. Turn off for internal work, training, or PTO."
                 : "This entry will not appear in the client's Billed Amount total."}
             </div>
           </div>
-          <BillableSwitch
+          {/* §88 — the switch draws no label of its own: the row already carries the name and
+              the sentence explaining it, and a third copy inside the control would be read
+              back twice. `aria-label` is what names it instead. */}
+          <Switch
             checked={billable}
             disabled={submitting}
             onChange={setBillable}
-            testId="time-entry-billable-toggle"
-            describedBy="tt-billable-desc"
+            aria-label="Billable"
+            aria-describedby="tt-billable-desc"
+            data-testid="time-entry-billable-toggle"
           />
         </div>
+
+        {/* 280 rather than §63's 240: split two ways with the button's own chrome, 240 leaves
+            79px of label and `Save changes` wraps onto a second line inside the button. */}
+        <FormActions maxWidth={280}>
+          <Button
+            onClick={handleClose}
+            disabled={submitting}
+            data-testid="tt-entry-cancel-btn"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            preloader={submitting}
+            data-testid="tt-entry-save-btn"
+          >
+            {isEdit ? 'Save changes' : 'Save entry'}
+          </Button>
+        </FormActions>
       </form>
     </Modal>
-  );
-}
-
-/**
- * Spec 16 §Accessibility — a boolean pill switch. DS ships a segmented `Toggle` (three
- * values, no true/false semantics), not a switch, so we roll a local one that uses
- * `role="switch"` + `aria-checked` and paints accent-filled ↔ muted-grey from tokens.
- * Kept local to this modal because the RunningTimer bar uses a smaller variant of the
- * same idea — inline duplication is cheaper than lifting a shared component just for two
- * call sites (spec 16 is the only spec that needs a boolean pill today).
- */
-function BillableSwitch({
-  checked,
-  disabled,
-  onChange,
-  testId,
-  describedBy,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (next: boolean) => void;
-  testId: string;
-  describedBy?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-describedby={describedBy}
-      data-testid={testId}
-      onClick={() => !disabled && onChange(!checked)}
-      disabled={disabled}
-      style={{
-        width: 42,
-        height: 24,
-        padding: 2,
-        borderRadius: 999,
-        border: '1px solid var(--border)',
-        background: checked ? 'var(--accent)' : 'var(--bg-sunken)',
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: checked ? 'flex-end' : 'flex-start',
-        transition: 'background 120ms ease',
-      }}
-    >
-      <span
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 999,
-          background: 'var(--bg-panel)',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
-          display: 'block',
-        }}
-      />
-    </button>
   );
 }
 

@@ -2,9 +2,11 @@
 
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { Badge, Button, IconButton, Select, Table } from '@/ds';
-import type { TableColumn } from '@ds/components/data/Table';
+import { Badge, Button, EmptyState, IconButton, Preloader, Select, Table } from '@devscribed/ds';
+import type { TableColumn } from '@devscribed/ds';
 import { PencilIcon } from '@/layout/icons';
+import { PageHeader } from '@/layout/PageHeader';
+import { optionFor, valueOf } from '@/select';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
 import {
@@ -24,11 +26,13 @@ const FILTER_OPTIONS: { value: ProjectStatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
-/** Status → DS `Badge` tone + label. Active reuses the green "active" tone, archived the
- * grey "inactive" tone — both carry dot + text so status is never colour-only. */
-const STATUS_META: Record<ProjectStatus, { tone: 'active' | 'inactive'; label: string }> = {
-  active: { tone: 'active', label: 'Active' },
-  archived: { tone: 'inactive', label: 'Archived' },
+/**
+ * Status → `Badge` (§32), which is written for exactly this pair. Both tones carry text, so
+ * the state is never colour alone.
+ */
+const STATUS_META: Record<ProjectStatus, { status: 'active' | 'inactive'; label: string }> = {
+  active: { status: 'active', label: 'Active' },
+  archived: { status: 'inactive', label: 'Archived' },
 };
 
 /**
@@ -124,10 +128,8 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
       render: (p) => (
         <span
           style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 500,
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text)',
+            fontWeight: 'var(--font-weight-medium)',
+            color: 'var(--text-primary)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -146,9 +148,7 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
         <span
           data-testid={`projects-row-${p.id}-client`}
           style={{
-            fontFamily: 'var(--font-text)',
-            fontSize: 'var(--fs-14)',
-            color: p.clientName ? 'var(--text)' : 'var(--text-faint)',
+            color: p.clientName ? 'var(--text-primary)' : 'var(--text-tertiary)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -161,15 +161,23 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
     {
       label: 'Members',
       flex: 1.3,
-      render: (p) => <AvatarStack count={p.memberCount} />,
+      render: (p) => <AvatarStack count={p.memberCount} members={p.memberPreview} />,
     },
     {
       label: 'Hours logged',
       flex: 1,
       align: 'flex-end',
-      mono: true,
       render: (p) => (
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-14)' }}>
+        <span
+          style={{
+            fontWeight: 'var(--font-weight-semibold)',
+            color: 'var(--text-primary)',
+            /* A total in a column of totals: the figures line up because the digits are one
+               width, which is what Phase 2 settled for every number in this product. A
+               second family would say this one is code. */
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
           {p.totalHours} h
         </span>
       ),
@@ -178,7 +186,9 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
       label: 'Status',
       flex: 0.9,
       render: (p) => (
-        <Badge tone={STATUS_META[p.status].tone}>{STATUS_META[p.status].label}</Badge>
+        <Badge status={STATUS_META[p.status].status} size="s">
+          {STATUS_META[p.status].label}
+        </Badge>
       ),
     },
     {
@@ -188,10 +198,8 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
       render: (p) =>
         p.status === 'archived' ? (
           <Button
-            variant="secondary"
-            size="sm"
-            loading={restoringId === p.id}
-            disabled={restoringId !== null && restoringId !== p.id}
+            preloader={restoringId === p.id}
+            disabled={restoringId !== null}
             onClick={(event: React.MouseEvent) => {
               event.stopPropagation();
               void handleRestore(p);
@@ -217,67 +225,51 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
 
   return (
     <div data-testid="projects-page">
-      {/* Page header (own testid on the h1 per the spec's roster, distinct from the
-          shell's `page-title`). */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 20,
-          flexWrap: 'wrap',
-          marginBottom: 22,
-        }}
-      >
-        <div>
-          <h1
-            data-testid="projects-page-title"
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-27)',
-              letterSpacing: '-.6px',
-              margin: '0 0 5px',
-              color: 'var(--text)',
-            }}
-          >
-            Projects
-          </h1>
-          <div style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-            Manage projects and assign members. Assignment controls who can log time.
-          </div>
-        </div>
-        <Button
-          variant="primary"
-          onClick={() => setCreateOpen(true)}
-          data-testid="projects-new-btn"
-        >
-          + New project
-        </Button>
-      </div>
+      <PageHeader
+        title={<span data-testid="projects-page-title">Projects</span>}
+        subtitle="Manage projects and assign members. Assignment controls who can log time."
+        action={
+          <Button variant="primary" onClick={() => setCreateOpen(true)} data-testid="projects-new-btn">
+            + New project
+          </Button>
+        }
+      />
 
-      <div style={{ marginBottom: 18, maxWidth: 200 }}>
+      <div style={{ marginBottom: 'var(--space-7)', maxWidth: 200 }}>
+        {/* `value` takes an **option**, not the value behind it: a bare string is a legal
+            option whose label is itself, so binding the filter directly would draw `active`
+            where the list says `Active`. `optionFor` is the crossing. */}
         <Select
-          value={filter}
+          value={optionFor(FILTER_OPTIONS, filter)}
           options={FILTER_OPTIONS}
-          onChange={(value) => setFilter(parseProjectStatusFilter(value))}
+          onChange={(option) => setFilter(parseProjectStatusFilter(valueOf(option)))}
           data-testid="projects-status-filter"
         />
       </div>
 
       {loading || projects === null ? (
-        <ProjectsSkeleton />
+        <Preloader data-testid="projects-loading" aria-label="Loading projects" />
       ) : projects.length === 0 ? (
-        <EmptyState onCreate={() => setCreateOpen(true)} />
+        <EmptyState data-testid="projects-empty-state">
+          {PROJECT_MESSAGES.emptyState}
+          <div style={{ marginTop: 'var(--space-6)' }}>
+            <Button variant="primary" onClick={() => setCreateOpen(true)} data-testid="projects-empty-new-btn">
+              + New project
+            </Button>
+          </div>
+        </EmptyState>
       ) : (
-        <Table
+        <Table<ProjectListItem>
           data-testid="projects-table"
           columns={columns}
-          rows={projects.map((p) => ({
-            ...p,
-            testId: `projects-row-${p.id}`,
-            dim: p.status === 'archived',
-          }))}
+          rows={projects}
+          rowKey="id"
+          rowTestId={(p) => `projects-row-${p.id}`}
+          /* An archived project is **not** in `disabledRowIds`, though the system offers it:
+             `Restore` lives on the row, and a greyed row takes `pointerEvents: none` with the
+             control inside it. That is the members list's argument (a removed member's card is
+             still the place a restore is decided from) arriving on a project, and the
+             `Archived` badge is what says the state. */
           onRowClick={(row) => router.push(`/org/${orgId}/projects/${row.id}`)}
         />
       )}
@@ -306,89 +298,6 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
         onClose={() => setEditTarget(null)}
         onSaved={() => void load()}
       />
-    </div>
-  );
-}
-
-/** Centered empty-state panel — the business spec's verbatim string + a create button. */
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div
-      data-testid="projects-empty-state"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 'var(--sp-6)',
-        padding: 'var(--sp-12) var(--sp-8)',
-        textAlign: 'center',
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-      }}
-    >
-      <div
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-18)',
-          color: 'var(--text)',
-        }}
-      >
-        No projects yet
-      </div>
-      <div style={{ fontSize: 'var(--fs-15)', color: 'var(--text-sub)', maxWidth: 420 }}>
-        {PROJECT_MESSAGES.emptyState}
-      </div>
-      <Button variant="primary" onClick={onCreate} data-testid="projects-empty-new-btn">
-        + New project
-      </Button>
-    </div>
-  );
-}
-
-/** Static token-colored table-shaped blocks — the app ships no skeleton primitive
- * (carried gap from 04/05/09/10). */
-function ProjectsSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
-  return (
-    <div
-      data-testid="projects-loading-skeleton"
-      style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ height: 52, background: 'var(--bg-header)' }} />
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--sp-6)',
-            padding: '0 18px',
-            minHeight: 62,
-            borderTop: '1px solid var(--divider)',
-          }}
-        >
-          <div style={{ ...block(160, 16), flex: 2 }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1.3 }}>
-            <div style={block(26, 26, 20)} />
-            <div style={block(70, 12)} />
-          </div>
-          <div style={{ ...block(50, 14), flex: 1 }} />
-          <div style={{ ...block(64, 22, 20), flex: 0.9 }} />
-          <div style={{ ...block(34, 34, 8), flex: 0.7 }} />
-        </div>
-      ))}
     </div>
   );
 }

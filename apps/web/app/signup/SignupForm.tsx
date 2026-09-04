@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { Button, Eye, EyeOff, IconButton, InfoBanner, Input } from '@/ds';
+import { Button, Eye, EyeOff, IconButton, InfoBanner, TextInput } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import {
   FIELD_VALIDATORS,
   MESSAGES,
@@ -39,35 +40,12 @@ const PLACEHOLDERS: Partial<Record<SignupField, string>> = {
   email: 'you@company.com',
 };
 
-const passwordHint = (
-  <span id="signup-password-hint">At least 8 characters, with one letter and one digit.</span>
-) as unknown as string;
-
-/**
- * The DS `Input` renders its `error` prop as the message node but exposes no way to
- * tag that node. It renders whatever node it is handed, so we hand it a span carrying
- * the spec's `field-error-{fieldName}` test id and the `aria-describedby` target.
- * See the design doc's "DS gaps" — a first-class `errorId` prop belongs in the DS.
- */
-function errorNode(field: SignupField, message: string) {
-  return (
-    <span id={`field-error-${field}`} data-testid={`field-error-${field}`}>
-      {message}
-    </span>
-  ) as unknown as string;
-}
-
 function detectTimezone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
   } catch {
     return undefined;
   }
-}
-
-function focusField(field: SignupField): void {
-  const input = document.querySelector<HTMLInputElement>(`[data-testid="${TEST_IDS[field]}"]`);
-  input?.focus();
 }
 
 export function SignupForm() {
@@ -102,7 +80,7 @@ export function SignupForm() {
     if (!validation.valid) {
       // Every applicable error at once, focus on the first one, no request (FR-15).
       setErrors(validation.errors);
-      focusField(validation.firstInvalidField!);
+      focusByTestId(TEST_IDS[validation.firstInvalidField!]);
       return;
     }
 
@@ -141,6 +119,8 @@ export function SignupForm() {
     const message = errors[field];
     return {
       label: LABELS[field],
+      id: TEST_IDS[field],
+      name: field,
       value: values[field],
       placeholder: PLACEHOLDERS[field],
       onChange: change(field),
@@ -149,38 +129,46 @@ export function SignupForm() {
       'data-testid': TEST_IDS[field],
       'aria-invalid': message ? true : undefined,
       'aria-describedby': message ? `field-error-${field}` : undefined,
-      error: message ? errorNode(field, message) : undefined,
+      error: message,
+      errorId: `field-error-${field}`,
       style: submitting ? { opacity: 0.55 } : undefined,
-      wrapperStyle: { gap: 0 },
     };
   };
 
   return (
     <form onSubmit={submit} noValidate data-testid="signup-form">
       {banner && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
-          <InfoBanner tone="error" role="alert" aria-live="polite" data-testid="signup-error-banner">
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <InfoBanner
+            variant="error"
+            role="alert"
+            aria-live="polite"
+            data-testid="signup-error-banner"
+          >
             {banner}
           </InfoBanner>
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
+      {/* 20px is the system's form rhythm, and the room TextInput's error slot needs — see LoginForm. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
         {SIGNUP_FIELD_ORDER.map((field) =>
           field === 'password' ? (
-            <Input
+            <TextInput
               key={field}
               {...fieldProps(field)}
               type={revealPassword ? 'text' : 'password'}
-              // `Input` shows the error *instead of* the hint, so only one of the two
-              // ever exists to be described by.
-              hint={passwordHint}
+              // The hint shares the error's slot, so only one of the two ever exists to be
+              // described by — which is what keeps this `aria-describedby` single-valued.
+              hint="At least 8 characters, with one letter and one digit."
+              hintId="signup-password-hint"
               aria-describedby={errors.password ? 'field-error-password' : 'signup-password-hint'}
               trailing={
                 <IconButton
                   label={revealPassword ? 'Hide password' : 'Show password'}
                   aria-pressed={revealPassword}
                   active={revealPassword}
+                  size={28}
                   data-testid="signup-password-toggle"
                   // Keeps focus in the field: the toggle never steals the caret.
                   onMouseDown={(event) => event.preventDefault()}
@@ -191,7 +179,7 @@ export function SignupForm() {
               }
             />
           ) : (
-            <Input
+            <TextInput
               key={field}
               {...fieldProps(field)}
               type={field === 'email' ? 'email' : 'text'}
@@ -203,10 +191,9 @@ export function SignupForm() {
       <Button
         type="submit"
         variant="primary"
-        size="lg"
-        loading={submitting}
+        preloader={submitting}
         data-testid="signup-submit-button"
-        style={{ width: '100%', marginTop: 'var(--sp-10)' }}
+        style={{ width: '100%', marginTop: 'var(--space-7)' }}
       >
         {submitting ? 'Creating account' : 'Create account'}
       </Button>

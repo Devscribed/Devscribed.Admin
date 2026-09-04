@@ -4,15 +4,31 @@ import type { Role } from '@devscribed/validation';
 export type ProjectStatus = 'active' | 'archived';
 
 /**
+ * A member as the list row draws them: the name the mark is tinted and labelled from, and
+ * the letters inside it. Both come from the server — §93's `Avatar` takes its initials as a
+ * prop and never derives them, so the rule for "first letter of each name" lives in one
+ * place rather than on every screen that draws a person.
+ */
+export interface ProjectMemberPreview {
+  name: string;
+  initials: string;
+}
+
+/**
  * One entry of `GET /api/organizations/{orgId}/projects` (spec 11 §API Contracts).
- * The list endpoint carries member/hours aggregates but no per-member data — the
- * roster is a separate call (`GET .../projects/{id}/members`).
+ * The list endpoint carries the hours aggregate and a *sample* of the roster; the roster
+ * itself is a separate call (`GET .../projects/{id}/members`).
  */
 export interface ProjectListItem {
   id: string;
   name: string;
   status: ProjectStatus;
   memberCount: number;
+  /**
+   * Spec 11 — at most the first three members, in roster order. A sample, never a length:
+   * `memberCount` is what says how many there are, and it is the number the column reads.
+   */
+  memberPreview: ProjectMemberPreview[];
   totalHours: number;
   /** ISO-8601 creation timestamp. */
   createdAt: string;

@@ -1,0 +1,11 @@
+/* The design system's stylesheet. One import gets the tokens and the base rules.
+
+   Keep this file as `@import` lines only — a rule written here belongs in `base.css`, and a
+   value belongs in `tokens/`. */
+
+@import './tokens/fonts.css';
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/effects.css';
+@import './base.css';

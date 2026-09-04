@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { AuthLayout, Button, Eye, EyeOff, IconButton, InfoBanner, Input, Spinner } from '@/ds';
-import { errorNode, focusByTestId, hintNode } from '@/field-error';
+import { AuthLayout, Button, Eye, EyeOff, IconButton, InfoBanner, Preloader, TextInput } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import { AUTH_MESSAGES, MESSAGES, validatePassword } from '@devscribed/validation';
 
 type Phase = 'checking' | 'valid' | 'invalid' | 'done';
@@ -13,14 +13,9 @@ const PASSWORD_TEST_ID = 'reset-password-input';
 const CONFIRM_TEST_ID = 'reset-password-confirm-input';
 
 const backToLogin = (
-  <Link href="/login" data-testid="reset-login-link" style={{ textDecoration: 'none' }}>
+  <Link href="/login" data-testid="reset-login-link">
     Back to login
   </Link>
-);
-
-const passwordHint = hintNode(
-  'reset-password-hint',
-  'At least 8 characters, with one letter and one digit.',
 );
 
 export function ResetPasswordScreen() {
@@ -135,12 +130,14 @@ export function ResetPasswordScreen() {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 'var(--sp-5)',
-            padding: 'var(--sp-12) 0 var(--sp-10)',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-8) 0 var(--space-7)',
           }}
         >
-          <Spinner size={28} style={{ color: 'var(--accent)' }} />
-          <p style={{ margin: 0, fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+          {/* The system's loader is three pulsing dots at a fixed size, not a sizable arc — the page
+              loader is `size=12 margin=7`, which is the default. */}
+          <Preloader />
+          <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
             Checking your reset link…
           </p>
         </div>
@@ -151,14 +148,14 @@ export function ResetPasswordScreen() {
   if (phase === 'invalid') {
     return (
       <AuthLayout title="Set a new password" footer={backToLogin}>
-        <InfoBanner tone="error" role="alert" aria-live="polite" data-testid="reset-error-message">
+        <InfoBanner variant="error" role="alert" aria-live="polite" data-testid="reset-error-message">
           {AUTH_MESSAGES.resetTokenInvalid}
         </InfoBanner>
         <p
           style={{
-            margin: 'var(--sp-4) 0 0',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--text-muted)',
+            margin: 'var(--space-3) 0 0',
+            fontSize: 'var(--font-size-s)',
+            color: 'var(--text-secondary)',
           }}
         >
           Request a new one from the login screen.
@@ -171,7 +168,7 @@ export function ResetPasswordScreen() {
     return (
       <AuthLayout title="Set a new password" footer={backToLogin}>
         <InfoBanner
-          tone="success"
+          variant="success"
           role="alert"
           aria-live="polite"
           data-testid="reset-success-message"
@@ -180,10 +177,10 @@ export function ResetPasswordScreen() {
         </InfoBanner>
         <p
           style={{
-            margin: 'var(--sp-4) 0 0',
-            fontSize: 'var(--fs-13)',
-            lineHeight: 'var(--lh-normal)',
-            color: 'var(--text-muted)',
+            margin: 'var(--space-3) 0 0',
+            fontSize: 'var(--font-size-s)',
+            lineHeight: 'var(--line-height-base)',
+            color: 'var(--text-secondary)',
           }}
         >
           You&apos;ve been signed out everywhere else. Sign in with your new password.
@@ -195,9 +192,12 @@ export function ResetPasswordScreen() {
   return (
     <AuthLayout title="Set a new password" footer={backToLogin}>
       <form onSubmit={submit} noValidate data-testid="reset-form">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
-          <Input
+        {/* 20px is the system's form rhythm, and the room TextInput's error slot needs — see LoginForm. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          <TextInput
             label="New password"
+            id={PASSWORD_TEST_ID}
+            name="password"
             type={reveal ? 'text' : 'password'}
             value={password}
             onChange={(event: { target: { value: string } }) => {
@@ -208,17 +208,19 @@ export function ResetPasswordScreen() {
             onBlur={checkPassword}
             readOnly={submitting}
             data-testid={PASSWORD_TEST_ID}
-            hint={passwordHint}
+            hint="At least 8 characters, with one letter and one digit."
+            hintId="reset-password-hint"
             aria-invalid={passwordError ? true : undefined}
             aria-describedby={passwordError ? 'field-error-password' : 'reset-password-hint'}
-            error={passwordError ? errorNode('password', passwordError) : undefined}
+            error={passwordError ?? undefined}
+            errorId="field-error-password"
             style={submitting ? { opacity: 0.55 } : undefined}
-            wrapperStyle={{ gap: 0 }}
             trailing={
               <IconButton
                 label={reveal ? 'Hide password' : 'Show password'}
                 aria-pressed={reveal}
                 active={reveal}
+                size={28}
                 data-testid="reset-password-toggle"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => setReveal((shown) => !shown)}
@@ -232,8 +234,10 @@ export function ResetPasswordScreen() {
             No reveal toggle here on purpose: if both fields can be read at once, the
             confirmation stops catching the typo it exists to catch.
           */}
-          <Input
+          <TextInput
             label="Confirm password"
+            id={CONFIRM_TEST_ID}
+            name="passwordConfirmation"
             type="password"
             value={confirmation}
             onChange={(event: { target: { value: string } }) => {
@@ -245,19 +249,18 @@ export function ResetPasswordScreen() {
             data-testid={CONFIRM_TEST_ID}
             aria-invalid={confirmError ? true : undefined}
             aria-describedby={confirmError ? 'field-error-password-confirm' : undefined}
-            error={confirmError ? errorNode('password-confirm', confirmError) : undefined}
+            error={confirmError ?? undefined}
+            errorId="field-error-password-confirm"
             style={submitting ? { opacity: 0.55 } : undefined}
-            wrapperStyle={{ gap: 0 }}
           />
         </div>
 
         <Button
           type="submit"
           variant="primary"
-          size="lg"
-          loading={submitting}
+          preloader={submitting}
           data-testid="reset-submit-button"
-          style={{ width: '100%', marginTop: 'var(--sp-10)' }}
+          style={{ width: '100%', marginTop: 'var(--space-7)' }}
         >
           {submitting ? 'Resetting' : 'Reset password'}
         </Button>

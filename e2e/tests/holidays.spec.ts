@@ -5,6 +5,7 @@ import {
   VALID,
   inviteAndAcceptViaApi,
   login,
+  openNavSection,
   seedReserveCredit,
   setMembershipRole,
   signupOrg,
@@ -85,8 +86,15 @@ async function setOwnCountryViaApi(request: APIRequestContext, countryCode: stri
   }
 }
 
-/** Opens Settings › Holidays through the sidebar row and waits for the page to mount. */
+/**
+ * Opens Settings › Holidays through the sidebar row and waits for the page to mount.
+ *
+ * `Holidays` is a row inside the **Time off** group, and a closed disclosure holds none of
+ * its contents in the document — so the group is opened first. `openNavSection` is
+ * idempotent, which is why it is safe to call on every path into this page.
+ */
 async function openHolidaysPage(page: Page) {
+  await openNavSection(page, 'Time off');
   await page.getByTestId('settings-tab-holidays').click();
   await page.waitForURL('**/settings/holidays**', { timeout: 30000 });
   await expect(page.getByTestId('holidays-page')).toBeVisible({ timeout: 30000 });

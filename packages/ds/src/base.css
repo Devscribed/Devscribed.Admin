@@ -1,0 +1,204 @@
+/* Base element resets, and the handful of global rules an inline style cannot express.
+   **Nothing else belongs in this file.** A value that can be written inline is written inline,
+   on the component that owns it; what lives here is what a media query, a pseudo-class or a
+   keyframe forces out of the file. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* No `color` on `body`, on purpose. Inherited text is the browser's own black; every component
+   that means `--text-primary` says so itself, so a page can never be quietly re-inked by a
+   change here. */
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+ul { list-style: none; padding: 0; margin: 0; }
+/* An unclassed `<a>` takes the brand link colour rather than the browser's #0000EE, so a link
+   added to a page without reaching for a component still looks like it belongs. Nothing in the
+   system relies on it — every component that draws a link colours it itself. */
+a { text-decoration: none; color: var(--text-link); }
+a:hover { color: var(--text-link); }
+p, h1, h2, h3, h4, h5, h6 { margin: 0; }
+
+/* The page heading steps up with the viewport: headline-6, then headline-5 from 768px and
+   headline-4 from 1200px. Media queries cannot be inline, so `PageTitle` renders an `<h1>`
+   against these rules rather than carrying the type itself. */
+.page-title { font-weight: 500; font-size: 16px; line-height: 24px; letter-spacing: -0.32px; }
+@media (min-width: 768px) { .page-title { font-weight: 450; font-size: 20px; line-height: 30px; letter-spacing: -0.32px; } }
+@media (min-width: 1200px) { .page-title { font-weight: 450; font-size: 24px; line-height: 36px; letter-spacing: -0.7px; } }
+img { max-width: 100%; display: block; }
+button {
+  margin: 0; padding: 0; border: 0; background: transparent;
+  font: inherit; cursor: pointer;
+}
+input, textarea, select { font: inherit; }
+
+/* The field label, as a class for anything that is not a system input. Every label sits 10px
+   in from its control's left edge and 10px down from whatever is above it, so a label block is
+   35px rather than 25. `FormField` exports the same values as `fieldLabelStyle` (§74), and the
+   three inputs that draw their own label render them inline. */
+.input-label {
+  display: inline-block;
+  padding: 10px 0 0 10px;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xs);
+  line-height: 21px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
+  white-space: nowrap;
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  font-size: var(--font-size-s);
+  color: var(--text-primary);
+  caret-color: var(--text-primary);
+  background-color: var(--color-white);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-l);
+  padding: var(--space-4);
+  transition: var(--transition-border-focus);
+}
+.form-control:focus {
+  border-color: var(--color-blue);
+  outline: 0;
+  box-shadow: var(--shadow-focus-input);
+}
+.form-control::placeholder { color: var(--text-secondary); opacity: 1; }
+
+.errorInput {
+  border-color: var(--color-error) !important;
+  outline: 0;
+  box-shadow: var(--shadow-error-glow);
+}
+
+/* §14 — the app frame's one breakpoint. Above it, a fixed `--layout-sidebar-width` rail beside
+   an 80px navbar; below it, a 60px navbar and the rail as a drawer. It lives here for the reason
+   `.page-title` does — a media query cannot be an inline style — and **width alone decides**, so
+   the server and the hydrated client agree at every size without a stored preference or a
+   `matchMedia` read.
+
+   Below the breakpoint the rail *becomes* the drawer, carrying `MenuDrawer`'s geometry — 340px,
+   `--shadow-drawer`, translateX(105%), 0.3s — rather than a second copy of the navigation
+   sliding in beside it, which would put two of every nav row in the document. */
+.ds-navbar { height: var(--layout-navbar-height-desktop); }
+
+.ds-sidebar { width: var(--layout-sidebar-width); }
+
+.ds-app-shell-nav {
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle);
+  background-color: var(--surface-card);
+}
+
+/* Both controls exist at every size and are revealed only below the breakpoint, where there is
+   something to open and close. */
+.ds-navbar-menu, .ds-sidebar-close { display: none; }
+
+@media (max-width: 1199px) {
+  .ds-navbar { height: var(--layout-navbar-height-mobile); }
+
+  .ds-app-shell-nav {
+    position: fixed;
+    top: var(--layout-navbar-height-mobile);
+    right: 0;
+    bottom: 0;
+    z-index: 2002;
+    width: 340px;
+    max-width: 100%;
+    border-right: 0;
+    box-shadow: var(--shadow-drawer);
+    transform: translateX(105%);
+    transition: transform var(--duration-hover);
+  }
+
+  .ds-app-shell-nav[data-open] { transform: translateX(0); }
+
+  /* The rail's own 290px would leave the drawer's last 50px empty. */
+  .ds-app-shell-nav .ds-sidebar { width: 100%; }
+
+  .ds-navbar-menu, .ds-sidebar-close { display: flex; }
+}
+
+.ds-app-shell-scrim { position: fixed; inset: 0; z-index: 2001; }
+
+/* §51 — `MenuDrawer`'s geometry. The panel hangs from **whatever the navbar currently is**,
+   which is the same switch `.ds-navbar` and `.ds-app-shell-nav` make above; a literal `top: 60px`
+   is the mobile navbar height frozen into a number, and above the breakpoint the navbar is 80.
+   It is here rather than inline for `.ds-navbar`'s reason: a media query cannot be an inline
+   style. The slide and the `data-open` that drives it are `.ds-app-shell-nav`'s own, and the
+   trailing `visibility` step is what keeps a closed panel out of the page rather than merely off
+   the side of it. A caller's `top` stays inline, where it can override this. */
+.ds-menu-drawer {
+  position: fixed;
+  top: var(--layout-navbar-height-desktop);
+  right: 0;
+  bottom: 0;
+  z-index: 2002;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-width: 100%;
+  background-color: #fff;
+  box-shadow: var(--shadow-drawer);
+  transform: translateX(105%);
+  /* Hidden only once it has finished leaving: the panel has to stay painted for the slide
+     and must not stay in the page after it. */
+  visibility: hidden;
+  transition: transform 0.3s, visibility 0s 0.3s;
+}
+
+.ds-menu-drawer[data-open] {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.3s;
+}
+
+.ds-menu-drawer-scrim {
+  position: fixed;
+  top: var(--layout-navbar-height-desktop);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2001;
+}
+
+@media (max-width: 1199px) {
+  .ds-menu-drawer,
+  .ds-menu-drawer-scrim { top: var(--layout-navbar-height-mobile); }
+}
+
+/* §30 — `Calendar`'s day cell. The column is `1fr` rather than a fixed width: this grid is
+   inline in a card that flexes, not in a popover of a known size, so the cells share the width
+   they are given. It lives in a class rather than inline because the height below is one
+   height for every pointer and used to be a media query. */
+.ds-calendar-day {
+  display: block;
+  /* §72 — `--control-height`. A 27px cell is a reasonable mouse target for a date picker that
+     is a secondary way to type a date into a field. This grid is the *primary* control on a
+     public page a candidate books an interview from, half of them on a phone. One height for
+     every pointer: the same 44px every other control in the system is. */
+  height: var(--control-height);
+  line-height: var(--control-height);
+  margin: 1px 0;
+}
+
+/* §69 — `Preloader`'s animation, here rather than injected into `<head>` by the component. A
+   module-scope
+   `document.head.appendChild` is a side effect that runs once, on whichever page first
+   imports the component, and it fails silently everywhere it does not: under a strict CSP,
+   in a document the module was evaluated against before hydration, or in any consumer that
+   renders the markup without evaluating the module. A loader whose dots do not move is
+   indistinguishable from a screen that has stopped, which is the one thing a loader exists
+   to rule out — so the animation belongs in the stylesheet that is always loaded. */
+@keyframes ds-pulse-loader {
+  0% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(0.1); opacity: 0.7; }
+  80% { transform: scale(1); opacity: 1; }
+}

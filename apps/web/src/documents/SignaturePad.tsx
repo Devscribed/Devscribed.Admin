@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { ENVELOPE_LIMITS } from '@devscribed/validation';
-import { Button, Input, Tabs } from '@/ds';
+import { Button, TextInput, PageTabs } from '@devscribed/ds';
 
 export type SignatureMode = 'drawn' | 'typed';
 
@@ -115,10 +115,10 @@ export function SignaturePad({
     <section
       data-testid="signing-signature"
       style={{
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--sp-8)',
-        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-l)',
+        padding: 'var(--space-6)',
+        background: 'var(--surface-card)',
       }}
     >
       <div
@@ -126,24 +126,24 @@ export function SignaturePad({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 'var(--sp-6)',
-          marginBottom: 'var(--sp-6)',
+          gap: 'var(--space-5)',
+          marginBottom: 'var(--space-5)',
         }}
       >
         <div data-testid="signing-signature-mode" style={{ flex: 1 }}>
-          <Tabs
-            items={[
-              { value: 'drawn', label: <span data-testid="signing-signature-mode-drawn">Draw</span> },
-              { value: 'typed', label: <span data-testid="signing-signature-mode-typed">Type</span> },
+          {/* §45 — the tab is drawn by the component, so the id it carries is `testId`
+              rather than a span smuggled through the label. */}
+          <PageTabs
+            tabs={[
+              { value: 'drawn', label: 'Draw', testId: 'signing-signature-mode-drawn' },
+              { value: 'typed', label: 'Type', testId: 'signing-signature-mode-typed' },
             ]}
-            value={mode}
-            onChange={(next: string) => onModeChange(next as SignatureMode)}
+            active={mode}
+            onChange={(next) => onModeChange(next as SignatureMode)}
           />
         </div>
         <Button
           type="button"
-          variant="ghost"
-          size="sm"
           data-testid="signing-signature-clear-btn"
           onClick={clear}
         >
@@ -168,9 +168,9 @@ export function SignaturePad({
             display: 'block',
             width: '100%',
             height: 160,
-            border: `1.5px dashed ${error ? 'var(--error-500)' : 'var(--border-strong)'}`,
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--paper-0)',
+            border: `var(--border-width-control) dashed ${error ? 'var(--status-error)' : 'var(--border-default)'}`,
+            borderRadius: 'var(--radius-l)',
+            background: 'var(--surface-card)',
             touchAction: 'none',
             cursor: disabled ? 'not-allowed' : 'crosshair',
           }}
@@ -178,7 +178,7 @@ export function SignaturePad({
       </div>
 
       <div style={{ display: mode === 'typed' ? 'block' : 'none' }}>
-        <Input
+        <TextInput
           label="Type your full name"
           value={typedName}
           disabled={disabled}
@@ -190,18 +190,22 @@ export function SignaturePad({
         <div
           aria-hidden
           style={{
-            marginTop: 'var(--sp-5)',
+            marginTop: 'var(--space-4)',
             minHeight: 64,
             display: 'flex',
             alignItems: 'center',
-            padding: '0 var(--sp-6)',
-            border: '1.5px dashed var(--border-strong)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--paper-0)',
-            fontFamily: 'var(--font-display)',
+            padding: '0 var(--space-5)',
+            border: 'var(--border-width-control) dashed var(--border-default)',
+            borderRadius: 'var(--radius-l)',
+            background: 'var(--surface-card)',
             fontStyle: 'italic',
-            fontSize: 'var(--fs-27)',
-            color: 'var(--char-ink)',
+            /* The largest thing in its box, and it reads as the value rather than as a
+               heading — so it takes the headline-4 step, tracking and all, and stays a
+               `div`. The same call the manage page's interview time made. */
+            fontSize: 'var(--headline-4-size)',
+            lineHeight: 'var(--headline-4-line)',
+            letterSpacing: 'var(--headline-4-tracking)',
+            color: 'var(--text-primary)',
           }}
         >
           {typedName}
@@ -211,7 +215,7 @@ export function SignaturePad({
       {error && (
         <p
           data-testid="signing-signature-error"
-          style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}
+          style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--font-size-s)', color: 'var(--status-error)' }}
         >
           {error}
         </p>

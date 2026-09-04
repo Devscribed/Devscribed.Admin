@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
-import { Button, Modal } from '@/ds';
+import { Button, FormActions, InfoBanner, Modal, TextInput } from '@devscribed/ds';
 import { useToast } from '@/toast';
 import {
   calculateWorkingDays,
@@ -25,104 +25,10 @@ function localTodayYmd(): string {
   return `${year}-${month}-${day}`;
 }
 
-const microLabel: CSSProperties = {
-  display: 'block',
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--fs-11)',
-  letterSpacing: 'var(--ls-wider)',
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-  marginBottom: 'var(--sp-4)',
-};
-
 const previewLine: CSSProperties = {
-  fontSize: 'var(--fs-13)',
-  color: 'var(--text-sub)',
+  fontSize: 'var(--font-size-s)',
+  color: 'var(--text-tertiary)',
 };
-
-/** Inline field error carrying the spec's `field-error-{field}` id + test id (native inputs
- * cannot use the DS `Input`'s `error` slot, so the error node is rendered by hand). */
-function FieldError({ field, message }: { field: string; message: string }) {
-  return (
-    <div
-      id={`field-error-${field}`}
-      data-testid={`field-error-${field}`}
-      style={{
-        fontFamily: 'var(--font-text)',
-        fontSize: 'var(--fs-12)',
-        color: 'var(--error-500)',
-        marginTop: 'var(--sp-2)',
-      }}
-    >
-      {message}
-    </div>
-  );
-}
-
-/** Native `<input type="date">` styled to the DS `Input` shape (the DS has no date field —
- * see the spec-09 design doc's DS-gaps). Manages its own focus ring like `Input`. */
-function DateInput({
-  label,
-  testId,
-  field,
-  value,
-  min,
-  error,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  testId: string;
-  field: string;
-  value: string;
-  min?: string;
-  error?: string;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-}) {
-  const [focus, setFocus] = useState(false);
-  const borderColor = error
-    ? 'var(--error-500)'
-    : focus
-      ? 'var(--accent)'
-      : 'var(--border-strong)';
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <label style={{ ...microLabel, color: error ? 'var(--error-500)' : 'var(--text-muted)' }}>
-        {label}
-      </label>
-      <input
-        type="date"
-        value={value}
-        min={min}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        onFocus={() => setFocus(true)}
-        onBlur={() => setFocus(false)}
-        data-testid={testId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `field-error-${field}` : undefined}
-        style={{
-          height: 'var(--field-h-lg)',
-          width: '100%',
-          border: `1.5px solid ${borderColor}`,
-          borderRadius: 'var(--radius-lg)',
-          padding: '0 12px',
-          fontFamily: 'var(--font-text)',
-          fontSize: 'var(--fs-15)',
-          color: 'var(--text)',
-          background: 'var(--bg-field)',
-          outline: 'none',
-          boxShadow: focus ? (error ? 'var(--shadow-glow-error)' : 'var(--shadow-glow-accent)') : 'none',
-          transition: 'border-color .15s, box-shadow .15s',
-          cursor: disabled ? 'not-allowed' : 'text',
-          opacity: disabled ? 0.55 : 1,
-        }}
-      />
-      {error && <FieldError field={field} message={error} />}
-    </div>
-  );
-}
 
 /**
  * Request Vacation modal (spec 09). Two native date inputs, a live working-days preview and
@@ -134,6 +40,15 @@ function DateInput({
  * covers a paid holiday. Informational only: requirement 12 keeps the vacation math
  * exactly as it was — `calculateWorkingDays` still counts every Mon–Fri, the payload is
  * unchanged, and the hint never disables submit.
+ *
+ * **The two ends stay native date inputs, and `DateField` is not restored for them.** The
+ * restorable one is a read-only text box over a month grid of its own, and both halves are
+ * wrong here: the system already has that grid in `Calendar` (§72, §86), and the one date
+ * rule the picker enforces is *no day after today*, which is the exact reverse of the only
+ * rule this form has. What the fields did need was the system's field treatment, and
+ * `TextInput` carries it through `type` — so the label, the ring, the error node and its
+ * `aria-describedby` are the component's, and the control under them is still the platform's
+ * date input a reader can type into.
  */
 export function RequestVacationModal({
   orgId,
@@ -280,91 +195,62 @@ export function RequestVacationModal({
   }
 
   return (
-    <Modal
-      open={open}
-      title="Request Vacation"
-      onClose={handleClose}
-      width={440}
-      data-testid="vacation-request-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={saving}
-            data-testid="vacation-request-cancel-btn"
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="vacation-request-form"
-            variant="primary"
-            size="lg"
-            loading={saving}
-            disabled={crossYear}
-            data-testid="vacation-request-submit-btn"
-            style={{ flex: 1 }}
-          >
-            {saving ? 'Submitting' : 'Submit request'}
-          </Button>
-        </>
-      }
-    >
+    <Modal open={open} title="Request Vacation" onClose={handleClose} data-testid="vacation-request-modal">
       <form id="vacation-request-form" onSubmit={submit} noValidate>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
-          <DateInput
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          <TextInput
+            type="date"
             label="Start date"
-            testId="vacation-start-date-input"
-            field="startDate"
             value={startDate}
             min={today}
+            readOnly={saving}
+            data-testid="vacation-start-date-input"
             error={fieldErrors.startDate}
-            disabled={saving}
-            onChange={(value) => {
-              setStartDate(value);
+            errorId="field-error-startDate"
+            onChange={(event) => {
+              setStartDate(event.target.value);
               setFieldErrors((prev) => ({ ...prev, startDate: undefined }));
               setServerError(null);
             }}
           />
 
-          <DateInput
+          <TextInput
+            type="date"
             label="End date"
-            testId="vacation-end-date-input"
-            field="endDate"
             value={endDate}
             min={startDate || today}
+            readOnly={saving}
+            data-testid="vacation-end-date-input"
             error={fieldErrors.endDate}
-            disabled={saving}
-            onChange={(value) => {
-              setEndDate(value);
+            errorId="field-error-endDate"
+            onChange={(event) => {
+              setEndDate(event.target.value);
               setFieldErrors((prev) => ({ ...prev, endDate: undefined }));
               setServerError(null);
             }}
           />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             <div data-testid="vacation-working-days-preview" style={previewLine}>
               Working days: {workingDaysText}
             </div>
             <div data-testid="vacation-available-days-preview" style={previewLine}>
               Available balance: {availableDays} days
             </div>
+            {/* Not an `InfoBanner`: §91 ruled that a holiday is not a status, and this banner
+                has only the four status tones. A fifth variant for one hint would put the
+                holiday hue back into the status palette the token was named to stay out of. */}
             {holidayCount > 0 && (
               <div
                 data-testid="vacation-request-holiday-hint"
                 style={{
-                  marginTop: 'var(--sp-2)',
-                  padding: 'var(--sp-3) var(--sp-4)',
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--holiday-bg)',
-                  border: '1px solid var(--holiday-border)',
-                  color: 'var(--holiday-ink)',
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-13)',
+                  marginTop: 'var(--space-1)',
+                  padding: 'var(--space-2) var(--space-3)',
+                  borderRadius: 'var(--radius-l)',
+                  background: 'var(--surface-holiday)',
+                  border: 'var(--border-width-hairline) solid var(--border-holiday)',
+                  color: 'var(--text-primary)',
+                  fontSize: 'var(--font-size-s)',
                 }}
               >
                 {HOLIDAY_MESSAGES.vacationHint(holidayCount)}
@@ -373,14 +259,27 @@ export function RequestVacationModal({
           </div>
 
           {errorText && (
-            <div
-              data-testid="vacation-request-error"
-              role="alert"
-              style={{ fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}
-            >
+            <InfoBanner variant="error" role="alert" data-testid="vacation-request-error">
               {errorText}
-            </div>
+            </InfoBanner>
           )}
+        </div>
+
+        <div style={{ marginTop: 'var(--space-9)' }}>
+          <FormActions>
+            <Button type="button" onClick={handleClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={saving}
+              disabled={crossYear}
+              data-testid="vacation-request-submit-btn"
+            >
+              {saving ? 'Submitting' : 'Submit request'}
+            </Button>
+          </FormActions>
         </div>
       </form>
     </Modal>

@@ -69,19 +69,19 @@ not.
 
 ## Design Layer
 
-Business specs own behaviour, API contracts, and validation messages. Visual and interaction detail lives in a paired `NN-name.design.md`, with a static `NN-name.mock.html` next to it as the visual acceptance target. Design specs reference the Teammerly Meridian design system in [`1_DS for dev/`](../../1_DS%20for%20dev/README.md) by component and token — they never restate a hex value or a pixel size.
+Business specs own behaviour, API contracts, and validation messages. Visual and interaction detail lives in a paired `NN-name.design.md`, with a static `NN-name.mock.html` next to it as the visual acceptance target. Design specs reference the design system in [`packages/ds`](../../packages/ds/README.md) by component and token — they never restate a hex value or a pixel size. Every design spec describes that system, and [`specs/design-system/decisions.md`](../design-system/decisions.md) is the numbered record behind it, kept for the reasoning rather than as a checklist.
 
 Rules that hold across every design spec:
 
-- **Light theme only** this release. Dark mode exists in the design system but is out of scope; no theme toggle ships yet.
+- **Light theme only.** Not a scoping decision any more — the design system has no dark palette, because the product it was measured from ships none. There is no theme toggle and no `[data-theme]` to honour.
 - **Copy ownership** — validation messages belong to the business spec; headings, subtitles, placeholders, hints, and micro-labels belong to the design spec. Neither restates the other.
-- **DS gaps** — anything missing from the design system is added to the design system, not improvised per screen, and recorded in that design spec's "DS gaps" table.
+- **DS gaps** — anything missing from the design system is added to the design system, not improvised per screen, and recorded in that design spec's "DS gaps" table. A gap is still a gap when it is missing only because nothing has needed it yet: it gets filled, and numbered in the [decisions](../design-system/decisions.md).
 - **The signed-in shell** — every route under `/org/{orgId}/` renders inside one app shell (sidebar, top bar, page header), defined in [00-app-shell.design.md](00-app-shell.design.md). Screens own their content and their page-header copy; they never draw their own chrome, and they never restate a navigation rule.
 - **The signed-out set** — `/signup`, `/login`, `/forgot-password`, and `/reset-password` are one visual family. Same shell, same card chrome, same spacing tokens; the cross-account link always sits in `AuthLayout`'s footer, outside the card. Spec 02's design file defines the family; spec 01 conforms.
 
 Spec 03 still gates its submit buttons on validation and needs the shared CTA rule applied when it is next touched. Its "I understand" checkbox gate stays disabled-until-checked — that is a deliberate confirmation, not a validation. Its accept-invite screen also belongs to the signed-out set and should adopt the shell rules above.
 
-`InfoBanner` hardcodes its four tone triplets as literal `oklch(...)` values rather than tokens. Spec 02 uses all four; promoting them to tokens is the outstanding design-system chore before spec 03 adds more banners.
+`InfoBanner` is one of the six components the reskin opens and remaps rather than replaces, and `Toast` folds into it — so the banner carries more of the product's messaging than it did. Spec 02 uses all four tones. Whether its tones resolve to tokens is settled when that remap lands, and recorded in the decisions record; spec 03 should not add more banners before then.
 
 Two DS-level items surfaced while building spec 07's currency picker (details in [07's DS gaps](07-vacation-accrual-management.design.md)):
 

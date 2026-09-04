@@ -1,8 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Button, Input, Modal, Select } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import {
+  Button,
+  FormActions,
+  Modal,
+  Select,
+  TextArea,
+  TextInput,
+  type SelectOption,
+} from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
+import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
 import {
   KANBAN_MESSAGES,
@@ -221,48 +230,45 @@ export function CreateTaskModal({
     setSubmitting(false);
   }
 
+  /* Every list is hoisted so `value` can be given the **option** rather than the value
+     behind it: `Select` renders `labelOf(value)`, and a bare string is a legal option whose
+     label is itself — so binding these directly draws `task`, `high`, and a membership UUID
+     where the lists say `Task`, `High` and a person's name. */
+  const typeOptions: SelectOption[] = TASK_TYPES.map((t) => ({
+    value: t,
+    label: TASK_TYPE_LABEL[t],
+  }));
+  const parentSelectOptions: SelectOption[] = parentOptions.map((t) => ({
+    value: t.id,
+    label: `${t.key} — ${t.title}`,
+  }));
+  const priorityOptions: SelectOption[] = [
+    { value: '', label: 'None' },
+    ...TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] })),
+  ];
+  const assigneeOptions: SelectOption[] = [
+    { value: '', label: 'Unassigned' },
+    ...members.map((m) => ({
+      value: m.membershipId,
+      label: `${m.firstName} ${m.lastName}`,
+    })),
+  ];
+  const statusOptions: SelectOption[] = columns.map((c) => ({ value: c.id, label: c.name }));
+
   return (
     <Modal
       open={open}
       onClose={submitting ? () => {} : onClose}
       title="Create Task"
-      width={520}
       data-testid="create-task-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            disabled={submitting}
-            onClick={onClose}
-            data-testid="create-task-cancel"
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="create-task-form"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            data-testid="create-task-submit"
-            style={{ flex: 1 }}
-          >
-            Create Task
-          </Button>
-        </>
-      }
     >
       <form
-        id="create-task-form"
         onSubmit={submit}
         noValidate
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 'var(--sp-5)',
+          gap: 'var(--space-7)',
           maxHeight: '65vh',
           overflowY: 'auto',
         }}
@@ -270,18 +276,19 @@ export function CreateTaskModal({
         {!fixedType && (
           <Select
             label="Type"
-            value={type}
-            options={TASK_TYPES.map((t) => ({ value: t, label: TASK_TYPE_LABEL[t] }))}
-            onChange={(v) => setType(v as TaskType)}
+            value={optionFor(typeOptions, type)}
+            options={typeOptions}
+            onChange={(next) => setType(valueOf(next) as TaskType)}
+            variant="formik"
             data-testid="create-task-type"
           />
         )}
 
-        <Input
+        <TextInput
           label="Title"
           placeholder="Task title"
           value={title}
-          onChange={(event: { target: { value: string } }) => {
+          onChange={(event) => {
             setTitle(event.target.value);
             if (titleError) setTitleError(null);
           }}
@@ -291,75 +298,40 @@ export function CreateTaskModal({
           }}
           autoFocus
           data-testid="create-task-title"
-          aria-invalid={titleError ? true : undefined}
-          aria-describedby={titleError ? 'field-error-create-task-title' : undefined}
-          error={titleError ? errorNode('create-task-title', titleError) : undefined}
-          wrapperStyle={{ gap: 0 }}
+          error={titleError ?? undefined}
+          errorId="field-error-create-task-title"
         />
 
-        <label
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6,
+        {/* §25's `TextArea`, not a hand-built `<textarea>` with its own label, ring and error
+            node. The monospace face stays — this box holds Markdown, which is source text,
+            and that is the half of §77 a real mono family is for. */}
+        <TextArea
+          label="Description"
+          placeholder="Markdown supported…"
+          value={description}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            if (descriptionError) setDescriptionError(null);
           }}
-        >
-          <span
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--fs-11)',
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              color: 'var(--text-muted)',
-            }}
-          >
-            Description
-          </span>
-          <textarea
-            data-testid="create-task-description"
-            placeholder="Markdown supported…"
-            value={description}
-            onChange={(e) => {
-              setDescription(e.target.value);
-              if (descriptionError) setDescriptionError(null);
-            }}
-            onBlur={() => {
-              const r = validateTaskDescription(description);
-              setDescriptionError(r.valid ? null : r.error);
-            }}
-            rows={4}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text)',
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)',
-              padding: '10px 12px',
-              resize: 'vertical',
-              minHeight: 90,
-            }}
-          />
-          {descriptionError && (
-            <span
-              id="field-error-create-task-description"
-              style={{ color: 'var(--error-500)', fontSize: 'var(--fs-12)' }}
-            >
-              {descriptionError}
-            </span>
-          )}
-        </label>
+          onBlur={() => {
+            const r = validateTaskDescription(description);
+            setDescriptionError(r.valid ? null : r.error);
+          }}
+          rows={4}
+          data-testid="create-task-description"
+          error={descriptionError ?? undefined}
+          errorId="field-error-create-task-description"
+          style={{ fontFamily: 'var(--font-family-mono)', minHeight: 90 }}
+        />
 
         {showParent && (
           <Select
             label={parentRequired ? 'Parent' : 'Parent (optional)'}
-            value={parentId}
+            value={optionFor(parentSelectOptions, parentId)}
             placeholder="None"
-            options={parentOptions.map((t) => ({
-              value: t.id,
-              label: `${t.key} — ${t.title}`,
-            }))}
-            onChange={(v) => setParentId(v)}
+            options={parentSelectOptions}
+            onChange={(next) => setParentId(valueOf(next))}
+            variant="formik"
             data-testid="create-task-parent"
           />
         )}
@@ -368,28 +340,26 @@ export function CreateTaskModal({
           style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: 'var(--sp-4)',
+            gap: 'var(--space-5)',
           }}
         >
           <Select
             label="Priority"
-            value={priority}
+            value={optionFor(priorityOptions, priority)}
             placeholder="None"
-            options={[
-              { value: '', label: 'None' },
-              ...TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] })),
-            ]}
-            onChange={(v) => setPriority(v)}
+            options={priorityOptions}
+            onChange={(next) => setPriority(valueOf(next))}
+            variant="formik"
             data-testid="create-task-priority"
           />
-          <Input
+          <TextInput
             label="Story Points"
             type="number"
             min={0}
             max={999}
             step={1}
             value={storyPoints}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setStoryPoints(event.target.value);
               if (storyPointsError) setStoryPointsError(null);
             }}
@@ -398,13 +368,8 @@ export function CreateTaskModal({
               setStoryPointsError(r.valid ? null : r.error);
             }}
             data-testid="create-task-story-points"
-            aria-invalid={storyPointsError ? true : undefined}
-            error={
-              storyPointsError
-                ? errorNode('create-task-story-points', storyPointsError)
-                : undefined
-            }
-            wrapperStyle={{ gap: 0 }}
+            error={storyPointsError ?? undefined}
+            errorId="field-error-create-task-story-points"
           />
         </div>
 
@@ -412,28 +377,26 @@ export function CreateTaskModal({
           style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: 'var(--sp-4)',
+            gap: 'var(--space-5)',
           }}
         >
           <Select
             label="Assignee"
-            value={assigneeId}
+            value={optionFor(assigneeOptions, assigneeId)}
             placeholder="Unassigned"
-            options={[
-              { value: '', label: 'Unassigned' },
-              ...members.map((m) => ({
-                value: m.membershipId,
-                label: `${m.firstName} ${m.lastName}`,
-              })),
-            ]}
-            onChange={(v) => setAssigneeId(v)}
+            options={assigneeOptions}
+            onChange={(next) => setAssigneeId(valueOf(next))}
+            variant="formik"
             data-testid="create-task-assignee"
           />
-          <Input
+          {/* §4 carries the field's whole treatment through `type`; the control under it is
+              still the platform's date input. That is the shape Phase 5 settled when it
+              refused `DateField`. */}
+          <TextInput
             label="Due Date"
             type="date"
             value={dueDate}
-            onChange={(event: { target: { value: string } }) => {
+            onChange={(event) => {
               setDueDate(event.target.value);
               if (dueDateError) setDueDateError(null);
             }}
@@ -442,21 +405,38 @@ export function CreateTaskModal({
               setDueDateError(r.valid ? null : r.error);
             }}
             data-testid="create-task-due-date"
-            aria-invalid={dueDateError ? true : undefined}
-            error={
-              dueDateError ? errorNode('create-task-due-date', dueDateError) : undefined
-            }
-            wrapperStyle={{ gap: 0 }}
+            error={dueDateError ?? undefined}
+            errorId="field-error-create-task-due-date"
           />
         </div>
 
         <Select
           label="Status"
-          value={columnId}
-          options={columns.map((c) => ({ value: c.id, label: c.name }))}
-          onChange={(v) => setColumnId(v)}
+          value={optionFor(statusOptions, columnId)}
+          options={statusOptions}
+          onChange={(next) => setColumnId(valueOf(next))}
+          variant="formik"
           data-testid="create-task-status"
         />
+
+        <FormActions>
+          <Button
+            type="button"
+            disabled={submitting}
+            onClick={onClose}
+            data-testid="create-task-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            preloader={submitting}
+            data-testid="create-task-submit"
+          >
+            Create Task
+          </Button>
+        </FormActions>
       </form>
     </Modal>
   );

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Input, Modal } from '@/ds';
-import { errorNode } from '@/field-error';
+import { Button, FormActions, Modal, TextInput } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
 import { useToast } from '@/toast';
 import { CLIENT_MESSAGES, validateClientName } from '@devscribed/validation';
 import type { ClientSummary } from './types';
@@ -72,9 +72,7 @@ export function ClientModal({
     if (!result.valid) {
       // Focus the name field (and surface the error) — never disable the submit.
       setNameError(result.error);
-      document
-        .querySelector<HTMLInputElement>('[data-testid="client-name-input"]')
-        ?.focus();
+      focusByTestId('client-name-input');
       return;
     }
     setNameError(null);
@@ -127,29 +125,43 @@ export function ClientModal({
       open={open}
       title={isEdit ? 'Rename Client' : 'New Client'}
       onClose={handleClose}
-      width={480}
       data-testid="client-modal"
-      actions={
-        <>
+    >
+      {/* The hidden `client-modal-title` copy is gone: §8's `Modal` names the dialog with its
+          own heading through `aria-labelledby`, and the span existed only because the previous
+          shell could not tag one. The spec's roster records the removal. */}
+      <form
+        onSubmit={submit}
+        noValidate
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}
+      >
+        <TextInput
+          label="Client name"
+          placeholder="e.g. Acme Corp"
+          value={name}
+          onChange={(event) => handleNameChange(event.target.value)}
+          onBlur={blurName}
+          readOnly={submitting}
+          autoFocus
+          data-testid="client-name-input"
+          error={nameError ?? undefined}
+          errorId="field-error-name"
+        />
+
+        <FormActions>
           <Button
             type="button"
-            variant="secondary"
-            size="lg"
             onClick={handleClose}
             disabled={submitting}
             data-testid="client-cancel-btn"
-            style={{ flex: 1 }}
           >
             Cancel
           </Button>
           <Button
             type="submit"
-            form="client-form"
             variant="primary"
-            size="lg"
-            loading={submitting}
+            preloader={submitting}
             data-testid="client-save-btn"
-            style={{ flex: 1 }}
           >
             {isEdit
               ? submitting
@@ -159,39 +171,7 @@ export function ClientModal({
                 ? 'Creating'
                 : 'Create client'}
           </Button>
-        </>
-      }
-    >
-      {/* Modal title needs its own testid, distinct from the modal container.
-          The DS `Modal` renders its own header, so we tag the visible label with
-          a hidden marker span for tests. */}
-      <span
-        data-testid="client-modal-title"
-        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
-      >
-        {isEdit ? 'Rename Client' : 'New Client'}
-      </span>
-      <form
-        id="client-form"
-        onSubmit={submit}
-        noValidate
-        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}
-      >
-        <Input
-          label="Client name"
-          placeholder="e.g. Acme Corp"
-          value={name}
-          onChange={(event: { target: { value: string } }) => handleNameChange(event.target.value)}
-          onBlur={blurName}
-          readOnly={submitting}
-          autoFocus
-          data-testid="client-name-input"
-          aria-invalid={nameError ? true : undefined}
-          aria-describedby={nameError ? 'field-error-name' : undefined}
-          error={nameError ? errorNode('name', nameError) : undefined}
-          style={submitting ? { opacity: 0.55 } : undefined}
-          wrapperStyle={{ gap: 0 }}
-        />
+        </FormActions>
       </form>
     </Modal>
   );

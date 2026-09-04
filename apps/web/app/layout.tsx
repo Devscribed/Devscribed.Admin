@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/toast';
-import '@ds/styles.css';
+import '@devscribed/ds/styles.css';
 import './globals.css';
 
 export const metadata: Metadata = {

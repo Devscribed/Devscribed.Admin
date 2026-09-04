@@ -24,6 +24,8 @@ playwright/.cache/
 e2e/playwright-report/
 e2e/test-results/
 
+# Uploaded CVs, written by LocalFsStorage in development and tests
+apps/api/.storage/
 # Local FileStorage driver — signed documents a developer or a test produced. A signed
 # contract is still a signed contract; none of it belongs in version control.
 .local-storage/
@@ -43,6 +45,9 @@ crash.*.log
 .env
 # Scratch notes that have held live credentials before.
 Info.txt
+
+.idea
+plans/
 docker-compose.override.yml
 
 # AI workflow runs. The summary of a run is worth keeping — it answers "how did this spec

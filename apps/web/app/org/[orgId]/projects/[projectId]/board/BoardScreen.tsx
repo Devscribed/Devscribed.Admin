@@ -19,11 +19,22 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, InfoBanner, SearchField, Spinner } from '@/ds';
+import {
+  Avatar,
+  BackTo,
+  BoardColumn,
+  Button,
+  InfoBanner,
+  Preloader,
+  SearchInput,
+  Select,
+  TextInput,
+  type SelectOption,
+} from '@devscribed/ds';
 import { PlusIcon } from '@/layout/icons';
+import { optionFor, valuesOf } from '@/select';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
 import {
@@ -32,25 +43,22 @@ import {
   TASK_TYPES,
   can,
   type Role,
-  type TaskPriority,
-  type TaskType,
 } from '@devscribed/validation';
-import { AvatarInitials } from '../../../members/[memberId]/AvatarInitials';
 import type { MemberListResponse } from '../../../members/types';
 import { BoardSettingsModal } from '../kanban/BoardSettingsModal';
 import { CreateTaskModal, type OrgMember } from '../kanban/CreateTaskModal';
 import { KanbanHeader } from '../kanban/KanbanHeader';
-import { LabelChipStrip } from '../kanban/LabelChip';
-import { MultiSelectFilter } from '../kanban/MultiSelectFilter';
+import { LabelStrip } from '../kanban/LabelStrip';
 import type {
   BoardResponse,
   KanbanAssignee,
-  KanbanColumn,
+  KanbanColumn as KanbanColumnData,
   KanbanTaskSummary,
 } from '../kanban/types';
 import {
   PRIORITY_LABEL,
   PriorityGlyph,
+  TASK_TYPE_COLOR,
   TASK_TYPE_LABEL,
   TaskTypeGlyph,
   columnCategoryBorder,
@@ -59,11 +67,35 @@ import {
   isOverdueISO,
 } from '../kanban/visual';
 
+/** One column's width. The board scrolls sideways rather than squeezing them. */
+const COLUMN_WIDTH = 300;
+
 /**
  * Spec 13 — Board view. Loads `GET .../board`, renders columns and cards with
  * drag-and-drop between columns (optimistic; PATCH .../tasks/{id}/move on drop).
  * Hides create/settings for archived projects, renders a full-page permission
  * panel for callers without `view-board` or project membership.
+ *
+ * **The column is the system's `BoardColumn` (§43); the card is not `BoardCard` (§42).**
+ * That split is this phase's finding rather than its plan, and the reason is what each
+ * component *is*. §43 is a container — a recessed well, a name, a count, an empty line, a
+ * scrolling body — and a kanban column is exactly that container, so it is taken whole,
+ * including the two test ids it draws for itself. §42 is not a container: it is a card with
+ * a fixed body of three facts, written for a hiring application — a name, a date, and the
+ * two marks a column can put on it. A task card carries seven, and four of them (labels,
+ * priority, story points, assignee) have no slot to go in. A card whose body would have to
+ * be passed through the one prop that ellipsises to a single line is not the same component
+ * wearing different content; it is a different component. So the task card stays here, under
+ * E3's third tier, composed from the system's `Chip`, `Avatar` and tokens.
+ *
+ * `@dnd-kit` stays with it, and that is decided rather than inherited. §43 speaks native
+ * HTML5 drag through `onDragOverIndex` / `onDrop`, and that protocol is written *between*
+ * §43 and §42 — the column finds its slots by `[data-board-card]`, which the card sets. With
+ * the card refused there is nothing on the other end of it, and the alternative is
+ * reimplementing §42's drag half here. The board would also not be the only loser: spec 13
+ * requires keyboard reordering in Board Settings and names `@dnd-kit`'s keyboard sensors as
+ * how it is met, so the library stays in the feature regardless. One mechanism across the
+ * whole feature beats two, which is the argument D4 makes everywhere else.
  */
 export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: string }) {
   const session = useSession();
@@ -187,6 +219,22 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
     for (const list of map.values()) list.sort((a, b) => a.position - b.position);
     return map;
   }, [board, filteredTasks]);
+
+  const typeOptions: SelectOption[] = TASK_TYPES.map((t) => ({
+    value: t,
+    label: TASK_TYPE_LABEL[t],
+    testId: `board-filter-type-item-${t}`,
+  }));
+  const priorityOptions: SelectOption[] = TASK_PRIORITIES.map((p) => ({
+    value: p,
+    label: PRIORITY_LABEL[p],
+    testId: `board-filter-priority-item-${p}`,
+  }));
+  const assigneeOptions: SelectOption[] = members.map((m) => ({
+    value: m.membershipId,
+    label: `${m.firstName} ${m.lastName}`,
+    testId: `board-filter-assignee-item-${m.membershipId}`,
+  }));
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -328,35 +376,33 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
 
   if (state.kind === 'loading') {
     return (
-      <div data-testid="board-view" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--sp-12)' }}>
-        <Spinner />
+      <div data-testid="board-view">
+        <Preloader aria-label="Loading board" />
       </div>
     );
   }
   if (state.kind === 'forbidden') {
     return (
-      <div data-testid="board-view" style={{ maxWidth: 560, margin: '0 auto', padding: 'var(--sp-12) var(--sp-6)' }}>
-        <InfoBanner tone="warning">{KANBAN_MESSAGES.boardPermissionDenied}</InfoBanner>
-        <div style={{ marginTop: 'var(--sp-6)' }}>
-          <Link
+      <div data-testid="board-view" style={{ maxWidth: 560, margin: '0 auto' }}>
+        <InfoBanner variant="warning">{KANBAN_MESSAGES.boardPermissionDenied}</InfoBanner>
+        <div style={{ marginTop: 'var(--space-7)' }}>
+          <BackTo
+            label="Back to Projects"
             href={`/org/${orgId}/projects`}
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              color: 'var(--accent)',
-              textDecoration: 'none',
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              router.push(`/org/${orgId}/projects`);
             }}
-          >
-            ← Back to Projects
-          </Link>
+          />
         </div>
       </div>
     );
   }
   if (state.kind === 'error') {
     return (
-      <div data-testid="board-view" style={{ padding: 'var(--sp-8)' }}>
-        <InfoBanner tone="error">{state.message}</InfoBanner>
+      <div data-testid="board-view">
+        <InfoBanner variant="error">{state.message}</InfoBanner>
       </div>
     );
   }
@@ -365,7 +411,7 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
   const isBoardEmpty = data.tasks.length === 0;
 
   return (
-    <div data-testid="board-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+    <div data-testid="board-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
       <KanbanHeader
         project={data.project}
         orgId={orgId}
@@ -375,64 +421,80 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
+      {/* §7's `info`, not a hand-built grey strip: a read-only board is a fact about the
+          state of the project, and nothing is going wrong. */}
       {archived && (
-        <div
-          style={{
-            background: 'var(--bg-sunken)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '10px 14px',
-            color: 'var(--text-muted)',
-            fontSize: 'var(--fs-13)',
-          }}
-        >
-          This project is archived — the board is read-only.
-        </div>
+        <InfoBanner variant="info">This project is archived — the board is read-only.</InfoBanner>
       )}
 
-      {/* Filter bar */}
-      <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* Filter bar. The three filters were one hand-built `MultiSelectFilter` each — a
+          trigger, a caret, a count bubble, an outside-click listener and a checkbox list,
+          150 lines — and they are `Select isMulti` (§21, §29, §36) now. This is the second
+          consumer of the collapse Phase 3 made, which is what proves it was a component
+          rather than one screen's composition. `closeMenuOnSelect={false}` is §36's
+          documented opt-out and this is its case: picking two types is one act. */}
+      <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {canManageTasks && !archived && (
           <Button
             variant="primary"
+            icon={<PlusIcon />}
             onClick={() => setCreateOpen(true)}
             data-testid="board-create-task-btn"
           >
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <PlusIcon />
-              Create Task
-            </span>
+            Create Task
           </Button>
         )}
-        <MultiSelectFilter
-          label="Type"
-          value={typeFilter}
-          options={TASK_TYPES.map((t) => ({ value: t, label: TASK_TYPE_LABEL[t] }))}
-          onChange={setTypeFilter}
+        <Select
           data-testid="board-filter-type"
+          placeholder="Type"
+          isMulti
+          closeMenuOnSelect={false}
+          options={typeOptions}
+          value={typeFilter.map((v) => optionFor(typeOptions, v)).filter((o) => o !== undefined)}
+          onChange={(next) => setTypeFilter(valuesOf(next))}
+          chipTestId={(option) =>
+            `board-filter-type-chip-${typeof option === 'string' ? option : option.value}`
+          }
+          wrapperStyle={{ width: 180 }}
         />
-        <MultiSelectFilter
-          label="Priority"
-          value={priorityFilter}
-          options={TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))}
-          onChange={setPriorityFilter}
+        <Select
           data-testid="board-filter-priority"
+          placeholder="Priority"
+          isMulti
+          closeMenuOnSelect={false}
+          options={priorityOptions}
+          value={priorityFilter
+            .map((v) => optionFor(priorityOptions, v))
+            .filter((o) => o !== undefined)}
+          onChange={(next) => setPriorityFilter(valuesOf(next))}
+          chipTestId={(option) =>
+            `board-filter-priority-chip-${typeof option === 'string' ? option : option.value}`
+          }
+          wrapperStyle={{ width: 180 }}
         />
-        <MultiSelectFilter
-          label="Assignee"
-          value={assigneeFilter}
-          options={members.map((m) => ({
-            value: m.membershipId,
-            label: `${m.firstName} ${m.lastName}`,
-          }))}
-          onChange={setAssigneeFilter}
+        <Select
           data-testid="board-filter-assignee"
+          placeholder="Assignee"
+          isMulti
+          isSearchable
+          closeMenuOnSelect={false}
+          options={assigneeOptions}
+          value={assigneeFilter
+            .map((v) => optionFor(assigneeOptions, v))
+            .filter((o) => o !== undefined)}
+          onChange={(next) => setAssigneeFilter(valuesOf(next))}
+          chipTestId={(option) =>
+            `board-filter-assignee-chip-${typeof option === 'string' ? option : option.value}`
+          }
+          wrapperStyle={{ width: 200 }}
         />
         <div style={{ flex: 1, minWidth: 200 }}>
-          <SearchField
+          <SearchInput
             value={search}
-            onChange={(event: { target: { value: string } }) => setSearch(event.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
+            onClear={() => setSearch('')}
             placeholder="Search tasks…"
+            aria-label="Search tasks"
             data-testid="board-search"
           />
         </div>
@@ -448,21 +510,20 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
         <div
           style={{
             display: 'flex',
-            gap: 'var(--sp-4)',
+            gap: 'var(--space-5)',
             overflowX: 'auto',
-            paddingBottom: 'var(--sp-4)',
+            paddingBottom: 'var(--space-5)',
+            alignItems: 'flex-start',
           }}
         >
           {data.columns.map((column) => (
-            <BoardColumn
+            <TaskColumn
               key={column.id}
               column={column}
               tasks={tasksByColumn.get(column.id) ?? []}
               draggable={!archived && canManageTasks}
               onOpenTask={(task) =>
-                router.push(
-                  `/org/${orgId}/projects/${projectId}/tasks/${task.id}`,
-                )
+                router.push(`/org/${orgId}/projects/${projectId}/tasks/${task.id}`)
               }
               isBoardEmpty={isBoardEmpty}
               canCreate={canManageTasks && !archived}
@@ -470,21 +531,19 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
             />
           ))}
           {canManageColumns && !archived && (
-            <div style={{ width: 300, flexShrink: 0 }}>
+            <div style={{ width: COLUMN_WIDTH, flexShrink: 0 }}>
               {addingColumn ? (
                 <div
                   style={{
-                    background: 'var(--bg-panel-2)',
-                    border: '1px dashed var(--border)',
-                    borderRadius: 'var(--radius-xl)',
-                    padding: 'var(--sp-4)',
+                    background: 'var(--surface-sunken)',
+                    borderRadius: 'var(--radius-l)',
+                    padding: 'var(--space-5)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 'var(--sp-3)',
+                    gap: 'var(--space-4)',
                   }}
                 >
-                  <input
-                    type="text"
+                  <TextInput
                     autoFocus
                     value={newColumnName}
                     onChange={(e) => setNewColumnName(e.target.value)}
@@ -498,23 +557,13 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
                       }
                     }}
                     placeholder="Column name"
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 'var(--fs-14)',
-                      color: 'var(--text)',
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '8px 10px',
-                    }}
+                    aria-label="Column name"
                   />
-                  <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                    <Button variant="primary" size="sm" onClick={() => void addColumn()}>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                    <Button variant="primary" onClick={() => void addColumn()}>
                       Add
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="sm"
                       onClick={() => {
                         setAddingColumn(false);
                         setNewColumnName('');
@@ -533,17 +582,20 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
                     width: '100%',
                     minHeight: 120,
                     background: 'transparent',
-                    border: '1px dashed var(--border)',
-                    borderRadius: 'var(--radius-xl)',
-                    color: 'var(--text-muted)',
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 'var(--fs-13)',
-                    fontWeight: 500,
+                    /* The one dashed edge on the board, and it is the same mark §43 uses for
+                       the gap a drop would land in: a dashed outline here means "a column
+                       could go here". */
+                    border: 'var(--border-width-hairline) dashed var(--border-default)',
+                    borderRadius: 'var(--radius-l)',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'var(--font-family-base)',
+                    fontSize: 'var(--font-size-s)',
+                    fontWeight: 'var(--font-weight-medium)',
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 6,
+                    gap: 'var(--space-2)',
                   }}
                 >
                   <PlusIcon />
@@ -594,7 +646,16 @@ export function BoardScreen({ orgId, projectId }: { orgId: string; projectId: st
   );
 }
 
-function BoardColumn({
+/**
+ * One column, on §43. Everything drawn here belongs to the system — the recessed well, the
+ * name, the count, the empty line, the scrolling body — and what is left is this board's
+ * three additions: the category rule along its top edge, a fixed width because the board
+ * scrolls sideways, and the droppable wrapper `@dnd-kit` needs a real node for.
+ *
+ * The wrapper exists because §43 is a plain function component and cannot take a `ref`. It
+ * is the drop target rather than the section itself, which is the same rectangle.
+ */
+function TaskColumn({
   column,
   tasks,
   draggable,
@@ -603,7 +664,7 @@ function BoardColumn({
   canCreate,
   onCreate,
 }: {
-  column: KanbanColumn;
+  column: KanbanColumnData;
   tasks: KanbanTaskSummary[];
   draggable: boolean;
   onOpenTask: (task: KanbanTaskSummary) => void;
@@ -612,122 +673,56 @@ function BoardColumn({
   onCreate: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+
   return (
-    <div
-      data-testid={`board-column-${column.id}`}
-      style={{
-        width: 300,
-        flexShrink: 0,
-        background: 'var(--bg-panel-2)',
-        borderRadius: 'var(--radius-xl)',
-        borderTop: `3px solid ${columnCategoryBorder(column.category)}`,
-        display: 'flex',
-        flexDirection: 'column',
-        maxHeight: 'calc(100vh - 260px)',
-      }}
-    >
-      <div
-        data-testid={`board-column-header-${column.id}`}
-        style={{
-          padding: '10px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          position: 'sticky',
-          top: 0,
-          background: 'var(--bg-panel-2)',
-          borderTopLeftRadius: 'var(--radius-xl)',
-          borderTopRightRadius: 'var(--radius-xl)',
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-14)',
-            color: 'var(--text)',
-          }}
-        >
-          {column.name}
-        </span>
-        <span
-          data-testid={`board-column-count-${column.id}`}
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-11)',
-            color: 'var(--text-muted)',
-            background: 'var(--bg-sunken)',
-            borderRadius: 999,
-            padding: '1px 8px',
-          }}
-        >
-          {column.taskCount}
-        </span>
-      </div>
-      <div
-        ref={setNodeRef}
-        style={{
-          padding: '0 var(--sp-3) var(--sp-3)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--sp-3)',
-          background: isOver ? 'var(--hover-bg-tint)' : 'transparent',
-          minHeight: 40,
-          overflowY: 'auto',
-          flex: 1,
-        }}
-      >
-        <SortableContext
-          items={tasks.map((t) => t.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {tasks.length === 0 ? (
+    /* `SortableContext` is a provider and draws nothing, but it is still a React child — and
+       §43 counts its children to know whether the column is empty and where a drop would
+       land. Wrapping the column rather than its cards keeps that count honest. */
+    <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      <div ref={setNodeRef} style={{ width: COLUMN_WIDTH, flexShrink: 0 }}>
+        <BoardColumn
+          status={column.id}
+          name={column.name}
+          count={column.taskCount}
+          /* The empty line says which of two things is true, and they are different states: a
+             board with no tasks at all is a screen waiting to be started, while a column with
+             none on a board that has them is just an empty column. */
+          emptyLabel={
             isBoardEmpty ? (
-              <div
-                style={{
-                  padding: 'var(--sp-8) var(--sp-4)',
-                  textAlign: 'center',
-                  color: 'var(--text-muted)',
-                  fontSize: 'var(--fs-13)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 'var(--sp-4)',
-                  alignItems: 'center',
-                }}
-              >
-                <div>No tasks yet. Create your first task to get started.</div>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                No tasks yet. Create your first task to get started.
                 {canCreate && (
-                  <Button variant="primary" size="sm" onClick={onCreate}>
-                    + Create Task
-                  </Button>
+                  <span>
+                    <Button variant="primary" onClick={onCreate}>
+                      + Create Task
+                    </Button>
+                  </span>
                 )}
-              </div>
+              </span>
             ) : (
-              <div
-                style={{
-                  padding: 'var(--sp-8) var(--sp-4)',
-                  textAlign: 'center',
-                  color: 'var(--text-faint)',
-                  fontSize: 'var(--fs-12)',
-                }}
-              >
-                No tasks in this column.
-              </div>
+              'No tasks in this column.'
             )
-          ) : (
-            tasks.map((task) => (
-              <SortableTaskCard
-                key={task.id}
-                task={task}
-                draggable={draggable}
-                onOpen={() => onOpenTask(task)}
-              />
-            ))
-          )}
-        </SortableContext>
+          }
+          style={{
+            /* The category rule. `in_progress` and `done` are the two columns whose meaning is
+               not their name, and the edge is the only place on the board carrying it. */
+            borderTop: `3px solid ${columnCategoryBorder(column.category)}`,
+            maxHeight: 'calc(100vh - 260px)',
+            /* §34's own reading for a container under a pointer that is carrying something. */
+            outline: isOver ? '2px solid var(--action-primary)' : undefined,
+          }}
+        >
+          {tasks.map((task) => (
+            <SortableTaskCard
+              key={task.id}
+              task={task}
+              draggable={draggable}
+              onOpen={() => onOpenTask(task)}
+            />
+          ))}
+        </BoardColumn>
       </div>
-    </div>
+    </SortableContext>
   );
 }
 
@@ -758,6 +753,16 @@ function SortableTaskCard({
   );
 }
 
+/**
+ * A task, as a board sees it: what kind of thing it is and its key, the title, its labels,
+ * and the row of marks that say how it is going and whose it is.
+ *
+ * Local under E3's third tier — see the note on `BoardScreen` for why this is not §42. What
+ * is *not* local is anything the system already draws: the labels are `Chip` (§20) through
+ * `LabelStrip`, the assignee is `Avatar` (§93), and every value here is a token. The surface
+ * is §12's — white, a hairline, the 8px radius — because that is what a card is in this
+ * system, and repeating those three values is cheaper than a component that only holds them.
+ */
 function TaskCard({
   task,
   draggable,
@@ -767,13 +772,6 @@ function TaskCard({
   draggable: boolean;
   onOpen?: () => void;
 }) {
-  const typeColor: Record<TaskType, string> = {
-    epic: 'var(--accent)',
-    task: 'oklch(0.55 0.11 180)',
-    bug: 'var(--error-500)',
-    story: 'var(--success-500)',
-    subtask: 'var(--text-muted)',
-  };
   return (
     <div
       role={onOpen ? 'button' : undefined}
@@ -788,40 +786,43 @@ function TaskCard({
       }}
       data-testid={`board-task-card-${task.id}`}
       style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-xl)',
-        padding: '10px 12px',
+        background: 'var(--surface-card)',
+        border: 'var(--border-width-hairline) solid var(--border-default)',
+        borderRadius: 'var(--radius-l)',
+        padding: 'var(--space-5)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
-        borderLeft: `4px solid ${typeColor[task.type]}`,
+        gap: 'var(--space-3)',
+        /* The type, as an edge. `TASK_TYPE_COLOR` is the one map both this card and the
+           timer bar read, so a bug is the same colour wherever it is drawn. */
+        borderLeft: `4px solid ${TASK_TYPE_COLOR[task.type]}`,
         cursor: draggable ? 'grab' : onOpen ? 'pointer' : 'default',
-        boxShadow: 'var(--shadow-card)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         <TaskTypeGlyph type={task.type} size={14} />
         <span
           style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--fs-12)',
-            color: 'var(--text-muted)',
+            /* §77's other half: a task key is a literal identifier somebody copies, which is
+               what the mono family is for. The numbers on this card are not compared down a
+               column, so nothing here wants tabular figures. */
+            fontFamily: 'var(--font-family-mono)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
           }}
         >
           {task.key}
         </span>
         {task.childCount > 0 && (
-          <span style={{ fontSize: 'var(--fs-11)', color: 'var(--text-faint)' }}>
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
             ⌐ {task.childCount}
           </span>
         )}
       </div>
       <div
         style={{
-          fontFamily: 'var(--font-text)',
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text)',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-primary)',
           display: '-webkit-box',
           WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
@@ -831,21 +832,27 @@ function TaskCard({
         {task.title}
       </div>
       {task.labels && task.labels.length > 0 && (
-        <LabelChipStrip labels={task.labels} testIdPrefix="task-card-label" />
+        <LabelStrip labels={task.labels} testIdPrefix="task-card-label" />
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minHeight: 22 }}>
         {task.priority && <PriorityGlyph priority={task.priority} size={14} />}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          style={{
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+          }}
+        >
           {task.storyPoints != null && (
             <span
               style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: 'var(--fs-11)',
-                color: 'var(--text-muted)',
-                background: 'var(--bg-sunken)',
-                borderRadius: 999,
-                padding: '2px 8px',
+                fontSize: 'var(--font-size-xs)',
+                fontWeight: 'var(--font-weight-semibold)',
+                color: 'var(--text-secondary)',
+                background: 'var(--surface-sunken)',
+                borderRadius: 'var(--radius-pill)',
+                padding: 'var(--space-1) var(--space-4)',
               }}
             >
               {task.storyPoints}
@@ -855,10 +862,12 @@ function TaskCard({
           {task.dueDate && (
             <span
               style={{
-                fontSize: 'var(--fs-11)',
+                fontSize: 'var(--font-size-xs)',
+                /* Overdue is the one thing on this card that is going badly, so it is the one
+                   thing that takes a status hue. */
                 color: isOverdueISO(task.dueDate)
-                  ? 'var(--error-500)'
-                  : 'var(--text-muted)',
+                  ? 'var(--status-error)'
+                  : 'var(--text-secondary)',
               }}
             >
               {formatDueDateShort(task.dueDate)}
@@ -870,12 +879,16 @@ function TaskCard({
   );
 }
 
+/**
+ * The mark is **not** `decorative`: a board card writes the assignee's name nowhere else, so
+ * a reader who cannot see the circle has no other way to learn whose task this is. That is
+ * the case §93's default was written for.
+ */
 function AssigneeAvatar({ assignee }: { assignee: KanbanAssignee }) {
-  const initials = initialsOfMember(assignee);
   return (
-    <AvatarInitials
-      fullName={`${assignee.firstName} ${assignee.lastName}`}
-      initials={initials}
+    <Avatar
+      name={`${assignee.firstName} ${assignee.lastName}`}
+      initials={initialsOfMember(assignee)}
       size={22}
       data-testid={`assignee-avatar-${assignee.membershipId}`}
     />

@@ -109,6 +109,12 @@ export async function latestResetToken(
   return (await response.json()).token as string;
 }
 
+export interface RegisteredOrganization {
+  email: string;
+  accountId: string;
+  orgId: string;
+}
+
 /**
  * Registers an account and hands back the organization it created. `registerAccount`
  * throws its response away, and the documents routes are all organization-scoped, so a
@@ -117,19 +123,25 @@ export async function latestResetToken(
  *
  * The signup response also issues the session cookie into this `request` context, which
  * is what lets the API-level preconditions below run as this admin.
+ *
+ * `accountId` comes back because hiring's preconditions assign the owner as an
+ * interviewer, which is a fact about an account rather than a membership. The default
+ * organization name is `Acme Inc` — the booking and manage pages render it as the only
+ * branding a candidate sees, and those cases assert on it by name.
  */
 export async function registerOrganization(
   request: APIRequestContext,
   email: string,
-  orgName = 'Existing Org',
-): Promise<{ orgId: string }> {
+  orgName = 'Acme Inc',
+): Promise<RegisteredOrganization> {
   const response = await request.post(`${API}/api/signup`, {
     data: { ...VALID, email, orgName, timezone: 'Europe/Berlin' },
   });
   if (!response.ok()) {
     throw new Error(`Precondition failed: could not register ${email} (${response.status()})`);
   }
-  return { orgId: (await response.json()).organization.id as string };
+  const body = await response.json();
+  return { email, accountId: body.account.id as string, orgId: body.organization.id as string };
 }
 
 /** Signs in through the UI and waits for the app shell to settle. */
@@ -1386,4 +1398,535 @@ export async function publishTemplateVersion(
         `(${published.status()} ${await published.text()})`,
     );
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * The rail
+ * ------------------------------------------------------------------ */
+
+/**
+ * Expands one titled group in the rail.
+ *
+ * Every destination but `Timesheets` lives inside a group now, and only the group holding
+ * the current route arrives open (§13) — so from Members, which is where signing in lands,
+ * most rows are one toggle away and are not in the document until it is thrown. A group
+ * title is reached by its accessible name rather than a test id, for the same reason the
+ * hamburger is: the name is what a reader has to navigate by, and a test id would not
+ * prove it exists.
+ *
+ * Idempotent, so a test already inside the section does not close it.
+ */
+export async function openNavSection(page: Page, title: string): Promise<void> {
+  const toggle = page.getByRole('button', { name: title, exact: true });
+  await toggle.waitFor({ state: 'visible' });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
+/** Opens a group and clicks one of its rows. */
+export async function clickNav(page: Page, section: string, testId: string): Promise<void> {
+  await openNavSection(page, section);
+  await page.getByTestId(testId).click();
+}
+
+/**
+ * Opens the floating tracker from the bar's pill (spec 12).
+ *
+ * The pill says *a timer is running*; the widget it discloses is what carries the project and
+ * the stop control, so a case that reads `topbar-timer-project` or presses
+ * `topbar-timer-stop-btn` opens it first. Same seam as `openNavSection`, for the same reason:
+ * a closed disclosure holds none of its contents in the document.
+ */
+export async function openTracker(page: Page): Promise<void> {
+  const pill = page.getByTestId('topbar-timer-indicator');
+  await pill.waitFor({ state: 'visible' });
+  if ((await pill.getAttribute('aria-expanded')) !== 'true') await pill.click();
+  await page.getByTestId('topbar-timer-widget').waitFor({ state: 'visible' });
+}
+
+/** `openNavSection(page, 'Hiring')`, kept because hiring's cases read better for it. */
+export async function openHiringSection(page: Page): Promise<void> {
+  await openNavSection(page, 'Hiring');
+}
+
+/** Opens the `Hiring` group and clicks one of its rows. */
+export async function clickHiringNav(page: Page, testId: string): Promise<void> {
+  await clickNav(page, 'Hiring', testId);
+}
+
+/* ------------------------------------------------------------------ *
+ * Hiring — specs 01-07
+ * ------------------------------------------------------------------ */
+
+export interface SeededRoleMember {
+  email: string;
+  accountId: string;
+  role: string;
+}
+
+/**
+ * Adds a second member with a given role, through the API's test-only seam.
+ *
+ * There is no invitation endpoint yet (user-management spec 03), so a browser has no way
+ * to produce a `manager`, a `user` or a `viewer` at all — and hiring's permission matrix
+ * is four roles wide, with the interviewer's row gated on assignment rather than role.
+ * `POST /api/test/members` is that missing seam and only that: it answers behind an
+ * `admin`'s own session and never in production, the same way the mail sink and the
+ * calendar stub do.
+ *
+ * The request context must be carrying the admin's session — `registerOrganization`
+ * leaves it there.
+ */
+export async function addMember(
+  request: APIRequestContext,
+  input: { email: string; role: string; firstName?: string; lastName?: string },
+): Promise<SeededRoleMember> {
+  const response = await request.post(`${API}/api/test/members`, {
+    data: { password: VALID.password, ...input },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not seed a ${input.role} (${response.status()})`,
+    );
+  }
+  const body = await response.json();
+  return { email: body.email, accountId: body.accountId, role: body.role };
+}
+
+/**
+ * Creates a vacancy interviewed by somebody other than the session's owner — which is
+ * what makes a `user` an interviewer, and is the precondition for every rule in
+ * hiring 03 §06 and 04 §01.
+ */
+export async function createVacancyFor(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  interviewerAccountId: string,
+  overrides: { title?: string; durationMinutes?: number } = {},
+): Promise<SeededVacancy> {
+  const response = await request.post(
+    `${API}/api/organizations/${org.orgId}/hiring/vacancies`,
+    {
+      data: {
+        title: overrides.title ?? 'Senior React Engineer',
+        durationMinutes: overrides.durationMinutes ?? 60,
+        description: '',
+        interviewerAccountId,
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not create a vacancy (${response.status()})`);
+  }
+  const body = await response.json();
+  return { id: body.id, publicSlug: body.publicSlug, title: body.title };
+}
+
+export interface SeededCategory {
+  id: string;
+  name: string;
+}
+
+/** Creates a category through the API — a precondition, not the thing under test. */
+export async function createCategory(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  name: string,
+): Promise<SeededCategory> {
+  const response = await request.post(
+    `${API}/api/organizations/${org.orgId}/hiring/categories`,
+    { data: { name } },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not create category ${name} (${response.status()})`);
+  }
+  const body = await response.json();
+  return { id: body.id, name: body.name };
+}
+
+export interface SeededCriterion {
+  id: string;
+  name: string;
+  type: string;
+  values: Array<{ id: string; label: string; position: number; assessmentCount: number }>;
+}
+
+/** Creates a criterion through the API — a precondition, not the thing under test. */
+export async function createCriterion(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  input: { name: string; type?: string; values?: string[] },
+): Promise<SeededCriterion> {
+  const type = input.type ?? 'scale';
+  const response = await request.post(
+    `${API}/api/organizations/${org.orgId}/hiring/criteria`,
+    {
+      data: {
+        name: input.name,
+        type,
+        ...(type === 'scale' ? { values: input.values ?? ['A1', 'A2', 'B1'] } : {}),
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not create criterion ${input.name} (${response.status()})`,
+    );
+  }
+  return response.json();
+}
+
+/**
+ * Archives a criterion through the API — a precondition for hiring 03 §04.19, where an
+ * archived criterion is still filterable and has to say so in the picker.
+ */
+export async function archiveCriterion(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  criterionId: string,
+): Promise<void> {
+  const response = await request.patch(
+    `${API}/api/organizations/${org.orgId}/hiring/criteria/${criterionId}`,
+    { data: { isArchived: true } },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: archiving answered ${response.status()}`);
+  }
+}
+
+/**
+ * Assesses a criterion on an application through the API — a precondition for the
+ * settings screen's archive-versus-delete rules, which only differ once something has
+ * been assessed.
+ */
+export async function assessCriterion(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  applicationId: string,
+  criterionId: string,
+  value: Record<string, unknown>,
+): Promise<void> {
+  const response = await request.put(
+    `${API}/api/organizations/${org.orgId}/hiring/applications/${applicationId}/criteria/${criterionId}`,
+    { data: value },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: assessment answered ${response.status()}`);
+  }
+}
+
+export interface SeededVacancy {
+  id: string;
+  publicSlug: string;
+  title: string;
+}
+
+/** Creates a vacancy through the API, interviewed by the account that owns the session. */
+export async function createVacancy(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  overrides: {
+    title?: string;
+    durationMinutes?: number;
+    description?: string;
+    categoryIds?: string[];
+  } = {},
+): Promise<SeededVacancy> {
+  const response = await request.post(
+    `${API}/api/organizations/${org.orgId}/hiring/vacancies`,
+    {
+      data: {
+        title: overrides.title ?? 'Senior React Engineer',
+        durationMinutes: overrides.durationMinutes ?? 60,
+        description: overrides.description ?? '',
+        interviewerAccountId: org.accountId,
+        ...(overrides.categoryIds ? { categoryIds: overrides.categoryIds } : {}),
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not create a vacancy (${response.status()})`);
+  }
+  const body = await response.json();
+  return { id: body.id, publicSlug: body.publicSlug, title: body.title };
+}
+
+/**
+ * Books an interview straight through the public endpoint, at the earliest time the
+ * interviewer is free. A precondition for the screens that need a vacancy with
+ * candidates on it, not the thing under test — the booking page has its own suite.
+ *
+ * `slotIndex` picks a later slot when a test needs two interviews that do not collide.
+ *
+ * The availability endpoint answers one month at a time and defaults to the window's first,
+ * so asking once means asking about *this* month only. On the last afternoon of one there is
+ * almost nothing left in it — `bookingWindow` runs from today to the same day next month, and
+ * clipped to today's month that is a few hours of one weekday. Every suite that seeds an
+ * interview then fails a precondition for a reason that has nothing to do with what it tests.
+ * So the next month is read too, and only when the first does not have enough.
+ */
+/** `2026-09` — the month after the one the booking window starts in. */
+function nextMonth(): string {
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+export async function bookInterview(
+  request: APIRequestContext,
+  publicSlug: string,
+  candidate: { firstName?: string; lastName?: string; email?: string; slotIndex?: number } = {},
+): Promise<{ startUtc: string }> {
+  const wanted = candidate.slotIndex ?? 0;
+  const slots: string[] = [];
+  // `undefined` is the window's own first month; the second is next month, named explicitly.
+  for (const month of [undefined, nextMonth()]) {
+    const availability = await request.get(`${API}/api/book/${publicSlug}/availability`, {
+      params: month ? { timeZone: 'UTC', month } : { timeZone: 'UTC' },
+    });
+    if (!availability.ok()) {
+      throw new Error(`Precondition failed: availability answered ${availability.status()}`);
+    }
+    const dates: Record<string, string[]> = (await availability.json()).dates ?? {};
+    slots.push(...Object.keys(dates).sort().flatMap((date) => dates[date]));
+    if (slots.length > wanted) break;
+  }
+
+  const startUtc = slots[wanted];
+  if (!startUtc) {
+    throw new Error(
+      `Precondition failed: the window offers ${slots.length} slot(s), and slot ${wanted} was asked for`,
+    );
+  }
+
+  const booked = await request.post(`${API}/api/book/${publicSlug}`, {
+    multipart: {
+      firstName: candidate.firstName ?? 'Jane',
+      lastName: candidate.lastName ?? 'Doe',
+      email: candidate.email ?? uniqueEmail('candidate'),
+      startUtc,
+      timeZone: 'UTC',
+      cv: CV_FILE,
+    },
+  });
+  if (!booked.ok()) {
+    throw new Error(`Precondition failed: booking answered ${booked.status()}`);
+  }
+  return { startUtc };
+}
+
+/**
+ * A real, minimal PDF: 303 bytes, one blank A4 page, no fonts and no content stream.
+ *
+ * It has to be a PDF a reader can actually open, not merely a file the CV validator
+ * accepts — the card's **View** action hands it to the browser's PDF viewer, and a
+ * fixture that only satisfies the extension check makes that button look broken when it
+ * is working perfectly.
+ *
+ * Base64 rather than a string literal because a PDF's cross-reference table is
+ * byte-addressed and each of its entries ends in a significant trailing space. An editor
+ * set to trim trailing whitespace would silently shift every offset and break the file.
+ */
+const BLANK_PDF_BASE64 =
+  'JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgNTk1IDg0Ml0+PmVuZG9iagp4cmVmCjAgNAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1MiAwMDAwMCBuIAowMDAwMDAwMTAxIDAwMDAwIG4gCnRyYWlsZXI8PC9TaXplIDQvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgoxNjQKJSVFT0YK';
+
+export const CV_FILE = {
+  name: 'jane-doe-cv.pdf',
+  mimeType: 'application/pdf',
+  buffer: Buffer.from(BLANK_PDF_BASE64, 'base64'),
+};
+
+export interface InviteLink {
+  organizationId: string;
+  candidateId: string;
+  applicationId: string;
+  /** The path the interviewer actually clicks, query string included. */
+  path: string;
+}
+
+/**
+ * The deep link out of the invite the last booking created.
+ *
+ * The candidate database is now a second route for an `admin` or `manager`, but for a
+ * `user` interviewer this is still the only one the product hands them until My
+ * interviews lands ([04 §01.7](../../specs/hiring/04-candidate-card.md)).
+ * Reading it from the event is the calendar's equivalent of reading a reset link out of
+ * the mail sink — a test that assembled the URL from ids it got elsewhere would be
+ * testing a link nobody is ever sent.
+ */
+export async function latestInviteLink(request: APIRequestContext): Promise<InviteLink> {
+  const response = await request.get(`${API}/api/test/calendar/latest`);
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: no calendar event (${response.status()})`);
+  }
+
+  const body = (await response.json()).body as string;
+  const match = body.match(
+    /\/org\/([0-9a-f-]+)\/hiring\/candidates\/([0-9a-f-]+)\?application=([0-9a-f-]+)/,
+  );
+  if (!match) throw new Error(`Precondition failed: no card link in the invite:\n${body}`);
+
+  return {
+    organizationId: match[1],
+    candidateId: match[2],
+    applicationId: match[3],
+    path: match[0],
+  };
+}
+
+export interface ManageLink {
+  slug: string;
+  token: string;
+  /** The path the candidate actually opens. */
+  path: string;
+}
+
+/**
+ * The manage link out of the invite the last booking created.
+ *
+ * Read from the calendar event rather than assembled from a token obtained some other
+ * way, for the same reason `latestInviteLink` is: the invite is the only channel this
+ * release has, so a test that built the URL itself would be testing a link nobody is
+ * ever sent (07 §03.14).
+ */
+export async function latestManageLink(request: APIRequestContext): Promise<ManageLink> {
+  const response = await request.get(`${API}/api/test/calendar/latest`);
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: no calendar event (${response.status()})`);
+  }
+
+  const body = (await response.json()).body as string;
+  const match = body.match(/\/manage\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/);
+  if (!match) throw new Error(`Precondition failed: no manage link in the invite:\n${body}`);
+
+  return { slug: match[1], token: match[2], path: match[0] };
+}
+
+/**
+ * A second document, plainly not the one the booking carried — the CV a replacement
+ * puts in place of it (07 §07).
+ */
+export const REPLACEMENT_CV = {
+  name: 'corrected-cv.docx',
+  mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  buffer: Buffer.from('a corrected CV, in a different format'),
+};
+
+/**
+ * Moves a booking through the candidate's own public routes — a precondition, not the
+ * thing under test.
+ *
+ * It reads the picker's own list rather than computing a slot, so a seeded move is one
+ * the page would actually have offered: the application's duration, the booked
+ * interviewer's mailbox, and its own event excluded (07 §05).
+ */
+export async function rescheduleBooking(
+  request: APIRequestContext,
+  slug: string,
+  token: string,
+): Promise<{ startUtc: string }> {
+  const record = await request.get(`${API}/api/manage/${slug}/${token}`);
+  if (!record.ok()) {
+    throw new Error(`Precondition failed: manage answered ${record.status()}`);
+  }
+  const current = (await record.json()).booking?.startUtc as string | undefined;
+
+  const availability = await request.get(`${API}/api/manage/${slug}/${token}/availability`, {
+    params: { timeZone: 'UTC' },
+  });
+  if (!availability.ok()) {
+    throw new Error(`Precondition failed: availability answered ${availability.status()}`);
+  }
+
+  const dates: Record<string, string[]> = (await availability.json()).dates ?? {};
+  const startUtc = Object.keys(dates)
+    .sort()
+    .flatMap((date) => dates[date])
+    .find((slot) => slot !== current);
+  if (!startUtc) throw new Error('Precondition failed: nowhere to move this interview to');
+
+  const moved = await request.post(`${API}/api/manage/${slug}/${token}/reschedule`, {
+    data: { startUtc, timeZone: 'UTC' },
+  });
+  if (!moved.ok()) {
+    throw new Error(`Precondition failed: reschedule answered ${moved.status()}`);
+  }
+  return { startUtc };
+}
+
+/** Replaces a booking's CV through the candidate's own route — a precondition. */
+export async function replaceCv(
+  request: APIRequestContext,
+  slug: string,
+  token: string,
+  file: { name: string; mimeType: string; buffer: Buffer } = REPLACEMENT_CV,
+): Promise<void> {
+  const response = await request.post(`${API}/api/manage/${slug}/${token}/cv`, {
+    multipart: { cv: file },
+  });
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: CV replacement answered ${response.status()}`);
+  }
+}
+
+/** Moves an application to another board column — a precondition, not the thing tested. */
+export async function setApplicationStatus(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  applicationId: string,
+  status: string,
+): Promise<void> {
+  const response = await request.patch(
+    `${API}/api/organizations/${org.orgId}/hiring/applications/${applicationId}`,
+    { data: { status } },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: status change answered ${response.status()}`);
+  }
+}
+
+export interface BoardCard {
+  applicationId: string;
+  candidateId: string;
+  name: string;
+  position: number;
+  hasConclusion: boolean;
+  isCancelled: boolean;
+}
+
+export interface BoardColumn {
+  status: string;
+  count: number;
+  cards: BoardCard[];
+}
+
+/**
+ * The board straight through the API, so a test can name the card it is about to drag.
+ *
+ * A precondition, not the thing under test: the ids are generated server-side and there
+ * is no other way for a test to learn them. The request context carries the session from
+ * `registerOrganization`, which is the same cookie the browser will use.
+ */
+export async function readBoard(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  vacancyId: string,
+): Promise<BoardColumn[]> {
+  const response = await request.get(
+    `${API}/api/organizations/${org.orgId}/hiring/vacancies/${vacancyId}/board`,
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: the board answered ${response.status()}`);
+  }
+  return (await response.json()).columns as BoardColumn[];
+}
+
+/** The cards of one column, in board order. */
+export async function columnCards(
+  request: APIRequestContext,
+  org: RegisteredOrganization,
+  vacancyId: string,
+  status: string,
+): Promise<BoardCard[]> {
+  const columns = await readBoard(request, org, vacancyId);
+  return columns.find((column) => column.status === status)!.cards;
 }

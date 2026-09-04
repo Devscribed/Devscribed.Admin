@@ -34,9 +34,9 @@ export function DocumentFrame({
         display: 'block',
         width: '100%',
         height: height ?? '65vh',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        background: 'var(--paper-0)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-l)',
+        background: 'var(--surface-card)',
       }}
     />
   );

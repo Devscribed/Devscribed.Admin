@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, type CSSProperties, type FormEvent } from 'react';
-import { Button, Input, Modal, Select } from '@/ds';
+import { useState, type FormEvent } from 'react';
+import { Button, FieldLabel, FormActions, Modal, Select, TextInput } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
+import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
 import {
   HOLIDAY_MESSAGES,
@@ -39,28 +40,22 @@ const FIELD_INPUT_TESTID: Partial<Record<Field, string>> = {
   paidHours: 'holiday-hours-input',
 };
 
-const microLabel: CSSProperties = {
-  display: 'block',
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--fs-11)',
-  letterSpacing: 'var(--ls-wider)',
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-  marginBottom: 'var(--sp-4)',
-};
-
-/** Inline error carrying the spec's `field-error-{field}` id — a native input cannot
- * use the DS `Input`'s error slot, so the node is drawn by hand (the spec-09 pattern). */
+/**
+ * Inline error carrying the spec's `field-error-{field}` id.
+ *
+ * Every field here that *can* use the system's own message slot does — `TextInput` has
+ * `error` + `errorId` (§4) and `Select` has `errorMessage` + `errorId` (§21). This is left
+ * for the one control neither covers: the native `<input type="date">` below.
+ */
 function FieldError({ field, message }: { field: string; message: string }) {
   return (
     <div
       id={`field-error-${field}`}
       data-testid={`field-error-${field}`}
       style={{
-        fontFamily: 'var(--font-text)',
-        fontSize: 'var(--fs-12)',
-        color: 'var(--error-500)',
-        marginTop: 'var(--sp-2)',
+        fontSize: 'var(--font-size-xs)',
+        color: 'var(--status-error)',
+        marginTop: 'var(--space-1)',
       }}
     >
       {message}
@@ -68,7 +63,17 @@ function FieldError({ field, message }: { field: string; message: string }) {
   );
 }
 
-/** Native `<input type="date">` styled to the DS `Input` (the DS has no date field). */
+/**
+ * Native `<input type="date">`, painted as one of the system's fields.
+ *
+ * The system's restorable `DateField` was read before this was kept, and refused: it is a
+ * *measurement* of a date picker rather than a working one — a `readOnly` input with a
+ * hard-coded default date, no `onChange`, no value contract and a popup that selects
+ * nothing. Swapping a field an admin can type into for one they cannot would be a repaint
+ * that removes the feature. So the native control stays and takes the system's own field
+ * geometry instead: `FieldLabel` (§64) above it, `--control-height`, the control-weight
+ * border, and the focus and error glows every other field on this screen draws.
+ */
 function DateInput({
   label,
   testId,
@@ -88,17 +93,16 @@ function DateInput({
 }) {
   const [focus, setFocus] = useState(false);
   const borderColor = error
-    ? 'var(--error-500)'
+    ? 'var(--status-error)'
     : focus
-      ? 'var(--accent)'
-      : 'var(--border-strong)';
+      ? 'var(--action-primary)'
+      : 'var(--border-default)';
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <label style={{ ...microLabel, color: error ? 'var(--error-500)' : 'var(--text-muted)' }}>
-        {label}
-      </label>
+      <FieldLabel htmlFor={testId}>{label}</FieldLabel>
       <input
         type="date"
+        id={testId}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -108,20 +112,22 @@ function DateInput({
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `field-error-${field}` : undefined}
         style={{
-          height: 'var(--field-h-lg)',
+          height: 'var(--control-height)',
           width: '100%',
-          border: `1.5px solid ${borderColor}`,
-          borderRadius: 'var(--radius-lg)',
-          padding: '0 12px',
-          fontFamily: 'var(--font-text)',
-          fontSize: 'var(--fs-15)',
-          color: 'var(--text)',
-          background: 'var(--bg-field)',
+          // The control weight, not a heavier ink: the system tells a field's edge from a
+          // divider by width rather than by colour, which is how `--border-strong` closed.
+          border: `var(--border-width-control) solid ${borderColor}`,
+          borderRadius: 'var(--radius-l)',
+          padding: '0 var(--space-5)',
+          fontFamily: 'var(--font-family-base)',
+          fontSize: 'var(--font-size-base)',
+          color: 'var(--text-primary)',
+          background: 'var(--surface-card)',
           outline: 'none',
           boxShadow: focus
             ? error
-              ? 'var(--shadow-glow-error)'
-              : 'var(--shadow-glow-accent)'
+              ? 'var(--shadow-error-glow)'
+              : 'var(--shadow-focus-input)'
             : 'none',
           transition: 'border-color .15s, box-shadow .15s',
           cursor: disabled ? 'not-allowed' : 'text',
@@ -288,50 +294,7 @@ export function HolidayModal({
   const title = isEdit ? 'Edit holiday' : 'Add holiday';
 
   return (
-    <Modal
-      open={open}
-      title={title}
-      onClose={handleClose}
-      width={520}
-      data-testid="holiday-modal"
-      actions={
-        <>
-          {isEdit && canDelete && (
-            <Button
-              type="button"
-              variant="danger"
-              size="lg"
-              onClick={() => onRequestDelete((mode as { holiday: HolidayRow }).holiday)}
-              disabled={submitting}
-              data-testid="holiday-delete-btn"
-              style={{ marginRight: 'auto' }}
-            >
-              Delete holiday
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={submitting}
-            data-testid="holiday-cancel-btn"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="holiday-form"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            data-testid="holiday-save-btn"
-          >
-            {isEdit ? (submitting ? 'Saving' : 'Save') : submitting ? 'Adding' : 'Add holiday'}
-          </Button>
-        </>
-      }
-    >
+    <Modal open={open} title={title} onClose={handleClose} data-testid="holiday-modal">
       {/* The DS Modal draws its own header, so the title's test id rides a hidden marker. */}
       <span
         data-testid="holiday-modal-title"
@@ -349,9 +312,9 @@ export function HolidayModal({
         id="holiday-form"
         onSubmit={submit}
         noValidate
-        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
       >
-        <div style={{ display: 'flex', gap: 'var(--sp-5)', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <DateInput
               label="Date"
@@ -367,14 +330,16 @@ export function HolidayModal({
             />
           </div>
           <div style={{ width: 150 }}>
-            <Input
+            {/* §4 — the field tags its own message, so the `as unknown as string` cast that
+                smuggled a node through the previous system's `Input` is gone with it. */}
+            <TextInput
               label="Paid hours"
               type="number"
               step="0.25"
               min="0"
               max="24"
               value={paidHours}
-              onChange={(event: { target: { value: string } }) => {
+              onChange={(event) => {
                 setPaidHours(event.target.value);
                 clearError('paidHours');
               }}
@@ -382,23 +347,17 @@ export function HolidayModal({
               data-testid="holiday-hours-input"
               aria-invalid={errors.paidHours ? true : undefined}
               aria-describedby={errors.paidHours ? 'field-error-paidHours' : undefined}
-              error={
-                errors.paidHours
-                  ? ((
-                      <FieldError field="paidHours" message={errors.paidHours} />
-                    ) as unknown as string)
-                  : undefined
-              }
-              wrapperStyle={{ gap: 0 }}
+              error={errors.paidHours}
+              errorId="field-error-paidHours"
             />
           </div>
         </div>
 
-        <Input
+        <TextInput
           label="Holiday name"
           placeholder="e.g. New Year's Day"
           value={name}
-          onChange={(event: { target: { value: string } }) => {
+          onChange={(event) => {
             setName(event.target.value);
             clearError('name');
           }}
@@ -407,29 +366,66 @@ export function HolidayModal({
           data-testid="holiday-name-input"
           aria-invalid={errors.name ? true : undefined}
           aria-describedby={errors.name ? 'field-error-name' : undefined}
-          error={
-            errors.name
-              ? ((<FieldError field="name" message={errors.name} />) as unknown as string)
-              : undefined
-          }
-          wrapperStyle={{ gap: 0 }}
+          error={errors.name}
+          errorId="field-error-name"
         />
 
-        <div>
-          <Select
-            label="Country"
-            value={countryCode}
-            options={HOLIDAY_COUNTRY_OPTIONS}
-            onChange={(value: string) => {
-              setCountryCode(value);
-              clearError('countryCode');
-            }}
-            disabled={submitting}
-            data-testid="holiday-country-select"
-          />
-          {errors.countryCode && (
-            <FieldError field="countryCode" message={errors.countryCode} />
-          )}
+        <Select
+          label="Country"
+          value={optionFor(HOLIDAY_COUNTRY_OPTIONS, countryCode)}
+          options={HOLIDAY_COUNTRY_OPTIONS}
+          onChange={(option) => {
+            setCountryCode(valueOf(option));
+            clearError('countryCode');
+          }}
+          isDisabled={submitting}
+          variant="formik"
+          data-testid="holiday-country-select"
+          error={errors.countryCode ? true : undefined}
+          errorMessage={errors.countryCode}
+          errorId="field-error-countryCode"
+        />
+
+        {/* §63 — `leading` is the destructive slot: it widens the row and pushes Delete to
+            the far left of the pair, which only reads as "pushed left" because everything
+            beside it is otherwise right. `Delete holiday` is drawn only for a caller holding
+            `delete-holidays` — a manager must not see a control they cannot use
+            (TC-03-E2E-02). */}
+        <div style={{ marginTop: 'var(--space-5)' }}>
+          <FormActions
+            leading={
+              isEdit && canDelete ? (
+                <Button
+                  type="button"
+                  variant="delete"
+                  onClick={() => onRequestDelete((mode as { holiday: HolidayRow }).holiday)}
+                  disabled={submitting}
+                  data-testid="holiday-delete-btn"
+                >
+                  Delete holiday
+                </Button>
+              ) : undefined
+            }
+          >
+            <Button
+              type="button"
+              onClick={handleClose}
+              disabled={submitting}
+              data-testid="holiday-cancel-btn"
+            >
+              Cancel
+            </Button>
+            {/* Never disabled for validation — an invalid form shows every error and focuses
+                the first invalid field, and a 409 leaves this live (TC-03-E2E-03). */}
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={submitting}
+              data-testid="holiday-save-btn"
+            >
+              {isEdit ? (submitting ? 'Saving' : 'Save') : submitting ? 'Adding' : 'Add holiday'}
+            </Button>
+          </FormActions>
         </div>
       </form>
     </Modal>

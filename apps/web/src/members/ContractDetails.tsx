@@ -12,13 +12,11 @@ import {
   isMaskedValue,
   validateProfileField,
 } from '@devscribed/validation';
-import { Button, Card, InfoBanner, Input, Select, Spinner } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, Card, FormActions, InfoBanner, TextArea, TextInput, Select, Preloader } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
+import { optionFor, valueOf } from '@/select';
 import { apiRequest, failureMessage } from '@/documents/api';
-// The toast surface still lives under `documents/` with a note saying it moves to
-// `layout/` when a second area needs it. Moving it is a spec 01/02 refactor this spec
-// has no mandate for, so this imports it where it is rather than forking a second one.
-import { useToast } from '@/documents/toast';
+import { useToast } from '@/toast';
 import {
   PROFILE_FIELDS,
   PROFILE_LABELS,
@@ -60,7 +58,7 @@ export function ContractDetails({
   /** True when the viewer is the member — the matrix's "user (own)" column. */
   isSelf: boolean;
 }) {
-  const toast = useToast();
+  const { showToast } = useToast();
 
   const [profile, setProfile] = useState<MemberProfileDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -97,7 +95,7 @@ export function ContractDetails({
 
   if (loadError !== null) {
     return (
-      <InfoBanner tone="error" data-testid="member-contract-details-forbidden">
+      <InfoBanner variant="error" data-testid="member-contract-details-forbidden">
         {loadError}
       </InfoBanner>
     );
@@ -107,10 +105,10 @@ export function ContractDetails({
     return (
       <div
         data-testid="profile-loading"
-        style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'center', color: 'var(--accent)' }}
+        style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', color: 'var(--action-primary)' }}
       >
-        <Spinner size={22} />
-        <span style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+        <Preloader size={22} />
+        <span style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
           Loading contract details…
         </span>
       </div>
@@ -184,11 +182,7 @@ export function ContractDetails({
     if (result.ok) {
       setProfile(result.data);
       setEditing(false);
-      toast.show({
-        testId: 'toast-profile-saved',
-        message: PROFILE_MESSAGES.toast.saved,
-        tone: 'success',
-      });
+      showToast('toast-profile-saved', PROFILE_MESSAGES.toast.saved);
       return;
     }
 
@@ -200,14 +194,11 @@ export function ContractDetails({
       return;
     }
 
-    toast.show({
-      testId: 'toast-profile-error',
-      message:
-        result.failure.status === 403
-          ? PROFILE_MESSAGES.permission.edit
-          : failureMessage(result.failure),
-      tone: 'error',
-    });
+    showToast(
+      'toast-profile-error',
+      result.failure.status === 403 ? PROFILE_MESSAGES.permission.edit : failureMessage(result.failure),
+      'error',
+    );
   }
 
   const updatedDay = formatUpdatedDay(profile.updatedAt);
@@ -221,8 +212,6 @@ export function ContractDetails({
           mayEdit && !editing ? (
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
               data-testid="profile-edit-btn"
               onClick={startEditing}
             >
@@ -233,9 +222,9 @@ export function ContractDetails({
       >
         <p
           style={{
-            margin: '0 0 var(--sp-7)',
-            fontSize: 'var(--fs-14)',
-            color: 'var(--text-muted)',
+            margin: '0 0 var(--space-7)',
+            fontSize: 'var(--font-size-s)',
+            color: 'var(--text-secondary)',
           }}
         >
           Used to fill contracts automatically. All fields optional.
@@ -243,7 +232,7 @@ export function ContractDetails({
 
         {editing ? (
           <form onSubmit={submit} noValidate data-testid="profile-form">
-            <div style={{ display: 'grid', gap: 'var(--sp-7)', maxWidth: 520 }}>
+            <div style={{ display: 'grid', gap: 'var(--space-7)', maxWidth: 520 }}>
               {editableFields.map((field) => (
                 <ProfileFieldInput
                   key={field}
@@ -263,35 +252,36 @@ export function ContractDetails({
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: 'var(--sp-5)', marginTop: 'var(--sp-9)' }}>
-              {/* Never disabled for validation — clicking with a bad value is how the
-                  member finds out which one it is (repository rule + Validation Rules). */}
-              <Button
-                type="submit"
-                variant="primary"
-                loading={saving}
-                data-testid="profile-save-btn"
-              >
-                Save
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={saving}
-                data-testid="profile-cancel-btn"
-                onClick={() => {
-                  setEditing(false);
-                  setErrors({});
-                }}
-              >
-                Cancel
-              </Button>
+            {/* Never disabled for validation — clicking with a bad value is how the
+                member finds out which one it is (repository rule + Validation Rules). */}
+            <div style={{ marginTop: 'var(--space-9)' }}>
+              <FormActions>
+                <Button
+                  type="button"
+                  disabled={saving}
+                  data-testid="profile-cancel-btn"
+                  onClick={() => {
+                    setEditing(false);
+                    setErrors({});
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  preloader={saving}
+                  data-testid="profile-save-btn"
+                >
+                  Save
+                </Button>
+              </FormActions>
             </div>
           </form>
         ) : empty ? (
           <p
             data-testid="profile-empty"
-            style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+            style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
           >
             {PROFILE_MESSAGES.generic.emptyState}
           </p>
@@ -310,8 +300,8 @@ export function ContractDetails({
         )}
 
         {masked.size > 0 && (
-          <div style={{ marginTop: 'var(--sp-7)' }}>
-            <InfoBanner tone="info" data-testid="profile-masked-hint">
+          <div style={{ marginTop: 'var(--space-7)' }}>
+            <InfoBanner variant="info" data-testid="profile-masked-hint">
               {PROFILE_MESSAGES.masked.hint}
             </InfoBanner>
           </div>
@@ -323,9 +313,9 @@ export function ContractDetails({
           <p
             data-testid="profile-updated-meta"
             style={{
-              margin: 'var(--sp-7) 0 0',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-faint)',
+              margin: 'var(--space-7) 0 0',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-secondary)',
             }}
           >
             Last updated {updatedDay}
@@ -370,16 +360,16 @@ function ProfileRow({
       style={{
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 'var(--sp-6)',
+        gap: 'var(--space-5)',
         padding: '11px 0',
-        borderTop: '1px solid var(--divider)',
+        borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
       }}
     >
       <span
         style={{
           flex: '0 0 150px',
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text-muted)',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-secondary)',
         }}
       >
         {PROFILE_LABELS[field]}
@@ -387,8 +377,8 @@ function ProfileRow({
       <span
         style={{
           flex: 1,
-          fontSize: 'var(--fs-15)',
-          color: value === null ? 'var(--text-faint)' : 'var(--text)',
+          fontSize: 'var(--font-size-base)',
+          color: value === null ? 'var(--text-secondary)' : 'var(--text-primary)',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
         }}
@@ -404,7 +394,7 @@ function ProfileRow({
               ? PROFILE_MESSAGES.masked.hint
               : 'Sensitive — visible only to an admin and to this member'
           }
-          style={{ display: 'flex', alignItems: 'center', color: 'var(--text-faint)', paddingTop: 2 }}
+          style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', paddingTop: 2 }}
         >
           <LockIcon />
         </span>
@@ -435,85 +425,53 @@ function ProfileFieldInput({
   if (field === 'country') {
     // Requirement 17 — codes are stored, names are shown, and the list is the package's
     // so client and server agree on exactly which codes are valid.
+    const choices = [
+      { value: '', label: '— none —' },
+      ...COUNTRY_OPTIONS.map((country) => ({ value: country.code, label: country.name })),
+    ];
     return (
       <div>
         <Select
           label={label}
-          value={value}
-          disabled={disabled}
+          value={optionFor(choices, value)}
+          isDisabled={disabled}
           placeholder="— none —"
           data-testid={testId}
-          options={[
-            { value: '', label: '— none —' },
-            ...COUNTRY_OPTIONS.map((country) => ({ value: country.code, label: country.name })),
-          ]}
-          onChange={onChange}
-          error={error}
+          options={choices}
+          onChange={(option) => onChange(valueOf(option))}
+          error={Boolean(error)}
+          errorMessage={error}
+          errorId={`field-error-${field}`}
         />
-        {error && (
-          <div style={{ marginTop: 6, fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
-            {errorNode(field, error)}
-          </div>
-        )}
       </div>
     );
   }
 
   if (field === 'bankDetails') {
-    // Free-form and up to 500 characters — an IBAN, a SWIFT code and an account name
-    // are three lines, not one. Meridian ships no textarea; this carries its tokens.
+    // Free-form and up to 500 characters — an IBAN, a SWIFT code and an account name are
+    // three lines, not one.
     return (
-      <div>
-        <label
-          htmlFor={testId}
-          style={{
-            display: 'block',
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-11)',
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            color: error ? 'var(--error-500)' : 'var(--text-muted)',
-            marginBottom: 6,
-          }}
-        >
-          {label}
-        </label>
-        <textarea
-          id={testId}
-          data-testid={testId}
-          value={value}
-          rows={3}
-          disabled={disabled}
-          readOnly={disabled}
-          maxLength={PROFILE_LIMITS.bankDetailsMax}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `field-error-${field}` : undefined}
-          onChange={(event) => onChange(event.target.value)}
-          onBlur={onBlur}
-          style={{
-            width: '100%',
-            resize: 'vertical',
-            padding: '10px 12px',
-            border: `1.5px solid ${error ? 'var(--error-500)' : 'var(--border-strong)'}`,
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-field)',
-            color: 'var(--text)',
-            fontFamily: 'var(--font-text)',
-            fontSize: 'var(--fs-15)',
-            opacity: disabled ? 0.7 : 1,
-          }}
-        />
-        {error && (
-          <div style={{ marginTop: 6, fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
-            {errorNode(field, error)}
-          </div>
-        )}
-      </div>
+      <TextArea
+        label={label}
+        id={testId}
+        data-testid={testId}
+        value={value}
+        rows={3}
+        disabled={disabled}
+        readOnly={disabled}
+        maxLength={PROFILE_LIMITS.bankDetailsMax}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `field-error-${field}` : undefined}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        error={error}
+        errorId={`field-error-${field}`}
+      />
     );
   }
 
   return (
-    <Input
+    <TextInput
       label={label}
       type={field === 'dateOfBirth' ? 'date' : 'text'}
       value={value}
@@ -525,7 +483,8 @@ function ProfileFieldInput({
       aria-describedby={error ? `field-error-${field}` : undefined}
       onChange={(event) => onChange(event.target.value)}
       onBlur={onBlur}
-      error={error ? errorNode(field, error) : undefined}
+      error={error}
+      errorId={`field-error-${field}`}
       wrapperStyle={{ gap: 0 }}
     />
   );

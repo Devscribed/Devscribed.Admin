@@ -1,18 +1,24 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { PageTitle } from '@devscribed/ds';
 
 /**
- * The title block every screen inside the shell opens with — Grotesk 27px, optional
- * subtitle, optional trailing action. Values follow the app template's page header.
+ * The title block every screen inside the shell opens with. The heading itself is the system's
+ * `PageTitle`, whose type steps 16 → 20 → 24px with the viewport; the subtitle and the
+ * trailing action are this app's composition around it.
+ *
+ * Both the title and the subtitle take nodes rather than strings: the candidate card needs to
+ * tag the name and the email inside them, and the heading level and its `page-title` belong to
+ * the design system either way.
  */
 export function PageHeader({
   title,
   subtitle,
   action,
 }: {
-  title: string;
-  subtitle?: string;
+  title: ReactNode;
+  subtitle?: ReactNode;
   action?: ReactNode;
 }) {
   return (
@@ -21,27 +27,23 @@ export function PageHeader({
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        gap: 20,
+        gap: 'var(--space-7)',
         flexWrap: 'wrap',
-        marginBottom: 22,
+        marginBottom: 'var(--space-7)',
       }}
     >
       <div>
-        <h1
-          data-testid="page-title"
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-27)',
-            letterSpacing: '-.6px',
-            margin: '0 0 5px',
-            color: 'var(--text)',
-          }}
-        >
-          {title}
-        </h1>
+        <PageTitle data-testid="page-title">{title}</PageTitle>
         {subtitle && (
-          <div style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>{subtitle}</div>
+          <div
+            style={{
+              marginTop: 'var(--space-1)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-tertiary)',
+            }}
+          >
+            {subtitle}
+          </div>
         )}
       </div>
       {action}

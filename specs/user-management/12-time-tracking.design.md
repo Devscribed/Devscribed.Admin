@@ -50,6 +50,29 @@ The **TIME** section conforms to 00's sidebar rules ([Sidebar](00-app-shell.desi
 
 A shell addition living in 00's [Top bar](00-app-shell.design.md#top-bar), to the **left of the account button**, visible **only** while the caller has a running timer. The mock (state 04) renders it as an amber pill: a pulsing dot, the elapsed time in mono, the project name behind a hairline divider, and a red square stop button.
 
+> **Amended by the design-system merge, ruling E2/D1 — the system wins including layout.** This
+> section describes **one** control; the system draws **two**, and every statement below about
+> the chip's anatomy is split between them.
+>
+> - The bar's element is the system's `MiniTracker` — a 144px pill holding a glyph, the clock,
+>   and a chevron. `topbar-timer-indicator` names it, unchanged. It is a real
+>   `<button aria-expanded>` (decisions §92), and it **discloses** rather than navigates.
+> - The project name and the stop button move into the system's `Tracker` (§89), the floating
+>   panel that pill opens: a 380px card at the top-right in `--color-tracker-blue`, carrying a
+>   circular **STOP**, the project, the clock, and the task under them.
+>     `topbar-timer-project`, `topbar-timer-elapsed` and `topbar-timer-stop-btn` are unchanged in
+>   meaning and now live there, so a case that reads one opens the panel first
+>   (`openTracker(page)`).
+>
+> The pill was never going to hold them: this document's own next bullets truncate the project
+> to fifteen characters and drop it below 768px, which is a 144px control saying so.
+>
+> **The amber goes with it.** `--color-tracker-blue` was reserved in the system for exactly this
+> widget before anything rendered it, and the DS-gap row below asking for `--timer-*` tokens is
+> answered by that token rather than by new ones. The stop control is the panel's white circle
+> on the blue field, not a red square: red is `--status-error`, which this grid already spends
+> on the now-line.
+
 - **Data + provider.** A **`RunningTimerProvider`** wraps the shell content, exactly as spec 10 seeded the requests badge from a shell-level context. On shell mount — **after `/api/me` resolves** — it fires `GET /api/organizations/{orgId}/timer` once (no polling). If `timer` is non-null it seeds `{ id, projectId, projectName, task, description, startedAt }`; the provider owns a single `setInterval` ticking once per second, deriving elapsed = `now − startedAt`. Both the topbar indicator and the [TT-page timer bar](#timer-bar-idle--running) subscribe to this one provider, so the two clocks never drift and starting/stopping in one place updates the other with no refetch.
 - **Anatomy** (`data-testid="topbar-timer-indicator"`):
   - Pulsing status dot (amber; DS gap — no timer-amber token, see [DS gaps](#ds-gaps)).

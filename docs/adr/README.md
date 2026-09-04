@@ -22,6 +22,7 @@ likely to be re-litigated.
 | [0007](0007-a-busy-port-moves-the-run-and-stale-servers-are-reaped.md) | A busy port moves the run, and stale servers are reaped                                           | current                  |
 | [0008](0008-a-spec-is-judged-by-a-stranger.md)                         | A spec is judged by a stranger, before the pipeline is paid for                                   | current                  |
 | [0009](0009-specs-are-frozen-and-the-newest-one-governs.md)            | Specs are frozen; the newest spec that speaks about a behaviour governs it, and states it in full | current                  |
+| [0009](0009-hiring-storage-and-calendar-are-read-as-given.md)          | Hiring's storage and calendar are read as given, in every environment                          | current                  |
 | [0010](0010-a-chain-of-dependent-specs-ships-one-link-at-a-time.md)    | A chain of dependent specs is refined and shipped one link at a time, in dependency order         | current                  |
 | [0011](0011-the-board-is-indexed-by-spec-and-a-gate-is-a-commit.md)    | The board is indexed by spec, and every gate of a refine loop is a commit                         | current                  |
 | [0012](0012-a-refine-loop-converges-on-the-judge-and-repairs-by-subtraction.md) | A refine loop converges on the judge, runs the pre-implementer last, and stops when a repair grows the spec | current, amends 0008 |

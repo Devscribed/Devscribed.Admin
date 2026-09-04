@@ -1,10 +1,23 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, InfoBanner, SearchField, Select, Spinner } from '@/ds';
+import {
+  Avatar,
+  BackTo,
+  Badge,
+  Button,
+  EmptyState,
+  InfoBanner,
+  Preloader,
+  SearchInput,
+  Select,
+  Table,
+  type SelectOption,
+  type TableColumn,
+} from '@devscribed/ds';
 import { PlusIcon } from '@/layout/icons';
+import { optionFor, valueOf, valuesOf } from '@/select';
 import { useSession } from '@/layout/session-context';
 import {
   KANBAN_MESSAGES,
@@ -15,12 +28,10 @@ import {
   type Role,
   type TaskListSort,
 } from '@devscribed/validation';
-import { AvatarInitials } from '../../../members/[memberId]/AvatarInitials';
 import type { MemberListResponse } from '../../../members/types';
 import { CreateTaskModal, type OrgMember } from '../kanban/CreateTaskModal';
 import { KanbanHeader } from '../kanban/KanbanHeader';
-import { LabelChipStrip } from '../kanban/LabelChip';
-import { MultiSelectFilter } from '../kanban/MultiSelectFilter';
+import { LabelStrip } from '../kanban/LabelStrip';
 import type {
   BoardResponse,
   KanbanColumn,
@@ -37,6 +48,9 @@ import {
   initialsOfMember,
   isOverdueISO,
 } from '../kanban/visual';
+
+/** The width a filter takes in the bar — the same 200px the report filters settled on. */
+const FILTER_WIDTH = { width: 200 };
 
 const SORT_LABELS: Record<TaskListSort, string> = {
   created_desc: 'Created (newest)',
@@ -176,24 +190,48 @@ export function ListScreen({ orgId, projectId }: { orgId: string; projectId: str
     return map;
   }, [columns]);
 
+  const typeOptions: SelectOption[] = TASK_TYPES.map((t) => ({
+    value: t,
+    label: TASK_TYPE_LABEL[t],
+    testId: `list-filter-type-item-${t}`,
+  }));
+  const priorityOptions: SelectOption[] = TASK_PRIORITIES.map((pr) => ({
+    value: pr,
+    label: PRIORITY_LABEL[pr],
+    testId: `list-filter-priority-item-${pr}`,
+  }));
+  const assigneeOptions: SelectOption[] = members.map((m) => ({
+    value: m.membershipId,
+    label: `${m.firstName} ${m.lastName}`,
+    testId: `list-filter-assignee-item-${m.membershipId}`,
+  }));
+  const statusOptions: SelectOption[] = columns.map((c) => ({
+    value: c.id,
+    label: c.name,
+    testId: `list-filter-status-item-${c.id}`,
+  }));
+  const sortOptions: SelectOption[] = Object.entries(SORT_LABELS).map(([value, label]) => ({
+    value,
+    label,
+    testId: `list-sort-item-${value}`,
+  }));
+
   const archived = project?.status === 'archived';
 
   if (forbidden) {
     return (
-      <div data-testid="list-view" style={{ maxWidth: 560, margin: '0 auto', padding: 'var(--sp-12) var(--sp-6)' }}>
-        <InfoBanner tone="warning">{KANBAN_MESSAGES.boardPermissionDenied}</InfoBanner>
-        <div style={{ marginTop: 'var(--sp-6)' }}>
-          <Link
+      <div data-testid="list-view" style={{ maxWidth: 560, margin: '0 auto' }}>
+        <InfoBanner variant="warning">{KANBAN_MESSAGES.boardPermissionDenied}</InfoBanner>
+        <div style={{ marginTop: 'var(--space-7)' }}>
+          <BackTo
+            label="Back to Projects"
             href={`/org/${orgId}/projects`}
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              color: 'var(--accent)',
-              textDecoration: 'none',
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              router.push(`/org/${orgId}/projects`);
             }}
-          >
-            ← Back to Projects
-          </Link>
+          />
         </div>
       </div>
     );
@@ -201,14 +239,14 @@ export function ListScreen({ orgId, projectId }: { orgId: string; projectId: str
 
   if (!project) {
     return (
-      <div data-testid="list-view" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--sp-12)' }}>
-        <Spinner />
+      <div data-testid="list-view">
+        <Preloader aria-label="Loading tasks" />
       </div>
     );
   }
 
   return (
-    <div data-testid="list-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+    <div data-testid="list-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
       <KanbanHeader
         project={project}
         orgId={orgId}
@@ -218,107 +256,112 @@ export function ListScreen({ orgId, projectId }: { orgId: string; projectId: str
       />
 
       {archived && (
-        <div
-          style={{
-            background: 'var(--bg-sunken)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '10px 14px',
-            color: 'var(--text-muted)',
-            fontSize: 'var(--fs-13)',
-          }}
-        >
-          This project is archived — the board is read-only.
-        </div>
+        <InfoBanner variant="info">This project is archived — the board is read-only.</InfoBanner>
       )}
 
-      <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* The four filters were one hand-built `MultiSelectFilter` each; they are `Select
+          isMulti` (§21, §29, §36) now, and this file is the second half of the deletion the
+          board's is the first half of. The sort beside them is the single-value form of the
+          same control. */}
+      <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {canManageTasks && !archived && (
           <Button
             variant="primary"
+            icon={<PlusIcon />}
             onClick={() => setCreateOpen(true)}
             data-testid="list-create-task-btn"
           >
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <PlusIcon />
-              Create Task
-            </span>
+            Create Task
           </Button>
         )}
-        <MultiSelectFilter
-          label="Type"
-          value={typeFilter}
-          options={TASK_TYPES.map((t) => ({ value: t, label: TASK_TYPE_LABEL[t] }))}
-          onChange={setTypeFilter}
+        <Select
           data-testid="list-filter-type"
+          placeholder="Type"
+          isMulti
+          closeMenuOnSelect={false}
+          options={typeOptions}
+          value={typeFilter.map((v) => optionFor(typeOptions, v)).filter((o) => o !== undefined)}
+          onChange={(next) => setTypeFilter(valuesOf(next))}
+          chipTestId={(option) =>
+            `list-filter-type-chip-${typeof option === 'string' ? option : option.value}`
+          }
+          wrapperStyle={FILTER_WIDTH}
         />
-        <MultiSelectFilter
-          label="Priority"
-          value={priorityFilter}
-          options={TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))}
-          onChange={setPriorityFilter}
+        <Select
           data-testid="list-filter-priority"
+          placeholder="Priority"
+          isMulti
+          closeMenuOnSelect={false}
+          options={priorityOptions}
+          value={priorityFilter
+            .map((v) => optionFor(priorityOptions, v))
+            .filter((o) => o !== undefined)}
+          onChange={(next) => setPriorityFilter(valuesOf(next))}
+          chipTestId={(option) =>
+            `list-filter-priority-chip-${typeof option === 'string' ? option : option.value}`
+          }
+          wrapperStyle={FILTER_WIDTH}
         />
-        <MultiSelectFilter
-          label="Assignee"
-          value={assigneeFilter}
-          options={members.map((m) => ({
-            value: m.membershipId,
-            label: `${m.firstName} ${m.lastName}`,
-          }))}
-          onChange={setAssigneeFilter}
+        <Select
           data-testid="list-filter-assignee"
+          placeholder="Assignee"
+          isMulti
+          isSearchable
+          closeMenuOnSelect={false}
+          options={assigneeOptions}
+          value={assigneeFilter
+            .map((v) => optionFor(assigneeOptions, v))
+            .filter((o) => o !== undefined)}
+          onChange={(next) => setAssigneeFilter(valuesOf(next))}
+          chipTestId={(option) =>
+            `list-filter-assignee-chip-${typeof option === 'string' ? option : option.value}`
+          }
+          wrapperStyle={FILTER_WIDTH}
         />
-        <MultiSelectFilter
-          label="Status"
-          value={statusFilter}
-          options={columns.map((c) => ({ value: c.id, label: c.name }))}
-          onChange={setStatusFilter}
+        <Select
           data-testid="list-filter-status"
+          placeholder="Status"
+          isMulti
+          closeMenuOnSelect={false}
+          options={statusOptions}
+          value={statusFilter
+            .map((v) => optionFor(statusOptions, v))
+            .filter((o) => o !== undefined)}
+          onChange={(next) => setStatusFilter(valuesOf(next))}
+          chipTestId={(option) =>
+            `list-filter-status-chip-${typeof option === 'string' ? option : option.value}`
+          }
+          wrapperStyle={FILTER_WIDTH}
         />
         <div style={{ flex: 1, minWidth: 200 }}>
-          <SearchField
+          <SearchInput
             value={search}
-            onChange={(event: { target: { value: string } }) => setSearch(event.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
+            onClear={() => setSearch('')}
             placeholder="Search tasks…"
+            aria-label="Search tasks"
             data-testid="list-search"
           />
         </div>
-        <div style={{ minWidth: 200 }} data-testid="list-sort">
-          <Select
-            value={sort}
-            options={Object.entries(SORT_LABELS).map(([value, label]) => ({
-              value,
-              label,
-            }))}
-            onChange={(v) => setSort(parseTaskListSort(v))}
-          />
-        </div>
+        <Select
+          data-testid="list-sort"
+          value={optionFor(sortOptions, sort)}
+          options={sortOptions}
+          onChange={(next) => setSort(parseTaskListSort(valueOf(next)))}
+          wrapperStyle={{ width: 220 }}
+        />
       </div>
 
       {error && !tasks ? (
-        <InfoBanner tone="error">{error}</InfoBanner>
+        <InfoBanner variant="error">{error}</InfoBanner>
       ) : tasks === null ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--sp-8)' }}>
-          <Spinner />
-        </div>
+        <Preloader aria-label="Loading tasks" />
       ) : tasks.length === 0 ? (
-        <div
-          style={{
-            padding: 'var(--sp-12) var(--sp-6)',
-            textAlign: 'center',
-            color: 'var(--text-muted)',
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-2xl)',
-          }}
-        >
-          {hasFilters ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)', alignItems: 'center' }}>
-              <div>{KANBAN_MESSAGES.emptyList}</div>
+        <EmptyState data-testid="list-empty-state">
+          {hasFilters ? KANBAN_MESSAGES.emptyList : KANBAN_MESSAGES.emptyBoard}
+          {hasFilters && (
+            <div style={{ marginTop: 'var(--space-6)' }}>
               <Button
-                variant="ghost"
-                size="sm"
                 onClick={() => {
                   setTypeFilter([]);
                   setPriorityFilter([]);
@@ -326,18 +369,18 @@ export function ListScreen({ orgId, projectId }: { orgId: string; projectId: str
                   setStatusFilter([]);
                   setSearch('');
                 }}
+                data-testid="list-clear-filters-btn"
               >
                 Clear filters
               </Button>
             </div>
-          ) : (
-            KANBAN_MESSAGES.emptyBoard
           )}
-        </div>
+        </EmptyState>
       ) : (
         <TasksTable
           tasks={tasks}
           columnById={columnById}
+          taskHref={(task) => `/org/${orgId}/projects/${projectId}/tasks/${task.id}`}
           onOpen={(task) =>
             router.push(`/org/${orgId}/projects/${projectId}/tasks/${task.id}`)
           }
@@ -360,207 +403,156 @@ export function ListScreen({ orgId, projectId }: { orgId: string; projectId: str
   );
 }
 
+/**
+ * The task list, on the system's `Table` (§18, §34, §48).
+ *
+ * It was a hand-built `<table>` with its own `Th` and `Td` — a header background, an
+ * uppercase micro-label treatment, a row border and eight column widths, all stated here.
+ * Every one of those belongs to `Table`, and two of them it does better: the row is a real
+ * anchor through `rowHref`, so a task can be middle-clicked and opened in a tab and is
+ * reachable by keyboard, where a `<tr onClick>` was neither. Spec 13 asks for a focusable row
+ * that `Enter` opens; this is the first version that actually has one.
+ */
 function TasksTable({
   tasks,
   columnById,
+  taskHref,
   onOpen,
 }: {
   tasks: KanbanTaskSummary[];
   columnById: Map<string, KanbanColumn>;
+  taskHref: (task: KanbanTaskSummary) => string;
   onOpen: (task: KanbanTaskSummary) => void;
 }) {
-  return (
-    <div
-      style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-        overflowX: 'auto',
-      }}
-    >
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          minWidth: 720,
-        }}
-      >
-        <thead>
-          <tr style={{ background: 'var(--bg-header)' }}>
-            <Th width={90}>Key</Th>
-            <Th width={44}>Type</Th>
-            <Th>Title</Th>
-            <Th width={140}>Status</Th>
-            <Th width={60}>Priority</Th>
-            <Th width={60}>Assignee</Th>
-            <Th width={48} align="right">
-              SP
-            </Th>
-            <Th width={100}>Due</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.map((task) => {
-            const column = columnById.get(task.columnId);
-            return (
-              <tr
-                key={task.id}
-                data-testid={`list-task-row-${task.id}`}
-                onClick={() => onOpen(task)}
-                style={{
-                  cursor: 'pointer',
-                  borderTop: '1px solid var(--divider)',
-                }}
-              >
-                <Td width={90}>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 'var(--fs-12)',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {task.key}
-                  </span>
-                </Td>
-                <Td width={44}>
-                  <TaskTypeGlyph type={task.type} size={18} />
-                </Td>
-                <Td>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span
-                      style={{
-                        fontSize: 'var(--fs-14)',
-                        color: 'var(--text)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: 'block',
-                      }}
-                    >
-                      {task.title}
-                    </span>
-                    {task.labels && task.labels.length > 0 && (
-                      <LabelChipStrip
-                        labels={task.labels}
-                        max={4}
-                        testIdPrefix="task-card-label"
-                      />
-                    )}
-                  </div>
-                </Td>
-                <Td width={140}>
-                  {column && (
-                    <span
-                      style={{
-                        fontSize: 'var(--fs-12)',
-                        color: 'var(--text-muted)',
-                        background: 'var(--bg-sunken)',
-                        borderRadius: 999,
-                        padding: '2px 10px',
-                      }}
-                    >
-                      {column.name}
-                    </span>
-                  )}
-                </Td>
-                <Td width={60}>
-                  <PriorityGlyph priority={task.priority} size={16} />
-                </Td>
-                <Td width={60}>
-                  {task.assignee && (
-                    <AvatarInitials
-                      fullName={`${task.assignee.firstName} ${task.assignee.lastName}`}
-                      initials={initialsOfMember(task.assignee)}
-                      size={22}
-                      data-testid={`list-assignee-avatar-${task.id}`}
-                    />
-                  )}
-                </Td>
-                <Td width={48} align="right">
-                  {task.storyPoints != null && (
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontWeight: 600,
-                        fontSize: 'var(--fs-13)',
-                        color: 'var(--text-sub)',
-                      }}
-                    >
-                      {task.storyPoints}
-                    </span>
-                  )}
-                </Td>
-                <Td width={100}>
-                  {task.dueDate && (
-                    <span
-                      style={{
-                        fontSize: 'var(--fs-12)',
-                        color: isOverdueISO(task.dueDate)
-                          ? 'var(--error-500)'
-                          : 'var(--text-muted)',
-                      }}
-                    >
-                      {formatDueDateShort(task.dueDate)}
-                    </span>
-                  )}
-                </Td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+  const columns: TableColumn<KanbanTaskSummary>[] = [
+    {
+      label: 'Key',
+      flex: 0.7,
+      render: (task) => (
+        <span
+          style={{
+            fontFamily: 'var(--font-family-mono)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          {task.key}
+        </span>
+      ),
+    },
+    {
+      label: 'Type',
+      flex: 0.4,
+      render: (task) => <TaskTypeGlyph type={task.type} size={18} />,
+    },
+    {
+      label: 'Title',
+      flex: 2.6,
+      align: 'flex-start',
+      render: (task) => (
+        <span
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-2)',
+            minWidth: 0,
+          }}
+        >
+          <span
+            style={{
+              color: 'var(--text-primary)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {task.title}
+          </span>
+          {task.labels && task.labels.length > 0 && (
+            <LabelStrip labels={task.labels} max={4} testIdPrefix="task-card-label" />
+          )}
+        </span>
+      ),
+    },
+    {
+      label: 'Status',
+      flex: 1,
+      render: (task) => {
+        const column = columnById.get(task.columnId);
+        /* §59's `neutral` — a column is a label on the task, not a judgement about it, so it
+           takes the one tone that claims nothing. */
+        return column ? (
+          <Badge status="neutral" size="s">
+            {column.name}
+          </Badge>
+        ) : null;
+      },
+    },
+    {
+      label: 'Priority',
+      flex: 0.5,
+      render: (task) => <PriorityGlyph priority={task.priority} size={16} />,
+    },
+    {
+      label: 'Assignee',
+      flex: 0.5,
+      render: (task) =>
+        task.assignee ? (
+          <Avatar
+            name={`${task.assignee.firstName} ${task.assignee.lastName}`}
+            initials={initialsOfMember(task.assignee)}
+            size={22}
+            data-testid={`list-assignee-avatar-${task.id}`}
+          />
+        ) : null,
+    },
+    {
+      label: 'SP',
+      flex: 0.4,
+      align: 'flex-end',
+      render: (task) =>
+        task.storyPoints != null ? (
+          <span
+            style={{
+              fontWeight: 'var(--font-weight-semibold)',
+              color: 'var(--text-secondary)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {task.storyPoints}
+          </span>
+        ) : null,
+    },
+    {
+      label: 'Due',
+      flex: 0.8,
+      maxWidth: 'none',
+      render: (task) =>
+        task.dueDate ? (
+          <span
+            style={{
+              fontSize: 'var(--font-size-xs)',
+              color: isOverdueISO(task.dueDate) ? 'var(--status-error)' : 'var(--text-secondary)',
+            }}
+          >
+            {formatDueDateShort(task.dueDate)}
+          </span>
+        ) : null,
+    },
+  ];
 
-function Th({
-  children,
-  width,
-  align = 'left',
-}: {
-  children: React.ReactNode;
-  width?: number;
-  align?: 'left' | 'right';
-}) {
   return (
-    <th
-      style={{
-        width,
-        textAlign: align,
-        padding: '10px 14px',
-        fontFamily: 'var(--font-display)',
-        fontWeight: 600,
-        fontSize: 'var(--fs-11)',
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-        color: 'var(--text-muted)',
+    <Table<KanbanTaskSummary>
+      columns={columns}
+      rows={tasks}
+      rowKey="id"
+      rowTestId={(task) => `list-task-row-${task.id}`}
+      rowHref={taskHref}
+      onRowClick={(task, event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+        event.preventDefault();
+        onOpen(task);
       }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({
-  children,
-  width,
-  align = 'left',
-}: {
-  children: React.ReactNode;
-  width?: number;
-  align?: 'left' | 'right';
-}) {
-  return (
-    <td
-      style={{
-        width,
-        textAlign: align,
-        padding: '10px 14px',
-        verticalAlign: 'middle',
-      }}
-    >
-      {children}
-    </td>
+    />
   );
 }

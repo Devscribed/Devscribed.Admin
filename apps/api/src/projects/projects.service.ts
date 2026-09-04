@@ -21,12 +21,45 @@ import { Prisma } from '@prisma/client';
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
 
+/**
+ * One member of a project, as much of them as a list row draws: who they are, and the letters
+ * that stand for them. The initials are computed here because the mark that draws them takes
+ * them as a prop and never derives them — one rule for "first letter of each name", server-side,
+ * rather than one per screen.
+ */
+export interface ProjectMemberPreview {
+  name: string;
+  initials: string;
+}
+
+/**
+ * How many members a list row carries. Three is what the column has room for beside the count;
+ * the count is what says how many there really are.
+ */
+const MEMBER_PREVIEW_LIMIT = 3;
+
+function previewOf(account: { firstName: string; lastName: string }): ProjectMemberPreview {
+  const first = account.firstName.trim();
+  const last = account.lastName.trim();
+  return {
+    name: [first, last].filter(Boolean).join(' '),
+    initials: `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase(),
+  };
+}
+
 /** A single row of the projects list (spec 11 GET .../projects contract, extended by spec 13). */
 export interface ProjectListItem {
   id: string;
   name: string;
   status: string;
   memberCount: number;
+  /**
+   * Spec 11 — the first few of `memberCount`, in the roster's own order, for the list's
+   * Members column. `memberCount` stays the count of *all* of them: this is a sample, never a
+   * length, and a project with more members than the preview holds still says so in the count
+   * beside it.
+   */
+  memberPreview: ProjectMemberPreview[];
   totalHours: number;
   createdAt: string;
   /** Spec 13 — the project's task-key prefix, or null when not set. */
@@ -147,6 +180,22 @@ export class ProjectsService {
       include: {
         _count: { select: { members: { where: { membership: { status: 'active' } } } } },
         client: { select: { id: true, name: true } },
+        // The Members column draws people, not a quantity, so the row has to carry a few of
+        // them. `take` is per project and Prisma resolves the whole include in one query, so
+        // this stays the two round trips the list already made. The order is `listMembers`'
+        // — last name then first — so the faces on the list are the first faces on the
+        // roster rather than an arbitrary three.
+        members: {
+          where: { membership: { status: 'active' } },
+          take: MEMBER_PREVIEW_LIMIT,
+          orderBy: [
+            { membership: { account: { lastName: 'asc' } } },
+            { membership: { account: { firstName: 'asc' } } },
+          ],
+          select: {
+            membership: { select: { account: { select: { firstName: true, lastName: true } } } },
+          },
+        },
       },
       orderBy: { name: 'asc' },
     });
@@ -174,6 +223,7 @@ export class ProjectsService {
         name: p.name,
         status: p.status,
         memberCount: p._count.members,
+        memberPreview: p.members.map((m) => previewOf(m.membership.account)),
         totalHours: Math.round(((minutesByProject.get(p.id) ?? 0) / 60) * 10) / 10,
         createdAt: p.createdAt.toISOString(),
         key: p.key,

@@ -11,8 +11,10 @@ import {
   validateSignerEmail,
   validateSignerName,
 } from '@devscribed/validation';
-import { Button, Card, InfoBanner, Input, SectionLabel, Select, Spinner } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, Card, InfoBanner, TextInput, Select, Preloader } from '@devscribed/ds';
+import { focusByTestId } from '@/field-error';
+import { SectionHeading } from '@/SectionHeading';
+import { optionFor, valueOf } from '@/select';
 import { apiRequest, failureMessage } from './api';
 import {
   envelopeUrl,
@@ -24,7 +26,7 @@ import {
 } from './envelopes';
 import { FieldInput, SignerFieldPreview, validateFieldValue } from './FieldInput';
 import { PreviewModal } from './PreviewModal';
-import { useToast } from './toast';
+import { useToast } from '@/toast';
 
 export interface TemplateChoice {
   id: string;
@@ -99,7 +101,7 @@ export function FillForm({
   autofillGaps?: AutofillGap[];
   autofillTruncated?: string[];
 }) {
-  const toast = useToast();
+  const { showToast } = useToast();
 
   const [title, setTitle] = useState('');
   const [expiresInDays, setExpiresInDays] = useState(String(ENVELOPE_LIMITS.expiryDaysDefault));
@@ -303,11 +305,7 @@ export function FillForm({
       return null;
     }
 
-    toast.show({
-      testId: 'toast-envelope-error',
-      message: failureMessage(result.failure),
-      tone: 'error',
-    });
+    showToast('toast-envelope-error', failureMessage(result.failure), 'error');
     return null;
   }
 
@@ -326,11 +324,7 @@ export function FillForm({
     setBusy(null);
     if (!saved) return;
     onSaved(saved);
-    toast.show({
-      testId: 'toast-envelope-saved',
-      message: ENVELOPE_MESSAGES.toast.draftSaved,
-      tone: 'success',
-    });
+    showToast('toast-envelope-saved', ENVELOPE_MESSAGES.toast.draftSaved);
   }
 
   async function send(): Promise<void> {
@@ -340,11 +334,7 @@ export function FillForm({
     if (Object.keys(found).length > 0) {
       const target = firstErrorTestId(found);
       if (target) focusByTestId(target);
-      toast.show({
-        testId: 'toast-envelope-error',
-        message: ENVELOPE_MESSAGES.send.missingFields,
-        tone: 'error',
-      });
+      showToast('toast-envelope-error', ENVELOPE_MESSAGES.send.missingFields, 'error');
       return;
     }
 
@@ -378,26 +368,21 @@ export function FillForm({
       setErrors(mapped);
       const target = firstErrorTestId(mapped);
       if (target) focusByTestId(target);
-      toast.show({
-        testId: 'toast-envelope-error',
-        message: ENVELOPE_MESSAGES.send.missingFields,
-        tone: 'error',
-      });
+      showToast('toast-envelope-error', ENVELOPE_MESSAGES.send.missingFields, 'error');
       return;
     }
 
-    toast.show({
-      testId: 'toast-envelope-error',
-      message:
-        failure.error === 'incomplete_signers'
-          ? ENVELOPE_MESSAGES.send.incompleteSigners
-          : failure.error === 'mail_delivery_failed'
-            ? ENVELOPE_MESSAGES.send.mailFailure
-            : failure.error === 'not_draft'
-              ? ENVELOPE_MESSAGES.send.alreadySent
-              : failureMessage(failure),
-      tone: 'error',
-    });
+    showToast(
+      'toast-envelope-error',
+      failure.error === 'incomplete_signers'
+        ? ENVELOPE_MESSAGES.send.incompleteSigners
+        : failure.error === 'mail_delivery_failed'
+          ? ENVELOPE_MESSAGES.send.mailFailure
+          : failure.error === 'not_draft'
+            ? ENVELOPE_MESSAGES.send.alreadySent
+            : failureMessage(failure),
+      'error',
+    );
   }
 
   async function preview(): Promise<void> {
@@ -413,11 +398,7 @@ export function FillForm({
     });
     setBusy(null);
     if (!result.ok) {
-      toast.show({
-        testId: 'toast-envelope-error',
-        message: failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast('toast-envelope-error', failureMessage(result.failure), 'error');
       return;
     }
     setPreviewHtml(result.data.html);
@@ -462,26 +443,26 @@ export function FillForm({
         event.preventDefault();
         void send();
       }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-10)' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}
     >
       <Card>
-        <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+        <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
           <div>
             <Select
               label="Template *"
-              value={templateId}
+              value={optionFor(templateOptions, templateId)}
               options={templateOptions}
               placeholder="Select a published template"
-              disabled={locked}
-              onChange={onTemplateChange}
+              isDisabled={locked}
+              onChange={(option) => onTemplateChange(valueOf(option))}
               data-testid="envelope-template-select"
             />
             {!locked && (
               <p
                 style={{
                   margin: '6px 0 0',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text-muted)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 Choosing a template creates the document and pins its current version. The
@@ -493,18 +474,18 @@ export function FillForm({
           <div>
             <Select
               label="Subject"
-              value={subjectId}
+              value={optionFor(subjectOptions, subjectId)}
               options={subjectOptions}
               placeholder="None"
-              disabled={locked}
-              onChange={onSubjectChange}
+              isDisabled={locked}
+              onChange={(option) => onSubjectChange(valueOf(option))}
               data-testid="envelope-subject-select"
             />
             {/* Requirement 12 — creating without a subject is a deliberate choice, and the
                 order matters because autofill runs at creation, which the template pick
                 triggers. Saying so here beats a form that quietly fills nothing. */}
             {!locked && (
-              <p style={{ margin: '6px 0 0', fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+              <p style={{ margin: '6px 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
                 The member this contract is about. Pick them before the template — autofill
                 runs when the document is created. Leaving this as None is fine.
               </p>
@@ -512,8 +493,8 @@ export function FillForm({
             {/* States table: "Subject removed — selecting one shows an advisory note,
                 not an error." Resolution works exactly the same for them. */}
             {subject?.isRemoved && (
-              <div style={{ marginTop: 'var(--sp-5)' }}>
-                <InfoBanner tone="warning" data-testid="envelope-subject-removed-note">
+              <div style={{ marginTop: 'var(--space-4)' }}>
+                <InfoBanner variant="warning" data-testid="envelope-subject-removed-note">
                   {subject.name} is a former member. Their details still fill this contract.
                 </InfoBanner>
               </div>
@@ -523,7 +504,7 @@ export function FillForm({
             {detail && subjectId.length > 0 && (
               <p
                 data-testid="envelope-autofill-summary"
-                style={{ margin: '8px 0 0', fontSize: 'var(--fs-13)', color: 'var(--text-sub)' }}
+                style={{ margin: '8px 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
               >
                 Fills {autofilledKeys.size} of {totalFields} fields from this member's profile
               </p>
@@ -531,15 +512,15 @@ export function FillForm({
           </div>
 
           {creating && (
-            <div style={{ display: 'flex', gap: 'var(--sp-4)', color: 'var(--accent)' }}>
-              <Spinner size={18} />
-              <span style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', color: 'var(--action-primary)' }}>
+              <Preloader size={18} />
+              <span style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
                 Creating the document…
               </span>
             </div>
           )}
 
-          <Input
+          <TextInput
             label="Title"
             value={title}
             disabled={readOnly}
@@ -552,11 +533,12 @@ export function FillForm({
             }}
             aria-invalid={errors.title ? true : undefined}
             aria-describedby={errors.title ? 'field-error-title' : undefined}
-            error={errors.title ? errorNode('title', errors.title) : undefined}
+            error={errors.title}
+            errorId="field-error-title"
             wrapperStyle={{ gap: 0 }}
           />
 
-          <Input
+          <TextInput
             label={`Expires in (days, ${ENVELOPE_LIMITS.expiryDaysMin}–${ENVELOPE_LIMITS.expiryDaysMax})`}
             type="number"
             value={expiresInDays}
@@ -570,11 +552,8 @@ export function FillForm({
             }}
             aria-invalid={errors.expiresInDays ? true : undefined}
             aria-describedby={errors.expiresInDays ? 'field-error-expiresInDays' : undefined}
-            error={
-              errors.expiresInDays
-                ? errorNode('expiresInDays', errors.expiresInDays)
-                : undefined
-            }
+            error={errors.expiresInDays}
+            errorId="field-error-expiresInDays"
             wrapperStyle={{ gap: 0, maxWidth: 260 }}
           />
         </div>
@@ -583,11 +562,11 @@ export function FillForm({
       {detail && (
         <Card title="Fields you fill">
           {senderFields.length === 0 && (
-            <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
               This template has no fields for you to fill.
             </p>
           )}
-          <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
             {senderFields.map((field) => {
               const masked = maskedKeys.has(field.key);
               return (
@@ -610,8 +589,8 @@ export function FillForm({
                       style={{
                         display: 'inline-block',
                         marginTop: 6,
-                        fontSize: 'var(--fs-12)',
-                        color: 'var(--text-muted)',
+                        fontSize: 'var(--font-size-xs)',
+                        color: 'var(--text-secondary)',
                       }}
                     >
                       Hidden — will be filled automatically
@@ -625,8 +604,8 @@ export function FillForm({
                       style={{
                         display: 'inline-block',
                         marginTop: 6,
-                        fontSize: 'var(--fs-12)',
-                        color: 'var(--amber-700)',
+                        fontSize: 'var(--font-size-xs)',
+                        color: 'var(--status-error)',
                       }}
                     >
                       {PROFILE_MESSAGES.autofill.truncated}
@@ -640,8 +619,8 @@ export function FillForm({
           {/* Alt Flow "Incomplete profile": gaps, never an error. The link opens in a new
               tab so the half-filled draft on this screen is not lost. */}
           {detail && subjectId.length > 0 && (autofillGaps?.length ?? 0) > 0 && (
-            <div style={{ marginTop: 'var(--sp-7)' }}>
-              <InfoBanner tone="warning" data-testid="envelope-autofill-gaps">
+            <div style={{ marginTop: 'var(--space-7)' }}>
+              <InfoBanner variant="warning" data-testid="envelope-autofill-gaps">
                 <span>
                   {PROFILE_MESSAGES.autofill.gaps(
                     autofillGaps!.length,
@@ -652,7 +631,7 @@ export function FillForm({
                     href={`/org/${orgId}/members/${subjectId}?tab=contract-details`}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+                    style={{ color: 'var(--action-primary)', textDecoration: 'underline' }}
                   >
                     Open profile
                   </a>
@@ -684,8 +663,6 @@ export function FillForm({
             readOnly ? undefined : (
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
                 data-testid="envelope-swap-order-btn"
                 onClick={() =>
                   setSigners((prev) =>
@@ -698,14 +675,14 @@ export function FillForm({
             )
           }
         >
-          <div style={{ display: 'grid', gap: 'var(--sp-8)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
             {ordered.map((signer) => (
               <div key={signer.id} data-testid={`envelope-signer-input-${signer.order}`}>
-                <SectionLabel style={{ marginBottom: 8 }}>
+                <SectionHeading>
                   {signer.order}. {signer.label || signer.roleKey}
-                </SectionLabel>
-                <div style={{ display: 'flex', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
-                  <Input
+                </SectionHeading>
+                <div style={{ display: 'flex', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
+                  <TextInput
                     label="Name"
                     value={signer.name}
                     disabled={readOnly}
@@ -718,17 +695,11 @@ export function FillForm({
                         ),
                       )
                     }
-                    error={
-                      errors[`signer-name-${signer.order}`]
-                        ? errorNode(
-                            `signer-name-${signer.order}`,
-                            errors[`signer-name-${signer.order}`],
-                          )
-                        : undefined
-                    }
+                    error={errors[`signer-name-${signer.order}`]}
+                    errorId={`field-error-signer-name-${signer.order}`}
                     wrapperStyle={{ gap: 0, flex: 1, minWidth: 200 }}
                   />
-                  <Input
+                  <TextInput
                     label="Email"
                     type="email"
                     value={signer.email}
@@ -742,14 +713,8 @@ export function FillForm({
                         ),
                       )
                     }
-                    error={
-                      errors[`signer-email-${signer.order}`]
-                        ? errorNode(
-                            `signer-email-${signer.order}`,
-                            errors[`signer-email-${signer.order}`],
-                          )
-                        : undefined
-                    }
+                    error={errors[`signer-email-${signer.order}`]}
+                    errorId={`field-error-signer-email-${signer.order}`}
                     wrapperStyle={{ gap: 0, flex: 1, minWidth: 220 }}
                   />
                 </div>
@@ -760,7 +725,7 @@ export function FillForm({
               // Requirement 9 — legal, and deliberately a warning rather than a block:
               // one person signing in two capacities is a real arrangement, and each
               // signer still gets their own token and their own turn.
-              <InfoBanner tone="warning" data-testid="envelope-same-email-warning">
+              <InfoBanner variant="warning" data-testid="envelope-same-email-warning">
                 Both signers use the same email address. Each still receives a separate link
                 and must sign in turn.
               </InfoBanner>
@@ -770,11 +735,10 @@ export function FillForm({
       )}
 
       {detail && !readOnly && (
-        <div style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           <Button
             type="button"
-            variant="secondary"
-            loading={busy === 'save'}
+            preloader={busy === 'save'}
             data-testid="envelope-save-draft-btn"
             onClick={() => void saveDraft()}
           >
@@ -782,8 +746,7 @@ export function FillForm({
           </Button>
           <Button
             type="button"
-            variant="secondary"
-            loading={busy === 'preview'}
+            preloader={busy === 'preview'}
             data-testid="envelope-preview-btn"
             onClick={() => void preview()}
           >
@@ -791,7 +754,7 @@ export function FillForm({
           </Button>
           {/* Never disabled for validation — clicking with an incomplete form is how the
               caller finds out what is missing (repository rule). */}
-          <Button type="submit" variant="primary" loading={busy === 'send'} data-testid="envelope-send-btn">
+          <Button type="submit" variant="primary" preloader={busy === 'send'} data-testid="envelope-send-btn">
             Send for signature
           </Button>
         </div>
@@ -827,8 +790,8 @@ function AutofillMarker({ field }: { field: EnvelopeFieldDto }) {
       style={{
         display: 'inline-block',
         marginTop: 6,
-        fontSize: 'var(--fs-12)',
-        color: 'var(--text-muted)',
+        fontSize: 'var(--font-size-xs)',
+        color: 'var(--text-secondary)',
       }}
     >
       ⟲ {name ? `from ${name}` : 'from profile'} — edit freely

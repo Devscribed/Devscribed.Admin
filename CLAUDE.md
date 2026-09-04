@@ -9,9 +9,9 @@ When behaviour and spec disagree, the spec wins — change the spec first, delib
 apps/api/              NestJS 11 + Prisma + PostgreSQL
 apps/web/              Next.js 15 App Router + React 19
 packages/validation/   validation rules and error messages, shared by web and API
+packages/ds/           Teammerly Meridian design system, @devscribed/ds — source, not a build
 e2e/                   Playwright, one file per spec area
 specs/                 the specs (see specs/*/README.md for each area index)
-1_DS for dev/          Teammerly Meridian design system, imported as @ds
 ```
 
 npm workspaces, Node 22, TypeScript everywhere.
@@ -69,9 +69,12 @@ validation message inline.
 and focuses the first invalid field. Disabling is only for genuine in-flight guards and deliberate
 confirmations.
 
-**Design system.** Import from `@ds` (via the barrel `apps/web/src/ds.ts`). **No hardcoded colors
-or sizes** — use tokens (`var(--sp-8)`, `var(--fs-14)`, `var(--text-muted)`). Anything missing goes
-*into* the design system and is recorded in that spec's "DS gaps" table, never improvised per
+**Design system.** Import from `@devscribed/ds`, the package root only — a component file is an
+internal, and `npm run ds:check` fails on a deep import. The package ships TypeScript source that
+Next compiles through `transpilePackages`, so a component change shows on the next render with no
+build step. **No hardcoded colors or sizes** — use tokens (`var(--space-3)`, `var(--font-size-s)`,
+`var(--text-secondary)`); the four normative rules are in `packages/ds/README.md`. Anything missing
+goes *into* the design system and is recorded in that spec's "DS gaps" table, never improvised per
 screen. Light theme only this release.
 
 **Testing.** Selectors are `data-testid` only, and the ids are named in the specs. Test cases are
@@ -132,11 +135,18 @@ suite unrunnable because a port was taken. `npm run reap:dry` says what the reap
 - **Probe a busy port by connecting, not by binding.** On Windows a server on `0.0.0.0` does not
   prevent a second bind to `127.0.0.1`, so a bind test reports every port free.
 - Migrations should be **additive**. `infra/deploy.sh` runs `prisma migrate deploy` (through
-  `infra/migrate.sh`, as a one-off task on the *new* image) and *then* `tf apply`s the services,
-  so the schema changes while the **previous** code is still serving. Additive is what makes that
-  window safe: the old code must keep working against the new schema. This is a rule, not an
-  observation about the current migrations. The migration step is skipped entirely on a web-only
-  deploy.
+  `infra/migrate.sh`, as a one-off task on the *new* image) *before* the Terraform rollout of
+  the services — new schema first, then the code that uses it — because a services-first order
+  deploys new code against an old schema and every query against a table the migration has not
+  created yet fails with a 500 until it does. Additive migrations make the *reverse* safe (old
+  code against new schema, which simply ignores the columns it does not know about), which is
+  why a rollback needs no database rollback. The order is documented at `infra/deploy.sh:27`;
+  the additive rule is what makes both directions survivable. The migration step is skipped
+  entirely on a web-only deploy. This is a rule, not an observation about the current
+  migrations.
+- **A workspace package needs two COPY lines in every Dockerfile that uses it**: its manifest
+  before `npm ci`, its source after. The `packages/*` glob tolerates a missing package silently,
+  so `npm ci` passes and the build fails later at `next build` with "Module not found".
 - If Prisma types look wrong in the editor, re-run `npm install` (or `prisma generate`) — the
   client is generated into `node_modules/.prisma`.
 

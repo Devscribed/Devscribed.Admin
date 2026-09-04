@@ -12,7 +12,7 @@ depends-on: ["07"]
 
 ## Summary
 
-The vacation reserve is a financial ledger that tracks how much money has been set aside to fund a member's paid vacation. The system **automatically generates monthly credit transactions** on the 1st of each month based on the previous month's expected billing, using the financial settings snapshot (spec 07) that was in effect during the billing month. The reserve balance determines how many vacation days a member has available. Unused balances expire at year-end. This spec covers the ledger, the auto-accrual engine, the balance calculation, and the transactions view on the Vacation tab. Vacation requests (submitting, reviewing, cancelling) are covered in spec 09.
+The vacation reserve is a financial ledger that tracks how much money has been set aside to fund a member's paid vacation. The system **automatically generates monthly credit transactions** on the 1st of each month based on the previous month's expected billing, using the financial settings snapshot (spec 07) that was in effect during the billing month. The reserve balance determines how many vacation days a member has available. Unused balances expire at year-end. This spec covers the decisions record, the auto-accrual engine, the balance calculation, and the transactions view on the Vacation tab. Vacation requests (submitting, reviewing, cancelling) are covered in spec 09.
 
 **Depends on:** Spec 07 — MemberFinancials and MemberFinancialsSnapshot must exist for a member before credits can accrue.
 

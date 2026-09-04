@@ -16,7 +16,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // RDS PostgreSQL in a deployed environment, a plain local Postgres in dev and tests.
   url       = env("DATABASE_URL")
   // Prisma Migrate needs advisory locks and DDL transactions, neither of which survives a
@@ -27,28 +27,32 @@ datasource db {
 
 /// Login credentials + the person behind them.
 model Account {
-  id               String   @id @default(uuid())
+  id                String    @id @default(uuid())
   /// Always stored lowercase; uniqueness is therefore case-insensitive.
-  email            String   @unique
-  passwordHash     String
-  firstName        String
-  lastName         String
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
   /// IANA zone auto-detected from the browser at signup.
-  timezone         String?
+  timezone          String?
   /// ISO 3166-1 alpha-2 country code for the phone number (spec 06); max 5 chars —
   /// Prisma cannot express a length cap, it is enforced in the shared validation layer.
-  phoneCountryCode String?
+  phoneCountryCode  String?
   /// Phone number in the selected country's format (spec 06); informational only,
   /// no uniqueness constraint. Max 20 chars, enforced in the validation layer.
-  phoneNumber      String?
+  phoneNumber       String?
   /// "Monday" (default) or "Sunday" — the source for how dates are displayed to this
   /// user elsewhere (spec 06 requirement 4/6). Max 10 chars, enforced in validation.
-  firstDayOfWeek   String   @default("Monday")
+  firstDayOfWeek    String    @default("Monday")
   /// Session-revocation token. Carried in every session cookie and re-checked on each
   /// authenticated request; regenerating it invalidates every outstanding cookie at
   /// once (spec 02 requirement 12 — shared with specs 04 and 06).
-  securityStamp    String   @default(uuid())
-  createdAt        DateTime @default(now())
+  securityStamp     String    @default(uuid())
+  /// Last time the calendar provider resolved this address to a tenant mailbox
+  /// (hiring 00 requirement 12). A cache for the interviewer picker only — every
+  /// write re-verifies, so a stale value can never authorise an assignment.
+  mailboxVerifiedAt DateTime?
+  createdAt         DateTime  @default(now())
 
   memberships               Membership[]
   passwordResetTokens       PasswordResetToken[]
@@ -83,6 +87,11 @@ model Account {
   clientMembership          ClientMembership?            @relation("ClientMembershipAccount")
   /// Requests spec 03 — audit back-relation for a removed client contact.
   clientMembershipsRemoved  ClientMembership[]           @relation("ClientMembershipsRemoved")
+  /// Hiring specs 01-07 — the interviewer side of a vacancy and of the interviews
+  /// actually booked against it, which a later reassignment never rewrites (07 §13.63).
+  interviewerVacancies      Vacancy[]                    @relation("VacancyInterviewer")
+  interviewerApplications   Application[]                @relation("ApplicationInterviewer")
+  scheduleEvents            ApplicationScheduleEvent[]   @relation("ScheduleEventActor")
 }
 
 /// Pending email-change confirmation grant (spec 06). The account's email is only
@@ -133,7 +142,7 @@ model Invitation {
 
   /// Requests spec 03 — set on a client-contact invitation, null on a staff one.
   /// Nullable, so every existing row stays valid without a backfill.
-  clientId  String?
+  clientId String?
 
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inviterMembership Membership   @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
@@ -163,9 +172,12 @@ model PasswordResetToken {
 }
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
+  id                     String    @id @default(uuid())
+  name                   String
+  /// Reserved by the hiring 01 migration. Nothing uploads or renders a logo in this
+  /// release — the booking page's wordmark is plain type (hiring 02 requirement 2).
+  logoKey                String?
+  createdAt              DateTime  @default(now())
   /// Documents spec 04 requirement 1 — the provider **new** envelopes are sent
   /// through. Read once at the start of a send and pinned onto the envelope in the
   /// transaction that flips it to `sent`; never read as authority afterwards. The
@@ -183,25 +195,31 @@ model Organization {
   /// what makes a backfill unnecessary for organizations that predate the column.
   nextRequestNumber Int @default(1)
 
-  memberships       Membership[]
-  documentTemplates DocumentTemplate[]
-  envelopes         Envelope[]
-  invitations       Invitation[]
-  projects          Project[]
-  timeEntries       TimeEntry[]
-  runningTimers     RunningTimer[]
+  memberships          Membership[]
+  documentTemplates    DocumentTemplate[]
+  envelopes            Envelope[]
+  invitations          Invitation[]
+  projects             Project[]
+  timeEntries          TimeEntry[]
+  runningTimers        RunningTimer[]
   /// Spec organization/01 — the clients that group projects for billing/reporting.
-  clients           Client[]
+  clients              Client[]
   /// Spec organization/03 — the organization's paid public-holiday calendar.
-  holidays          Holiday[]
+  holidays             Holiday[]
   /// Requests spec 01 — the organization's requests.
-  requests          Request[]
+  requests             Request[]
   /// Requests spec 02 — the organization's own catalogue of request topics.
-  requestTopics     RequestTopic[]
+  requestTopics        RequestTopic[]
   /// Requests spec 03 — the client contacts who are signed-in principals here.
-  clientMemberships ClientMembership[]
+  clientMemberships    ClientMembership[]
   /// Requests spec 03 — the notification outbox.
   requestNotifications RequestNotification[]
+  /// Hiring specs 01-06. Every hiring entity is org-scoped from its first migration.
+  vacancies            Vacancy[]
+  candidates           Candidate[]
+  applications         Application[]
+  categories           Category[]
+  criteria             Criterion[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -219,31 +237,31 @@ model Membership {
   /// acceptance (spec 03 requirement 5; spec 05).
   jobTitle       String?
 
-  account             Account                      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  envelopesAsSubject  Envelope[]                   @relation("EnvelopeSubject")
-  signerRecords       EnvelopeSigner[]             @relation("SignerMembership")
-  profile             MemberProfile?
-  invitationsSent     Invitation[]
-  financials          MemberFinancials?
-  financialsSnapshots MemberFinancialsSnapshot[]
-  transactions        VacationReserveTransaction[]
-  vacationRequests    VacationRequest[]
-  projectMemberships  ProjectMember[]
-  timeEntries         TimeEntry[]
-  runningTimer        RunningTimer?
-  tasksAssigned       Task[]                       @relation("TaskAssignee")
-  tasksReported       Task[]                       @relation("TaskReporter")
-  commentsAuthored    TaskComment[]                @relation("TaskCommentAuthor")
-  watchedTasks        TaskWatcher[]                @relation("TaskWatcherMembership")
-  taskActivity        TaskActivity[]               @relation("TaskActivityActor")
+  account                  Account                      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization             Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  envelopesAsSubject       Envelope[]                   @relation("EnvelopeSubject")
+  signerRecords            EnvelopeSigner[]             @relation("SignerMembership")
+  profile                  MemberProfile?
+  invitationsSent          Invitation[]
+  financials               MemberFinancials?
+  financialsSnapshots      MemberFinancialsSnapshot[]
+  transactions             VacationReserveTransaction[]
+  vacationRequests         VacationRequest[]
+  projectMemberships       ProjectMember[]
+  timeEntries              TimeEntry[]
+  runningTimer             RunningTimer?
+  tasksAssigned            Task[]                       @relation("TaskAssignee")
+  tasksReported            Task[]                       @relation("TaskReporter")
+  commentsAuthored         TaskComment[]                @relation("TaskCommentAuthor")
+  watchedTasks             TaskWatcher[]                @relation("TaskWatcherMembership")
+  taskActivity             TaskActivity[]               @relation("TaskActivityActor")
   /// Requests spec 01 — the request rows this membership takes part in.
-  requestsRaised      Request[]                    @relation("RequestRequester")
-  requestsAssigned    Request[]                    @relation("RequestAssignee")
-  requestMessages     RequestMessage[]             @relation("RequestMessageAuthor")
-  requestEvents       RequestEvent[]               @relation("RequestEventActor")
+  requestsRaised           Request[]                    @relation("RequestRequester")
+  requestsAssigned         Request[]                    @relation("RequestAssignee")
+  requestMessages          RequestMessage[]             @relation("RequestMessageAuthor")
+  requestEvents            RequestEvent[]               @relation("RequestEventActor")
   /// Requests spec 03 — the client contacts this member invited (audit).
-  clientMembershipsInvited ClientMembership[]      @relation("ClientMembershipsInvited")
+  clientMembershipsInvited ClientMembership[]           @relation("ClientMembershipsInvited")
 
   @@index([organizationId])
 }
@@ -275,27 +293,27 @@ enum TemplateFieldType {
 /// A reusable contract. The template itself carries only identity and lifecycle —
 /// every piece of content lives on a version, so that publishing can freeze it.
 model DocumentTemplate {
-  id             String         @id @default(uuid())
-  organizationId String
-  name           String
-  description    String?
-  status         TemplateStatus @default(draft)
+  id                  String         @id @default(uuid())
+  organizationId      String
+  name                String
+  description         String?
+  status              TemplateStatus @default(draft)
   /// The version new envelopes bind to. Null until the first publish, and only
   /// ever moved by a successful publish (requirement 4).
-  currentVersionId String?      @unique
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  createdByAccountId String
-  archivedAt     DateTime?
+  currentVersionId    String?        @unique
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  createdByAccountId  String
+  archivedAt          DateTime?
   archivedByAccountId String?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    Account      @relation("TemplatesCreated", fields: [createdByAccountId], references: [id])
-  archivedBy   Account?     @relation("TemplatesArchived", fields: [archivedByAccountId], references: [id])
-  versions     DocumentTemplateVersion[] @relation("TemplateVersions")
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      Account                   @relation("TemplatesCreated", fields: [createdByAccountId], references: [id])
+  archivedBy     Account?                  @relation("TemplatesArchived", fields: [archivedByAccountId], references: [id])
+  versions       DocumentTemplateVersion[] @relation("TemplateVersions")
   /// Deliberately not a foreign key back to `versions`: Postgres would need the row
   /// to exist before the template does. Resolved in the service instead.
-  currentVersion DocumentTemplateVersion? @relation("TemplateCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  currentVersion DocumentTemplateVersion?  @relation("TemplateCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
 
   /// Uniqueness is case-insensitive per the spec, which a plain @@unique cannot
   /// express — the migration adds a lower(name) unique index and the service
@@ -306,25 +324,25 @@ model DocumentTemplate {
 /// Immutable once `publishedAt` is set. Nothing in the application may write to a
 /// published row — requirement 8, asserted by TC-01-INT-05.
 model DocumentTemplateVersion {
-  id            String    @id @default(uuid())
-  templateId    String
-  versionNumber Int
-  bodyHtml      String    @default("")
+  id                 String    @id @default(uuid())
+  templateId         String
+  versionNumber      Int
+  bodyHtml           String    @default("")
   /// Ordered, frozen copy of the field definitions, written at publish. The live
   /// definitions stay in `fields` so a draft can be edited row by row.
-  fieldsSnapshot Json?
+  fieldsSnapshot     Json?
   /// `[{ key, label, order }]` — exactly two entries once published.
-  signerRoles   Json      @default("[]")
-  publishedAt   DateTime?
+  signerRoles        Json      @default("[]")
+  publishedAt        DateTime?
   /// Optimistic lock. Incremented on every draft save; a stale value is a 409.
-  rowVersion    Int       @default(1)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  rowVersion         Int       @default(1)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   createdByAccountId String
 
-  template  DocumentTemplate @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
-  createdBy Account          @relation("TemplateVersionsCreated", fields: [createdByAccountId], references: [id])
-  fields    TemplateField[]
+  template   DocumentTemplate  @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  createdBy  Account           @relation("TemplateVersionsCreated", fields: [createdByAccountId], references: [id])
+  fields     TemplateField[]
   currentFor DocumentTemplate? @relation("TemplateCurrentVersion")
   envelopes  Envelope[]
 
@@ -417,49 +435,49 @@ enum EnvelopeEventType {
 /// One contract in flight: a pinned template version, the values filled into it,
 /// two signers, and the trail of everything that happened to it.
 model Envelope {
-  id                String         @id @default(uuid())
-  organizationId    String
+  id                  String         @id @default(uuid())
+  organizationId      String
   /// Pinned at creation and never changed. `Restrict` rather than `Cascade`: a
   /// version that backs a document must not be deletable at all.
-  templateVersionId String
-  title             String
-  status            EnvelopeStatus @default(draft)
+  templateVersionId   String
+  title               String
+  status              EnvelopeStatus @default(draft)
   /// Map of field key to value, accumulated from the sender and from each signer.
-  fieldValues       Json           @default("{}")
+  fieldValues         Json           @default("{}")
   /// Written exactly once, at send, and never again (invariant 5).
-  renderedHtml      String?
-  documentHash      String?
-  signedPdfKey      String?
-  signedPdfHash     String?
-  pdfStatus         PdfStatus      @default(not_required)
+  renderedHtml        String?
+  documentHash        String?
+  signedPdfKey        String?
+  signedPdfHash       String?
+  pdfStatus           PdfStatus      @default(not_required)
   /// Autofill subject (spec 03). SetNull so deleting a member cannot take an
   /// executed contract with it.
   subjectMembershipId String?
   /// The SignatureProvider port, present from day one so that adding a
   /// third-party adapter later is a class and an env var, not a migration.
-  providerKey       String         @default("internal")
-  providerRef       String         @default("")
+  providerKey         String         @default("internal")
+  providerRef         String         @default("")
   /// Spec 04. Written at send beside `providerKey`, and never read from configuration
   /// at display time: switching test mode off must not relabel a document that was
   /// signed while it was on (edge case 17).
-  providerTestMode  Boolean        @default(false)
+  providerTestMode    Boolean        @default(false)
   /// The provider's own status string, verbatim ("Sent", "Completed"). For support,
   /// never for logic — every decision reads our own status column.
-  providerStatus    String?
+  providerStatus      String?
   /// Drives lazy convergence (requirement 24a). Written at send, so a freshly-sent
   /// envelope is fresh and costs no provider call on its first read.
-  providerSyncedAt  DateTime?
+  providerSyncedAt    DateTime?
   /// Last provider-side error, cleared on the next successful sync.
-  providerError     String?
-  expiresAt         DateTime?
-  sentAt            DateTime?
-  completedAt       DateTime?
-  voidedAt          DateTime?
-  voidedByAccountId String?
-  voidReason        String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  createdByAccountId String
+  providerError       String?
+  expiresAt           DateTime?
+  sentAt              DateTime?
+  completedAt         DateTime?
+  voidedAt            DateTime?
+  voidedByAccountId   String?
+  voidReason          String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  createdByAccountId  String
 
   organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   templateVersion DocumentTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
@@ -531,24 +549,24 @@ model SigningToken {
 /// hash chain so that an edited or deleted row is detectable rather than merely
 /// unlikely (requirements 38-39).
 model EnvelopeEvent {
-  id               String            @id @default(uuid())
-  envelopeId       String
-  envelopeSignerId String?
-  type             EnvelopeEventType
-  actorAccountId   String?
-  actorEmail       String?
-  ipAddress        String?
-  userAgent        String?
-  documentHash     String?
+  id                String            @id @default(uuid())
+  envelopeId        String
+  envelopeSignerId  String?
+  type              EnvelopeEventType
+  actorAccountId    String?
+  actorEmail        String?
+  ipAddress         String?
+  userAgent         String?
+  documentHash      String?
   /// Never contains field values: the trail records that a document was signed,
   /// not what was written in it (requirement 40).
-  metadata         Json?
+  metadata          Json?
   /// Lets the chain algorithm evolve without invalidating chains written under
   /// the old one.
-  schemaVersion    Int               @default(1)
-  occurredAt       DateTime          @default(now())
+  schemaVersion     Int               @default(1)
+  occurredAt        DateTime          @default(now())
   previousEventHash String?
-  eventHash        String
+  eventHash         String
 
   envelope Envelope        @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
   signer   EnvelopeSigner? @relation(fields: [envelopeSignerId], references: [id], onDelete: SetNull)
@@ -614,19 +632,19 @@ model ProviderWebhookEvent {
 /// `ViewMemberProfilePii`, and excluded from logs and from the audit trail.
 /// Column-level encryption is a recorded, accepted gap — see the area README.
 model MemberProfile {
-  id               String    @id @default(uuid())
-  membershipId     String    @unique
-  addressLine      String?
-  city             String?
-  postalCode       String?
+  id                 String    @id @default(uuid())
+  membershipId       String    @unique
+  addressLine        String?
+  city               String?
+  postalCode         String?
   /// ISO 3166-1 alpha-2.
-  country          String?
-  taxId            String?
+  country            String?
+  taxId              String?
   /// A date with no time component; stored at UTC midnight.
-  dateOfBirth      DateTime?
-  idDocumentNumber String?
-  bankDetails      String?
-  updatedAt        DateTime  @updatedAt
+  dateOfBirth        DateTime?
+  idDocumentNumber   String?
+  bankDetails        String?
+  updatedAt          DateTime  @updatedAt
   updatedByAccountId String?
 
   membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
@@ -819,9 +837,9 @@ model Client {
   /// Account that archived the client (audit). Cleared on restore.
   archivedByAccountId String?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    Account      @relation("ClientsCreated", fields: [createdByAccountId], references: [id])
-  archivedBy   Account?     @relation("ClientsArchived", fields: [archivedByAccountId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account            @relation("ClientsCreated", fields: [createdByAccountId], references: [id])
+  archivedBy   Account?           @relation("ClientsArchived", fields: [archivedByAccountId], references: [id])
   projects     Project[]
   /// Requests spec 03 — the people at this client who hold a principal here.
   contacts     ClientMembership[]
@@ -959,19 +977,19 @@ model Task {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  project  Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  column   BoardColumn @relation(fields: [columnId], references: [id])
-  assignee Membership? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter Membership  @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Cascade)
-  parent   Task?       @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children Task[]      @relation("TaskHierarchy")
-  labels   TaskLabelAssignment[]
-  comments TaskComment[]
-  watchers TaskWatcher[]
-  activity TaskActivity[]
+  project       Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  column        BoardColumn           @relation(fields: [columnId], references: [id])
+  assignee      Membership?           @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter      Membership            @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  parent        Task?                 @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children      Task[]                @relation("TaskHierarchy")
+  labels        TaskLabelAssignment[]
+  comments      TaskComment[]
+  watchers      TaskWatcher[]
+  activity      TaskActivity[]
   /// Spec 15 — back-relations for TimeEntry.taskRef / RunningTimer.taskRef.
-  timeEntries   TimeEntry[]    @relation("TimeEntryTask")
-  runningTimers RunningTimer[] @relation("RunningTimerTask")
+  timeEntries   TimeEntry[]           @relation("TimeEntryTask")
+  runningTimers RunningTimer[]        @relation("RunningTimerTask")
 
   @@unique([projectId, taskNumber])
   @@index([projectId, columnId])
@@ -1032,7 +1050,7 @@ model TimeEntry {
   /// Amount on reports. `true` = billable (default; matches every pre-migration row);
   /// `false` = non-billable (internal work, training, PTO). Amounts Owed excludes
   /// `false` rows entirely; Time & Activity splits them into Non-Billable Time.
-  billable           Boolean  @default(true)
+  billable           Boolean   @default(true)
 
   membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1044,8 +1062,8 @@ model TimeEntry {
   /// (FR-2/FR-3). onDelete: SetNull so hard-deleting the task un-links entries without
   /// altering the historical `task` label (FR-8). Relation field is named `taskRef`
   /// because the scalar `task` (free-text label) is already taken on this model.
-  taskId       String?
-  taskRef      Task?        @relation("TimeEntryTask", fields: [taskId], references: [id], onDelete: SetNull)
+  taskId  String?
+  taskRef Task?   @relation("TimeEntryTask", fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([membershipId, date])
   @@index([organizationId, date])
@@ -1079,8 +1097,8 @@ model RunningTimer {
   /// created TimeEntry on stop (FR-9); onDelete: SetNull so a task deletion mid-run
   /// leaves the timer running with taskId cleared (FR-8 / TC-15-INT-20). Relation field
   /// is `taskRef` because the scalar `task` (free-text label) is already taken here too.
-  taskId       String?
-  taskRef      Task?        @relation("RunningTimerTask", fields: [taskId], references: [id], onDelete: SetNull)
+  taskId  String?
+  taskRef Task?   @relation("RunningTimerTask", fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([taskId])
@@ -1188,70 +1206,70 @@ model TaskActivity {
 /// `Client.status`), so adding a request type, an access kind, or spec 02's second
 /// addressee kind is additive and needs no migration.
 model Request {
-  id                    String    @id @default(uuid())
+  id                         String    @id @default(uuid())
   /// Scope key. A required argument on every service method; there is no default.
-  organizationId        String
+  organizationId             String
   /// Per-organization human-readable number. Written exactly once, under a `FOR UPDATE`
   /// lock on the organization row inside the creating transaction (requirement 10).
-  number                Int
+  number                     Int
   /// 'access' | 'question'.
-  type                  String
+  type                       String
   /// Required when `type = 'access'`, absent otherwise. One of repository, environment,
   /// server, vpn, saas, admin_panel, documentation, other.
-  accessKind            String?
-  title                 String    @db.VarChar(200)
+  accessKind                 String?
+  title                      String    @db.VarChar(200)
   /// Plain text, <= 5000 chars. No markup is accepted, stored or interpreted.
-  description           String?   @db.Text
+  description                String?   @db.Text
   /// SetNull rather than Cascade: a request outlives a hard-deleted project.
-  projectId             String?
-  requesterMembershipId String
+  projectId                  String?
+  requesterMembershipId      String
   /// 'member' is the only valid value in this spec; spec 02 adds `client`.
-  assigneeKind          String
+  assigneeKind               String
   /// Required while `assigneeKind = 'member'`. Nullable in the column so spec 02's
   /// second addressee kind needs no column change.
-  assigneeMembershipId  String?
+  assigneeMembershipId       String?
   /// Requests spec 03 — required while `assigneeKind = 'client'`, null otherwise.
   assigneeClientMembershipId String?
   /// 'low' | 'normal' | 'high' | 'urgent'.
-  priority              String    @default("normal")
-  blocking              Boolean   @default(false)
+  priority                   String    @default("normal")
+  blocking                   Boolean   @default(false)
   /// Date-only. `overdue` is derived from it per reading account's timezone and is
   /// never stored (requirement 33).
-  neededBy              DateTime? @db.Date
+  neededBy                   DateTime? @db.Date
   /// 'open' | 'answered' | 'granted' | 'declined' | 'cancelled'.
-  status                String    @default("open")
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  status                     String    @default("open")
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
   /// Written exactly once, on the first entry into `answered`.
-  answeredAt            DateTime?
+  answeredAt                 DateTime?
   /// Written exactly once, on entry into a terminal status.
-  resolvedAt            DateTime?
-  resolvedByAccountId   String?
+  resolvedAt                 DateTime?
+  resolvedByAccountId        String?
   /// Sort key. Updated by any message, status change or reassignment.
-  lastActivityAt        DateTime  @default(now())
+  lastActivityAt             DateTime  @default(now())
   /// Requests spec 02 requirement 18 — the topic the request was raised under. Nullable
   /// so requests that predate that spec need no backfill; `SetNull` is the correct
   /// semantics for a hard delete that no route this product exposes can perform
   /// (requirement 14), and the state it would leave — a `topicLabel` with no `topicId` —
   /// is one the serializer still answers for.
-  topicId               String?
+  topicId                    String?
   /// Requests spec 02 requirement 23 — snapshot of the topic's name at creation, written
   /// once inside the creating transaction and never rewritten by any topic write
   /// (requirement 25).
-  topicLabel            String?   @db.VarChar(60)
+  topicLabel                 String?   @db.VarChar(60)
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  requester    Membership       @relation("RequestRequester", fields: [requesterMembershipId], references: [id], onDelete: Cascade)
-  assignee     Membership?      @relation("RequestAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
-  resolvedBy   Account?         @relation("RequestResolvedBy", fields: [resolvedByAccountId], references: [id], onDelete: SetNull)
-  topic        RequestTopic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  organization             Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project                  Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  requester                Membership            @relation("RequestRequester", fields: [requesterMembershipId], references: [id], onDelete: Cascade)
+  assignee                 Membership?           @relation("RequestAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
+  resolvedBy               Account?              @relation("RequestResolvedBy", fields: [resolvedByAccountId], references: [id], onDelete: SetNull)
+  topic                    RequestTopic?         @relation(fields: [topicId], references: [id], onDelete: SetNull)
   /// Requests spec 03 — the client contact this request is addressed to.
-  assigneeClientMembership ClientMembership? @relation("RequestClientAssignee", fields: [assigneeClientMembershipId], references: [id], onDelete: SetNull)
-  messages     RequestMessage[]
-  events       RequestEvent[]
+  assigneeClientMembership ClientMembership?     @relation("RequestClientAssignee", fields: [assigneeClientMembershipId], references: [id], onDelete: SetNull)
+  messages                 RequestMessage[]
+  events                   RequestEvent[]
   /// Requests spec 03 — the outbox rows this request's events produced.
-  notifications RequestNotification[]
+  notifications            RequestNotification[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
@@ -1262,19 +1280,19 @@ model Request {
 /// Requests spec 01 — one message in a request's conversation. Append-only: the
 /// application has no edit path and no delete path.
 model RequestMessage {
-  id                 String   @id @default(uuid())
-  requestId          String
+  id                       String   @id @default(uuid())
+  requestId                String
   /// 'member' | 'client'. The same seam as `Request.assigneeKind`.
-  authorKind         String
-  authorMembershipId String?
+  authorKind               String
+  authorMembershipId       String?
   /// Requests spec 03 — set when `authorKind` is `client`.
   authorClientMembershipId String?
   /// Plain text, 1-5000 chars.
-  body               String   @db.Text
-  createdAt          DateTime @default(now())
+  body                     String   @db.Text
+  createdAt                DateTime @default(now())
 
-  request Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  author  Membership? @relation("RequestMessageAuthor", fields: [authorMembershipId], references: [id], onDelete: SetNull)
+  request      Request           @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author       Membership?       @relation("RequestMessageAuthor", fields: [authorMembershipId], references: [id], onDelete: SetNull)
   clientAuthor ClientMembership? @relation("RequestMessageClientAuthor", fields: [authorClientMembershipId], references: [id], onDelete: SetNull)
 
   @@index([requestId, createdAt])
@@ -1284,28 +1302,28 @@ model RequestMessage {
 /// this is an operational trail, not the evidence of a legally executed contract, and
 /// claiming tamper-evidence it does not have would be worse than not claiming it.
 model RequestEvent {
-  id                String   @id @default(uuid())
-  requestId         String
+  id                      String   @id @default(uuid())
+  requestId               String
   /// 'member' | 'client' | 'system'.
-  actorKind         String
-  actorMembershipId String?
+  actorKind               String
+  actorMembershipId       String?
   /// Requests spec 03 — set when `actorKind` is `client`.
   actorClientMembershipId String?
   /// 'created' | 'status_changed' | 'assignee_changed' | 'field_changed' | 'message_posted'.
-  action            String
+  action                  String
   /// Set for `field_changed`.
-  field             String?
-  oldValue          String?
-  newValue          String?
+  field                   String?
+  oldValue                String?
+  newValue                String?
   /// Display-name snapshots taken at write time, so the trail survives a removed or
   /// renamed member (the device `TaskActivity` uses).
-  oldLabel          String?
-  newLabel          String?
-  createdAt         DateTime @default(now())
+  oldLabel                String?
+  newLabel                String?
+  createdAt               DateTime @default(now())
 
-  request Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  actor   Membership? @relation("RequestEventActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
-  clientActor ClientMembership? @relation("RequestEventClientActor", fields: [actorClientMembershipId], references: [id], onDelete: SetNull)
+  request       Request               @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor         Membership?           @relation("RequestEventActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+  clientActor   ClientMembership?     @relation("RequestEventClientActor", fields: [actorClientMembershipId], references: [id], onDelete: SetNull)
   /// Requests spec 03 — the outbox rows this event caused.
   notifications RequestNotification[]
 
@@ -1402,4 +1420,312 @@ model RequestTopic {
 
   /// The picker's query: one audience of one organization, active only.
   @@index([organizationId, audience, status])
+}
+
+/// One open position: one interviewer, one interview length, one public booking link.
+model Vacancy {
+  id                   String   @id @default(uuid())
+  /// Carried from the first migration rather than retrofitted — see hiring 00.
+  organizationId       String
+  title                String
+  description          String?
+  /// Exactly one interviewer; their mailbox is what availability is read from.
+  interviewerAccountId String
+  /// 15 | 30 | 45 | 60. Enforced in application code, which owns the message.
+  durationMinutes      Int
+  /// "open" | "closed". No `draft`: the slug is already unguessable.
+  status               String   @default("open")
+  /// `slugify(title)-randomBytes(9).base64url`. Globally unique, frozen at creation,
+  /// stored in plaintext — the manager has to be able to copy it again.
+  publicSlug           String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  interviewer  Account           @relation("VacancyInterviewer", fields: [interviewerAccountId], references: [id])
+  applications Application[]
+  categories   VacancyCategory[]
+
+  @@index([organizationId])
+  @@index([interviewerAccountId])
+}
+
+/// An org-wide label on a vacancy: `React`, `Senior`, `Engineer` (hiring 06 §02).
+model Category {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Stored exactly as typed. Uniqueness is enforced case-insensitively by a
+  /// `lower(name)` index the migration creates, not by this column — folding the
+  /// stored value would render `Asp.Net` as `asp.net` on every screen.
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vacancies    VacancyCategory[]
+
+  @@index([organizationId])
+}
+
+/// Assignment of a category to a vacancy. Renaming the category touches no row here,
+/// which is the whole reason the assignment references the row rather than the string.
+model VacancyCategory {
+  vacancyId  String
+  categoryId String
+  assignedAt DateTime @default(now())
+
+  vacancy  Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([vacancyId, categoryId])
+  @@index([categoryId])
+}
+
+/// A person who has applied at least once. Never signs in; the team owns the record.
+model Candidate {
+  id             String    @id @default(uuid())
+  organizationId String
+  /// Overwritten by the latest booking (hiring 02 requirement 27) — a typo in the
+  /// first booking must not be permanently uncorrectable.
+  firstName      String
+  lastName       String
+  /// Always lowercase, matching the account rule.
+  email          String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  /// Soft delete (hiring 03 §11). Null is the whole of "present": every hiring read
+  /// adds `deletedAt: null`, and nothing about the person or their history is erased.
+  ///
+  /// Their applications are **not** deleted and keep their board position — they are
+  /// unreachable while their candidate is, and come back with them. Which is what the
+  /// unique pair below is for: `BookingService` upserts on it, so a deleted person who
+  /// books again is revived by clearing this column rather than by inserting a second
+  /// row. No partial index and no email mangling; the pair means the same thing it
+  /// always did.
+  deletedAt      DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, deletedAt])
+}
+
+/// One candidate against one vacancy: the interview, its outcome, and its board card.
+model Application {
+  id                   String   @id @default(uuid())
+  organizationId       String
+  candidateId          String
+  vacancyId            String
+  /// The board column itself — one field, five values, no mirrored status (hiring 05).
+  status               String   @default("scheduled")
+  /// Gap integer scoped to (vacancyId, status); `id` is the stable tiebreak.
+  position             Int
+  /// The name exactly as submitted, frozen — the candidate's display name may move on.
+  submittedName        String
+  start                DateTime
+  end                  DateTime
+  /// The IANA zone the candidate booked in, so every screen can name it.
+  timeZone             String
+  /// `randomBytes(16).base64url`, unique, frozen at booking, stored in **plaintext**.
+  ///
+  /// Plaintext follows `Vacancy.publicSlug` rather than `PasswordResetToken.tokenHash`,
+  /// and the difference is not an oversight: hashing protects a credential that grants
+  /// account access, where this addresses one application row that anyone holding the
+  /// database already has. It would buy nothing and would cost the candidate the
+  /// ability to reopen a month-old invite (hiring 07 §03.11).
+  manageToken          String   @unique
+  /// The interviewer this booking was actually made with, stamped here rather than
+  /// resolved later through the vacancy. Reassigning a vacancy must not retroactively
+  /// rewrite who held an interview that already happened (hiring 07 §13.63), and a
+  /// reschedule has to reach the mailbox the event is actually in.
+  interviewerAccountId String
+  /// Identifier of the calendar event in the interviewer's mailbox.
+  graphEventId         String?
+  /// Opaque, application-generated storage key — never a path and never user input.
+  cvKey                String?
+  cvFileName           String?
+  cvContentType        String?
+  /// Recorded at upload so the card can name the file's size without reading it back
+  /// out of storage (hiring 04 §API). Null on any application booked before this
+  /// column existed, which the card renders as a filename with no size.
+  cvSizeBytes          Int?
+  /// The candidate's own note from the booking form.
+  note                 String?
+  /// Written during the interview (hiring 04). Shared fields, last write wins.
+  interviewNotes       String?
+  conclusion           String?
+  /// **The interview did not take place** — and nothing about the candidate's standing
+  /// (hiring 07 §01.1). Set from either side, never retroactively, and never derived by
+  /// replaying `ApplicationScheduleEvent`: this flag is what the board queries.
+  isCancelled          Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate      Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  vacancy        Vacancy                    @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  interviewer    Account                    @relation("ApplicationInterviewer", fields: [interviewerAccountId], references: [id])
+  criteria       ApplicationCriterion[]
+  scheduleEvents ApplicationScheduleEvent[]
+  cvVersions     ApplicationCv[]
+
+  @@index([organizationId])
+  @@index([candidateId])
+  @@index([vacancyId, status, position])
+  @@index([interviewerAccountId])
+}
+
+/// Every version of a candidate's CV, oldest first (hiring 07 §07.33).
+///
+/// **Nothing is ever deleted.** The record is permanent (04 §07.35), and what the
+/// candidate submitted at booking is evidence the interviewer may already have read — so
+/// a replacement adds a row and supersedes nothing on disk. Storage per booking is
+/// therefore unbounded, which 07 §15.70 records rather than limits.
+///
+/// It is not an event, and deliberately not folded into `ApplicationScheduleEvent`: a
+/// filename, a size and a content type have no place in an event row (07 §11.52). The
+/// candidate card merges the two sources into one timeline at render.
+///
+/// Scope travels through `Application`, exactly as `ApplicationCriterion`'s does.
+model ApplicationCv {
+  id            String   @id @default(uuid())
+  applicationId String
+  /// Opaque and application-generated: `{cvId}{extension}`, never derived from what the
+  /// candidate called their file (00 §03.17). Rows written by the migration keep the
+  /// `{applicationId}{extension}` key their file is actually stored under — the old
+  /// shape is a single slot, and no file was moved to fix it.
+  key           String
+  /// The name the candidate uploaded it under. Team-only: it is on the card and on no
+  /// candidate-facing surface, which is why the manage page says only that a CV is
+  /// attached (07 §04.21).
+  fileName      String
+  contentType   String
+  /// Null on a version back-filled from a row that predates `Application.cvSizeBytes`,
+  /// which the card already renders as a filename with no size.
+  sizeBytes     Int?
+  uploadedAt    DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  /// The card reads one application's versions, newest first, beside its log.
+  @@index([applicationId, uploadedAt])
+}
+
+/// Every change to when an interview is, append-only (hiring 07 §11).
+///
+/// The log is the whole story rather than only its deviations, so a `booked` row is
+/// written at booking. It is never replayed to derive board or card state: denormalized
+/// state plus an append-only record is the split, and re-deriving a five-column kanban
+/// from an event stream is not (07 §11.51).
+///
+/// Scope travels through `Application`, exactly as `ApplicationCriterion`'s does.
+model ApplicationScheduleEvent {
+  id             String    @id @default(uuid())
+  applicationId  String
+  /// "booked" | "rescheduled" | "cancelled".
+  type           String
+  /// "candidate" | "member" — attribution runs both ways (07 §11.55).
+  actor          String
+  /// Set when `actor = member`, null otherwise.
+  actorAccountId String?
+  /// Both set on `rescheduled`; `toStart` alone on `booked`; neither on `cancelled`.
+  fromStart      DateTime?
+  toStart        DateTime?
+  /// The zone the acting party was working in, so the entry can be read back in it.
+  timeZone       String
+  /// Team cancellations only (07 §10.48). Never rendered candidate-side.
+  reason         String?
+  createdAt      DateTime  @default(now())
+
+  application  Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorAccount Account?    @relation("ScheduleEventActor", fields: [actorAccountId], references: [id])
+
+  /// The card reads one application's whole log, newest first.
+  @@index([applicationId, createdAt])
+  @@index([actorAccountId])
+}
+
+/// Something a candidate is assessed on during an interview: `English`, `AI Skills`,
+/// `Late hours availability` (hiring 06 §03).
+///
+/// Scoped by `organizationId` like every other hiring root. `CriterionValue` and
+/// `ApplicationCriterion` inherit that scope through their parents, exactly as
+/// `VacancyCategory` does — a join row's organization is not a second fact about it.
+model Criterion {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Stored exactly as typed. Uniqueness is case-insensitive through the same
+  /// `lower(name)` index the categories use, created by the migration.
+  name           String
+  /// "scale" | "boolean" | "number" | "text". Frozen at creation (06 §03.14): every
+  /// assessment lives in the column this names, so changing it would strand them.
+  type           String
+  /// Archived, never deleted, once assessed (06 §03.17). Reversible, and invisible only
+  /// to the add-autocomplete — the filter and the existing assessments keep it.
+  isArchived     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  values       CriterionValue[]
+  assessments  ApplicationCriterion[]
+
+  /// Not a rule about criteria — the key `ApplicationCriterion`'s composite foreign key
+  /// points at, which is what keeps its copy of `type` honest. `id` is already unique.
+  @@unique([id, type])
+  @@index([organizationId])
+}
+
+/// One label on a `scale` criterion's ordered list.
+///
+/// Comparison uses `position`, never `label` (06 §03.15) — which is what makes renaming a
+/// value free and reordering one retroactive, and why only the second is confirmed.
+model CriterionValue {
+  id          String @id @default(uuid())
+  criterionId String
+  label       String
+  /// Contiguous from zero, worst to best. The whole list is renumbered on every write,
+  /// so two values can never share a position and none is ever skipped.
+  position    Int
+
+  criterion   Criterion              @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  assessments ApplicationCriterion[]
+
+  /// Again a foreign-key target rather than a rule: it is what lets an assessment's
+  /// `(criterionId, valueId)` pair be checked by the database, so a value belonging to
+  /// another scale cannot be stored against this criterion.
+  @@unique([criterionId, id])
+  @@index([criterionId, position])
+}
+
+/// One criterion assessed on one application (hiring 04 §05).
+///
+/// The primary key is the pair, which is what "at most once per application" means:
+/// re-adding a criterion edits the row that is already there rather than adding a second.
+model ApplicationCriterion {
+  applicationId String
+  criterionId   String
+  /// A copy of the criterion's type, kept honest by a composite foreign key onto
+  /// `Criterion(id, type)`. It exists so the check constraint below can be written at
+  /// all — a CHECK cannot read another table — and it can never drift, because the type
+  /// it copies is immutable and the foreign key would refuse the write if it moved.
+  type          String
+  /// Exactly one of these four is populated, and it is the one `type` names. Enforced by
+  /// a check constraint, so every filter in spec 03 stays a plain indexed comparison
+  /// rather than a JSON cast (04 §05.23).
+  valueId       String?
+  valueBool     Boolean?
+  valueNumber   Float?
+  valueText     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  criterion   Criterion       @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  value       CriterionValue? @relation(fields: [valueId], references: [id])
+
+  @@id([applicationId, criterionId])
+  @@index([criterionId])
+  @@index([valueId])
 }

@@ -1,12 +1,16 @@
 'use client';
 
-import { Button, Modal } from '@/ds';
+import { ConfirmDialog } from '@devscribed/ds';
 import type { Member } from './types';
 
 /**
- * The name-specific confirmation dialog in front of a delete (spec 04 requirement 6 /
- * the Screens section's "Delete Confirmation Dialog"). Restore has no equivalent —
- * it fires immediately from the row menu.
+ * The name-specific confirmation in front of a delete (spec 04 requirement 6). Restore has
+ * no equivalent — it fires immediately from the row menu.
+ *
+ * `ConfirmDialog` rather than a `Modal` with two hand-placed buttons, and §41 is why it can
+ * be: this dialog awaits a result the reader has to see, so it passes `busy` — which spins
+ * the accept button and blocks both controls — and `closeOnAccept={false}`, so the page
+ * closes it on the answer rather than the dialog closing itself on the press.
  */
 export function DeleteConfirmDialog({
   member,
@@ -20,41 +24,19 @@ export function DeleteConfirmDialog({
   onConfirm: () => void;
 }) {
   return (
-    <Modal
+    <ConfirmDialog
       open={!!member}
       title="Remove member"
+      description={`Are you sure you want to remove ${member?.fullName ?? ''}? They will lose access immediately.`}
+      acceptBtnText={submitting ? 'Removing' : 'Remove'}
+      declineBtnText="Cancel"
+      busy={submitting}
+      closeOnAccept={false}
       onClose={onCancel}
+      onAccept={onConfirm}
       data-testid="confirm-delete-dialog"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={onCancel}
-            disabled={submitting}
-            data-testid="cancel-delete-button"
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="lg"
-            loading={submitting}
-            onClick={onConfirm}
-            data-testid="confirm-delete-button"
-            style={{ flex: 1 }}
-          >
-            {submitting ? 'Removing' : 'Remove'}
-          </Button>
-        </>
-      }
-    >
-      <p style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
-        Are you sure you want to remove {member?.fullName}? They will lose access immediately.
-      </p>
-    </Modal>
+      acceptTestId="confirm-delete-button"
+      declineTestId="cancel-delete-button"
+    />
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Badge, Card, Spinner } from '@/ds';
+import { Badge, Card, Preloader } from '@devscribed/ds';
 import { apiRequest } from './api';
 import {
   envelopeUrl,
@@ -44,8 +44,8 @@ export function ActivityTab({ orgId, envelopeId }: { orgId: string; envelopeId: 
   if (loading) {
     return (
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
-          <Spinner size={24} />
+        <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--action-primary)' }}>
+          <Preloader size={24} />
         </div>
       </Card>
     );
@@ -54,7 +54,7 @@ export function ActivityTab({ orgId, envelopeId }: { orgId: string; envelopeId: 
   if (failed || !data) {
     return (
       <Card>
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+        <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
           The activity trail is not available for this document.
         </p>
       </Card>
@@ -68,9 +68,9 @@ export function ActivityTab({ orgId, envelopeId }: { orgId: string; envelopeId: 
 
   return (
     <Card padded={false}>
-      <div style={{ padding: 'var(--sp-8) var(--sp-10)' }}>
+      <div style={{ padding: 'var(--space-6) var(--space-7)' }}>
         <Badge
-          tone={data.chain.valid ? 'active' : 'inactive'}
+          status={data.chain.valid ? 'active' : 'inactive'}
           data-testid="envelope-chain-status"
         >
           {data.chain.valid ? 'Chain verified' : 'Chain verification failed'}
@@ -81,10 +81,10 @@ export function ActivityTab({ orgId, envelopeId }: { orgId: string; envelopeId: 
         {events.length === 0 && (
           <div
             style={{
-              padding: 'var(--sp-12) var(--sp-10)',
-              borderTop: '1px solid var(--divider)',
-              fontSize: 'var(--fs-14)',
-              color: 'var(--text-muted)',
+              padding: 'var(--space-8) var(--space-7)',
+              borderTop: '1px solid var(--border-subtle)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-secondary)',
             }}
           >
             Nothing has happened to this document yet.
@@ -100,34 +100,33 @@ export function ActivityTab({ orgId, envelopeId }: { orgId: string; envelopeId: 
               data-testid={`envelope-audit-row-${event.id}`}
               style={{
                 display: 'flex',
-                gap: 'var(--sp-6)',
+                gap: 'var(--space-5)',
                 alignItems: 'baseline',
                 flexWrap: 'wrap',
-                padding: '12px var(--sp-10)',
-                borderTop: '1px solid var(--divider)',
-                fontSize: 'var(--fs-14)',
-                background: broken ? 'var(--status-inactive-bg)' : undefined,
+                padding: '12px var(--space-7)',
+                borderTop: '1px solid var(--border-subtle)',
+                fontSize: 'var(--font-size-s)',
+                background: broken ? 'var(--color-error-tint)' : undefined,
               }}
             >
-              <span style={{ width: 200, color: 'var(--text-muted)' }}>
+              <span style={{ width: 200, color: 'var(--text-secondary)' }}>
                 {formatUtcTimestamp(event.occurredAt)}
               </span>
               <span
                 style={{
                   width: 130,
-                  fontFamily: 'var(--font-display)',
                   fontWeight: 600,
-                  color: 'var(--text)',
+                  color: 'var(--text-primary)',
                 }}
               >
                 {eventLabel(event.type)}
               </span>
-              <span style={{ flex: 1, minWidth: 160, color: 'var(--text-sub)' }}>{actor}</span>
-              <span style={{ width: 140, color: 'var(--text-muted)' }}>
+              <span style={{ flex: 1, minWidth: 160, color: 'var(--text-tertiary)' }}>{actor}</span>
+              <span style={{ width: 140, color: 'var(--text-secondary)' }}>
                 {event.ipAddress ?? ''}
               </span>
               {broken && (
-                <span style={{ width: '100%', color: 'var(--status-inactive-ink)' }}>
+                <span style={{ width: '100%', color: 'var(--status-error)' }}>
                   The chain first diverges here.
                 </span>
               )}

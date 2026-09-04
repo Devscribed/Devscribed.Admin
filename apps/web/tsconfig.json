@@ -16,8 +16,6 @@
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
     "paths": {
-      "@ds": ["../../1_DS for dev/index.js"],
-      "@ds/*": ["../../1_DS for dev/*"],
       "@/*": ["./src/*"]
     }
   },

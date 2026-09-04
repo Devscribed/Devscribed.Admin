@@ -18,8 +18,18 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Button, IconButton, Input, Modal } from '@/ds';
+import {
+  Button,
+  Chip,
+  ConfirmDialog,
+  EmptyState,
+  fieldLabelStyle,
+  IconButton,
+  Modal,
+  TextInput,
+} from '@devscribed/ds';
 import { DragHandleIcon, PencilIcon, PlusIcon, TrashIcon } from '@/layout/icons';
+import { labelChipStyle } from './LabelStrip';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
 import {
@@ -385,12 +395,11 @@ export function BoardSettingsModal({
         open={open}
         onClose={onClose}
         title="Board Settings"
-        width={520}
         data-testid="board-settings-modal"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
           <div>
-            <MicroLabel>Columns</MicroLabel>
+            <span style={fieldLabelStyle}>Columns</span>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -404,9 +413,9 @@ export function BoardSettingsModal({
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    marginTop: 'var(--sp-3)',
-                    border: '1px solid var(--divider)',
-                    borderRadius: 'var(--radius-lg)',
+                    marginTop: 'var(--space-4)',
+                    border: 'var(--border-width-hairline) solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-l)',
                     overflow: 'hidden',
                   }}
                 >
@@ -441,24 +450,19 @@ export function BoardSettingsModal({
           </div>
 
           {adding ? (
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--sp-2)',
-                alignItems: 'flex-start',
-              }}
-            >
-              <Input
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+              <TextInput
                 autoFocus
                 value={addDraft}
-                onChange={(event: { target: { value: string } }) => {
+                onChange={(event) => {
                   setAddDraft(event.target.value);
                   if (addError) setAddError(null);
                 }}
                 placeholder="Column name"
+                aria-label="Column name"
                 data-testid="board-settings-column-name-input"
-                aria-invalid={addError ? true : undefined}
                 error={addError ?? undefined}
+                errorId="field-error-board-settings-column-name"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -469,21 +473,13 @@ export function BoardSettingsModal({
                     setAddError(null);
                   }
                 }}
-                style={{ flex: 1 }}
-                wrapperStyle={{ gap: 0, flex: 1 }}
+                wrapperStyle={{ flex: 1 }}
               />
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={() => void saveAdd()}
-              >
+              <Button type="button" variant="primary" onClick={() => void saveAdd()}>
                 Add
               </Button>
               <Button
                 type="button"
-                variant="ghost"
-                size="md"
                 onClick={() => {
                   setAdding(false);
                   setAddDraft('');
@@ -496,50 +492,32 @@ export function BoardSettingsModal({
           ) : (
             <Button
               type="button"
-              variant="ghost"
+              icon={<PlusIcon />}
               onClick={() => setAdding(true)}
               data-testid="board-settings-column-add"
               style={{ alignSelf: 'flex-start' }}
             >
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                <PlusIcon />
-                Add Column
-              </span>
+              Add Column
             </Button>
           )}
 
           {/* --- Labels section (spec 14) --- */}
           <div data-testid="board-settings-labels-section">
-            <MicroLabel>Labels</MicroLabel>
+            <span style={fieldLabelStyle}>Labels</span>
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                marginTop: 'var(--sp-3)',
+                marginTop: 'var(--space-4)',
                 border: labels.length
-                  ? '1px solid var(--divider)'
-                  : '1px dashed var(--border)',
-                borderRadius: 'var(--radius-lg)',
+                  ? 'var(--border-width-hairline) solid var(--border-subtle)'
+                  : 'var(--border-width-hairline) dashed var(--border-default)',
+                borderRadius: 'var(--radius-l)',
                 overflow: 'hidden',
               }}
             >
               {labels.length === 0 ? (
-                <div
-                  style={{
-                    padding: 'var(--sp-5)',
-                    color: 'var(--text-faint)',
-                    fontSize: 'var(--fs-12)',
-                    fontStyle: 'italic',
-                  }}
-                >
-                  No labels yet.
-                </div>
+                <EmptyState style={{ padding: 'var(--space-6)' }}>No labels yet.</EmptyState>
               ) : (
                 labels.map((label) => (
                   <LabelRow
@@ -581,26 +559,27 @@ export function BoardSettingsModal({
               labelAdding ? (
                 <div
                   style={{
-                    marginTop: 'var(--sp-3)',
-                    padding: 'var(--sp-3)',
-                    border: '1px solid var(--divider)',
-                    borderRadius: 'var(--radius-lg)',
+                    marginTop: 'var(--space-4)',
+                    padding: 'var(--space-4)',
+                    border: 'var(--border-width-hairline) solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-l)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 'var(--sp-3)',
+                    gap: 'var(--space-4)',
                   }}
                 >
-                  <Input
+                  <TextInput
                     autoFocus
                     value={labelAddName}
-                    onChange={(event: { target: { value: string } }) => {
+                    onChange={(event) => {
                       setLabelAddName(event.target.value);
                       if (labelAddNameError) setLabelAddNameError(null);
                     }}
                     placeholder="Label name"
+                    aria-label="Label name"
                     data-testid="board-settings-label-name-input"
-                    aria-invalid={labelAddNameError ? true : undefined}
                     error={labelAddNameError ?? undefined}
+                    errorId="field-error-board-settings-label-name"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -612,7 +591,6 @@ export function BoardSettingsModal({
                         setLabelAddColorError(null);
                       }
                     }}
-                    wrapperStyle={{ gap: 0 }}
                   />
                   <ColorPicker
                     value={labelAddColor}
@@ -623,19 +601,12 @@ export function BoardSettingsModal({
                     hexError={labelAddColorError}
                     hexInputTestId="board-settings-label-color-input"
                   />
-                  <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      onClick={() => void saveAddLabel()}
-                    >
+                  <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                    <Button type="button" variant="primary" onClick={() => void saveAddLabel()}>
                       Save
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="sm"
                       onClick={() => {
                         setLabelAdding(false);
                         setLabelAddName('');
@@ -649,23 +620,14 @@ export function BoardSettingsModal({
                   </div>
                 </div>
               ) : (
-                <div style={{ marginTop: 'var(--sp-3)' }}>
+                <div style={{ marginTop: 'var(--space-4)' }}>
                   <Button
                     type="button"
-                    variant="ghost"
+                    icon={<PlusIcon />}
                     onClick={() => setLabelAdding(true)}
                     data-testid="board-settings-label-add"
                   >
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
-                    >
-                      <PlusIcon />
-                      Add Label
-                    </span>
+                    Add Label
                   </Button>
                 </div>
               )
@@ -674,96 +636,48 @@ export function BoardSettingsModal({
         </div>
       </Modal>
 
-      <Modal
+      {/* Both confirmations are raised *from* a `Modal`, which is the case §40 was written
+          for: `ConfirmDialog` sits at a higher z-index than `Modal` so it can be. Each awaits
+          a result the reader has to see, so both take §41's pair — `busy` blocks the controls
+          while the request is in flight, and `closeOnAccept={false}` leaves the dialog
+          standing until the caller has the answer. Neither accept button is red: §40 rules
+          that a dialog whose whole job is to ask does not also shout the answer. */}
+      <ConfirmDialog
         open={deleteTarget !== null}
-        onClose={() => (!deleting ? setDeleteTarget(null) : undefined)}
         title="Delete column"
+        description={`Delete column "${deleteTarget?.name ?? ''}"?`}
+        acceptBtnText={deleting ? 'Deleting' : 'Delete column'}
+        declineBtnText="Cancel"
+        busy={deleting}
+        closeOnAccept={false}
+        onClose={() => (!deleting ? setDeleteTarget(null) : undefined)}
+        onAccept={() => deleteTarget && void confirmDelete(deleteTarget)}
         data-testid="board-settings-column-delete-confirm"
-        actions={
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              disabled={deleting}
-              onClick={() => setDeleteTarget(null)}
-              style={{ flex: 1 }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="lg"
-              loading={deleting}
-              onClick={() => deleteTarget && void confirmDelete(deleteTarget)}
-              style={{ flex: 1 }}
-            >
-              Delete column
-            </Button>
-          </>
-        }
-      >
-        <p
-          style={{
-            fontFamily: 'var(--font-text)',
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text-sub)',
-          }}
-        >
-          Delete column "{deleteTarget?.name}"?
-        </p>
-      </Modal>
+        acceptTestId="board-settings-column-delete-confirm-btn"
+        declineTestId="board-settings-column-delete-cancel"
+      />
 
-      <Modal
+      <ConfirmDialog
         open={labelDeleteTarget !== null}
-        onClose={() => (!labelDeleting ? setLabelDeleteTarget(null) : undefined)}
         title="Delete label"
-        data-testid="board-settings-label-delete-confirm"
-        actions={
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              disabled={labelDeleting}
-              onClick={() => setLabelDeleteTarget(null)}
-              data-testid="board-settings-label-delete-cancel"
-              style={{ flex: 1 }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="lg"
-              loading={labelDeleting}
-              onClick={() =>
-                labelDeleteTarget && void confirmLabelDelete(labelDeleteTarget)
-              }
-              data-testid="board-settings-label-delete-confirm-btn"
-              style={{ flex: 1 }}
-            >
-              Delete label
-            </Button>
-          </>
-        }
-      >
-        <p
-          style={{
-            fontFamily: 'var(--font-text)',
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text-sub)',
-          }}
-        >
-          {labelDeleteTarget
+        description={
+          labelDeleteTarget
             ? labelDeleteConfirmMessage(
                 labelDeleteTarget.name,
                 labelDeleteTarget.assignmentCount ?? 0,
               )
-            : ''}
-        </p>
-      </Modal>
+            : ''
+        }
+        acceptBtnText={labelDeleting ? 'Deleting' : 'Delete label'}
+        declineBtnText="Cancel"
+        busy={labelDeleting}
+        closeOnAccept={false}
+        onClose={() => (!labelDeleting ? setLabelDeleteTarget(null) : undefined)}
+        onAccept={() => labelDeleteTarget && void confirmLabelDelete(labelDeleteTarget)}
+        data-testid="board-settings-label-delete-confirm"
+        acceptTestId="board-settings-label-delete-confirm-btn"
+        declineTestId="board-settings-label-delete-cancel"
+      />
     </>
   );
 }
@@ -779,22 +693,6 @@ const LABEL_SWATCHES = [
   '#EC4899',
   '#6B7280',
 ] as const;
-
-function MicroLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        fontFamily: 'var(--font-display)',
-        fontSize: 'var(--fs-11)',
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-        color: 'var(--text-muted)',
-      }}
-    >
-      {children}
-    </span>
-  );
-}
 
 function SortableColumnRow({
   column,
@@ -827,14 +725,16 @@ function SortableColumnRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 'var(--sp-3)',
-        padding: '8px 10px',
-        borderTop: '1px solid var(--divider)',
-        background: isDragging ? 'var(--hover-bg-tint)' : 'transparent',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-4) var(--space-5)',
+        borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
+        background: isDragging ? 'var(--surface-row-hover)' : 'transparent',
         transform: CSS.Transform.toString(transform),
         transition,
       }}
     >
+      {/* The grip is its own focusable control — spec 13 asks for `Enter`/`Space` to pick a
+          row up, and `@dnd-kit`'s keyboard sensor is what answers on it. */}
       <button
         type="button"
         {...attributes}
@@ -843,20 +743,20 @@ function SortableColumnRow({
         style={{
           background: 'transparent',
           border: 'none',
-          color: 'var(--text-faint)',
+          color: 'var(--text-tertiary)',
           cursor: 'grab',
           display: 'inline-flex',
-          padding: 4,
+          padding: 'var(--space-1)',
         }}
       >
         <DragHandleIcon />
       </button>
       {editing ? (
-        <div style={{ flex: 1, display: 'flex', gap: 'var(--sp-2)' }}>
-          <Input
+        <div style={{ flex: 1, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+          <TextInput
             autoFocus
             value={editDraft}
-            onChange={(event: { target: { value: string } }) => onEditChange(event.target.value)}
+            onChange={(event) => onEditChange(event.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -865,15 +765,15 @@ function SortableColumnRow({
                 onEditCancel();
               }
             }}
-            aria-invalid={editError ? true : undefined}
+            aria-label="Column name"
             error={editError ?? undefined}
-            style={{ flex: 1 }}
-            wrapperStyle={{ gap: 0, flex: 1 }}
+            errorId={`field-error-board-settings-column-${column.id}`}
+            wrapperStyle={{ flex: 1 }}
           />
-          <Button type="button" variant="primary" size="sm" onClick={onEditSave}>
+          <Button type="button" variant="primary" onClick={onEditSave}>
             Save
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onEditCancel}>
+          <Button type="button" onClick={onEditCancel}>
             Cancel
           </Button>
         </div>
@@ -883,10 +783,9 @@ function SortableColumnRow({
           onClick={onStartEdit}
           style={{
             flex: 1,
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-14)',
-            fontWeight: 500,
-            color: 'var(--text)',
+            fontSize: 'var(--font-size-s)',
+            fontWeight: 'var(--font-weight-medium)',
+            color: 'var(--text-primary)',
             cursor: 'pointer',
           }}
         >
@@ -895,13 +794,13 @@ function SortableColumnRow({
       )}
       <span
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-11)',
-          color: 'var(--text-muted)',
-          background: 'var(--bg-sunken)',
-          borderRadius: 999,
-          padding: '1px 8px',
+          fontSize: 'var(--font-size-xs)',
+          fontWeight: 'var(--font-weight-semibold)',
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--text-secondary)',
+          background: 'var(--surface-sunken)',
+          borderRadius: 'var(--radius-pill)',
+          padding: 'var(--space-1) var(--space-4)',
         }}
       >
         {column.taskCount}
@@ -963,18 +862,18 @@ function LabelRow({
       style={{
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 'var(--sp-3)',
-        padding: '8px 10px',
-        borderTop: '1px solid var(--divider)',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-4) var(--space-5)',
+        borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
         flexWrap: 'wrap',
       }}
     >
       {editing ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-          <Input
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <TextInput
             autoFocus
             value={draftName}
-            onChange={(event: { target: { value: string } }) => onNameChange(event.target.value)}
+            onChange={(event) => onNameChange(event.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -983,9 +882,9 @@ function LabelRow({
                 onCancel();
               }
             }}
-            aria-invalid={nameError ? true : undefined}
+            aria-label="Label name"
             error={nameError ?? undefined}
-            wrapperStyle={{ gap: 0 }}
+            errorId={`field-error-board-settings-label-${label.id}`}
           />
           <ColorPicker
             value={draftColor}
@@ -993,51 +892,34 @@ function LabelRow({
             hexError={colorError}
             hexInputTestId={`board-settings-label-color-edit-input-${label.id}`}
           />
-          <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-            <Button type="button" variant="primary" size="sm" onClick={onSave}>
+          <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+            <Button type="button" variant="primary" onClick={onSave}>
               Save
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            <Button type="button" onClick={onCancel}>
               Cancel
             </Button>
           </div>
         </div>
       ) : (
         <>
-          <span
-            aria-hidden
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: '50%',
-              background: label.color,
-              flexShrink: 0,
-              marginTop: 4,
-            }}
-          />
-          <span
+          {/* The label's colour, as the label itself would draw it: this is the settings
+              row for the chip on the cards, so it shows the chip. `Chip`'s accent edge is
+              where the colour lives (see `LabelStrip`), and the hex beside it is the value
+              being edited. */}
+          <Chip
+            label={label.name}
             data-testid={`board-settings-label-name-${label.id}`}
-            style={{
-              flex: 1,
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--fs-14)',
-              fontWeight: 500,
-              color: 'var(--text)',
-              minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {label.name}
-          </span>
+            style={{ ...labelChipStyle(label.color), flex: 1, margin: 0 }}
+          />
           <span
             data-testid={`board-settings-label-color-${label.id}`}
             style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--fs-12)',
-              color: 'var(--text-muted)',
-              marginTop: 2,
+              /* A hex is source text somebody types, which is §77's mono half. */
+              fontFamily: 'var(--font-family-mono)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-secondary)',
+              marginTop: 'var(--space-1)',
             }}
           >
             {label.color.toUpperCase()}
@@ -1083,18 +965,19 @@ function ColorPicker({
   hexInputTestId: string;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         {LABEL_SWATCHES.map((swatch) => {
           const selected = value.toUpperCase() === swatch.toUpperCase();
           const style: CSSProperties = {
             width: 22,
             height: 22,
-            borderRadius: '50%',
+            borderRadius: 'var(--radius-circle)',
             background: swatch,
+            /* @literal a 2px ring on a 22px swatch, both proportions of this one mark. */
             border: selected
-              ? '2px solid var(--text)'
-              : '2px solid var(--divider)',
+              ? '2px solid var(--text-primary)'
+              : '2px solid var(--border-subtle)',
             cursor: 'pointer',
             padding: 0,
           };
@@ -1110,15 +993,15 @@ function ColorPicker({
           );
         })}
       </div>
-      <Input
+      <TextInput
         value={value}
-        onChange={(event: { target: { value: string } }) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         placeholder="#RRGGBB"
+        aria-label="Label colour"
         data-testid={hexInputTestId}
-        aria-invalid={hexError ? true : undefined}
         error={hexError ?? undefined}
-        wrapperStyle={{ gap: 0 }}
-        style={{ fontFamily: 'var(--font-mono)' }}
+        errorId={`field-error-${hexInputTestId}`}
+        style={{ fontFamily: 'var(--font-family-mono)' }}
       />
     </div>
   );

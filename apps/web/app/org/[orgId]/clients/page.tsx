@@ -3,9 +3,21 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, IconButton, InfoBanner, SearchField, Select, Table } from '@/ds';
-import type { TableColumn } from '@ds/components/data/Table';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  IconButton,
+  InfoBanner,
+  Preloader,
+  SearchInput,
+  Select,
+  Table,
+} from '@devscribed/ds';
+import type { TableColumn } from '@devscribed/ds';
 import { PencilIcon } from '@/layout/icons';
+import { PageHeader } from '@/layout/PageHeader';
+import { optionFor, valueOf } from '@/select';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
 import {
@@ -25,9 +37,10 @@ const FILTER_OPTIONS: { value: ClientStatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
-const STATUS_META: Record<ClientStatus, { tone: 'active' | 'inactive'; label: string }> = {
-  active: { tone: 'active', label: 'Active' },
-  archived: { tone: 'inactive', label: 'Archived' },
+/** §32's own pair — the component was written for exactly active/inactive. */
+const STATUS_META: Record<ClientStatus, { status: 'active' | 'inactive'; label: string }> = {
+  active: { status: 'active', label: 'Active' },
+  archived: { status: 'inactive', label: 'Archived' },
 };
 
 /** Debounce interval for the search query (spec organization/01 §UI Description). */
@@ -184,10 +197,8 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
           <Link
             href={`/org/${orgId}/clients/${c.id}`}
             style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              fontSize: 'var(--fs-15)',
-              color: 'var(--text)',
+              fontWeight: 'var(--font-weight-medium)',
+              color: 'var(--text-primary)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -204,10 +215,9 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
         render: (c) => (
           <span
             style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-14)',
-              color: 'var(--text)',
+              fontWeight: 'var(--font-weight-semibold)',
+              color: 'var(--text-primary)',
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
             {c.projectCount}
@@ -218,7 +228,9 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
         label: 'Status',
         flex: 0.9,
         render: (c) => (
-          <Badge tone={STATUS_META[c.status].tone}>{STATUS_META[c.status].label}</Badge>
+          <Badge status={STATUS_META[c.status].status} size="s">
+            {STATUS_META[c.status].label}
+          </Badge>
         ),
       },
       {
@@ -226,7 +238,7 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
         flex: 0.9,
         align: 'flex-end',
         render: (c) => (
-          <div style={{ display: 'flex', gap: 'var(--sp-2)', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
             <IconButton
               label="Rename client"
               onClick={(event: React.MouseEvent) => {
@@ -239,8 +251,6 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
             </IconButton>
             {c.status === 'archived' ? (
               <Button
-                variant="secondary"
-                size="sm"
                 onClick={(event: React.MouseEvent) => {
                   event.stopPropagation();
                   void handleRestore(c);
@@ -254,8 +264,6 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
               // carries `activeProjectCount` so the message renders without an
               // extra fetch.
               <Button
-                variant="secondary"
-                size="sm"
                 onClick={(event: React.MouseEvent) => {
                   event.stopPropagation();
                   setArchiveTarget(c);
@@ -287,66 +295,41 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
 
   return (
     <div data-testid="clients-page">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 20,
-          flexWrap: 'wrap',
-          marginBottom: 22,
-        }}
-      >
-        <div>
-          <h1
-            data-testid="clients-page-title"
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-27)',
-              letterSpacing: '-.6px',
-              margin: '0 0 5px',
-              color: 'var(--text)',
-            }}
-          >
-            Clients
-          </h1>
-          <div style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-            Group projects by who you&apos;re billing.
-          </div>
-        </div>
-        <Button
-          variant="primary"
-          onClick={() => setCreateOpen(true)}
-          data-testid="clients-new-btn"
-        >
-          + New client
-        </Button>
-      </div>
+      <PageHeader
+        title={<span data-testid="clients-page-title">Clients</span>}
+        subtitle="Group projects by who you're billing."
+        action={
+          <Button variant="primary" onClick={() => setCreateOpen(true)} data-testid="clients-new-btn">
+            + New client
+          </Button>
+        }
+      />
 
       <div
         style={{
           display: 'flex',
-          gap: 'var(--sp-4)',
-          marginBottom: 18,
+          gap: 'var(--space-5)',
+          marginBottom: 'var(--space-7)',
           flexWrap: 'wrap',
           alignItems: 'center',
         }}
       >
         <div style={{ minWidth: 180 }}>
+          {/* `value` is an option, never the value behind it — see the note on the
+              projects list's own filter. */}
           <Select
-            value={filter}
+            value={optionFor(FILTER_OPTIONS, filter)}
             options={FILTER_OPTIONS}
-            onChange={(value: string) => setFilter(parseClientStatusFilter(value))}
+            onChange={(option) => setFilter(parseClientStatusFilter(valueOf(option)))}
             data-testid="clients-status-filter"
           />
         </div>
         <div style={{ flex: 1, minWidth: 220, maxWidth: 360 }}>
-          <SearchField
-            type="search"
+          <SearchInput
             placeholder="Search clients…"
             value={q}
-            onChange={(event: { target: { value: string } }) => setQ(event.target.value)}
+            onChange={(event) => setQ(event.target.value)}
+            onClear={() => setQ('')}
             data-testid="clients-search"
             aria-label="Search clients"
           />
@@ -371,38 +354,50 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
       </div>
 
       {loading || clients === null ? (
-        <ClientsSkeleton />
+        <Preloader data-testid="clients-loading" aria-label="Loading clients" />
       ) : error ? (
-        <div data-testid="clients-error-banner">
-          <InfoBanner tone="error" role="alert">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-4)' }}>
-              <span>{CLIENT_MESSAGES.errorLoad}</span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void load()}
-                data-testid="clients-error-retry-btn"
-              >
-                Retry
-              </Button>
-            </div>
-          </InfoBanner>
-        </div>
+        <InfoBanner variant="error" role="alert" data-testid="clients-error-banner">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-5)',
+            }}
+          >
+            <span>{CLIENT_MESSAGES.errorLoad}</span>
+            <Button onClick={() => void load()} data-testid="clients-error-retry-btn">
+              Retry
+            </Button>
+          </div>
+        </InfoBanner>
       ) : isFirstEmpty ? (
-        <EmptyState onCreate={() => setCreateOpen(true)} />
+        <EmptyState data-testid="clients-empty-state">
+          {CLIENT_MESSAGES.emptyState}
+          <div style={{ marginTop: 'var(--space-6)' }}>
+            <Button
+              variant="primary"
+              onClick={() => setCreateOpen(true)}
+              data-testid="clients-empty-primary-cta"
+            >
+              + Add your first client
+            </Button>
+          </div>
+        </EmptyState>
       ) : isSearchMiss ? (
-        <InlineEmpty message={CLIENT_MESSAGES.emptySearch(debouncedQ.trim())} />
+        <EmptyState>{CLIENT_MESSAGES.emptySearch(debouncedQ.trim())}</EmptyState>
       ) : isArchivedEmpty ? (
-        <InlineEmpty message={CLIENT_MESSAGES.emptyArchived} />
+        <EmptyState>{CLIENT_MESSAGES.emptyArchived}</EmptyState>
       ) : (
-        <Table
+        <Table<ClientListItem>
           data-testid="clients-table"
           columns={columns}
-          rows={clients.map((c) => ({
-            ...c,
-            testId: `clients-row-${c.id}`,
-            dim: c.status === 'archived',
-          }))}
+          rows={clients}
+          rowKey="id"
+          rowTestId={(c) => `clients-row-${c.id}`}
+          /* An archived client keeps its row's controls — `Restore` is one of them — so it is
+             not in `disabledRowIds`, which takes `pointerEvents` off the whole row. The
+             `Archived` badge is what says the state, exactly as on the projects list. */
         />
       )}
 
@@ -436,101 +431,6 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
         }}
         onConfirm={() => void handleArchiveConfirm()}
       />
-    </div>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div
-      data-testid="clients-empty-state"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 'var(--sp-6)',
-        padding: 'var(--sp-12) var(--sp-8)',
-        textAlign: 'center',
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-      }}
-    >
-      <div
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-18)',
-          color: 'var(--text)',
-        }}
-      >
-        No clients yet
-      </div>
-      <div style={{ fontSize: 'var(--fs-15)', color: 'var(--text-sub)', maxWidth: 420 }}>
-        {CLIENT_MESSAGES.emptyState}
-      </div>
-      <Button variant="primary" onClick={onCreate} data-testid="clients-empty-primary-cta">
-        + Add your first client
-      </Button>
-    </div>
-  );
-}
-
-function InlineEmpty({ message }: { message: string }) {
-  return (
-    <div
-      style={{
-        padding: 'var(--sp-8)',
-        color: 'var(--text-muted)',
-        fontSize: 'var(--fs-14)',
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-        textAlign: 'center',
-      }}
-    >
-      {message}
-    </div>
-  );
-}
-
-/** Token-only shimmering row skeleton (the app ships no primitive). */
-function ClientsSkeleton() {
-  const block = (w: number | string, h: number, radius = 8): React.CSSProperties => ({
-    width: w,
-    height: h,
-    borderRadius: radius,
-    background: 'var(--bg-sunken)',
-  });
-  return (
-    <div
-      data-testid="clients-loading-skeleton"
-      style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ height: 52, background: 'var(--bg-header)' }} />
-      {[0, 1, 2, 3].map((i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--sp-6)',
-            padding: '0 18px',
-            minHeight: 62,
-            borderTop: '1px solid var(--divider)',
-          }}
-        >
-          <div style={{ ...block(180, 16), flex: 2 }} />
-          <div style={{ ...block(30, 14), flex: 0.8 }} />
-          <div style={{ ...block(70, 22, 20), flex: 0.9 }} />
-          <div style={{ ...block(64, 32, 8), flex: 0.9 }} />
-        </div>
-      ))}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   hasCapability,
   isTerminal as isTerminalStatus,
 } from '@devscribed/validation';
-import { Badge, Button, Card, InfoBanner, Spinner, Tabs } from '@/ds';
+import { Badge, Button, Card, InfoBanner, Preloader, PageTabs } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { apiRequest, failureMessage } from '@/documents/api';
@@ -27,7 +27,7 @@ import {
 } from '@/documents/envelopes';
 import { FillForm } from '@/documents/FillForm';
 import { SignersTab } from '@/documents/SignersTab';
-import { ToastProvider, useToast } from '@/documents/toast';
+import { useToast } from '@/toast';
 import { VoidModal } from '@/documents/VoidModal';
 
 type Tab = 'document' | 'signers' | 'activity';
@@ -38,15 +38,11 @@ export default function EnvelopeDetailPage({
   params: Promise<{ orgId: string; envelopeId: string }>;
 }) {
   const { orgId, envelopeId } = use(params);
-  return (
-    <ToastProvider>
-      <EnvelopeScreen orgId={orgId} envelopeId={envelopeId} />
-    </ToastProvider>
-  );
+  return <EnvelopeScreen orgId={orgId} envelopeId={envelopeId} />;
 }
 
 function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: string }) {
-  const toast = useToast();
+  const { showToast } = useToast();
   const { role } = useSession();
 
   const [detail, setDetail] = useState<EnvelopeDetail | null>(null);
@@ -87,12 +83,8 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
     if (sentAnnounced.current) return;
     if (new URLSearchParams(window.location.search).get('sent') !== '1') return;
     sentAnnounced.current = true;
-    toast.show({
-      testId: 'toast-envelope-sent',
-      message: ENVELOPE_MESSAGES.toast.sent,
-      tone: 'success',
-    });
-  }, [toast]);
+    showToast('toast-envelope-sent', ENVELOPE_MESSAGES.toast.sent);
+  }, [showToast]);
 
   if (gone || !hasCapability(role, 'ViewEnvelopes')) notFound();
 
@@ -103,11 +95,11 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
         style={{
           display: 'flex',
           justifyContent: 'center',
-          padding: 'var(--sp-20)',
-          color: 'var(--accent)',
+          padding: 'var(--space-12)',
+          color: 'var(--action-primary)',
         }}
       >
-        <Spinner size={28} />
+        <Preloader size={28} />
       </div>
     );
   }
@@ -137,23 +129,18 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
     setVoiding(false);
 
     if (!result.ok) {
-      toast.show({
-        testId: 'toast-envelope-error',
-        message:
-          result.failure.error === 'invalid_status'
-            ? ENVELOPE_MESSAGES.void.wrongStatus
-            : failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast(
+        'toast-envelope-error',
+        result.failure.error === 'invalid_status'
+          ? ENVELOPE_MESSAGES.void.wrongStatus
+          : failureMessage(result.failure),
+        'error',
+      );
       return;
     }
 
     setVoidOpen(false);
-    toast.show({
-      testId: 'toast-envelope-voided',
-      message: ENVELOPE_MESSAGES.toast.voided,
-      tone: 'success',
-    });
+    showToast('toast-envelope-voided', ENVELOPE_MESSAGES.toast.voided);
     await load();
   }
 
@@ -166,16 +153,15 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
     setDownloading(false);
 
     if (!result.ok) {
-      toast.show({
-        testId: 'toast-envelope-error',
-        message:
-          result.failure.error === 'pdf_not_ready'
-            ? ENVELOPE_MESSAGES.pdf.notReady
-            : result.failure.error === 'pdf_failed'
-              ? ENVELOPE_MESSAGES.pdf.failed
-              : failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast(
+        'toast-envelope-error',
+        result.failure.error === 'pdf_not_ready'
+          ? ENVELOPE_MESSAGES.pdf.notReady
+          : result.failure.error === 'pdf_failed'
+            ? ENVELOPE_MESSAGES.pdf.failed
+            : failureMessage(result.failure),
+        'error',
+      );
       return;
     }
     // A presigned URL with a 15-minute TTL — handed to the browser, never proxied.
@@ -191,11 +177,7 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
     });
     setRetrying(false);
     if (!result.ok) {
-      toast.show({
-        testId: 'toast-envelope-error',
-        message: failureMessage(result.failure),
-        tone: 'error',
-      });
+      showToast('toast-envelope-error', failureMessage(result.failure), 'error');
       return;
     }
     await load();
@@ -222,8 +204,8 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
           terminalNote ? ` · ${terminalNote}` : ''
         }`}
         action={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
-            <Badge tone={envelopeStatusTone(status)} data-testid="envelope-status">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <Badge status={envelopeStatusTone(status)} data-testid="envelope-status">
               {envelopeStatusLabel(status)}
             </Badge>
             {/* Spec 04 requirement 34 — which provider executed this document, and, in
@@ -235,13 +217,13 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
             {detail.provider && (
               <span
                 data-testid="envelope-provider"
-                style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+                style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
               >
                 {SIGNING_PROVIDER_MESSAGES.envelope.signedVia(detail.provider.name)}
               </span>
             )}
             {detail.provider?.testMode && (
-              <Badge tone="warning" data-testid="envelope-test-badge">
+              <Badge status="warning" data-testid="envelope-test-badge">
                 {SIGNING_PROVIDER_MESSAGES.envelope.testDocument}
               </Badge>
             )}
@@ -268,7 +250,7 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
                 data-testid={
                   detail.provider.certificateIssued ? 'envelope-certificate-link' : undefined
                 }
-                style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+                style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
               >
                 {SIGNING_PROVIDER_MESSAGES.envelope.documentIncludes(
                   detail.provider.name,
@@ -277,14 +259,13 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
               </span>
             )}
             {canVoid && (
-              <Button variant="danger" data-testid="envelope-void-btn" onClick={() => setVoidOpen(true)}>
+              <Button variant="delete" data-testid="envelope-void-btn" onClick={() => setVoidOpen(true)}>
                 Void
               </Button>
             )}
             {canDownload && (
               <Button
-                variant="secondary"
-                loading={downloading || pdfPending}
+                preloader={downloading || pdfPending}
                 title={pdfPending ? 'Preparing the signed PDF' : undefined}
                 disabled={pdfFailed}
                 data-testid="envelope-download-btn"
@@ -300,21 +281,21 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
       {/* Edge case 16 — the provider this document is waiting on is no longer configured.
           Said plainly rather than left as an envelope that silently stops advancing. */}
       {detail.provider?.unconfigured && !isTerminalStatus(status) && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
-          <InfoBanner tone="warning" data-testid="envelope-provider-unconfigured">
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <InfoBanner variant="warning" data-testid="envelope-provider-unconfigured">
             {SIGNING_PROVIDER_MESSAGES.envelope.unconfiguredInFlight}
           </InfoBanner>
         </div>
       )}
 
       {pdfFailed && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
-          <InfoBanner tone="error" data-testid="envelope-pdf-failed-banner">
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <InfoBanner variant="error" data-testid="envelope-pdf-failed-banner">
             <span
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--sp-6)',
+                gap: 'var(--space-5)',
                 flexWrap: 'wrap',
               }}
             >
@@ -323,9 +304,7 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
               {ENVELOPE_MESSAGES.pdf.failed}
               {canManage && (
                 <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={retrying}
+                  preloader={retrying}
                   data-testid="envelope-pdf-retry-btn"
                   onClick={() => void retryPdf()}
                 >
@@ -338,29 +317,30 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
       )}
 
       <div data-testid="envelope-tabs">
-        <Tabs
-          items={[
-            { value: 'document', label: <span data-testid="envelope-tab-document">Document</span> },
-            { value: 'signers', label: <span data-testid="envelope-tab-signers">Signers</span> },
+        <PageTabs
+          tabs={[
+            { value: 'document', label: 'Document', testId: 'envelope-tab-document' },
+            { value: 'signers', label: 'Signers', testId: 'envelope-tab-signers' },
             ...(canAudit
               ? [
                   {
                     value: 'activity',
-                    label: <span data-testid="envelope-tab-activity">Activity</span>,
+                    label: 'Activity',
+                    testId: 'envelope-tab-activity',
                   },
                 ]
               : []),
           ]}
-          value={tab}
-          onChange={(next: string) => setTab(next as Tab)}
-          style={{ marginBottom: 'var(--sp-10)' }}
+          active={tab}
+          onChange={(next) => setTab(next as Tab)}
+          style={{ marginBottom: 'var(--space-7)' }}
         />
       </div>
 
       {tab === 'document' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
           {detail.renderedHtml && (
-            <Card padded={false} style={{ padding: 'var(--sp-6)' }}>
+            <Card padded={false} style={{ padding: 'var(--space-5)' }}>
               <DocumentFrame
                 html={detail.renderedHtml}
                 testId="envelope-document-frame"
@@ -398,11 +378,7 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
             onSent={() => {
               // Sent from this screen, so the toast is raised here directly — the URL
               // flag exists only for the send that happened on `/documents/new`.
-              toast.show({
-                testId: 'toast-envelope-sent',
-                message: ENVELOPE_MESSAGES.toast.sent,
-                tone: 'success',
-              });
+              showToast('toast-envelope-sent', ENVELOPE_MESSAGES.toast.sent);
               void load();
             }}
           />
@@ -410,10 +386,10 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
           <div
             style={{
               display: 'flex',
-              gap: 'var(--sp-10)',
+              gap: 'var(--space-7)',
               flexWrap: 'wrap',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-muted)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-secondary)',
             }}
           >
             <span data-testid="envelope-document-hash" title={detail.documentHash ?? undefined}>

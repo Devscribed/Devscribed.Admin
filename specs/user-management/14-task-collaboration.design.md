@@ -64,7 +64,7 @@ A "Labels" field in spec 13's side panel field stack (positioned after Story Poi
 
 ## Label picker popover
 
-`data-testid="task-label-picker"`, a DS `Modal`-adjacent popover — since the DS ships no anchored-popover primitive, this is built as a small floating panel (`--bg-panel`, `--border`, `--radius-xl`, `--shadow-modal`, width 260px) positioned below the trigger, closing on outside-click/Escape (carried gap, see [DS gaps](#ds-gaps)).
+`data-testid="task-label-picker"`, a DS `Modal`-adjacent popover — since the DS ships no anchored-popover primitive, this is built as a small floating panel (`--bg-panel`, `--border`, `--radius-xl`, `--shadow-modal`, width 260px) positioned below the trigger, closing on outside-click/Escape (carried gap, see [DS gaps](#ds-gaps)). *Amended by the main merge, Phase 6: **the gap is closed** — the design system ships `Popover` (§22), an anchored `role="menu"` with arrow keys, `Home`/`End`, `Escape`, focus return and a portal that escapes a scrolling panel (§55). The hand-built panel and its test id are gone; see the roster note in [14-task-collaboration.md](14-task-collaboration.md).*
 
 - **Header.** Micro-label **"Add label"**, Grotesk 600 `--fs-11` uppercase, `--text-faint`.
 - **List.** One row per project label not yet assigned to the task, `data-testid="task-label-picker-option-{id}"`: an 8px color dot + name, whole row clickable (no explicit checkbox — clicking assigns immediately via `POST .../tasks/{taskId}/labels` and the row disappears from the list, chip appears on the task). Row height 36px, hover `--hover-bg-tint`.

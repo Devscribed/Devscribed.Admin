@@ -35,7 +35,10 @@
     "coverage": "node scripts/handoff-coverage.mjs",
     "spec:lint": "node scripts/spec-lint.mjs",
     "spec:slice": "node scripts/spec-slice.mjs",
-    "refine:loop": "node scripts/refine-loop.mjs"
+    "refine:loop": "node scripts/refine-loop.mjs",
+    "ds:equiv": "node scripts/ds-equiv.js",
+    "ds:tokens": "node scripts/ds-token-resolve.js",
+    "ds:check": "node scripts/ds-adherence.js"
   },
   "devDependencies": {
     "release-it": "21.0.2"
