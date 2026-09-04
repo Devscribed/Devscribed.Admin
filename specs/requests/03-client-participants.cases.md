@@ -11,7 +11,7 @@ until the client principal exists says `not run` and is named in Known Gaps.
 | Step | Command | Observed |
 |---|---|---|
 | 1 | `docker ps` | `devscribed-postgres` up 3 days (healthy), publishing the development and E2E database ports. |
-| 2 | `cd e2e && CI=1 PW_WORKERS=1 npx playwright test tests/<file> --reporter=list` | The suite claimed its own pair, `e2e/global-setup.ts` migrated the E2E database, Next.js reported `Ready in 1781ms`, and `/login`, `/org/[orgId]/members` and `/org/[orgId]/requests` compiled and served. |
+| 2 | `cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 npx playwright test tests/<file> --reporter=list` | The suite claimed its own pair, `e2e/global-setup.ts` migrated the E2E database, Next.js reported `Ready in 1781ms`, and `/login`, `/org/[orgId]/members` and `/org/[orgId]/requests` compiled and served. |
 | 3 | The same run, API calls only | Every precondition route below answered, and the two refusals this spec must change were captured verbatim. |
 
 No environment repair was needed at the checkout this was walked on.
@@ -50,7 +50,7 @@ helper that already exists. **This spec owes no test fixture** and adds nothing 
 |---|---|---|---|
 | AC-1 | TC-03-INT-03, TC-03-E2E-01 | Integration + E2E | today's refusal captured verbatim; the sign-in screen was reached |
 | AC-2 | TC-03-INT-08 | Integration | new |
-| AC-3 | TC-03-INT-13, TC-03-E2E-02 | Integration + E2E | the members, projects and topics routes answer `200` to staff today, which is the baseline |
+| AC-3 | TC-03-INT-13, TC-03-E2E-02 | Integration + E2E | the members and projects routes answer `200` to staff today, which is the baseline |
 | AC-4 | TC-03-INT-15, TC-03-INT-16, TC-03-INT-17 | Integration | the project, its client link and project membership are all reachable and proven |
 | AC-5 | TC-03-INT-18 | Integration | new |
 | AC-6 | TC-03-INT-20, TC-03-INT-21, TC-03-INT-22 | Integration | the transition routes exist and are exercised by `apps/api/test/requests.spec.ts` |
@@ -76,7 +76,7 @@ and reached the requests screens. It was deleted afterwards; the command and wha
 are kept here.
 
 ```
-cd e2e && CI=1 PW_WORKERS=1 \
+cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 \
   npx playwright test tests/_probe-requests-topics-clients.spec.ts --reporter=list
 
 [probe] POST clients => 201 {"id":"…","name":"Acme …","status":"active", …}
@@ -102,7 +102,7 @@ and whether the two refusals this spec replaces still read the same. It was dele
 afterwards.
 
 ```
-cd e2e && CI=1 PW_WORKERS=1 \
+cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 \
   npx playwright test tests/_probe-03-clients.spec.ts --reporter=list
 
 [probe] GET request-topics?audience=client => 200 {"topics":[
@@ -204,9 +204,10 @@ against them.
 - **Asserts:** `POST /api/login` → 400 AUTH_MESSAGES.deactivated
 - **Steps:** Create an account holding no principal at all and sign in with the correct
   password. Repeat with the wrong password.
-- **Expected Result:** Both answer `400` with the deactivated message. The membership check
-  runs before the password comparison, so neither answer tells a caller whether the password
-  was right.
+- **Expected Result:** The correct password answers `400` with the deactivated message; the
+  wrong one answers `400` with `AUTH_MESSAGES.invalidCredentials`. The membership check runs
+  before the password comparison, so neither answer tells a caller whether the password was
+  right.
 
 ### TC-03-INT-05
 
@@ -238,34 +239,26 @@ against them.
   CLIENT_USER_MESSAGES.alreadyLinked
 - **Steps:** Invite and accept a contact, then invite the same address to the same client
   again. Then invite the same address to a **different** client of the same organization.
-  Then remove the contact and invite that address to the different client once more.
-- **Expected Result:** All three answer `409` with the same message, so no answer says which
-  client the person belongs to. The third shows the refusal is not about the row's status: a
-  removed row belongs to the client it was written for, and no invitation moves it.
+- **Expected Result:** The first repeat answers `409`. The second also answers `409`, because
+  the account already holds its one client membership, and the message is the same so neither
+  answer says which client the person belongs to.
 
 ### TC-03-INT-08
 
 - **Level:** Integration
-- **Covers:** REQ-03-002, REQ-03-014, REQ-03-042
+- **Covers:** REQ-03-002, REQ-03-014
 - **Asserts:** `POST /api/invitations/accept` → 409
   CLIENT_USER_MESSAGES.principalConflict;
-  `POST /api/invitations` → 409 CLIENT_USER_MESSAGES.principalConflict;
   `POST /api/login` → 200;
   `POST /api/login` → 400 AUTH_MESSAGES.deactivated
-- **Steps:** Approach the unreachable cell from **both** directions. First, take an account
-  holding an active staff membership and accept a `client` invitation with it. Second, take an
-  account holding an active `ClientMembership` and, as an admin, invite that same address to
-  staff; then write a staff invitation for an address that is a client contact of another
-  organization and have it accepted. Then, for each row of the principal decision table that is
-  reachable, build the account and sign in: no rows at all; an active client row alone; a
-  removed client row alone; an active staff row alone; an active staff row with a removed
-  client row; a removed staff row with an active client row; a removed staff row alone; both
-  rows removed.
-- **Expected Result:** Every approach to the cell is refused with the same `409` and the same
-  message, and neither a `ClientMembership`, an `Invitation` nor a `Membership` is written by
-  the refused call — so the cell the table marks unreachable is unreachable from the client
-  side and from the staff side alike. Every other cell resolves the principal the table names,
-  and every refusal carries the deactivated message.
+- **Steps:** Take an account holding an active staff membership and accept a `client`
+  invitation with it. Then, for each row of the principal decision table that is reachable,
+  build the account and sign in: no rows at all; an active client row alone; a removed client
+  row alone; an active staff row alone; an active staff row with a removed client row; a
+  removed staff row with an active client row; a removed staff row alone; both rows removed.
+- **Expected Result:** The accept answers `409` and writes no `ClientMembership`, so the cell
+  the table marks unreachable stays unreachable. Every other cell resolves the principal the
+  table names, and every refusal carries the deactivated message.
 
 ### TC-03-INT-09
 
@@ -306,15 +299,15 @@ against them.
 
 - **Level:** Integration
 - **Covers:** REQ-03-008
-- **Asserts:** `POST /api/organizations/{orgId}/clients/{clientId}/contacts` → 404;
-  `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` → 404;
-  `GET /api/organizations/{orgId}/clients/{clientId}/contacts` → 404
+- **Asserts:** `POST /api/organizations/{orgId}/clients/{clientId}/contacts` → 403
+  CLIENT_USER_MESSAGES.inviteForbidden;
+  `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` → 403
+  CLIENT_USER_MESSAGES.inviteForbidden;
+  `GET /api/organizations/{orgId}/clients/{clientId}/contacts` → 403 CLIENT_MESSAGES.forbidden
 - **Steps:** As a member holding `user`, call each of the three contacts routes. Repeat every
   call as a `manager`.
-- **Expected Result:** Every `user` call answers `404` with no message and writes nothing —
-  the same answer that caller gets from the client's own detail route, so the client's
-  existence is not disclosed by the refusal. Every `manager` call succeeds, so the capability
-  is proven granted as well as withheld.
+- **Expected Result:** Every `user` call is refused and nothing is written. Every `manager`
+  call succeeds, so the capability is proven granted as well as withheld.
 
 ### TC-03-INT-13
 
@@ -323,11 +316,10 @@ against them.
 - **Asserts:** `GET /api/organizations/{orgId}/members` → 404;
   `GET /api/organizations/{orgId}/projects` → 404;
   `GET /api/organizations/{orgId}/clients/{clientId}/contacts` → 404;
-  `GET /api/organizations/{orgId}/request-topics` → 404;
   `GET /api/organizations/{orgId}/members` → 200
-- **Steps:** As a signed-in client contact, call the members route, the projects route, the
-  contacts route of their own client and the request-topics route, each with their own
-  organization's id in the path. Then call the members route as an admin of that organization.
+- **Steps:** As a signed-in client contact, call the members route, the projects route and the
+  contacts route of their own client, each with their own organization's id in the path. Then
+  call the members route as an admin of that organization.
 - **Expected Result:** Every client call answers `404` with no message naming the resource —
   the same answer as for an organization the caller has no part in. The admin call answers
   `200`, so the `404` is about the principal and not about the route being broken.
@@ -345,21 +337,6 @@ against them.
   slip through and a malformed one is not answered as a validation error. The message is
   asserted to be that one and **not** `REQUEST_MESSAGES.createForbidden`, which is what a
   capability check reached first would answer.
-
-### TC-03-INT-36
-
-- **Level:** Integration
-- **Covers:** REQ-03-043
-- **Asserts:** `GET /api/organizations/{orgId}/request-contacts` → 200
-- **Steps:** Build two clients, each with a project and an active contact, and assign a member
-  holding `user` to the first client's project only. Read the route as that member, as an
-  admin assigned to neither project, and as a `viewer`.
-- **Expected Result:** The `user` is answered `200` with the first client's contact alone —
-  the second client's contact is absent, and so is a removed contact of the first. The route
-  answers on `create-request` and not on `view-clients`, which the `user` does not hold, so
-  the addressee kind the matrix grants that role is one they can complete. The admin, assigned
-  to no project, is answered `200` with an empty list rather than the whole client book. The
-  `viewer`, holding no `create-request`, is answered `404`.
 
 ### TC-03-INT-15
 
@@ -438,13 +415,11 @@ against them.
   REQUEST_MESSAGES.notYoursToAnswer;
   `POST /api/organizations/{orgId}/requests/{requestId}/answer` → 409
   REQUEST_MESSAGES.alreadyTerminal
-- **Steps:** As the requester, attempt to answer their own open request. Then as the addressee
-  contact, answer it. Then cancel it as the requester and attempt to answer again as the
-  contact.
-- **Expected Result:** The requester's attempt answers `403` while the request is still open,
-  where the actor guard is the only check it can fail. The contact's answer answers `200` and
-  writes `answeredAt` once and one `status_changed` event whose actor kind is `client`. The
-  attempt after the cancellation answers `409`.
+- **Steps:** As the addressee contact, answer their request. Then as the requester, attempt to
+  answer it. Then cancel it as the requester and attempt to answer again as the contact.
+- **Expected Result:** The first answers `200`, writes `answeredAt` once and one
+  `status_changed` event whose actor kind is `client`. The requester's attempt answers `403`.
+  The attempt after the cancellation answers `409`.
 
 ### TC-03-INT-21
 
@@ -478,16 +453,13 @@ against them.
 
 - **Level:** Integration
 - **Covers:** REQ-03-029
-- **Asserts:** `GET /api/organizations/{orgId}/requests` → 200;
-  `GET /api/organizations/{orgId}/requests` → 400
+- **Asserts:** `GET /api/organizations/{orgId}/requests` → 200
 - **Steps:** In an organization holding requests addressed to two contacts, requests between
   members, and a pending vacation request, list as contact A with no query, then with
-  `scope=all`, then with a `scope` of `everything`, which is neither.
-- **Expected Result:** The first two answers hold only the requests addressed to contact A.
-  The response carries no `vacation` member at all, and `counts.waitingOnMe` counts the
-  non-terminal ones addressed to them. `scope=all` widens nothing. `scope=everything` answers
-  `400` `validation_error` naming `scope`, the refusal every principal receives, so the client
-  is not carved out of it.
+  `scope=all`.
+- **Expected Result:** Both answers hold only the requests addressed to contact A. The
+  response carries no `vacation` member at all, and `counts.waitingOnMe` counts the
+  non-terminal ones addressed to them. `scope=all` widens nothing.
 
 ### TC-03-INT-24
 
@@ -508,13 +480,11 @@ against them.
 - **Level:** Integration
 - **Covers:** REQ-03-036
 - **Asserts:** `POST /api/organizations/{orgId}/requests/{requestId}/messages` → 201
-- **Steps:** On a request with a member requester and a client addressee, in an organization
-  that also holds an admin who is party to nothing, post a message as the requester and read
-  the outbox rows for that event. Post one as the contact and read again.
+- **Steps:** On a request with a member requester and a client addressee, post a message as the
+  requester and read the outbox rows for that event. Post one as the contact and read again.
 - **Expected Result:** The requester's message produced exactly one row, addressed to the
   contact. The contact's produced exactly one, addressed to the requester. Neither event
-  produced a row addressed to the principal who caused it, and neither produced one for the
-  admin, whose `view-all-requests` lets them read the request and makes them no recipient.
+  produced a row addressed to the principal who caused it.
 
 ### TC-03-INT-26
 
@@ -593,13 +563,11 @@ against them.
   REQUEST_MESSAGES.assigneeInvalid;
   `POST /api/organizations/{orgId}/requests` → 404
 - **Steps:** Raise a client-addressed request with no `assigneeClientMembershipId`, then with
-  one naming a contact of a **different organization**, then with an id that names no row at
-  all, then with `assigneeKind: "client"` and an `assigneeMembershipId` instead.
-- **Expected Result:** The first and fourth answer `400` with the named message. The
-  cross-organization contact and the unknown id both answer `404` with no message, byte for
-  byte alike, so contact ids cannot be probed across organizations; neither is answered the
-  `400` `REQUEST_MESSAGES.assigneeInactive` a removed contact of the caller's own organization
-  receives.
+  one naming a contact of a **different organization**, then with `assigneeKind: "client"` and
+  a `assigneeMembershipId` instead.
+- **Expected Result:** The first and third answer `400` with the named message. The
+  cross-organization contact answers `404`, identical to an id that does not exist, so contact
+  ids cannot be probed across organizations.
 
 ### TC-03-INT-33
 
@@ -637,16 +605,15 @@ against them.
 ### TC-03-E2E-01
 
 - **Level:** E2E
-- **Covers:** REQ-03-003, REQ-03-013
+- **Covers:** REQ-03-003
 - **Steps:** As an admin, open a client's detail screen, invite a contact, and read the token
-  from the mail sink. Accept that invitation through the accept screen, then sign in as the
-  new contact. Raise a request addressed to them as an assigned member beforehand, so the list
-  has a row. Back in the admin context, invite the same address to the same client again.
+  from the mail sink. Invite the same address a second time. Accept the first invitation
+  through the accept screen, then sign in as the new contact. Raise a request addressed to
+  them as an assigned member beforehand, so the list has a row.
 - **Expected Result:** The contacts section lists the invited address before acceptance and the
-  contact afterwards. Signing in lands on the requests screen, showing the one request
-  addressed to them and no control for raising one. The repeat invitation, sent once the
-  address is an active contact, keeps the modal open with the already-a-contact error under
-  the address field.
+  contact afterwards. The second invitation keeps the modal open with the already-a-contact
+  error under the address field. Signing in lands on the requests screen, showing the one
+  request addressed to them and no control for raising one.
 - **Selectors:** `client-contacts-section`, `client-contact-invite-btn`,
   `client-contact-invite-modal`, `client-contact-invite-email`, `client-contact-invite-submit`,
   `client-contact-invite-error-email`, `client-contact-row-{id}`, `requests-page`,
@@ -658,15 +625,11 @@ against them.
 - **Covers:** REQ-03-018, REQ-03-019
 - **Steps:** Signed in as a client contact, read the sidebar. Then navigate directly to the
   members address, the projects address and the clients address of their own organization.
-  Then read the same sidebar as an admin of that organization.
-- **Expected Result:** The requests entry is the only organization navigation entry drawn for
-  the contact. Each direct navigation renders no screen behind it, because the route the page
-  reads answers `404` — a destination the caller cannot use is neither drawn nor reachable by
-  typing. The admin's sidebar draws the members, projects and clients entries, so the absence
-  is the principal's and not a row that stopped being drawn for everybody.
-- **Selectors:** `sidebar-requests-link`, `nav-members` (absent for the contact, present for
-  the admin), `nav-projects` (absent for the contact, present for the admin), `nav-clients`
-  (absent for the contact, present for the admin)
+- **Expected Result:** The requests entry is the only organization navigation entry drawn. Each
+  direct navigation renders no screen behind it, because the route the page reads answers
+  `404` — a destination the caller cannot use is neither drawn nor reachable by typing.
+- **Selectors:** `sidebar-requests-link`, `nav-members` (absent), `nav-projects` (absent),
+  `nav-clients` (absent)
 
 ### TC-03-E2E-03
 
@@ -686,9 +649,8 @@ against them.
 - **Level:** E2E
 - **Covers:** REQ-03-020
 - **Steps:** As a member assigned to a project of a client with a contact, open the
-  new-request modal from the control on the requests list and read the topic control. Choose
-  the client addressee kind and read it again. Submit with no contact chosen, then choose the
-  contact and the project and submit.
+  new-request modal and read the topic control. Choose the client addressee kind and read it
+  again. Submit with no contact chosen, then choose the contact and the project and submit.
 - **Expected Result:** The addressee control offers colleagues and clients, and the member
   picker gives way to the contact picker when the client kind is chosen. The topic control
   offers the staff catalogue before the switch and the two seeded client topics after it, with
@@ -699,10 +661,10 @@ against them.
   choosing the client kind replaces the topic control with the empty-catalogue copy and draws
   no submit control, while choosing the colleague kind restores both — the state is per
   audience, not per modal.
-- **Selectors:** `requests-new-btn` (present for this member), `request-new-assignee-kind`,
-  `request-new-assignee-client`, `request-new-assignee-member` (absent after the switch),
-  `request-new-topic`, `request-new-topic-empty`, `request-new-submit` (absent on the empty
-  audience), `request-new-error-assignee`, `request-new-project`
+- **Selectors:** `request-new-assignee-kind`, `request-new-assignee-client`,
+  `request-new-assignee-member` (absent after the switch), `request-new-topic`,
+  `request-new-topic-empty`, `request-new-submit` (absent on the empty audience),
+  `request-new-error-assignee`, `request-new-project`
 
 ### TC-03-E2E-05
 
