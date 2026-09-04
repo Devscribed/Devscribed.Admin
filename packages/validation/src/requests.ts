@@ -182,6 +182,22 @@ function isCalendarDate(s: string): boolean {
   return date.toISOString().slice(0, 10) === s;
 }
 
+/** PATCH-002 — the ceiling's span, named once so the validator and any control that
+ * bounds itself read the same number. */
+export const REQUEST_NEEDED_BY_MAX_YEARS = 5;
+
+/**
+ * PATCH-002 — the ceiling as `YYYY-MM-DD`, from a `today` in the caller's timezone.
+ * Adds `REQUEST_NEEDED_BY_MAX_YEARS` to `today`'s year and keeps the month and day; a
+ * 29 February ceiling lands on 1 March of a non-leap year, the ordinary consequence of
+ * adding a year to that date, and needs no rule of its own.
+ */
+export function requestNeededByMax(today: string): string {
+  const [year, month, day] = today.split('-');
+  const maxYear = String(Number(year) + REQUEST_NEEDED_BY_MAX_YEARS).padStart(4, '0');
+  return `${maxYear}-${month}-${day}`;
+}
+
 /**
  * Rule 6 — optional ISO date. `today` is passed in ('YYYY-MM-DD' in the caller's zone)
  * so this stays pure.
@@ -190,6 +206,11 @@ function isCalendarDate(s: string): boolean {
  * creation ("it may become past afterwards, which is what makes a request overdue"),
  * and the Error Messages table lists `neededByPast` under `POST` alone while every
  * other shared field says POST/PATCH.
+ *
+ * PATCH-002 — order of refusals: shape first, then the lower bound, then the ceiling,
+ * so a six-digit year (not strict `YYYY-MM-DD`) is always `neededByInvalid` and never
+ * `neededByTooFar`. The ceiling itself applies on creation and on edit alike — it is
+ * checked outside the `enforceNotPast` branch.
  */
 export function validateRequestNeededBy(
   raw: unknown,
@@ -202,6 +223,9 @@ export function validateRequestNeededBy(
   }
   if (options.enforceNotPast && raw < today) {
     return { valid: false, error: REQUEST_MESSAGES.neededByPast };
+  }
+  if (raw > requestNeededByMax(today)) {
+    return { valid: false, error: REQUEST_MESSAGES.neededByTooFar };
   }
   return { valid: true, value: raw };
 }

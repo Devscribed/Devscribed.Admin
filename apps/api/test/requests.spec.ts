@@ -20,6 +20,13 @@ const ymdUtc = (offsetDays = 0): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** Today plus `offsetYears`, same month and day, as 'YYYY-MM-DD' in UTC. */
+const ymdUtcYearsFromNow = (offsetYears: number): string => {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear() + offsetYears, now.getUTCMonth(), now.getUTCDate()));
+  return d.toISOString().slice(0, 10);
+};
+
 /** The exact copy of the spec's Error Messages table. Asserted literally, never through
  * the constant the code imports — an assertion about a message must be able to fail when
  * the code's wording drifts. */
@@ -38,6 +45,7 @@ const COPY = {
     accessKindNotAllowed: 'A question does not have an access kind',
   },
   neededByPast: 'The date needed cannot be in the past',
+  neededByTooFar: 'The date needed cannot be more than five years away',
   assigneeInvalid: 'Choose who this request is for',
   assigneeInactive: 'That person is no longer active in this organization',
   projectUnavailable: 'That project is not available',
@@ -1384,5 +1392,35 @@ describe('Requests (requests spec 01)', () => {
     expect(asUser.status).toBe(200);
     expect(asUser.body.requests).toEqual([]);
     expect(asUser.body.vacation).toBeUndefined();
+  });
+
+  // TC-01-INT-23 (PATCH-002)
+  it('refuses a needed-by date more than five years out, on create and on edit alike', async () => {
+    const admin = await signupAdmin('admin@acme.test', 'Acme Inc');
+    const user = await createMember(admin.organizationId, {
+      email: 'sam@acme.test',
+      role: 'user',
+    });
+    const topicId = await seededTopicId(admin.organizationId);
+    const tooFar = ymdUtcYearsFromNow(6);
+
+    const created = await createRequest(user, admin.organizationId, admin);
+
+    const create = await post(
+      user,
+      admin.organizationId,
+      '',
+      newRequestBody(admin, topicId, { neededBy: tooFar }),
+    );
+    expect(create.status).toBe(400);
+    expect(create.body.fields).toEqual({ neededBy: COPY.neededByTooFar });
+
+    const edit = await patch(user, admin.organizationId, `/${created.id}`, { neededBy: tooFar });
+    expect(edit.status).toBe(400);
+    expect(edit.body.fields).toEqual({ neededBy: COPY.neededByTooFar });
+
+    expect(await prisma.request.count()).toBe(1);
+    const stillCreated = await prisma.request.findUniqueOrThrow({ where: { id: created.id } });
+    expect(stillCreated.neededBy).toBeNull();
   });
 });

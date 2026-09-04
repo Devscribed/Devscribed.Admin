@@ -16,6 +16,7 @@ import {
   validateRequestEdit,
   validateRequestKind,
   validateRequestMessageBody,
+  validateRequestNeededBy,
   validateRequestTitle,
   type SortableRequestRow,
 } from './index';
@@ -280,6 +281,61 @@ describe('TC-01-UNIT-06 — capabilities', () => {
     );
     expect(capabilitiesFor('user')).toEqual(['CreateRequest', 'ViewOwnRequests']);
     expect(capabilitiesFor('viewer')).toEqual(['ViewOwnRequests']);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * TC-01-UNIT-07 — a needed-by date more than five years out is refused
+ * (PATCH-002)
+ * ------------------------------------------------------------------ */
+
+describe('TC-01-UNIT-07 — the needed-by ceiling', () => {
+  const today = '2026-09-04';
+
+  it('accepts the ceiling itself on creation', () => {
+    expect(validateRequestNeededBy('2031-09-04', today, { enforceNotPast: true })).toEqual({
+      valid: true,
+      value: '2031-09-04',
+    });
+  });
+
+  it('refuses one day past the ceiling on creation', () => {
+    expect(validateRequestNeededBy('2031-09-05', today, { enforceNotPast: true })).toEqual({
+      valid: false,
+      error: REQUEST_MESSAGES.neededByTooFar,
+    });
+  });
+
+  it('accepts today on creation', () => {
+    expect(validateRequestNeededBy('2026-09-04', today, { enforceNotPast: true })).toEqual({
+      valid: true,
+      value: '2026-09-04',
+    });
+  });
+
+  it('reports the six-digit year the control can produce as neededByInvalid, never neededByTooFar', () => {
+    expect(validateRequestNeededBy('232131-10-21', today, { enforceNotPast: true })).toEqual({
+      valid: false,
+      error: REQUEST_MESSAGES.neededByInvalid,
+    });
+  });
+
+  it('still refuses yesterday as neededByPast on creation', () => {
+    expect(validateRequestNeededBy('2026-09-03', today, { enforceNotPast: true })).toEqual({
+      valid: false,
+      error: REQUEST_MESSAGES.neededByPast,
+    });
+  });
+
+  it('holds the ceiling on edit, where the lower bound does not apply', () => {
+    expect(validateRequestNeededBy('2031-09-05', today, { enforceNotPast: false })).toEqual({
+      valid: false,
+      error: REQUEST_MESSAGES.neededByTooFar,
+    });
+    expect(validateRequestNeededBy('2020-01-01', today, { enforceNotPast: false })).toEqual({
+      valid: true,
+      value: '2020-01-01',
+    });
   });
 });
 
