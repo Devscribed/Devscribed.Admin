@@ -28,9 +28,12 @@
  *   --resume           continue the active run instead of starting a new one
  *   --skip <stages>    comma-separated stages to skip (e.g. --skip qa)
  *   --permission-mode  passed to claude; default acceptEdits
- *   --implement-profile  solo | orchestrated — one implementer, or a lead with shards
- *   --review-profile     open | sweeps
- *   --plan-profile       classic | strict
+ *   --track <name>     spec | bug | patch — which stages this document earns, and what each
+ *                      one is. Read off the document's path when omitted, so the flag is only
+ *                      for overriding that.
+ *   --plan-profile <v>       run a named variant of one stage instead of the shape the track
+ *   --implement-profile <v>  declares. `npm run config` lists what each track has; `default`
+ *   --review-profile <v>     is the block itself.
  *   --accept-unrefined <reason>  start even though the spec's refine ledger is not a pass
  *   --dry-run          print what each stage would run, change nothing
  */
@@ -40,14 +43,14 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, appendFileS
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { stageProfile } from './profiles.mjs';
+import { loadConfig, stageFor, timeoutFor, trackFor, STAGES } from './ship-config.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, 'scripts', 'wf.mjs');
 
 const argv = process.argv.slice(2);
 const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry',
-  'implement-profile', 'review-profile', 'plan-profile', 'accept-unrefined']);
+  'implement-profile', 'review-profile', 'plan-profile', 'accept-unrefined', 'track']);
 
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
@@ -74,21 +77,13 @@ const dryRun = flag('dry-run');
  */
 const permissionMode = opt('permission-mode', 'bypassPermissions');
 
-const cfg = JSON.parse(readFileSync(join(ROOT, '.claude/ai-workflow.config.json'), 'utf8'));
-
-/**
- * Which shape each agent stage runs in this run. Resolved once, printed at the start and
- * written into run.json, so a result is attributable to the shape that produced it rather than
- * to whatever the config says the next time somebody looks.
- */
-const PROFILE_FLAG = { pre_implement: 'plan-profile', implement: 'implement-profile', review: 'review-profile' };
-const STAGE = {};
-for (const [stage, f] of Object.entries(PROFILE_FLAG)) {
-  try { STAGE[stage] = stageProfile(cfg, stage, opt(f, null)); }
-  catch (e) { process.stderr.write(`ship: ${e.message}
-`); process.exit(1); }
-}
-STAGE.qa = stageProfile(cfg, 'qa', null);
+/* Validated here, before a run directory, a lock or a branch exists. A configuration error
+   found by the stage that trips over it is found after the run has already spent the stages
+   before it. */
+const cfg = (() => {
+  try { return loadConfig(ROOT); }
+  catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
+})();
 
 /* ── output ──────────────────────────────────────────────────────────────── */
 
@@ -112,6 +107,34 @@ function runState() {
   const id = readFileSync(cur, 'utf8').trim();
   const p = join(ROOT, '.workflow/runs', id, 'run.json');
   return existsSync(p) ? { id, dir: join(ROOT, '.workflow/runs', id), ...JSON.parse(readFileSync(p, 'utf8')) } : null;
+}
+
+/**
+ * The track, and the shape each stage runs in.
+ *
+ * The track comes first: it decides which stages a document of this weight earns and what each
+ * of them is. A `--*-profile` flag then names a variant of one stage. Both are resolved once,
+ * printed at the start and written into run.json, so a result is attributable to the shape that
+ * produced it rather than to whatever the config says the next time somebody looks.
+ */
+const TRACK = (() => {
+  const active = runState();
+  const doc = specArg ?? active?.spec;
+  /* No document at all is the usage error in main(), not an unmatched track. */
+  if (!doc) return {};
+  /* A resumed run keeps the track it was started with, including one that came from `--track`
+     and disagrees with the path. Re-deriving it would resume a different pipeline. */
+  try { return trackFor(cfg, doc, opt('track', null) ?? (specArg ? null : active?.track ?? null)); }
+  catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
+})();
+
+const VARIANT_FLAG = { pre_implement: 'plan-profile', implement: 'implement-profile', review: 'review-profile' };
+const STAGE = {};
+if (TRACK.name) {
+  for (const stage of STAGES) {
+    try { STAGE[stage] = stageFor(cfg, TRACK.name, stage, opt(VARIANT_FLAG[stage] ?? '', null)); }
+    catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
+  }
 }
 
 /** HEAD when an attempt starts, so a report can tell what each attempt actually changed. */
@@ -167,33 +190,41 @@ function promptFor(stage, run, verdictPath) {
       return `${head}\nCompile the spec into \`.workflow/runs/${run.id}/handoff.json\` and write your reasoning to `
         + `\`.workflow/runs/${run.id}/stages/pre_implement.md\`.${back}`;
     case 'implement': {
-      /* The shape reaches the lead as configuration, not as a choice. A lead told to shard picks
-         neither the agent nor how many run at once: two runs of one handoff must split it the
-         same way, or a comparison between them measures the split. */
+      /* The shape reaches the lead as configuration, not as a choice: two runs of one handoff
+         must split it the same way, or a comparison between them measures the split. How to
+         split is in the lead's own definition; only the numbers belong here. */
       const p = STAGE.implement ?? {};
       const shards = p.shardAgent
-        ? `\n\n## How to shard\n\nDispatch subagent_type "${p.shardAgent}"${p.shardModel ? ` on ${p.shardModel}` : ''}, at most `
-          + `${p.maxShards ?? 4} at once, one Task call per group in a single message. Group the handoff's tasks so their `
-          + `\`files\` globs are disjoint and \`dependsOn\` orders the waves. Both live in .claude/ai-workflow.config.json `
-          + `under stages.implement. Do not choose your own.\n`
+        ? `\n\n## Your shape\n\nDispatch subagent_type "${p.shardAgent}"${p.shardModel ? ` on ${p.shardModel}` : ''}, at most `
+          + `${p.maxShards ?? 4} at once. From shipConfig.${run.track ?? 'spec'}.stages.implement; not yours to choose.\n`
         : '';
-      return `${head}\nImplement \`.workflow/runs/${run.id}/handoff.json\`. Write your stage report to `
+      /* A track with no plan stage leaves no handoff.json. The document is then the plan, and
+         saying so is the whole difference — an implementer sent to a path that does not exist
+         invents one. */
+      const plan = existsSync(join(ROOT, '.workflow/runs', run.id, 'handoff.json'))
+        ? `\`.workflow/runs/${run.id}/handoff.json\``
+        : `\`${run.spec}\` — this track compiles no plan, so the document is the plan`;
+      return `${head}\nImplement ${plan}. Write your stage report to `
         + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${shards}${back}`;
     }
     case 'review': {
       const done = run.stages.review.attempts ?? 0;
-      const slice = `node scripts/review-slice.mjs --profile ${STAGE.review?.profile ?? 'open'}`;
+      /* Naming a plan that was never compiled sends the reviewer to an absent file, and a
+         reviewer that cannot find its inputs judges the diff against its own assumptions. */
+      const against = existsSync(join(ROOT, '.workflow/runs', run.id, 'handoff.json'))
+        ? 'the spec and the handoff' : 'the spec';
+      const slice = `node scripts/review-slice.mjs --variant ${STAGE.review?.variant ?? 'default'}`;
       const ledger = `\n\n## Your worklist\n\nRun \`${slice}\` first. It splits the diff into what must be read this `
         + `pass and what an earlier pass settled, and it decides the second by comparing each file against the commit that pass `
         + `actually saw. You may not write a verdict while the worklist is non-empty; if the fuse runs out first, report the `
         + `remainder in \`covered.unreached\` and do not call it a pass.\n`;
       if (!done) {
-        return `${head}\nReview \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff.${ledger}${back}`;
+        return `${head}\nReview \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against ${against}.${ledger}${back}`;
       }
       const priors = Array.from({ length: done }, (_, i) =>
         `  - \`.workflow/runs/${run.id}/stages/review.attempt-${i + 1}.json\``).join('\n');
       return `${head}
-Review \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff. **This diff has been reviewed ${done} time(s) before.**
+Review \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against ${against}. **This diff has been reviewed ${done} time(s) before.**
 
 ## What earlier passes concluded
 
@@ -256,8 +287,6 @@ function blockersAreCarried(run) {
 
 /* ── stage runners ───────────────────────────────────────────────────────── */
 
-const AGENT_STAGES = { pre_implement: 'pre-implementer-strict', implement: 'implementer', review: 'code-reviewer', qa: 'qa' };
-
 /**
  * A parent Claude session refuses to spawn a nested `claude` CLI with
  * `--permission-mode bypassPermissions`: Anthropic's classifier kills the child before
@@ -271,9 +300,9 @@ const AGENT_STAGES = { pre_implement: 'pre-implementer-strict', implement: 'impl
 const nested = process.env.CLAUDECODE === '1' || !!process.env.CLAUDE_CODE_ENTRYPOINT;
 
 async function runAgentStage(stage, run) {
-  const agent = STAGE[stage]?.agent ?? AGENT_STAGES[stage];
+  const agent = STAGE[stage].agent;
   const model = STAGE[stage]?.model;
-  const timeoutMin = cfg.breakers.stageTimeoutMin?.[stage] ?? 45;
+  const timeoutMin = timeoutFor(cfg, run.track ?? 'spec', stage);
   const verdictPath = `.workflow/runs/${run.id}/${stage}.verdict.json`;
   /* Remove any verdict left by the previous attempt: a stale file read as this attempt's
      answer would be the worst possible failure — a verdict about code that is no longer there. */
@@ -482,7 +511,7 @@ async function main() {
 
   if (!flag('resume')) {
     if (!specArg) {
-      say('usage: node scripts/ship.mjs <spec path> [--branch <name>] [--from <ref>] [--carry <runId>|--no-carry] [--skip qa] [--resume]');
+      say('usage: node scripts/ship.mjs <document path> [--track spec|bug|patch] [--branch <name>] [--from <ref>] [--carry <runId>|--no-carry] [--skip qa] [--resume]');
       process.exit(1);
     }
     /* A dry run prints and writes nothing. It used to guard only the agent calls and the static
@@ -492,14 +521,15 @@ async function main() {
        implemented, and the next real run was refused by the lock the rehearsal was holding. */
     if (dryRun) {
       step(`dry run ${specArg}`);
+      note(`track ${TRACK.name}, branch prefix ${TRACK.branchPrefix ?? 'spec/'}, refine ${TRACK.requiresRefine ? 'required' : 'not required'}`);
       note('nothing is written: no run directory, no lock, no verdicts, no branch');
-      for (const [stage, s] of Object.entries(cfg.stages)) {
-        const state = skip.has(stage) ? 'skipped' : s.enabled === false ? 'disabled' : 'would run';
-        const p = STAGE[stage] ?? s;
-        const agent = p.agent ?? AGENT_STAGES[stage];
-        const how = s.script ? `node ${s.script}`
-          : agent ? `claude -p --agent ${agent}${p.model ? ` --model ${p.model}` : ''}`
-            + (p.profile ? `  (profile ${p.profile}${p.shardAgent ? `, shards ${p.shardAgent} on ${p.shardModel}` : ''})` : '')
+      for (const stage of STAGES) {
+        const p = STAGE[stage] ?? {};
+        const state = skip.has(stage) ? 'skipped' : p.enabled === false ? 'disabled' : 'would run';
+        const how = p.script ? `node ${p.script}`
+          : p.agent ? `claude -p --agent ${p.agent}${p.model ? ` --model ${p.model}` : ''}`
+            + (p.variant !== 'default' ? `  (variant ${p.variant})` : '')
+            + (p.shardAgent ? `  shards ${p.shardAgent} on ${p.shardModel}` : '')
             : 'a preflight script';
         note(`${stage.padEnd(14)} ${state}${state === 'would run' ? `  ${how}` : ''}`);
       }
@@ -507,16 +537,18 @@ async function main() {
     }
 
     step(`init ${specArg}`);
+    const off = STAGES.filter((s) => STAGE[s]?.enabled === false);
+    note(`track ${TRACK.name}${off.length ? ` — does not run ${off.join(', ')}` : ''}`);
     const from = opt('from');
     const carry = opt('carry');
     const unrefined = opt('accept-unrefined');
-    if (wf('init', '--spec', specArg,
+    if (wf('init', '--spec', specArg, '--track', TRACK.name,
       ...(from ? ['--from', from] : []),
       ...(carry ? ['--carry', carry] : []),
       ...(unrefined ? ['--accept-unrefined', unrefined] : []),
       ...Object.entries(STAGE)
-        .filter(([, p]) => p?.profile)
-        .flatMap(([stage, p]) => ['--profile', `${stage}=${p.profile}`]),
+        .filter(([, p]) => p?.variant && p.variant !== 'default')
+        .flatMap(([stage, p]) => ['--variant', `${stage}=${p.variant}`]),
       ...(flag('no-carry') ? ['--no-carry'] : [])) !== 0) process.exit(1);
     step('preflight');
     if (wf('preflight') !== 0) process.exit(2);
@@ -540,7 +572,7 @@ async function main() {
     }
 
     const stage = run.status;
-    if (skip.has(stage) || cfg.stages[stage]?.enabled === false) {
+    if (skip.has(stage) || STAGE[stage]?.enabled === false) {
       step(`${stage} — skipped`);
       wf('stage', stage, '--start');
       wf('verdict', stage, '--file', writeSkip(run, stage));

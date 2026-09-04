@@ -181,12 +181,16 @@ const readJson = (p) => {
    an agent at all. The config knows which agent owns which stage; it is the authority. */
 const cfgStages = (() => {
   try {
-    return JSON.parse(readFileSync(join(ROOT, '.claude', 'ai-workflow.config.json'), 'utf8')).stages ?? {};
+    const cfg = JSON.parse(readFileSync(join(ROOT, '.claude', 'ai-workflow.config.json'), 'utf8'));
+    return cfg.shipConfig?.[run.track ?? 'spec']?.stages ?? {};
   } catch {
     return {};
   }
 })();
-const agentFor = (block) => block.agentType ?? cfgStages[block.stage]?.agent ?? block.stage;
+const agentFor = (block) => block.agentType
+  ?? cfgStages[block.stage]?.variants?.[run.variants?.[block.stage]]?.agent
+  ?? cfgStages[block.stage]?.agent
+  ?? block.stage;
 
 const seen = {};
 const agents = blocks.map((b) => {

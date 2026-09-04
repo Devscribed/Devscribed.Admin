@@ -1,96 +1,247 @@
 {
-  "$comment": "Spec-to-ship pipeline. Stages can be switched off individually; the routing engine in scripts/wf.mjs skips a disabled stage without changing how the rest behave.",
-  "stages": {
-    "preflight": {
-      "enabled": true
-    },
-    "pre_implement": {
-      "$comment": "profile picks which compiler runs. `classic` is the original prompt; `strict` answers a closed compile checklist by id and writes shippingSurfaces. Both write the same handoff.json.",
-      "enabled": true,
-      "profile": "strict",
-      "profiles": {
-        "classic": {
-          "agent": "pre-implementer",
-          "model": "opus",
-          "effort": "high"
+  "$comment": "The spec-to-ship pipeline. `shipConfig` is the whole of it: one block per track, and inside each the stages that track runs, written out in full. Nothing is inherited between tracks — what you read under a track is exactly what that track runs. Validate any edit with `npm run config` before starting a run; it is also checked automatically by ship, wf init and preflight.",
+  "shipConfig": {
+    "$comment": "A track is a weight of document. It is resolved from the document's path by `match`, or named with `--track`. Stage order is fixed: preflight, pre_implement, implement, static_gate, review, qa. Every track must list all six; a stage it does not run is `enabled: false` rather than absent, so a reader never has to know the full list to see what is missing. `static_gate` and `qa` may not be disabled on any track — a lighter document buys speed against the stages that read intent, never against the ones that check the result.",
+    "spec": {
+      "$comment": "A three-file spec bundle that the refine loop admitted. The full pipeline.",
+      "match": "^specs/(?!bugs/|patches/)",
+      "branchPrefix": "spec/",
+      "requiresRefine": true,
+      "stages": {
+        "preflight": {
+          "enabled": true
         },
-        "strict": {
+        "pre_implement": {
+          "$comment": "Compiles the spec into handoff.json. `strict` answers a closed compile checklist by id and writes shippingSurfaces; the `classic` variant is the original open prompt. Both write the same handoff.json.",
+          "enabled": true,
           "agent": "pre-implementer-strict",
           "model": "opus",
-          "effort": "high"
+          "effort": "high",
+          "variants": {
+            "classic": {
+              "agent": "pre-implementer"
+            }
+          }
+        },
+        "implement": {
+          "$comment": "Writes the code. The default is one opus implementer, synchronous — the safe shape for a small or tangled diff. The `orchestrated` variant is an opus lead that splits the handoff into disjoint file sets and dispatches sonnet shards in parallel waves; it is faster and only sound when the plan's file globs are disjoint. Pick one for a run with --implement-profile.",
+          "enabled": true,
+          "agent": "implementer",
+          "model": "opus",
+          "variants": {
+            "orchestrated": {
+              "agent": "implementer-lead",
+              "shardAgent": "implementer",
+              "shardModel": "sonnet",
+              "shardEffort": "medium",
+              "maxShards": 4
+            }
+          }
+        },
+        "static_gate": {
+          "enabled": true,
+          "script": "scripts/static-gate.mjs"
+        },
+        "review": {
+          "$comment": "Judges the diff. The default gives each shard open-ended judgement and no checklist, on opus. The `sweeps` variant gives it the enumerate-then-judge method in .claude/skills/code-review/SKILL.md, on sonnet. shardSize is the largest number of files one shard is handed. Pick one for a run with --review-profile.",
+          "enabled": true,
+          "agent": "code-reviewer-lead",
+          "model": "opus",
+          "shardAgent": "code-reviewer-open",
+          "shardModel": "opus",
+          "shardEffort": "medium",
+          "shardSize": 15,
+          "variants": {
+            "sweeps": {
+              "shardAgent": "code-reviewer-sweeps",
+              "shardModel": "sonnet"
+            },
+            "solo": {
+              "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
+              "agent": "code-reviewer-open",
+              "shardAgent": null,
+              "shardModel": null
+            }
+          }
+        },
+        "qa": {
+          "enabled": true,
+          "agent": "qa",
+          "model": "sonnet",
+          "levels": [
+            "unit",
+            "int",
+            "e2e"
+          ],
+          "skipE2eIfLowerFailed": true
         }
+      },
+      "convergence": {
+        "$comment": "Retry is the exception. Only a finding addressed to code, carrying a witness, and uncontested is ever retried.",
+        "maxCodeAttempts": 8,
+        "maxHandoffReplans": 1,
+        "infraRetries": 3,
+        "autoContestAfter": 2
+      },
+      "timeoutMin": {
+        "$comment": "Fuses, not targets. A stage that runs past one understands nothing about why.",
+        "pre_implement": 35,
+        "implement": 45,
+        "review": 20,
+        "qa": 30
       }
     },
-    "implement": {
-      "$comment": "profile picks how the code is written. `solo` is one opus implementer, synchronous, and is the safe default for a small or tangled diff. `orchestrated` is an opus lead that splits the handoff into disjoint file sets and dispatches sonnet shards in parallel waves — faster, and only sound when the plan's file globs are disjoint. Override for one run with `--implement-profile`.",
-      "enabled": true,
-      "profile": "solo",
-      "profiles": {
-        "solo": {
+    "bug": {
+      "$comment": "An investigation report. It already carries the cause to file:line and the fix approach, so there is nothing left to compile into a plan.",
+      "match": "^specs/bugs/",
+      "branchPrefix": "fix/",
+      "requiresRefine": false,
+      "stages": {
+        "preflight": {
+          "enabled": true
+        },
+        "pre_implement": {
+          "$comment": "No plan is compiled. The implement and review prompts name the report instead, and a review finding addressed to `handoff` routes to implement.",
+          "enabled": false
+        },
+        "implement": {
+          "enabled": true,
+          "agent": "implementer",
+          "model": "opus",
+          "variants": {
+            "orchestrated": {
+              "agent": "implementer-lead",
+              "shardAgent": "implementer",
+              "shardModel": "sonnet",
+              "shardEffort": "medium",
+              "maxShards": 4
+            }
+          }
+        },
+        "static_gate": {
+          "enabled": true,
+          "script": "scripts/static-gate.mjs"
+        },
+        "review": {
+          "$comment": "A defect fix earns the careful reviewer: the code around a bug is the code that already fooled somebody.",
+          "enabled": true,
+          "agent": "code-reviewer-lead",
+          "model": "opus",
+          "shardAgent": "code-reviewer-open",
+          "shardModel": "opus",
+          "shardEffort": "medium",
+          "shardSize": 15,
+          "variants": {
+            "sweeps": {
+              "shardAgent": "code-reviewer-sweeps",
+              "shardModel": "sonnet"
+            },
+            "solo": {
+              "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
+              "agent": "code-reviewer-open",
+              "shardAgent": null,
+              "shardModel": null
+            }
+          }
+        },
+        "qa": {
+          "enabled": true,
+          "agent": "qa",
+          "model": "sonnet",
+          "levels": [
+            "unit",
+            "int",
+            "e2e"
+          ],
+          "skipE2eIfLowerFailed": true
+        }
+      },
+      "convergence": {
+        "$comment": "maxHandoffReplans is 0 because there is no plan stage to replan; a `handoff` finding is routed to implement instead.",
+        "maxCodeAttempts": 6,
+        "maxHandoffReplans": 0,
+        "infraRetries": 3,
+        "autoContestAfter": 2
+      },
+      "timeoutMin": {
+        "implement": 45,
+        "review": 20,
+        "qa": 30
+      }
+    },
+    "patch": {
+      "$comment": "A change of agreed behaviour small enough to state and check in one file. Admission is the entry condition in .claude/skills/patch/SKILL.md, not a judged round.",
+      "match": "^specs/patches/",
+      "branchPrefix": "fix/",
+      "requiresRefine": false,
+      "stages": {
+        "preflight": {
+          "enabled": true
+        },
+        "pre_implement": {
+          "$comment": "No plan is compiled. The patch note is the plan; its file bound stands in for the handoff's globs.",
+          "enabled": false
+        },
+        "implement": {
+          "$comment": "No orchestrated variant: the entry condition bounds a patch at two product files, and a lead that shards one file is pure overhead.",
+          "enabled": true,
           "agent": "implementer",
           "model": "opus"
         },
-        "orchestrated": {
-          "agent": "implement-lead",
+        "static_gate": {
+          "enabled": true,
+          "script": "scripts/static-gate.mjs"
+        },
+        "review": {
+          "$comment": "The cheap shape by default — a patch diff is small enough for one shard, and the checklist is what a small diff needs. The `open` variant buys the careful reviewer when a patch turns out to touch something load-bearing.",
+          "enabled": true,
+          "agent": "code-reviewer-lead",
           "model": "opus",
-          "shardAgent": "implement-shard",
+          "shardAgent": "code-reviewer-sweeps",
           "shardModel": "sonnet",
           "shardEffort": "medium",
-          "maxShards": 4
-        }
-      }
-    },
-    "static_gate": {
-      "enabled": true,
-      "script": "scripts/static-gate.mjs"
-    },
-    "review": {
-      "$comment": "profile picks how the shards read. `open` gives each shard open-ended judgement and no checklist; `sweeps` gives it the enumerate-then-judge method in .claude/skills/code-review/SKILL.md. shardSize is the largest number of files one shard is handed.",
-      "enabled": true,
-      "agent": "code-reviewer",
-      "model": "opus",
-      "profile": "open",
-      "shardSize": 15,
-      "profiles": {
-        "open": {
-          "shardAgent": "review-shard-open",
-          "shardModel": "opus",
-          "shardEffort": "medium"
+          "shardSize": 15,
+          "variants": {
+            "open": {
+              "shardAgent": "code-reviewer-open",
+              "shardModel": "opus"
+            },
+            "solo": {
+              "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
+              "agent": "code-reviewer-sweeps",
+              "shardAgent": null,
+              "shardModel": null
+            }
+          }
         },
-        "sweeps": {
-          "shardAgent": "review-shard",
-          "shardModel": "sonnet",
-          "shardEffort": "medium"
+        "qa": {
+          "enabled": true,
+          "agent": "qa",
+          "model": "sonnet",
+          "levels": [
+            "unit",
+            "int",
+            "e2e"
+          ],
+          "skipE2eIfLowerFailed": true
         }
+      },
+      "convergence": {
+        "$comment": "maxCodeAttempts is low on purpose. A patch that needs many attempts was misfiled — the run halting is the signal that it is a spec, and raising this number only hides that.",
+        "maxCodeAttempts": 3,
+        "maxHandoffReplans": 0,
+        "infraRetries": 3,
+        "autoContestAfter": 2
+      },
+      "timeoutMin": {
+        "implement": 30,
+        "review": 15,
+        "qa": 30
       }
-    },
-    "qa": {
-      "enabled": true,
-      "agent": "qa",
-      "model": "sonnet",
-      "levels": [
-        "unit",
-        "int",
-        "e2e"
-      ],
-      "skipE2eIfLowerFailed": true
     }
   },
-  "convergence": {
-    "$comment": "Retry is the exception. Only a finding that is addressed to code, carries a witness, and is uncontested is ever retried.",
-    "maxCodeAttempts": 8,
-    "maxHandoffReplans": 1,
-    "infraRetries": 3,
-    "autoContestAfter": 2
-  },
   "breakers": {
-    "$comment": "Fuses, not checks. They understand nothing about the code and therefore cannot be wrong about it.",
-    "stageTimeoutMin": {
-      "pre_implement": 35,
-      "implement": 45,
-      "review": 20,
-      "qa": 30
-    },
+    "$comment": "Whole-run fuses, the same for every track.",
     "runTimeoutMin": 180,
     "runTokenCap": 3000000
   },
@@ -105,30 +256,29 @@
   "protectedBranches": [
     "main"
   ],
-  "branchPrefix": "spec/",
   "refine": {
-    "$comment": "The pre-pipeline gate. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre-implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note.",
-    "$profiles": "profile picks who judges and who repairs. `solo` is the original single opus judge, synchronous, one pass over the whole bundle. `sharded` is an opus judge that splits the criteria families across sonnet shards, then decides what is worth returning — faster and cheaper per pass, and the judge still signs every finding. Override for one run with `--profile`.",
+    "$comment": "The pre-pipeline gate, and the only thing here that is not per-track: it judges spec bundles, which is the one track that requires it. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre_implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note.",
+    "$profiles": "profile picks who judges and who repairs. `solo` is a single opus judge, synchronous, one pass over the whole bundle. `sharded` is an opus judge that splits the criteria families across sonnet shards, then decides what is worth returning — faster and cheaper per pass, and the judge still signs every finding. Override for one run with --profile.",
+    "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; it applies only to tracks with requiresRefine true, and `--accept-unrefined <reason>` overrides it and is recorded in run.json.",
     "profile": "sharded",
     "profiles": {
       "solo": {
-        "judgeAgent": "spec-refiner",
+        "judgeAgent": "spec-reviewer",
         "judgeModel": "opus",
         "fixerAgent": "spec-fixer",
         "fixerModel": "opus"
       },
       "sharded": {
-        "judgeAgent": "spec-review",
+        "judgeAgent": "spec-reviewer-lead",
         "judgeModel": "opus",
         "fixerAgent": "spec-fixer-minimal",
         "fixerModel": "opus",
-        "shardAgent": "spec-review-shard",
+        "shardAgent": "spec-reviewer",
         "shardModel": "sonnet",
         "shardEffort": "medium",
         "mergeFamiliesUnderLines": 400
       }
     },
-    "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; `--accept-unrefined <reason>` overrides and is recorded in run.json.",
     "requireCriteriaMap": true,
     "requireJudgeModel": true,
     "shipRequiresRefine": true,

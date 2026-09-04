@@ -1,5 +1,7 @@
 # 0004 — A review is a set of sweeps, and clearing an item costs what raising one costs
 
+> **Renamed by [ADR 15](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md).** The agents this record names still exist under the current names; the rules they duplicated now live once, in `.claude/agents/references/`. The decision below is unchanged.
+
 **Decided** 2026-08-30.
 
 ## The rule now
@@ -72,7 +74,9 @@ condition — eleven sweeps done, therefore `pass` — which open-ended judgemen
 and a defect of a shape nobody wrote down in advance is exactly what the list cannot see.
 
 So the reviewer has two profiles, set in `.claude/ai-workflow.config.json` under
-`stages.review`:
+`stages.review` — moved by ADR 14 to `shipConfig.<track>.stages.review`, where the two are the
+block itself and one `variants` entry, and which of them is the default now depends on the
+track:
 
 | profile | shard agent | model | what it reads |
 |---|---|---|---|

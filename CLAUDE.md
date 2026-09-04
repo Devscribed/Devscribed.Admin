@@ -29,8 +29,9 @@ npm run test:e2e       # Playwright; starts both dev servers itself
 npm run spec   -- <what to spec>   # opens Claude Code on /spec
 npm run refine -- <spec path>      # /refine — a stranger judges the spec, before a run is paid for
 npm run bug    -- <what is broken> # /bug
-npm run ship   -- <spec path>      # /ship — the skill, which checks the branch and reads the outcome
-npm run ship:run -- <spec path>    # scripts/ship.mjs alone, no model either side
+npm run patch  -- <the rule that changes>  # /patch
+npm run ship   -- <document path>  # /ship — the skill, which checks the branch and reads the outcome
+npm run ship:run -- <document path># scripts/ship.mjs alone, no model either side
 npm run board                      # the board: specs → what was run against one → that run
 npm run watch                      # the same, without opening anything
 npm run specs                      # the same index, printed
@@ -144,7 +145,7 @@ acceptance criteria, test cases through E2E, and a verification route walked bef
 were written. Specs are written in English.
 
 **A spec is judged by somebody who did not write it.** `/spec` ends by dispatching the
-`spec-review` agent on a clean context — it is given the spec path and the request, and nothing
+`spec-reviewer` agent on a clean context — it is given the spec path and the request, and nothing
 else — which asks three questions the author cannot ask of their own work: is every claim about
 this repository still true, do two clear statements disagree, and what has this spec just made
 false in the documents around it. `npm run refine -- <spec path>` runs the same judgement on any
@@ -183,10 +184,23 @@ Investigate a defect with the `bug` skill (`/bug`). It writes `specs/bugs/BUG-NN
 ends in one of three verdicts — the code is wrong, the spec is wrong, or the spec is silent —
 which is what decides whether anything may be fixed yet.
 
+**Three weights of document, and the weight is chosen by what changes, never by how much time
+is left.** A spec bundle in `specs/<area>/` opens a design space and is admitted by `/refine`.
+A bug report in `specs/bugs/` explains behaviour that disagrees with a document. A patch note
+in `specs/patches/` — the `patch` skill (`/patch`) — closes exactly one rule that is changing:
+a field moves, a control is disabled until another is chosen, an input gains a bound. The
+patch's entry condition is closed and lives in that skill; a change that adds a route, touches
+the schema, moves authorization, needs a third product file or a new design-system component
+is a spec however small it looks. A patch supersedes what an older spec said the same way any
+newer document does — by stating the whole new rule in its own text, and writing nothing back.
+
 ## Implementing specs
 
 Use the `ship` skill (`/ship`) to run a spec through pre-implement → implement → static gate →
-review → QA. Routing lives in `scripts/wf.mjs`, not in a prompt: every finding names where the
+review → QA. `/ship bug <report>` and `/ship patch <note>` run the lighter tracks: no plan is
+compiled, and for a patch the review runs its cheap profile. **Every track runs the static
+gate and QA** — a lighter document buys speed against the stages that read intent, never
+against the ones that check the result. Routing lives in `scripts/wf.mjs`, not in a prompt: every finding names where the
 defect lives, only findings addressed to `code` are ever retried, and a finding the implementer
 contests halts the run for a person instead of spending another attempt. The runbook is
 [docs/ai-workflow.md](docs/ai-workflow.md).
@@ -199,11 +213,21 @@ a loop that is not a `pass`, or a bundle that changed after the round that judge
 run before any model is paid. `--accept-unrefined "<why>"` overrides it and the reason is
 recorded in `run.json`.
 
-**Which agent a stage runs is a profile, not a constant.** Each stage names its default in
-`.claude/ai-workflow.config.json` and takes an override for one run — `--profile` for refine,
+**The pipeline is configuration, and it is checked before it runs.**
+`.claude/ai-workflow.config.json` is keyed by track: `shipConfig.<track>` names the paths it
+matches, the branch it uses and whether refine admits it, and `shipConfig.<track>.stages.<stage>`
+writes out the agent, model, shard shape, budgets and timeouts in full. Nothing is inherited
+between tracks — what you read under a track is what it runs. `scripts/ship-config.mjs` is the
+only reader, and it validates: an unknown key, a renamed agent, a model that does not exist, a
+missing stage, `static_gate` or `qa` switched off. `npm run config` prints what each track
+resolves to; `ship`, every `wf` command and preflight run the same check first, so a bad edit
+stops a run before a lock or a branch exists.
+
+**Which agent a stage runs is a variant, not a constant.** Alternatives live in that stage
+block's `variants` and are selected for one run — `--profile` for refine,
 `--implement-profile`, `--review-profile`, `--plan-profile` for ship. So one run goes parallel on
 sonnet shards and the next goes synchronous on one opus agent, with no edit between them, and
-every profile in force is written into the ledger or `run.json`. Every agent a new one replaced
+every variant in force is written into the ledger or `run.json`. Every agent a new one replaced
 is kept and still selectable: [.claude/agents/VARIANTS.md](.claude/agents/VARIANTS.md) lists them
 and says what each changed.
 

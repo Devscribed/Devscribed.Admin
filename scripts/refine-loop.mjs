@@ -7,7 +7,7 @@
  * Three gates, and only the last two cost a model:
  *
  *   T0  spec-lint          a script. Pointers, joins, cross-product completeness.
- *   T2  the judge          spec-review or spec-refiner, by profile. Full on the first round;
+ *   T2  the judge          spec-reviewer-lead or spec-reviewer, by profile. Full on the first round;
  *                          from the second, the range the previous repair produced and nothing
  *                          else.
  *   T1  pre-implement      the spec compiled into a plan, by the agent the pipeline runs. It
@@ -42,7 +42,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { enforceCriteria, readRegister } from './criteria.mjs';
-import { stageProfile } from './profiles.mjs';
+import { stageFor, timeoutFor } from './ship-config.mjs';
 import { bundleMembers, stemFor } from './spec-paths.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,7 +76,7 @@ if (RC.profiles && !RC.profiles[profileName]) {
   process.exit(1);
 }
 const PROFILE = { name: profileName, ...(RC.profiles?.[profileName] ?? {}) };
-const JUDGE_AGENT = PROFILE.judgeAgent ?? 'spec-review';
+const JUDGE_AGENT = PROFILE.judgeAgent ?? 'spec-reviewer-lead';
 const JUDGE_MODEL = PROFILE.judgeModel ?? RC.judgeModel ?? 'opus';
 const FIXER_AGENT = PROFILE.fixerAgent ?? 'spec-fixer-minimal';
 const FIXER_MODEL = PROFILE.fixerModel ?? RC.fixerModel ?? 'opus';
@@ -501,13 +501,14 @@ async function gatePlan(spec, ledger, round) {
 
   /* The same compiler the pipeline runs, read the same way — the point of running T1 here is
      that it is the pipeline's own gate, not a second opinion configured separately. */
-  const planStage = stageProfile(cfg, 'pre_implement', opt('plan-profile', null));
+  /* Refine judges spec bundles, so the compiler it borrows is the spec track's. */
+  const planStage = stageFor(cfg, 'spec', 'pre_implement', opt('plan-profile', null));
   return runAgent({
     agent: planStage.agent ?? 'pre-implementer-strict',
     model: planStage.model,
     prompt,
     verdictPath,
-    timeoutMin: cfg.breakers?.stageTimeoutMin?.pre_implement ?? 45,
+    timeoutMin: timeoutFor(cfg, 'spec', 'pre_implement'),
     logStem: `${dir}/stages/pre_implement`,
   });
 }

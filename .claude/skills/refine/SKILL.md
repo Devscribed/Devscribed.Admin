@@ -18,7 +18,7 @@ or the loop stops and says why.
 | Gate | What it is | What it costs |
 |---|---|---|
 | **T0** `spec-lint` | a script — pointers, joins, cross-product completeness | nothing |
-| **T2** the judge | `spec-review` (opus, shards the reading across sonnet) or `spec-refiner` (one opus pass), by profile: the whole document on round one, the previous repair's range after that | one pass |
+| **T2** the judge | `spec-reviewer-lead` (opus, shards the reading across sonnet) or `spec-reviewer` (one opus pass), by profile: the whole document on round one, the previous repair's range after that | one pass |
 | **T1** `pre-implement` | the spec compiled into a plan by the agent the pipeline runs — once, after T2 is clean, as the last gate | one pass |
 
 Whichever gate blocked, the profile's fixer repairs its verdict and the round is committed.

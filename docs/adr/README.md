@@ -25,6 +25,9 @@ likely to be re-litigated.
 | [0010](0010-a-chain-of-dependent-specs-ships-one-link-at-a-time.md)    | A chain of dependent specs is refined and shipped one link at a time, in dependency order         | current                  |
 | [0011](0011-the-board-is-indexed-by-spec-and-a-gate-is-a-commit.md)    | The board is indexed by spec, and every gate of a refine loop is a commit                         | current                  |
 | [0012](0012-a-refine-loop-converges-on-the-judge-and-repairs-by-subtraction.md) | A refine loop converges on the judge, runs the pre-implementer last, and stops when a repair grows the spec | current, amends 0008 |
+| [0013](0013-a-spec-is-admitted-by-a-judge-that-shards-its-reading.md)  | A spec is admitted by a judge that shards its reading, and the pipeline refuses one nothing admitted | current                  |
+| [0014](0014-a-document-earns-its-pipeline-by-its-weight.md)            | A document earns its pipeline by its weight: the config is keyed by track, validated before a run, with the gates on all three | current                  |
+| [0015](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md)     | One core agent and one lead per family, with the rules every judge obeys written once outside them | current, renames 0002/0004/0008/0012/0013 |
 
 Measurements that led to these, including the hypotheses that did not survive, are in
 [docs/research/](../research/).
