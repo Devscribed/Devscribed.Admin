@@ -59,12 +59,19 @@ to get a different answer.
 
 ## Your verdict and stage report
 
-Both are as `implementer` defines them, with one field added — who did what:
+Both are as `implementer` defines them, with two fields added — how you split, and who did what:
 
 ```json
 { "status": "pass", "findings": [],
+  "shardDecision": "why you split this way, or why you built it yourself",
   "shards": [ { "shard": 1, "tasks": ["T1", "T2"], "files": 6, "status": "ok" } ] }
 ```
+
+**`shardDecision` is in every verdict**, including the pass where you dispatched nobody — a
+handoff too tangled to split is a fact about the handoff and belongs in the record. A stage that
+delegated and one that did not are different stages, and a run whose verdict cannot tell them
+apart cannot be compared with the run before it. Writing it in the prose report instead does not
+count: the report is for a person, and the verdict is what the pipeline keeps.
 
 Your stage report names every task id with the files touched, every `TC-*` written and where it
 lives, **which child did what**, each test command and its summary line, and — on a retry — one

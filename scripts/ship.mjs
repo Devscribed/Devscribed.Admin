@@ -411,7 +411,17 @@ async function runAgentStage(stage, run) {
   }
 
   note(`verdict written after ${secs}s`);
-  return readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
+  const verdict = readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
+
+  /* Whether to delegate is the lead's call, so working alone is a legitimate answer. What is
+     not optional is saying which way it went: a stage that split and one that did not are
+     different stages, and a run whose record cannot tell them apart cannot be compared with
+     the run before it. The same check guards the refine judge. */
+  if (STAGE[stage]?.shardAgent && !(verdict.shards ?? []).length && !verdict.shardDecision) {
+    note(`${agent} reported no split — neither "shards" nor "shardDecision" is in the verdict, `
+      + 'so what this stage actually ran is only in its prose report');
+  }
+  return verdict;
 }
 
 function runViaCLI({ stage, agent, model, prompt, resume, timeoutMin, stem }) {

@@ -1,0 +1,339 @@
+{
+  "runId": "2026-09-04T08-40-20_patches-PATCH-001-mock-rename-a-variable",
+  "capturedAt": "2026-09-04T09:15:48.498Z",
+  "spec": "specs/patches/PATCH-001-mock-rename-a-variable.md",
+  "specSha": "31757f683aacf3239cf722807223241b942cb3def4a656e6be259fd655a11441",
+  "branch": "test/flow-check",
+  "baseRef": "d26d6dedb2a44395cb98047e79e61e86af0daf13",
+  "headAtCapture": "311edf0a4978395843c1e371e6626fc68f2a1715",
+  "status": "ready",
+  "halt": null,
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "pipeline": {
+    "fingerprint": "26afcdc93346fcf1",
+    "files": {
+      ".claude/agents/code-reviewer-lead.md": "ba2a09905e3b",
+      ".claude/agents/code-reviewer-open.md": "6395150332b9",
+      ".claude/agents/code-reviewer-sweeps.md": "8d17ff906597",
+      ".claude/agents/implementer-lead.md": "8ed3c4032ccc",
+      ".claude/agents/implementer.md": "45f6883c86b7",
+      ".claude/agents/pre-implementer-strict.md": "d99a97a5f355",
+      ".claude/agents/pre-implementer.md": "6b62e14dda9d",
+      ".claude/agents/qa.md": "1d305259ff49",
+      ".claude/agents/references/lead-contract.md": "7b65b1a9dfe3",
+      ".claude/agents/references/verdict-contract.md": "58eb4e3e2a37",
+      ".claude/ai-workflow.config.json": "3cc8fd117693",
+      ".claude/skills/code-review/SKILL.md": "e8ca68421d13",
+      ".claude/skills/code-review/references/blocking-criteria.md": "9b471737b10e",
+      "scripts/review-slice.mjs": "df34a085d632",
+      "scripts/ship-config.mjs": "d0940f2bc32a",
+      "scripts/ship.mjs": "e2601d6b2cfe",
+      "scripts/static-gate.mjs": "7bf6b1ec4b11",
+      "scripts/wf.mjs": "26c5ea78fee6"
+    }
+  },
+  "diff": {
+    "files": 33,
+    "added": 844,
+    "removed": 13
+  },
+  "totals": {
+    "wallSec": 362,
+    "toolSec": 143,
+    "calls": 58,
+    "costUsd": 1.64,
+    "thinkingPct": 60
+  },
+  "byAgent": {
+    "implementer": {
+      "invocations": 1,
+      "wallSec": 108,
+      "toolSec": 43,
+      "calls": 16,
+      "costUsd": 0.56,
+      "thinkingPct": 60
+    },
+    "code-reviewer-lead": {
+      "invocations": 1,
+      "wallSec": 61,
+      "toolSec": 6,
+      "calls": 15,
+      "costUsd": 0.66,
+      "thinkingPct": 90
+    },
+    "qa": {
+      "invocations": 1,
+      "wallSec": 193,
+      "toolSec": 94,
+      "calls": 27,
+      "costUsd": 0.42,
+      "thinkingPct": 51
+    }
+  },
+  "agents": [
+    {
+      "stage": "implement",
+      "attempt": 1,
+      "agent": "implementer",
+      "sessionId": "27f44773-c58b-4d19-a967-5d7ec709e01a",
+      "costUsd": 0.56,
+      "apiSec": 79,
+      "stopReason": "end_turn",
+      "tokens": {
+        "input": 28,
+        "output": 5525,
+        "cacheRead": 277048,
+        "cacheWrite": 27988
+      },
+      "startedAt": "2026-09-04T08:40:29.033Z",
+      "wallSec": 108,
+      "toolSec": 43,
+      "thinkingPct": 60,
+      "calls": 16,
+      "verdict": "pass",
+      "findings": {
+        "blockers": 0,
+        "notes": 0,
+        "rules": []
+      },
+      "byTool": {
+        "Bash": {
+          "count": 16,
+          "sec": 43
+        }
+      },
+      "byCommand": [
+        {
+          "shape": "npm test",
+          "count": 1,
+          "sec": 28
+        },
+        {
+          "shape": "npx tsc",
+          "count": 1,
+          "sec": 6
+        },
+        {
+          "shape": "npm run test:unit",
+          "count": 1,
+          "sec": 5
+        },
+        {
+          "shape": "cat",
+          "count": 3,
+          "sec": 1
+        },
+        {
+          "shape": "grep",
+          "count": 2,
+          "sec": 0
+        },
+        {
+          "shape": "(empty)",
+          "count": 1,
+          "sec": 0
+        },
+        {
+          "shape": "ls",
+          "count": 2,
+          "sec": 0
+        },
+        {
+          "shape": "git diff",
+          "count": 1,
+          "sec": 0
+        },
+        {
+          "shape": "git status",
+          "count": 1,
+          "sec": 0
+        },
+        {
+          "shape": "printf",
+          "count": 1,
+          "sec": 0
+        },
+        {
+          "shape": "pwd",
+          "count": 1,
+          "sec": 0
+        },
+        {
+          "shape": "python",
+          "count": 1,
+          "sec": 0
+        }
+      ]
+    },
+    {
+      "stage": "review",
+      "attempt": 1,
+      "agent": "code-reviewer-lead",
+      "sessionId": "092a878c-1b87-4918-bb6c-7750a3068929",
+      "costUsd": 0.66,
+      "apiSec": 74,
+      "stopReason": "end_turn",
+      "tokens": {
+        "input": 32,
+        "output": 4898,
+        "cacheRead": 415065,
+        "cacheWrite": 32724
+      },
+      "startedAt": "2026-09-04T08:42:38.618Z",
+      "wallSec": 61,
+      "toolSec": 6,
+      "thinkingPct": 90,
+      "calls": 15,
+      "verdict": "pass",
+      "findings": {
+        "blockers": 0,
+        "notes": 0,
+        "rules": []
+      },
+      "byTool": {
+        "Bash": {
+          "count": 15,
+          "sec": 6
+        }
+      },
+      "byCommand": [
+        {
+          "shape": "npx tsc",
+          "count": 1,
+          "sec": 2
+        },
+        {
+          "shape": "node scripts/review-slice.mjs",
+          "count": 1,
+          "sec": 1
+        },
+        {
+          "shape": "sed",
+          "count": 4,
+          "sec": 1
+        },
+        {
+          "shape": "cat",
+          "count": 3,
+          "sec": 1
+        },
+        {
+          "shape": "ls",
+          "count": 2,
+          "sec": 0
+        },
+        {
+          "shape": "grep",
+          "count": 2,
+          "sec": 0
+        },
+        {
+          "shape": "git diff",
+          "count": 1,
+          "sec": 0
+        },
+        {
+          "shape": "pwd",
+          "count": 1,
+          "sec": 0
+        }
+      ]
+    },
+    {
+      "stage": "qa",
+      "attempt": 1,
+      "agent": "qa",
+      "sessionId": "dd3d563a-3e37-45bb-9380-353fb9e8b264",
+      "costUsd": 0.42,
+      "apiSec": 109,
+      "stopReason": "end_turn",
+      "tokens": {
+        "input": 52,
+        "output": 7266,
+        "cacheRead": 804321,
+        "cacheWrite": 46932
+      },
+      "startedAt": "2026-09-04T08:44:06.466Z",
+      "wallSec": 193,
+      "toolSec": 94,
+      "thinkingPct": 51,
+      "calls": 27,
+      "verdict": "pass",
+      "findings": {
+        "blockers": 0,
+        "notes": 0,
+        "rules": []
+      },
+      "byTool": {
+        "Bash": {
+          "count": 18,
+          "sec": 94
+        },
+        "Grep": {
+          "count": 2,
+          "sec": 0
+        },
+        "Read": {
+          "count": 7,
+          "sec": 0
+        }
+      },
+      "byCommand": [
+        {
+          "shape": "npx playwright",
+          "count": 2,
+          "sec": 73
+        },
+        {
+          "shape": "npm test",
+          "count": 1,
+          "sec": 16
+        },
+        {
+          "shape": "npm run test:unit",
+          "count": 1,
+          "sec": 2
+        },
+        {
+          "shape": "git diff",
+          "count": 2,
+          "sec": 1
+        },
+        {
+          "shape": "grep",
+          "count": 3,
+          "sec": 1
+        },
+        {
+          "shape": "find",
+          "count": 3,
+          "sec": 0
+        },
+        {
+          "shape": "ls",
+          "count": 2,
+          "sec": 0
+        },
+        {
+          "shape": "cat",
+          "count": 2,
+          "sec": 0
+        },
+        {
+          "shape": "(empty)",
+          "count": 1,
+          "sec": 0
+        },
+        {
+          "shape": "cp",
+          "count": 1,
+          "sec": 0
+        }
+      ]
+    }
+  ]
+}
