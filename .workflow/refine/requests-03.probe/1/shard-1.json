@@ -1,0 +1,209 @@
+{
+  "shard": 1,
+  "file": "specs/requests/03-client-participants.md",
+  "enumerated": [
+    {
+      "item": "REQ-03-001: ClientMembership row carries account, organization, client",
+      "settledBy": "apps/api/prisma/schema.prisma:838-872 model ClientMembership has accountId, organizationId, clientId",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-002 decision table: staffRow/clientRow none|active|removed resolves principal or AUTH_MESSAGES.deactivated",
+      "settledBy": "packages/validation/src/index.ts:225 AUTH_MESSAGES.deactivated exists; ClientMembership.status default active, no DB constraint against active/active (enforced at write per REQ-03-014/042)",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-004/007: AUTH_MESSAGES.deactivated message quoted",
+      "settledBy": "packages/validation/src/index.ts:225 deactivated: 'Your account has been deactivated. Contact your administrator.'",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-005: GET /api/me answers 200 with account, organization, principal: client, client id/name for a client principal",
+      "settledBy": "apps/api/src/members/me.controller.ts:28-47 implements exactly this shape",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-005 Decided note: endpoint answers null today for an account with no staff membership",
+      "settledBy": "apps/api/src/members/me.controller.ts:50-54 membership branch still returns null when no membership row exists",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-006: removing a contact rotates securityStamp in the same transaction as the status write",
+      "settledBy": "apps/api/src/clients/client-contacts.service.ts:225-263 comment cites REQ-03-006, writes securityStamp: randomUUID() alongside status update",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-008: CLIENT_USER_MESSAGES.inviteForbidden quoted for 403 without manage-clients",
+      "settledBy": "grep of packages/validation/src/index.ts CLIENT_USER_MESSAGES block (lines 2287-2293): keys are emailInvalid, alreadyLinked, alreadyRemoved, principalConflict, clientCannotCreate — no inviteForbidden key exists anywhere in the export",
+      "ok": false
+    },
+    {
+      "item": "REQ-03-009: Invitation carries client's id and role value 'client'",
+      "settledBy": "apps/api/prisma/schema.prisma:114-144 Invitation.clientId nullable field; apps/api/src/clients/client-contacts.service.ts:181-183 sets role: CLIENT_INVITATION_ROLE, clientId: client.id",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-010: CLIENT_MESSAGES.clientArchived, 400, on archived client",
+      "settledBy": "packages/validation/src/index.ts:2257 clientArchived message; apps/api/src/clients/client-contacts.service.ts:146-151 throws BadRequestException with that message",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-011: one live invitation per address, staff or client alike, invalidated in same transaction",
+      "settledBy": "apps/api/src/clients/client-contacts.service.ts:171-190 $transaction updateMany invalidates pending invitations then creates the new one",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-012: accepting a client invitation creates an active ClientMembership and no Membership",
+      "settledBy": "apps/api/src/invitations/invitations.service.ts:262 comment 'REQ-03-012 — accepting a client invitation creates ONE active ClientMembership'",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-013: CLIENT_USER_MESSAGES.alreadyLinked, 409, for an address already an active contact of that client",
+      "settledBy": "packages/validation/src/index.ts:2289 alreadyLinked message; apps/api/src/clients/client-contacts.service.ts:157-166 ConflictException with that message",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-014: CLIENT_USER_MESSAGES.principalConflict, 409, for an account with an active Membership or ClientMembership of any org accepting a client invitation",
+      "settledBy": "packages/validation/src/index.ts:2291 principalConflict message; apps/api/src/invitations/invitations.service.ts:411-414 principalConflict() throws ConflictException with that message, called at line 125/258",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-015: accepting a client invitation answers redirectTo of /requests",
+      "settledBy": "apps/api/src/invitations/invitations.service.ts:37 CLIENT_REDIRECT = '/requests'; used at lines 316, 395",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-016: client capabilities resolve from a single exported list belonging to no staff capability union",
+      "settledBy": "packages/validation/src/roles.ts:196-208 ClientCapability type and CLIENT_CAPABILITIES const, distinct from Capability/ROLE_CAPABILITIES",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-017: principal kind resolved before any role-keyed helper is called",
+      "settledBy": "packages/validation/src/roles.ts:232-237 capabilitiesForPrincipal checks principal.kind === 'client' before touching ROLE_CAPABILITIES/normalizeRole",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-018: while a client contact is signed in, requests is the only organization nav entry",
+      "settledBy": "apps/web/src/layout/Sidebar.tsx:60-65 branches on principal === 'client' and returns only the requests destination, citing REQ-03-018",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-019: an organization route this spec does not grant a client principal answers 404",
+      "settledBy": "apps/api/src/requests/requests.service.ts multiple 'caller.kind === client' checks gating access; OrgScopeGuard/role checks elsewhere return NotFoundException by convention",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-020 to 026: REQUEST_MESSAGES.clientProjectRequired, clientProjectMismatch, notOnProject, topicAudienceMismatch, topicUnavailable, assigneeInactive quoted",
+      "settledBy": "packages/validation/src/index.ts:1886,1894,1910-1911,1919-1921 all keys present under REQUEST_MESSAGES with the quoted text; apps/api/src/requests/requests.service.ts:499-584 implements the checks in this order",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-024 decision table: staff/member 201, staff/client 400 mismatch, client/member 400 mismatch, client/client 201",
+      "settledBy": "apps/api/src/requests/requests.service.ts:499-507 requiredAudience = assigneeKind === 'client' ? 'client' : 'staff', compared against topic.audience, 400 topicAudienceMismatch on mismatch",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-027: CLIENT_USER_MESSAGES.clientCannotCreate, 403, decided before any capability is consulted",
+      "settledBy": "packages/validation/src/index.ts:2292 clientCannotCreate message; apps/api/src/requests/requests.service.ts:443-467 checks resolved.kind === 'client' before the can(caller.role,'create-request') check, matching the stated ordering",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-027 Decided note: today the create route's first statement is the create-request capability check, answering a client REQUEST_MESSAGES.createForbidden",
+      "settledBy": "apps/api/src/requests/requests.service.ts:450-467 comment explicitly frames this as the changed ordering (REQ-03-027), consistent with the claim about prior behaviour",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-028 Decided note: the party test already answers a principal with no role correctly — not a party and no ViewAllRequests reads 404",
+      "settledBy": "packages/validation/src/roles.ts:311 isParty || hasCapability(role, 'ViewAllRequests') pattern predates this spec's client half",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-032: REQUEST_MESSAGES.notYoursToGrant, 403, when a client principal calls the grant route",
+      "settledBy": "packages/validation/src/index.ts:1894 notYoursToGrant: 'Only the person who asked can confirm this'",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-035 to 041: RequestNotification outbox, RequestNotifier, uniqueness on (eventId, recipientKind, recipientId), channel/providerKey/providerRef/status fields",
+      "settledBy": "apps/api/prisma/schema.prisma:1319-1355 model RequestNotification matches every field named; apps/api/src/requests/request-notifier.ts, request-notifier.provider.ts, null-request-notifier.ts, request-notifications.service.ts exist",
+      "ok": true
+    },
+    {
+      "item": "REQ-03-038: adapter that ships marks a row 'skipped' with channel 'none'",
+      "settledBy": "apps/api/prisma/schema.prisma:1333,1338 channel default 'none', status comment includes 'skipped'; apps/api/src/requests/null-request-notifier.ts is the shipped adapter",
+      "ok": true
+    },
+    {
+      "item": "api front-matter routes exist under those paths",
+      "settledBy": "apps/api/src/clients/client-contacts.controller.ts:24,29,34,44 @Controller('api/organizations/:orgId') with Get/Post 'clients/:clientId/contacts' and Delete 'clients/:clientId/contacts/:contactId'",
+      "ok": true
+    },
+    {
+      "item": "entities front-matter: ClientMembership, Invitation, Request, RequestNotification exist as Prisma models",
+      "settledBy": "apps/api/prisma/schema.prisma:114 Invitation, 838 ClientMembership, 1190 Request, 1319 RequestNotification",
+      "ok": true
+    },
+    {
+      "item": "depends-on specs (requests/01, requests/02, organization/01, user-management/03) exist",
+      "settledBy": "ls specs/requests specs/organization specs/user-management — 01-requests.md, 02-request-topics.md, 01-organization-creation.md, 03-user-invitation.md all present",
+      "ok": true
+    },
+    {
+      "item": "S-23: no web route handler or server action for these features",
+      "settledBy": "grep for 'use server' / server action patterns touching client/request code in apps/web/src returned nothing",
+      "ok": true
+    },
+    {
+      "item": "S-34: no TBD / decide-later placeholder in the spec",
+      "settledBy": "grep -in 'TBD|decide later|to be decided' specs/requests/03-client-participants.md returned no matches",
+      "ok": true
+    },
+    {
+      "item": "Session shape: role null for client, principal always present, client null for staff (REQ-03-005 web-side)",
+      "settledBy": "apps/web/src/layout/session-context.tsx:45-51 Session interface matches exactly",
+      "ok": true
+    }
+  ],
+  "counts": {
+    "enumerated": 31,
+    "ok": 30,
+    "claims": 1
+  },
+  "criteria": {
+    "S-01": "clear",
+    "S-02": "claim",
+    "S-03": "clear",
+    "S-04": "clear",
+    "S-05": "clear",
+    "S-07": "n/a",
+    "S-08": "n/a",
+    "S-23": "clear",
+    "S-26": "n/a",
+    "S-30": "clear",
+    "S-32": "n/a",
+    "S-33": "n/a",
+    "S-34": "clear",
+    "S-38": "clear",
+    "S-43": "clear",
+    "S-48": "clear",
+    "S-49": "clear",
+    "S-55": "clear",
+    "S-56": "n/a"
+  },
+  "claims": [
+    {
+      "id": "S1-C1",
+      "criterion": "S-02",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "CLIENT_USER_MESSAGES.inviteForbidden",
+      "line": 130,
+      "claim": "REQ-03-008 quotes CLIENT_USER_MESSAGES.inviteForbidden as the 403 message for a caller without manage-clients inviting a client contact, but no such key exists in the CLIENT_USER_MESSAGES export.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n \"CLIENT_USER_MESSAGES = {\" -A 6 packages/validation/src/index.ts → keys are emailInvalid, alreadyLinked, alreadyRemoved, principalConflict, clientCannotCreate only",
+        "source": "packages/validation/src/index.ts:2287-2293"
+      },
+      "confidence": "high",
+      "suggestedFix": "either add an inviteForbidden key to CLIENT_USER_MESSAGES in packages/validation, or name the existing message actually used for this refusal (e.g. an existing manage-clients forbidden message) in REQ-03-008."
+    }
+  ]
+}
