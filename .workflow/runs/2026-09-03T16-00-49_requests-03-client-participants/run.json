@@ -5,10 +5,10 @@
   "task": "requests-03-client-participants",
   "branch": "spec/requests-03-client-participants",
   "baseRef": "de9c5f916fa328734ed5f8f9c77023e8720e35e8",
-  "headAtInit": "ddcab5d554a48d75a99be07f2fe492362d338920",
-  "status": "implement",
+  "headAtInit": "e0ddf9f8cbf112fe33f3ffa2d0c66e66124bf247",
+  "status": "ready",
   "createdAt": "2026-09-03T16:00:49.472Z",
-  "updatedAt": "2026-09-03T18:26:01.467Z",
+  "updatedAt": "2026-09-03T18:44:32.666Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -22,11 +22,11 @@
       "endedAt": "2026-09-03T17:50:00.665Z"
     },
     "implement": {
-      "status": "pending",
-      "attempts": 5,
-      "startedAt": "2026-09-03T18:04:08.352Z",
+      "status": "aborted",
+      "attempts": 6,
+      "startedAt": "2026-09-03T18:26:01.672Z",
       "lastVerdict": "pass",
-      "endedAt": "2026-09-03T18:13:18.984Z"
+      "endedAt": "2026-09-03T18:30:17.213Z"
     },
     "static_gate": {
       "status": "passed",
@@ -36,15 +36,18 @@
       "endedAt": "2026-09-03T18:13:27.636Z"
     },
     "review": {
-      "status": "blocked",
-      "attempts": 2,
-      "startedAt": "2026-09-03T18:13:27.842Z",
-      "lastVerdict": "blocked",
-      "endedAt": "2026-09-03T18:26:01.413Z"
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-03T18:30:25.717Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-03T18:35:19.827Z"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-03T18:35:19.928Z",
+      "endedAt": "2026-09-03T18:44:32.585Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
@@ -832,6 +835,240 @@
         "source": "apps/api/src/requests/requests.service.ts:1224 and packages/validation/src/roles.ts:27-28"
       },
       "suggestedFix": "State the normalization as the mechanism when this text is next touched — it is what makes the legacy value both refused for view-clients and granted create-request."
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": "specs/requests/01-requests.md requirement 35 and specs/requests/03-client-participants.md Known Gaps",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "reassignRequest",
+      "line": 1042,
+      "claim": "Carried unchanged from review 2. Reassign on a client-addressed row is refused with 409 invalidTransition and the control is withheld on the detail screen — a defensible reading of spec 03's Known Gaps row and edge case 5, but a refusal no requirement states. Spec 03's Routes table does not list the reassign route at all. Not blocked: the previous pass raised the opposite direction under CR-32 and it was addressed, and re-blocking in reverse is what the closed register exists to prevent. A person should decide whether the refusal stays and, if so, write it into spec 03 with its status and message.",
+      "witness": {
+        "kind": "rule",
+        "detail": "invalidTransition is scoped to \"every transition route\" in spec 01's error table; reassign has a section of its own documenting 200 and body validation only, and spec 03 amends no reassign behaviour in its own text.",
+        "source": "specs/requests/01-requests.md:687 and :605-608"
+      },
+      "suggestedFix": "Add a requirement and a Routes row to spec 03 naming the status and message for a reassign of a client-addressed request, and number the integration test that already asserts it."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "specs/requests/03-client-participants.contracts.md — Security: \"It is visible on the contacts list, to holders of `view-clients`, and nowhere else: no request response carries it\"",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequestContacts",
+      "line": 420,
+      "claim": "Carried unchanged from review 2. `displayName: displayNameOf(row.account) || row.account.email` would put a contact's email into a response guarded by create-request, which a `user` holds while holding view-clients nowhere. No input reaches the fallback — both accept paths validate first and last name — so it is dead code that contradicts a written statement rather than a live leak.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The contracts fix the response as { id, displayName, clientId, clientName } and confine the address to view-clients holders; requests.dto.ts:21 states \"The contact's email address is never carried here\".",
+        "source": "specs/requests/03-client-participants.contracts.md:96 and :597"
+      },
+      "suggestedFix": "Drop the `|| row.account.email` fallback, or amend the PII bullet to name the one place an address can surface without view-clients."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "contacts effect",
+      "line": 245,
+      "claim": "Carried unchanged from review 2. `contacts` is reset neither by the open-cycle re-seed that clears every other field nor on a failed read, so a stale contact can still be offered after it was removed elsewhere. The server decides, so this is stale convenience rather than a leak.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Open the modal, choose Client, contacts load; close; an admin removes that contact; reopen and choose Client while /request-contacts is failing — the previous list is still in state and offered, and creation then answers assigneeInactive.",
+        "source": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:159-194, 237-265"
+      },
+      "suggestedFix": "setContacts([]) in the open-cycle reset and on a non-ok response, the way topicsByAudience resets to { member: null, client: null }."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Testing: \"Selectors are `data-testid` only, and the ids are named in the specs.\"",
+      "file": "e2e/tests/client-participants.spec.ts",
+      "symbol": "TC-03-E2E-04",
+      "line": 424,
+      "claim": "Carried unchanged from review 2. The navigation step selects the list row by rendered text rather than by request-row-{id}. Not blocked under CR-27: the id is unavailable because the request was created through the UI, and the file follows an established pattern.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-03-E2E-04, e2e/tests/client-participants.spec.ts:424",
+        "source": "e2e/tests/client-participants.spec.ts:424"
+      },
+      "suggestedFix": "Resolve the created request's id and click request-row-{id}, if a testid selector is wanted here."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "e2e/tests/client-participants.spec.ts",
+      "symbol": "TC-03-E2E-05",
+      "line": 502,
+      "claim": "Carried unchanged from review 2. The `toHaveCount(0)` on request-detail-reassign-btn in TC-03-E2E-05 is asserted as the addressee contact, for whom showReassign already required canViewAll before this diff, so it cannot fail for the reason its comment gives. The equivalent assertion in TC-03-E2E-04 at line 427, made as an admin, is the one that observes the new rule.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-03-E2E-05 at e2e/tests/client-participants.spec.ts:502; the guard it probes is canViewAll, false for every client principal.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:212"
+      },
+      "suggestedFix": "Drop it, or relabel it as the contact-side restatement of a control already withheld by capability."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": "specs/requests/03-client-participants.md REQ-03-043: \"the active client contacts of every client owning a project that member is assigned to, and no other\"",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequestContacts",
+      "line": 401,
+      "claim": "Carried unchanged from review 2. The query adds `status: 'active'` on the project, which the requirement's sentence does not state. The divergence is unobservable through creation, which refuses the same projects for other reasons, so this is recorded as a read of the spec rather than an unnoticed invention.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Client B owns exactly one project, archived, and the requester holds a ProjectMember row on it. REQ-03-043's text returns B's active contacts; the implementation returns none.",
+        "source": "specs/requests/03-client-participants.md:221-227 against apps/api/src/requests/requests.service.ts:401"
+      },
+      "suggestedFix": "State the active-project boundary in REQ-03-043's own sentence, or drop the filter."
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Testing: \"Test cases are numbered in the specs (TC-01-E2E-03) and the code references those ids.\"",
+      "file": "apps/api/test/client-participants.spec.ts",
+      "symbol": "refuses to reassign a request addressed to a client contact",
+      "line": 1398,
+      "claim": "Carried unchanged from review 2. The integration test covering the reassign refusal carries no TC id, because the behaviour it covers is numbered nowhere in the spec. Same root as N1.",
+      "witness": {
+        "kind": "test",
+        "detail": "apps/api/test/client-participants.spec.ts:1398 has no TC-03-INT-nn marker, unlike every other `it` in the file.",
+        "source": "apps/api/test/client-participants.spec.ts:1395-1398"
+      },
+      "suggestedFix": "Number the case in the spec when the reassign rule is written there, and reference the id here."
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "reassignRequest",
+      "line": 1042,
+      "claim": "Carried unchanged from review 2, and re-read at HEAD. The addressee-kind check runs before validateRequestAssignee, so a malformed reassign body against a client-addressed request answers 409 invalidTransition where spec 01 gives a malformed addressee 400 assigneeInvalid. Only reachable on the row the route refuses either way.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST /requests/{clientAddressedId}/reassign with `{}` as an admin gives 409 conflict/invalidTransition; the same body on a member-addressed request gives 400 validation_error/assigneeInvalid.",
+        "source": "apps/api/src/requests/requests.service.ts:1042-1055"
+      },
+      "suggestedFix": "If the refusal stays, validate the body first so the two answers keep the order spec 01 documents, or state the ordering alongside the refusal."
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "front matter api:",
+      "line": 8,
+      "claim": "Carried from review 2 (its N12) and re-checked at HEAD — still open. The front matter lists six api entries and none is GET /api/organizations/{orgId}/request-contacts, while the contracts Routes table gives it a row. Nothing compares the two, so no gate catches it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/03-client-participants.md:8-14 lists six api entries, none of them the request-contacts route; the contracts Routes table has a row for it.",
+        "source": "specs/requests/03-client-participants.md:8 against specs/requests/03-client-participants.contracts.md:42"
+      },
+      "suggestedFix": "Add \"GET /api/organizations/{orgId}/request-contacts\" to the api: list."
+    },
+    {
+      "stage": "review",
+      "id": "N10",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "Acceptance Criteria",
+      "line": 419,
+      "claim": "Carried from review 2 (its N13) and re-checked at HEAD — still open. The AC table ends at AC-17 and the cases file's observer table ends at AC-17, so REQ-03-043 — the rule that a `user` can actually fill the client addressee kind, which is what review 1's F2 was about — is in no acceptance set.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-03-INT-36 exists in the cases file but appears in neither the AC table (specs/requests/03-client-participants.md:419-420 is its last pair) nor the observer table.",
+        "source": "specs/requests/03-client-participants.md:419"
+      },
+      "suggestedFix": "Add AC-18 — a requester is offered exactly the client contacts of the projects they are assigned to, and the picker's route answers on create-request — observed by TC-03-INT-36."
+    },
+    {
+      "stage": "review",
+      "id": "N11",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Record what you learn: \"Never delete a superseded record\"",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "Known Gaps",
+      "line": 394,
+      "claim": "Carried from review 2 (its N14) and re-checked at HEAD — still open. `grep -rn \"client shell\" specs/` returns nothing, so the deleted Known Gaps row about the client shell is recorded nowhere in the spec tree. Content leaving a spec under line-budget pressure is invisible to every gate.",
+      "witness": {
+        "kind": "rule",
+        "detail": "grep -rn \"client shell\" specs/ returns no match at HEAD; git show 30401b4 -- specs/requests/03-client-participants.md removes the row.",
+        "source": "specs/requests/03-client-participants.md:394"
+      },
+      "suggestedFix": "Restore the gap row; if the budget refuses it, raise the budget rather than the deletion, and make spec-lint name the section it is forcing out."
+    },
+    {
+      "stage": "review",
+      "id": "N12",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "role migration paragraph",
+      "line": 1,
+      "claim": "Carried from review 2 (its N16). The paragraph justifying that no role migration is needed argues from the capability helper answering false for a role its matrix has no row for, but the helper is never handed the raw value — requests.service.ts normalizes `member` to `user` first. The conclusion (no migration needed) holds; the reason given for it does not describe the code.",
+      "witness": {
+        "kind": "rule",
+        "detail": "requestCaller normalizes the role before `can` is called, so `member` is never the argument the paragraph reasons about.",
+        "source": "specs/requests/03-client-participants.contracts.md — the role-migration paragraph, against apps/api/src/requests/requests.service.ts requestCaller"
+      },
+      "suggestedFix": "Restate the reason as the normalization that actually runs, so a reader checking the claim against the code finds it."
+    },
+    {
+      "stage": "review",
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Implementing specs: \"Merge the `build/*` branch when the run is over.\"",
+      "file": "scripts/usage-recover.mjs",
+      "symbol": "(the aside)",
+      "line": 1,
+      "claim": "The five machinery files are off the run branch and onto build/board-and-records, which is the correct fix and closes review-2 F1 and N10. Two consequences to hold on to. First, the working tree is clean for scripts/ rather than carrying the change uncommitted, so the rest of this run — QA, and the run report — executes base machinery; that is the tested machinery, so nothing is at risk, but this run's report will not recover what the fuse-killed implement attempt spent. Second, review-2's N9 (ship.mjs commitRecord attempt number off by one), N11 (run-report tokPerSec mixing populations, and `unaccounted` double-counting recovered steps) and N15 (spec-lint's unused `guards`/`matrix` parsers, where a conditional cell parses as granted to nobody) are no longer findings against this diff but are still true of build/board-and-records. They should be judged before that branch merges, not dropped with the aside.",
+      "witness": {
+        "kind": "rule",
+        "detail": "git diff de9c5f9..HEAD -- scripts/ is empty; git diff de9c5f9..build/board-and-records -- scripts/ shows the six files, so the work exists only on the build branch and has not been reviewed under any criterion.",
+        "source": "CLAUDE.md — Implementing specs"
+      },
+      "suggestedFix": "Merge build/board-and-records when this run is over, and carry N9/N11/N15 to whatever reviews it."
     }
   ],
   "preflight": {
@@ -944,6 +1181,17 @@
       "headAtInit": {
         "from": "ddcab5d554a48d75a99be07f2fe492362d338920",
         "to": "ddcab5d554a48d75a99be07f2fe492362d338920"
+      }
+    },
+    {
+      "at": "2026-09-03T18:30:17.212Z",
+      "stage": "review",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": "The review's only blocker was scripts/refine-read.mjs, machinery that should never have been on this branch. Those commits are moved to build/board-and-records and the diff now carries the spec's work alone. The defect the reviewer found is real and is fixed there.",
+      "headAtInit": {
+        "from": "ddcab5d554a48d75a99be07f2fe492362d338920",
+        "to": "e0ddf9f8cbf112fe33f3ffa2d0c66e66124bf247"
       }
     }
   ]

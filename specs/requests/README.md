@@ -307,3 +307,15 @@ asserts every read path is correct with nothing ever delivered.
 | Spec 03's verification route is walked in two parts | Its unreachable states depend on a principal that does not exist yet. Everything independent of it was walked and is recorded as observed | Walking the remainder at the start of 03's implementation, on a branch with 02 merged |
 | Login distinguishes "no such active principal" from "wrong password" by message | **Pre-existing**, found while probing and not introduced here | An amendment to user-management spec 02 making the two refusals identical |
 | A person who is both staff and a client contact needs two addresses | Both membership tables hold `accountId @unique`, the same single-org constraint staff live under | The spec that makes them non-unique and adds a principal switcher — also what multi-org would need |
+
+## Open bug investigations
+
+Follow-ups this area owes, per [specs/bugs](../bugs/README.md).
+
+- **[BUG-007](../bugs/BUG-007-request-topic-name-error-drawn-twice.md)** — `SPEC-GAP`. The
+  Add topic modal hands the name error to the `@ds` `Input`, which renders it, and then draws
+  it a second time beside the control to carry the `request-topic-error-name` id the spec
+  names. Spec 02's UI Description rows state that the error is *present*, never that it is
+  drawn once, so the E2E case selects the tagged node and passes over the duplicate. The
+  report proposes the missing UI Description row and a DS-gaps row for the `errorId` the
+  design system does not offer; both go into spec 02 before the fix.

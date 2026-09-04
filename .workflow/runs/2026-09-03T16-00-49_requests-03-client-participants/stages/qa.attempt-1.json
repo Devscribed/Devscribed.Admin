@@ -1,0 +1,127 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1098,
+      "failed": 0,
+      "ms": 1270
+    },
+    "int": {
+      "passed": 153,
+      "failed": 0,
+      "ms": 108000,
+      "files": [
+        "test/client-participants.spec.ts",
+        "test/request-notifications.spec.ts",
+        "test/requests.spec.ts",
+        "test/invitations.spec.ts",
+        "test/login.spec.ts",
+        "test/session-revocation.spec.ts",
+        "test/clients.spec.ts",
+        "test/members.spec.ts",
+        "test/member-detail.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 37,
+      "failed": 0,
+      "flaky": 1,
+      "ms": 91500,
+      "files": [
+        "tests/client-participants.spec.ts",
+        "tests/regressions.spec.ts",
+        "tests/clients.spec.ts",
+        "tests/requests.spec.ts",
+        "tests/requests-page.spec.ts",
+        "tests/app-shell.spec.ts",
+        "tests/org-scope.spec.ts"
+      ]
+    }
+  },
+  "flaky": [
+    {
+      "test": "10 — Organization Requests Page > manager reviews requests from the Requests page",
+      "file": "e2e/tests/requests-page.spec.ts:115",
+      "detail": "Failed once on a status-badge race ('Approved' vs 'Pending' read before the toast-driven refetch settled), passed on Playwright's built-in CI retry #1. Unrelated to this diff — the failing assertion is spec-09/10 territory the change does not touch."
+    }
+  ],
+  "findings": [],
+  "walkthrough": {
+    "spec": "e2e/tests/qa-look.spec.ts (copied from template, deleted after the pass)",
+    "scenarios": [
+      "Admin invites a client contact on the client detail screen, the contact accepts and signs in, lands on /requests, sees only the Requests nav entry (sidebar-requests-link) and no nav-members, no requests-new-btn.",
+      "Client contact opens the request addressed to them: request-detail-answer-btn and request-detail-decline-btn are drawn, request-detail-grant-btn is absent.",
+      "Client contact navigates directly to /org/{orgId}/members: renders the app's 404 ('This page could not be found.'), confirming REQ-03-019/AC-3 from the browser side, not just the API.",
+      "Admin (contact manager) opens the client detail screen: Contacts section lists the new contact, active, with Remove control — matches the documented known gap that the email is visible to a manager holding view-clients."
+    ],
+    "result": "No defect observed. All four screenshots under e2e/.qa-look (deleted after the pass, per the skill's cleanup step) matched the expected state once each screenshot was taken after its guarding assertion rather than immediately on navigation."
+  },
+  "acceptanceCriteria": {
+    "AC-1": "pass — TC-03-INT-03, TC-03-E2E-01 exist and pass; also confirmed by hand.",
+    "AC-2": "pass — TC-03-INT-08 exists and passes.",
+    "AC-3": "pass — TC-03-INT-13, TC-03-E2E-02 exist and pass; also confirmed by hand (members route 404s for a contact).",
+    "AC-4": "pass — TC-03-INT-15/16/17 exist and pass.",
+    "AC-5": "pass — TC-03-INT-18 exists and passes.",
+    "AC-6": "pass — TC-03-INT-20/21/22 exist and pass; also confirmed by hand (answer/decline drawn, grant absent).",
+    "AC-7": "pass — TC-03-INT-19/23 exist and pass.",
+    "AC-8": "pass — TC-03-INT-10, TC-03-E2E-03 exist and pass.",
+    "AC-9": "pass — TC-03-INT-24/25 exist and pass.",
+    "AC-10": "pass — TC-03-INT-25 exists and passes.",
+    "AC-11": "pass — TC-03-INT-26/27 exist and pass.",
+    "AC-12": "pass — TC-03-INT-28 exists and passes.",
+    "AC-13": "pass — TC-03-INT-29 exists and passes.",
+    "AC-14": "pass — TC-03-INT-14 exists and passes.",
+    "AC-15": "pass — TC-03-INT-06/07 exist and pass.",
+    "AC-16": "pass — TC-03-INT-11 exists and passes.",
+    "AC-17": "pass — TC-03-INT-30 exists and passes."
+  },
+  "testCaseCoverage": {
+    "declared": [
+      "TC-03-UNIT-01",
+      "TC-03-UNIT-02",
+      "TC-03-INT-01",
+      "TC-03-INT-02",
+      "TC-03-INT-03",
+      "TC-03-INT-04",
+      "TC-03-INT-05",
+      "TC-03-INT-06",
+      "TC-03-INT-07",
+      "TC-03-INT-08",
+      "TC-03-INT-09",
+      "TC-03-INT-10",
+      "TC-03-INT-11",
+      "TC-03-INT-12",
+      "TC-03-INT-13",
+      "TC-03-INT-14",
+      "TC-03-INT-15",
+      "TC-03-INT-16",
+      "TC-03-INT-17",
+      "TC-03-INT-18",
+      "TC-03-INT-19",
+      "TC-03-INT-20",
+      "TC-03-INT-21",
+      "TC-03-INT-22",
+      "TC-03-INT-23",
+      "TC-03-INT-24",
+      "TC-03-INT-25",
+      "TC-03-INT-26",
+      "TC-03-INT-27",
+      "TC-03-INT-28",
+      "TC-03-INT-29",
+      "TC-03-INT-30",
+      "TC-03-INT-31",
+      "TC-03-INT-32",
+      "TC-03-INT-33",
+      "TC-03-INT-34",
+      "TC-03-INT-35",
+      "TC-03-INT-36",
+      "TC-03-E2E-01",
+      "TC-03-E2E-02",
+      "TC-03-E2E-03",
+      "TC-03-E2E-04",
+      "TC-03-E2E-05"
+    ],
+    "missing": [],
+    "note": "Every declared id is present in the suite (packages/validation/src/roles.test.ts for UNIT, apps/api/test/client-participants.spec.ts + apps/api/test/request-notifications.spec.ts for INT, e2e/tests/client-participants.spec.ts for E2E) and touches the route/testid its spec entry names."
+  }
+}

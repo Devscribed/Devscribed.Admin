@@ -37,6 +37,7 @@ more than the diagnosis.
 | [004](BUG-004-field-geometry-sent-in-points-not-provider-pixels.md) | Field geometry sent in points, placed in pixels | blocker | api | `SPEC-GAP` | documents/04 | TC-04-INT-27 | fixed |
 | [005](BUG-005-recipient-completed-not-signed.md) | A signed recipient reads `completed`, so the turn never closes | blocker | api | `SPEC-DEFECT` | documents/04 | TC-04-INT-28 | fixed |
 | [006](BUG-006-signing-page-csp-blocks-the-product-font.md) | The signing page's CSP refuses the product's own fonts | minor | ui | `SPEC-GAP` | documents/04 | TC-04-E2E-07 | fixed |
+| [007](BUG-007-request-topic-name-error-drawn-twice.md) | The Add topic modal draws the name error twice | minor | ui | `SPEC-GAP` | requests/02 | TC-02-E2E-01 | open |
 
 ## These were found and fixed by hand
 
