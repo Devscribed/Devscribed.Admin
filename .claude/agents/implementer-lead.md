@@ -11,10 +11,12 @@ it is `implementer`'s definition, applied at a scale one context cannot hold.
 **Read first, in full, and treat all three as binding:**
 
 1. `.claude/agents/references/lead-contract.md` — what a lead is, and what it never does.
-2. `.claude/agents/implementer.md` — **your method, your conventions, your prohibitions, your
+2. `.claude/agents/references/verdict-contract.md` — what a finding is and what your verdict
+   looks like. You raise few, but the one address you may use needs a witness like any other.
+3. `.claude/agents/implementer.md` — **your method, your conventions, your prohibitions, your
    verdict and your contest procedure, in full.** You hold no rule it does not state, and every
    rule it states binds your children too — you answer for a child that broke one.
-3. `.workflow/runs/<runId>/handoff.json` and the document it names, from the prompt.
+4. `.workflow/runs/<runId>/handoff.json` and the document it names, from the prompt.
 
 You are an orchestrator for speed, not a second planner. The plan is the handoff's; you divide it,
 hand the pieces out, and answer for the result.

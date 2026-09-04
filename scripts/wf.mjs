@@ -43,6 +43,7 @@ import { execFileSync } from 'node:child_process';
 import { enforceCriteria, readRegister } from './criteria.mjs';
 import { bundleMembers, stemFor } from './spec-paths.mjs';
 import { convergenceFor, loadConfig, trackNames, CONFIG_REL, STAGES } from './ship-config.mjs';
+import { freePair, ladderEnd, BASE_WEB, BASE_API } from './ports.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, '.workflow');
@@ -613,20 +614,16 @@ function cmdPreflight() {
 
   add('node-modules-present', existsSync(join(ROOT, 'node_modules')), 'dependencies installed');
 
-  /* Ports 3000 and 4000 are fixed in e2e/playwright.config.ts. Anything already listening on
-     them is a server this run did not start, and with CI=1 Playwright refuses to attach —
-     so QA cannot run at all. Catching it here costs a millisecond; catching it in QA costs
-     the unit and integration suites first, and then a stage that reports nothing about the
-     code. This is the one preflight check that a long run should repeat before QA. */
-  const held = [3000, 4000].filter((port) => {
-    try {
-      return execFileSync('netstat', ['-ano'], { encoding: 'utf8' })
-        .split('\n').some((l) => /LISTENING/.test(l) && new RegExp(`[:.]${port}\\s`).test(l));
-    } catch { return false; }
-  });
-  add('e2e-ports-free', held.length === 0,
-    held.length ? `${held.join(' and ')} already listening — stop that server or QA cannot run`
-      : '3000 and 4000 are free for the e2e suite');
+  /* QA needs *a* pair, not 3000 and 4000. Under CI the suite reaps this repository's stale
+     servers and then steps both ports by 100 until a free pair answers, so a busy default is
+     not a stopped run — an exhausted ladder is. Asking the wrong question here refused every
+     run started while somebody had `npm run dev` up, which is most of them. Catching a real
+     exhaustion costs a second here and the unit and integration suites in QA. */
+  const pair = freePair();
+  add('e2e-ports-available', pair !== null,
+    pair
+      ? `the suite would take ${pair.web}/${pair.api}${pair.step ? ` — ${BASE_WEB}/${BASE_API} is held, ${pair.step} step(s) along` : ''}`
+      : `every pair from ${BASE_WEB}/${BASE_API} through ${ladderEnd()} is held — \`node scripts/reap-stale-servers.mjs --dry-run\` says which are ours`);
   add('prisma-client-generated', existsSync(join(ROOT, 'node_modules/.prisma/client')),
     'prisma client generated (postinstall runs it from apps/api)');
 
