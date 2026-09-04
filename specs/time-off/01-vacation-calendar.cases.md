@@ -10,7 +10,7 @@ Every cell is what happened.
 | Step | Command | Observed |
 |---|---|---|
 | Database | `docker compose ps` | The Postgres container was up and healthy. |
-| Migrate + start the pair | `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<probe>.spec.ts --workers=1 --retries=0` from `e2e/` | `globalSetup` migrated the E2E database it chose and reported `30 migrations found`, `No pending migrations to apply`. Nest mapped its routes and Next reported ready; both servers answered on the pair the harness claimed. |
+| Migrate + start the pair | `CI=1 npx playwright test tests/<probe>.spec.ts --workers=1 --retries=0` from `e2e/`, which claims its own port pair | `globalSetup` migrated the E2E database it chose and reported `30 migrations found`, `No pending migrations to apply`. Nest mapped its routes and Next reported ready; both servers answered on the pair the harness claimed. |
 | The address this spec claims | `GET /api/organizations/{orgId}/time-off/calendar?startDate=2026-09-01&endDate=2026-09-30` | **404** — nothing answers there today, so the route is free. |
 
 ### Reaching the states the cases need
@@ -58,8 +58,7 @@ One throwaway Playwright spec, `e2e/tests/zz-probe-vacation-calendar.spec.ts`, b
 above, called the endpoints, and reached both screens the feature touches:
 
 ```
-cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 \
-  npx playwright test tests/zz-probe-vacation-calendar.spec.ts --workers=1 --retries=0
+cd e2e && CI=1 npx playwright test tests/zz-probe-vacation-calendar.spec.ts --workers=1 --retries=0
 ```
 
 It failed three times before it passed, and each failure is a row above: `400` on the `member`
@@ -293,15 +292,20 @@ are kept.
 ### TC-01-INT-25
 
 - **Level:** Integration
-- **Covers:** REQ-01-042, REQ-01-043
+- **Covers:** REQ-01-042, REQ-01-043, REQ-01-051
 - **Asserts:** `PUT /api/organizations/{orgId}/members/{memberId}` → 200;
+  `PUT /api/organizations/{orgId}/members/{memberId}` → 400
+  HOLIDAY_MESSAGES.countryCodeInvalid;
   `GET /api/organizations/{orgId}/time-off/calendar` → 200
 - **Steps:** With a `US` holiday and a `PL` holiday in the window and the organization country set
   to `PL`, state `US` on a member as a `manager`, read the calendar, then submit an empty country
-  for the same member and read again.
+  for the same member and read again. Finally submit `pl` for that member.
 - **Expected Result:** After the first write the member carries the `US` holiday and not the `PL`
   one; after the second their `Membership.countryCode` is `null` and they carry the `PL` one, by
-  the organization fallback. The member's role and job title are unchanged by both writes.
+  the organization fallback. The member's role and job title are unchanged by every write. The
+  third write is refused with `400` carrying `countryCodeInvalid` — the status this route already
+  refuses an invalid role and an invalid job title with, not the `422` the organization country
+  write answers — and the stored country stays `null`.
 
 ### TC-01-INT-26
 
@@ -327,6 +331,18 @@ are kept.
   The `user` and the `viewer` receive the identical body, field included: the read is gated by no
   capability and the field is not conditional on one. What they do not get is the control, which is
   a rendering decision and is asserted by TC-01-E2E-08.
+
+### TC-01-INT-28
+
+- **Level:** Integration
+- **Covers:** REQ-01-048
+- **Asserts:** `GET /api/organizations/{orgId}/members/{memberId}` → 200
+- **Steps:** State `US` on a member who also carries a job title, remove them, then restore them.
+  Read their detail, and read the calendar over a window holding a `US` holiday.
+- **Expected Result:** `countryCode` is `"US"` on the detail read and the member carries the `US`
+  holiday again — the restore clears the job title beside it and leaves the country alone, so a
+  returning member is paid the holidays they were paid before they left rather than the
+  organization's until somebody re-states them.
 
 ### TC-01-INT-16
 
@@ -364,11 +380,16 @@ are kept.
 - **Level:** Integration
 - **Covers:** REQ-01-018
 - **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 200
-- **Steps:** At an instant that is 2026-09-05 in `Pacific/Auckland` and still 2026-09-04 in
-  `America/Los_Angeles`, read the calendar as a caller in each zone, and as one whose
-  `Account.timezone` is unset.
-- **Expected Result:** `range.today` is `2026-09-05`, `2026-09-04`, and the UTC day respectively.
-  `days[]` is identical in all three — only the marker moves (Edge case 18).
+- **Steps:** At one instant of the run, read the same window three times: as a caller whose
+  `Account.timezone` is `Pacific/Kiritimati`, as one whose timezone is `Pacific/Niue`, and as an
+  invited member whose timezone is still empty. The case computes each zone's calendar date for
+  that instant itself.
+- **Expected Result:** `range.today` is the caller's own calendar date for that instant in the
+  first two reads and the UTC date in the third. No date is written into the case as a literal —
+  the suite runs on whatever day it runs. The two zones are 25 hours apart, so their answers
+  never agree, whichever hour the run starts, and a server that ignored the caller's timezone
+  would fail on at least one of the three. `days[]` is identical in all three — only the marker
+  moves (Edge case 18).
 
 ### TC-01-INT-20
 
@@ -444,15 +465,16 @@ are kept.
 ### TC-01-E2E-03
 
 - **Level:** E2E
-- **Covers:** REQ-01-008, REQ-01-019
+- **Covers:** REQ-01-008, REQ-01-019, REQ-01-049
 - **Steps:** Eight members. Open the calendar, click `calendar-scope-people`, pick four of them in
   `calendar-people-picker`, then click `calendar-window-2weeks`, then `calendar-next`, then
   `calendar-prev` twice, then `calendar-today`, then `calendar-window-week`.
 - **Expected Result:** Exactly four rows throughout. The grid holds fourteen day-header cells
   under the fortnight preset and seven under the week preset, starting on the caller's
-  `firstDayOfWeek`. `calendar-range-label` names the window at each step, `calendar-next` and
-  `calendar-prev` move it by one whole window, and `calendar-today` returns it to the window
-  containing today.
+  `firstDayOfWeek`. `calendar-range-label` names the window at each step; the range after
+  `calendar-next` is the fortnight after the one before it and the range after each
+  `calendar-prev` the fortnight before, and `calendar-today` lands on the window holding today
+  (REQ-01-049).
 - **Selectors:** `calendar-scope-people`, `calendar-people-picker`, `calendar-window-2weeks`,
   `calendar-window-week`, `calendar-next`, `calendar-prev`, `calendar-today`,
   `calendar-range-label`, `calendar-member-row-{membershipId}` ×4

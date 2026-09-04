@@ -53,8 +53,6 @@ Beyond the request, this spec adds:
 - **One country-resolution helper, adopted by every call site that resolves a member's country.**
   Holidays `scope=mine` and both reports read `Account.phoneCountryCode` today, and this spec
   drops that source everywhere rather than ranking against it — one question needs one answer.
-  It moves what Amounts Owed pays in both directions, and pays fewer holidays than today until
-  somebody states a country — see Blast Radius.
 - **The `ViewTimeOffCalendar` capability.** Neither country write adds one: `ManageHolidays` and
   `edit-detail` already grant exactly the admin and manager who set them.
 
@@ -73,9 +71,13 @@ Blast radius and backward compatibility for this spec are in [README.md](README.
 
 Capability checks run against `normalizeRole()` (`packages/validation/src/roles.ts`), so they work
 on today's `admin` / `member` column and survive the role-enum migration untouched. `edit-detail`
-belongs to the lowercase-dashed `MemberCapability` union that `can(role, …)` reads; every other
-row belongs to `Capability`, which `RequireCapability` decorators name. Both unions ship, both
-grant admin and manager here, and only `Capability` gains a member from this spec.
+belongs only to the lowercase-dashed `MemberCapability` union that `can(role, …)` reads; the two
+holiday rows are spelled in it and in `Capability`, which `RequireCapability` decorators name.
+
+**Decided:** this spec's capability ships in both unions — `ViewTimeOffCalendar` and its twin
+`view-time-off-calendar`, granted to admin, manager and user in each — and the calendar's gate
+reads the twin through `can(role, 'view-time-off-calendar')`. Rejected: `Capability` alone, which
+would spell this gate differently from the `view-holidays` gate on the page beside it.
 
 | Capability | admin | manager | user | viewer |
 |---|---|---|---|---|
@@ -139,7 +141,9 @@ IF `scope` is `teams` or `people` and its selection list is empty, THEN THE SYST
 `422` carrying the message for that scope.
 
 **Decided:** an empty selection is ambiguous between "nothing ticked yet" and "everyone", and an
-empty grid would teach the reader their team has nobody in it.
+empty grid would teach the reader their team has nobody in it. The sentinel `none` of REQ-01-007
+is a tick like any other: a `projectIds` of `none` alone is a selection, not an empty one, and is
+answered rather than refused.
 
 #### REQ-01-041 — an unknown scope is refused
 
@@ -164,8 +168,6 @@ THE SYSTEM SHALL order rows by display name, case-insensitively ascending.
 IF a scope resolves to more rows than the row cap the contracts declare, THEN THE SYSTEM SHALL
 answer `422` carrying `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers`.
 
-**Decided:** a cap, not pagination — a wallchart paginated by member is two half-charts.
-
 ### Which days the grid draws
 
 #### REQ-01-014 — the range is required
@@ -183,9 +185,6 @@ IF `endDate` is earlier than `startDate`, THEN THE SYSTEM SHALL answer `422` car
 IF the inclusive range exceeds 92 days, THEN THE SYSTEM SHALL answer `422` carrying
 `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide`.
 
-**Decided:** a quarter — the widest window a per-day column could later be added for without
-changing this contract, and far tighter than reports allow: a cell per member per day.
-
 #### REQ-01-017 — days are calendar days
 
 THE SYSTEM SHALL compare `VacationRequest.startDate`, `VacationRequest.endDate` and `Holiday.date`
@@ -196,13 +195,20 @@ silently truncated — which drops the boundary day for anybody east or west of 
 
 #### REQ-01-018 — today is the caller's today
 
-THE SYSTEM SHALL resolve the day marked as today from the caller's `Account.timezone`.
+THE SYSTEM SHALL resolve the day marked as today from the caller's `Account.timezone`, and from
+UTC whenever that value is absent, empty or not a timezone the server recognizes.
 
 #### REQ-01-019 — the window presets
 
 WHERE the screen offers the `Week`, `2 weeks` and `Month` presets, THE SYSTEM SHALL compute each
 preset's range from the caller's `Account.firstDayOfWeek`, except `Month`, which runs from the
 first to the last day of the displayed calendar month.
+
+#### REQ-01-049 — moving the window
+
+WHEN the reader moves the range back, forward, or to today, THE SYSTEM SHALL move it to the range
+that control names — one whole window earlier, one whole window later, or the window holding the
+caller's today — and name the new range in the range label.
 
 ### The absence bands
 
@@ -215,9 +221,6 @@ THE SYSTEM SHALL return an absence band for every `VacationRequest` whose status
 
 THE SYSTEM SHALL return no band for a `VacationRequest` whose status is `rejected` or `cancelled`.
 
-**Decided:** a rejected request is not an absence, and drawing it would put days on the chart that
-nobody is taking.
-
 #### REQ-01-022 — bands are clipped, not dropped
 
 WHEN an absence starts before the window or ends after it, THE SYSTEM SHALL return the band with
@@ -227,8 +230,6 @@ its true `startDate` and `endDate` and a flag on each edge that falls outside th
 
 THE SYSTEM SHALL draw a band as one unbroken run across every day from its start to its end,
 including weekends and holidays inside it.
-
-**Decided:** breaking the band at a weekend would read as two absences.
 
 #### REQ-01-024 — the band's day count is the frozen one
 
@@ -308,6 +309,15 @@ WHEN a caller holding `edit-detail` submits an empty country for a member, THE S
 **Decided:** `null` is not a member without holidays — REQ-01-026 reads the organization's
 country for exactly this row.
 
+#### REQ-01-048 — a restored membership keeps its country
+
+WHEN a `removed` membership becomes `active` again, THE SYSTEM SHALL leave
+`Membership.countryCode` at the value stored on it.
+
+**Decided:** kept, though the restore clears the job title beside it. A country is a payroll fact
+about the person, not about the posting they left. Rejected: clearing it, which pays a returning
+member global holidays only until somebody notices.
+
 #### REQ-01-044 — the member write is refused to everyone else
 
 IF a caller without `edit-detail` submits a member country, THEN THE SYSTEM SHALL answer `403`
@@ -356,10 +366,19 @@ IF a caller without `ManageHolidays` submits a country, THEN THE SYSTEM SHALL an
 **Decided:** `ManageHolidays` rather than a capability of its own, a distinction no grant expresses
 and no case could reach. 404 is what it answers on the holiday create and edit beside it.
 
-#### REQ-01-036 — an invalid country is refused
+#### REQ-01-036 — an invalid organization country is refused
 
 IF the submitted country is neither empty nor a valid alpha-2 value, THEN THE SYSTEM SHALL answer
-`422` carrying `HOLIDAY_MESSAGES.countryCodeInvalid`.
+`422` carrying `HOLIDAY_MESSAGES.countryCodeInvalid` on the organization country write.
+
+#### REQ-01-051 — an invalid member country is refused
+
+IF the submitted country is neither empty nor a valid alpha-2 value, THEN THE SYSTEM SHALL answer
+`400` carrying `HOLIDAY_MESSAGES.countryCodeInvalid` on the member write.
+
+**Decided:** the member write keeps the `400` its role and its job title are already refused with,
+because one form that refuses one of its fields in a second status is a client branching per
+field. Rejected: `422` on both, which buys the new route's neighbour a second validation shape.
 
 ### States
 

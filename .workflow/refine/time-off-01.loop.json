@@ -10,7 +10,7 @@
       "round": 1,
       "startedAt": "2026-09-04T15:05:07.771Z",
       "head": "f410e4ccf42fa0ed87eaa040e0d25d56a2aa4d18",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -83,7 +83,21 @@
           "S-57": "clear",
           "S-58": "note"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 4,
+      "keys": [
+        "spec/contradiction:Roles & Permission Matrix against the contracts' Shared code table",
+        "spec/contradiction:Screens / the absence band",
+        "spec/contradiction:REQ-01-007 — the unassigned bucket",
+        "spec/untestable-case:TC-01-INT-19"
+      ],
+      "fix": {
+        "fixed": 6,
+        "decided": 5,
+        "left": 0
+      },
+      "endedAt": "2026-09-04T15:29:21.868Z"
     }
   ],
   "status": "running",

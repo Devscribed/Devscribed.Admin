@@ -7,23 +7,25 @@ here by id.
 
 | Route | Guards | Success | Errors |
 |---|---|---|---|
-| `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `ViewTimeOffCalendar` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
+| `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `can(role, 'view-time-off-calendar')` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
 | `GET /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ViewHolidays` checked in the service | `200` | `404` (no `ViewHolidays`, REQ-01-046; wrong organization) |
 | `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
 | `GET /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; no capability gates this read — it answers every role (REQ-01-045) | `200` | `403` `MEMBER_MESSAGES.viewForbidden` (the caller is no longer an active member; shipped, unchanged) · `404` (wrong organization; member not found) |
-| `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) · `404` (wrong organization) |
+| `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `400` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-051) · `404` (wrong organization) |
 
 No route here carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
 the calendar must answer `404` when the caller lacks its capability, so the check runs in the
-service instead — the shape `HolidaysService.deleteHoliday` already uses for
-`DELETE /api/organizations/{orgId}/holidays/{holidayId}`.
+service instead — the shape `HolidaysService.requireViewCapability` and `requireManageCapability`
+already use, each answering a bare `NotFoundException`.
 
 **Decided:** 404 for the calendar and for both halves of the organization country. The calendar's
 refusal must be byte-identical to a wrong-organization read (REQ-01-002, REQ-01-039), and
 `view-holidays` and `manage-holidays` already answer 404 on the holiday list, create and edit the
 country control sits beside. **The member country is the exception and keeps its route's existing 403** —
 `PUT .../members/{memberId}` ships that refusal today for role and job title, and one route does
-not get two refusal shapes because a field was added to it.
+not get two refusal shapes because a field was added to it. Its field failures are `400` today —
+an invalid role and an invalid job title both are — and `countryCode` joins them at `400`
+(REQ-01-051) rather than at the `422` the organization country write answers (REQ-01-036).
 
 **The member rows are existing routes.** The read gains `countryCode` in its projection and the
 write gains it in its body; neither changes in any other way — same guards, same statuses, same
@@ -46,8 +48,8 @@ literal `none`) · `memberIds[]` (required when `scope=people`).
     "timezone": "Europe/Warsaw"
   },
   "days": [
-    { "date": "2026-09-01", "weekday": 2, "isWeekend": false, "isoWeek": 36 },
-    { "date": "2026-09-05", "weekday": 6, "isWeekend": true, "isoWeek": 36 }
+    { "date": "2026-09-01", "isWeekend": false, "isoWeek": 36 },
+    { "date": "2026-09-05", "isWeekend": true, "isoWeek": 36 }
   ],
   "holidays": [
     {
@@ -89,6 +91,9 @@ literal `none`) · `memberIds[]` (required when `scope=people`).
   "meta": { "scope": "all", "memberCount": 8 }
 }
 ```
+
+`meta.memberCount` is the number of rows in `members[]` and nothing else; a refused read carries
+no body to count (REQ-01-013).
 
 `holidayIds` is the resolution's output, not its input: the server applies REQ-01-026 through
 REQ-01-029 and emits the holidays that reached each member, so the rule has one implementation.
@@ -185,7 +190,8 @@ rollback safe without a database rollback.
 | `resolveMemberHolidayCountry(membershipCountry, organizationCountry)` | `packages/validation/src/reports.ts` | The chain of REQ-01-026, REQ-01-027 and REQ-01-040. Returns the membership's country when it normalizes, else the organization's when it does, else `null`. Both arguments are required and neither has a default, so a caller that forgets the organization gets `null` rather than a silently wrong country. |
 | `isHolidayApplicableToMember(holiday, member)` | `packages/validation/src/reports.ts` | Already ships and is unchanged. It answers REQ-01-028 and REQ-01-029 given a resolved country. |
 | `TIME_OFF_CALENDAR_MESSAGES` | a new module beside `packages/validation/src/holiday-messages.ts` | New message export, matching the one-file-per-area shape that module uses. |
-| `ViewTimeOffCalendar` | `packages/validation/src/roles.ts` | One new member of `Capability`, and its lowercase-dashed twin `view-time-off-calendar` in `MemberCapability`, matching every capability that came before it. Granted to admin, manager and user. Neither country write adds a capability: `ManageHolidays` and `edit-detail` already grant exactly the admin and manager who set them. |
+| `ViewTimeOffCalendar` | `packages/validation/src/roles.ts` | One new member of `Capability`, granted to admin, manager and user in `ROLE_CAPABILITIES`. Neither country write adds a capability: `ManageHolidays` and `edit-detail` already grant exactly the admin and manager who set them. |
+| `view-time-off-calendar` | `packages/validation/src/index.ts` | The lowercase-dashed twin in `MemberCapability`, and the spelling the calendar's own gate reads through `can(role, …)`. `CAPABILITY_MATRIX` is a boolean per role per capability, so the twin is written into all four role rows: `true` for admin, manager and user, `false` for viewer. |
 
 **The call sites that must adopt `resolveMemberHolidayCountry`.** Each resolves a member's country
 from `Account.phoneCountryCode` today and must read the stated columns instead, or REQ-01-026 is
@@ -219,7 +225,9 @@ it, and nothing about holidays consults it again.
 
 The client validates 1–4, 6, 7 and 9 to keep the controls honest before a request is spent; the
 server re-validates all nine, and 5 and 8 exist only on the server because neither is reachable
-from a control the screen draws.
+from a control the screen draws. Rule 9 carries one message and two statuses: `422` on the
+organization country write (REQ-01-036), `400` on the member write (REQ-01-051), which is the
+status that route already refuses an invalid role and an invalid job title with.
 
 **Decided:** rule 9 refuses `pl` rather than upcasing it, which is what the holiday rows' country
 validator already does and what keeps the stored value the one their uniqueness index compares.
@@ -283,6 +291,10 @@ whose three states are the three scopes. Structure, top to bottom:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+`calendar-teams-picker` lists an **Unassigned** entry above the projects, which submits the
+sentinel `projectIds=none` (REQ-01-007). It ticks and unticks like a project and may be the only
+entry ticked — `none` alone is a selection, so REQ-01-009 does not refuse it.
+
 The filter bar is the design system's `ReportControls`
 (`packages/ds/src/components/reports/ReportControls.tsx`) in its `scope` + children shape — the
 same `<fieldset>` and clipped legend every report screen carries, so the row of controls is
@@ -290,7 +302,8 @@ announced as one group rather than as loose inputs. The range navigation sits in
 right slot, where the Holidays page puts `+ Add holiday`.
 
 The member column is `position: sticky; left: 0` so the names survive a horizontal scroll; it is
-264px, and the day columns divide what is left.
+264px — a width no token carries, recorded in DS gaps below — and the day columns divide what is
+left.
 
 ### `/org/{orgId}/settings/holidays`
 
@@ -320,6 +333,17 @@ update the screen already submits — no new form, no second save button.
 | Narrow viewport | Below `--layout-breakpoint-desktop` the grid scrolls horizontally inside its own container; the member column stays pinned and the page body never scrolls sideways. |
 | Keyboard | The three scope buttons and the three window buttons are one roving-tabindex group each. Each absence band is a button carrying its dates, status and working-day count as its accessible name. |
 
+## DS gaps
+
+The mock declares each name below in its own `:root` because `@ds` has none of them. Recording
+them here is what the design-system rule requires; whether they enter `@ds` this release is a
+product call, and until they do the calendar is the only screen that may declare them.
+
+| Gap | Where it bites | What ships instead | What closes it |
+|---|---|---|---|
+| No absence-band colour | The approved band's fill and border, the pending band's hatch and dashed border, and the band label — every one of them on the calendar grid, plus the legend's two swatches | `--surface-timeoff-band`, `--border-timeoff-band` and `--text-timeoff-band`, declared once on the calendar page's own root and used through `var(…)` everywhere else, so no component file carries a colour literal. Violet, which none of `--status-success`, `--status-warning`, `--status-error`, `--status-info` or `--color-holiday` uses, so a band reads as a category and not as a claim about how somebody is doing | The three names entering `@ds` as time-off category tokens, and the page's local block deleted in the same change. The policy catalogue of a later spec wants a colour per absence type, and this is the first of that set |
+| No sticky-column width token | The grid's member column, in the header rows and every member row | `--name-col: 264px`, declared beside the three above and referenced by every row's `grid-template-columns` | A layout token in `@ds` for a pinned first column, which the reports tables would take as well |
+
 ## Edge Cases
 
 | # | Situation | Exact behaviour |
@@ -341,7 +365,7 @@ update the screen already submits — no new form, no second save button.
 | 15 | The window crosses a year boundary | Allowed — the 92-day bound is the only limit, and ISO week numbers restart correctly across it (TC-01-INT-16). |
 | 16 | A member has an approved and a pending request that touch but do not overlap | Two bands, adjacent, visually separated by their own 3px margins. No case of its own: the margin is drawn on every band, which TC-01-E2E-01 asserts on two bands already. |
 | 17 | Two non-cancelled requests overlap for one member | Impossible through the product — spec `user-management/09` refuses an overlapping submission. If such a pair exists in the data, both bands draw stacked and neither is hidden, so the anomaly is visible rather than silently resolved. No case: the state cannot be reached through any route the cases call. |
-| 18 | The caller has no `Account.timezone` | Today's marker falls back to UTC; every other date is a calendar day and is unaffected (REQ-01-017). |
+| 18 | The caller's `Account.timezone` is `null`, `""`, or a string the server does not recognize | Today's marker falls back to UTC in all three (REQ-01-018); every other date is a calendar day and is unaffected (REQ-01-017). An invited member's timezone is `""` until they set one, so the empty case is the common one. |
 | 19 | An admin clears the organization country while members rely on it | Those members fall back to `null` on the next read and see only global holidays. No stored value changes; the chain is evaluated on read. |
 | 20 | A `user` submits an organization country through the API directly | `404` — `manage-holidays` refuses it the way it refuses a holiday create, and the caller learns nothing about the route (REQ-01-035). |
 
