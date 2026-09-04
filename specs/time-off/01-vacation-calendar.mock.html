@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>time-off/01 — Vacation calendar · Meridian mockup</title>
+<link rel="stylesheet" href="../../packages/ds/src/styles.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--surface-well);color:var(--text-primary);
+            font-family:var(--font-family-base);font-size:var(--font-size-s)}
+
+  /* The two tokens this spec asks the design system for. A time-off band is a *category*,
+     not a status: violet keeps it clear of blue (action), amber (holiday), red (the now
+     line) and green (success), so nothing on this grid reads as a claim about how somebody
+     is doing. Recorded as the DS gap in the spec. */
+  :root{
+    --surface-timeoff-band: oklch(0.90 0.06 285);
+    --border-timeoff-band: oklch(0.55 0.14 285);
+    --text-timeoff-band: oklch(0.38 0.12 285);
+    --name-col: 264px;
+  }
+
+  .page{padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-10);align-items:center}
+  .legendtxt{width:100%;max-width:1400px;color:var(--text-secondary);line-height:1.6}
+  .legendtxt h1{font-size:var(--headline-4-size);line-height:var(--headline-4-line);
+                letter-spacing:var(--headline-4-tracking);font-weight:var(--headline-4-weight);
+                color:var(--text-primary);margin:0 0 var(--space-2)}
+  .legendtxt code{font-family:var(--font-family-mono);font-size:var(--font-size-xs);color:var(--text-link)}
+  .state{width:100%;max-width:1400px;display:flex;flex-direction:column;gap:var(--space-3)}
+  .state-label{font-size:var(--font-size-xs);letter-spacing:.08em;text-transform:uppercase;
+               color:var(--text-secondary);font-weight:var(--font-weight-medium)}
+  .stage{background:var(--surface-page);border:1px solid var(--border-default);
+         border-radius:var(--radius-xl);overflow:hidden}
+
+  /* ---- app shell ---- */
+  .shell{display:flex;background:var(--surface-well)}
+  .side{width:var(--layout-sidebar-width);flex-shrink:0;background:var(--surface-page);
+        border-right:1px solid var(--border-default);display:flex;flex-direction:column}
+  .side-head{height:var(--layout-navbar-height-desktop);display:flex;align-items:center;
+             padding:0 var(--space-8);border-bottom:1px solid var(--border-default)}
+  .mark{font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);letter-spacing:-.5px}
+  .mark b{color:var(--text-link);font-weight:var(--font-weight-bold)}
+  .nav{padding:var(--space-6) var(--space-5);display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:var(--space-5);padding:var(--space-4) var(--space-5);
+         border-radius:var(--radius-l);color:var(--text-tertiary);text-decoration:none;
+         font-weight:var(--font-weight-medium);font-size:var(--font-size-base)}
+  .nav a.sub{padding-left:52px;font-size:var(--font-size-s)}
+  .nav a.on{background:var(--color-blue-tint);color:var(--text-link)}
+  .nav .grp{color:var(--text-link)}
+  .ic{width:20px;height:20px;flex:0 0 20px;border-radius:5px;background:currentColor;opacity:.35}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:var(--layout-navbar-height-desktop);border-bottom:1px solid var(--border-default);
+       background:var(--surface-page);display:flex;align-items:center;justify-content:flex-end;
+       gap:var(--space-5);padding:0 var(--space-8)}
+  .content{padding:var(--space-7) var(--space-8) var(--space-10);min-width:0}
+
+  .phead{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-7);
+         margin-bottom:var(--space-7)}
+  .ptitle{font-size:var(--headline-4-size);line-height:var(--headline-4-line);
+          letter-spacing:var(--headline-4-tracking);font-weight:var(--headline-4-weight);margin:0}
+  .psub{color:var(--text-secondary);margin:var(--space-1) 0 0}
+
+  /* ---- filter bar ---- */
+  .bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--space-5);margin-bottom:var(--space-5)}
+  .ctl{display:flex;flex-direction:column;gap:var(--space-2)}
+  .ctl.push{margin-left:auto}
+  .ctl label{font-size:var(--font-size-xs);line-height:var(--line-height-label);
+             color:var(--text-secondary);font-weight:var(--font-weight-medium)}
+  .segs{display:inline-flex;background:var(--surface-sunken);border-radius:var(--radius-pill);padding:3px}
+  .seg{border:0;background:transparent;border-radius:var(--radius-pill);padding:0 var(--space-6);
+       height:36px;font:inherit;font-weight:var(--font-weight-medium);color:var(--text-secondary);cursor:pointer}
+  .seg.on{background:var(--surface-page);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .picker{height:44px;border:1.5px solid var(--border-default);background:var(--surface-page);
+          border-radius:var(--radius-l);padding:0 var(--space-6);font:inherit;color:var(--text-primary);
+          display:inline-flex;align-items:center;gap:var(--space-4);cursor:pointer}
+  .chev{width:8px;height:8px;border-right:1.5px solid var(--text-secondary);
+        border-bottom:1.5px solid var(--text-secondary);transform:rotate(45deg) translateY(-2px)}
+  .nav-range{display:inline-flex;align-items:center;gap:var(--space-3);height:44px;flex:0 0 auto}
+  .ico{width:36px;height:36px;border-radius:var(--radius-l);border:1.5px solid var(--border-default);
+       background:var(--surface-page);cursor:pointer;font-size:18px;line-height:1;color:var(--text-tertiary)}
+  .todaybtn{height:36px;padding:0 var(--space-6);border-radius:var(--radius-l);
+            border:1.5px solid var(--border-default);background:var(--surface-page);font:inherit;
+            font-weight:var(--font-weight-medium);cursor:pointer}
+  .rangelabel{font-weight:var(--font-weight-medium);margin-left:var(--space-3)}
+
+  .legend{display:flex;gap:var(--space-8);flex-wrap:wrap;margin-bottom:var(--space-5);
+          color:var(--text-secondary);font-size:var(--font-size-xs)}
+  .legend span{display:inline-flex;align-items:center;gap:var(--space-3)}
+  .sw{width:22px;height:12px;border-radius:3px;display:inline-block}
+  .sw.approved{background:var(--surface-timeoff-band);border:1.5px solid var(--border-timeoff-band)}
+  .sw.pending{border:1.5px dashed var(--border-timeoff-band);
+              background:repeating-linear-gradient(135deg,var(--surface-timeoff-band) 0 3px,transparent 3px 6px)}
+  .sw.holiday{background:var(--surface-holiday);border:1.5px solid var(--border-holiday)}
+  .sw.weekend{background:var(--surface-sunken);border:1px solid var(--border-default)}
+  .sw.todaysw{background:transparent;border-left:2px solid var(--action-primary);width:2px;border-radius:0}
+
+  /* ---- the grid ---- */
+  .grid{border:1px solid var(--border-default);border-radius:var(--radius-l);
+        background:var(--surface-page);overflow:hidden}
+  .row{display:grid;align-items:stretch;border-bottom:1px solid var(--border-subtle);position:relative}
+  .row:last-child{border-bottom:0}
+  .hrow{background:var(--surface-page)}
+  .hrow2{background:var(--surface-page);border-bottom:1px solid var(--border-default)}
+  .wk{grid-row:1;font-size:var(--font-size-xs);color:var(--text-secondary);
+      padding:var(--space-3) 0 var(--space-1);text-align:center;
+      border-left:1px solid var(--border-subtle);font-weight:var(--font-weight-medium)}
+  .hcorner{display:flex;align-items:flex-end;padding:var(--space-3) var(--space-6)}
+  .hcorner-label{font-size:var(--font-size-xs);color:var(--text-secondary);
+                 font-weight:var(--font-weight-medium);text-transform:uppercase;letter-spacing:.06em}
+  .dh{grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:1px;padding:var(--space-2) 0 var(--space-3);border-left:1px solid var(--border-subtle);
+      position:relative}
+  .dh em{font-style:normal;font-size:10px;color:var(--text-secondary);text-transform:uppercase}
+  .dh b{font-size:var(--font-size-s);font-weight:var(--font-weight-medium);
+        font-variant-numeric:tabular-nums}
+  .dh.we{background:var(--surface-sunken)}
+  .dh.we em,.dh.we b{color:var(--text-secondary)}
+  .dh.hol{background:var(--surface-holiday)}
+  .dh.today b{color:var(--action-primary);font-weight:var(--font-weight-bold)}
+  .dh.today::after{content:'';position:absolute;left:50%;bottom:-1px;transform:translateX(-50%);
+                   width:20px;height:2px;background:var(--action-primary);border-radius:2px}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--border-holiday);display:block}
+  .dot.part{background:transparent;border:1.5px solid var(--border-holiday)}
+
+  .who{display:flex;align-items:center;gap:var(--space-5);padding:var(--space-4) var(--space-6);
+       border-right:1px solid var(--border-default);min-width:0;background:var(--surface-page);
+       position:sticky;left:0;z-index:3}
+  .who-text{display:flex;flex-direction:column;min-width:0}
+  .who-text b{font-weight:var(--font-weight-medium);white-space:nowrap;overflow:hidden;
+              text-overflow:ellipsis}
+  .who-text i{font-style:normal;font-size:var(--font-size-xs);color:var(--text-secondary);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .av{width:32px;height:32px;border-radius:var(--radius-circle);flex:0 0 32px;display:flex;
+      align-items:center;justify-content:center;font-size:var(--font-size-xs);
+      font-weight:var(--font-weight-medium)}
+  .av1{background:var(--avatar-1-surface);color:var(--avatar-1-text)}
+  .av2{background:var(--avatar-2-surface);color:var(--avatar-2-text)}
+  .av3{background:var(--avatar-3-surface);color:var(--avatar-3-text)}
+  .av4{background:var(--avatar-4-surface);color:var(--avatar-4-text)}
+  .av5{background:var(--avatar-5-surface);color:var(--avatar-5-text)}
+  .av6{background:var(--avatar-6-surface);color:var(--avatar-6-text)}
+
+  .cell{grid-row:1;height:52px;border-left:1px solid var(--border-subtle)}
+  .cell.we{background:var(--surface-sunken)}
+  .cell.hol{background:var(--surface-holiday)}
+  .cell.hol-own{background:var(--surface-holiday);
+                box-shadow:inset 0 0 0 1.5px var(--border-holiday)}
+  .cell.today{box-shadow:inset 2px 0 0 0 var(--action-primary)}
+
+  .band{grid-row:1;align-self:center;height:30px;margin:0 3px;border-radius:var(--radius-s);
+        z-index:2;display:flex;align-items:center;justify-content:center;
+        font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+        color:var(--text-timeoff-band);overflow:hidden;white-space:nowrap}
+  .band.approved{background:var(--surface-timeoff-band);border:1.5px solid var(--border-timeoff-band)}
+  .band.pending{border:1.5px dashed var(--border-timeoff-band);background:var(--surface-page);
+                background-image:repeating-linear-gradient(135deg,
+                  var(--surface-timeoff-band) 0 4px,transparent 4px 8px)}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="legendtxt">
+    <h1>Time off calendar — visual acceptance target</h1>
+    <p>A horizontal wallchart: one row per member, one column per day. Bands are vacation
+    requests — solid where <code>approved</code>, hatched where <code>pending</code>;
+    <code>rejected</code> and <code>cancelled</code> are never drawn. Weekend columns take
+    <code>--surface-sunken</code>. A public holiday that applies to <em>every</em> member in
+    view shades the whole column (21 Sep, "Company Day"); one that applies to some of them
+    marks only their cells and gets a hollow dot in the header (16 Sep, "Polish National
+    Day", PL only). The three scopes are the same grid over a different row set.</p>
+    <p>The band colour is the one thing this screen asks the design system for — see the
+    DS gaps table in the design notes. Everything else on the page is an existing token.</p>
+  </div>
+  <section class="state">
+    <div class="state-label">State 1 — scope: All · window: Month</div>
+    <div class="legendtxt" style="max-width:none">Every active member, September 2026. Olga Admin has no absence: the row still draws, because "nobody is away" is the answer the chart exists to give.</div>
+    <div class="stage">
+      <div class="shell">
+        <aside class="side">
+          <div class="side-head"><span class="mark">Team<b>merly</b></span></div>
+          <nav class="nav">
+            <a><i class="ic"></i>Timesheets</a>
+            <a><i class="ic"></i>Project management</a>
+            <a><i class="ic"></i>People</a>
+            <a><i class="ic"></i>Reports</a>
+            <a class="grp"><i class="ic"></i>Time off</a>
+            <a class="sub on" data-testid="nav-time-off-calendar">Calendar</a>
+            <a class="sub">Holidays</a>
+            <a class="sub">Requests</a>
+            <a><i class="ic"></i>Documents</a>
+            <a><i class="ic"></i>Hiring</a>
+            <a><i class="ic"></i>Organization</a>
+          </nav>
+        </aside>
+        <div class="main">
+          <div class="top"><span style="font-weight:var(--font-weight-medium)">Olga Admin</span><span class="av av5">OA</span></div>
+          <div class="content" data-testid="time-off-calendar-page">
+            <div class="phead">
+              <div>
+                <h1 class="ptitle">Time off calendar</h1>
+                <p class="psub">Who is away, and when.</p>
+              </div>
+              <div class="nav-range">
+                <button class="ico" data-testid="calendar-prev">‹</button>
+                <button class="todaybtn" data-testid="calendar-today">Today</button>
+                <button class="ico" data-testid="calendar-next">›</button>
+                <span class="rangelabel" data-testid="calendar-range-label">September 2026</span>
+              </div>
+            </div>
+    <div class="bar">
+      <div class="ctl"><label>Scope</label><div class="segs">
+        <button class="seg on" data-testid="calendar-scope-all">All</button><button class="seg" data-testid="calendar-scope-teams">Teams</button><button class="seg" data-testid="calendar-scope-people">People</button>
+      </div></div>
+      <div class="ctl"><label>Window</label><div class="segs">
+        <button class="seg" data-testid="calendar-window-week">Week</button><button class="seg" data-testid="calendar-window-2weeks">2 weeks</button><button class="seg on" data-testid="calendar-window-month">Month</button>
+      </div></div>
+    </div>
+    <div class="legend" data-testid="calendar-legend">
+      <span><i class="sw approved"></i>Vacation · approved</span>
+      <span><i class="sw pending"></i>Vacation · pending</span>
+      <span><i class="sw holiday"></i>Public holiday</span>
+      <span><i class="sw weekend"></i>Weekend</span>
+      <span><i class="sw todaysw"></i>Today</span>
+    </div>
+    <div class="grid" data-testid="calendar-grid">
+      <div class="row hrow" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who hcorner" style="grid-column:1"><span class="hcorner-label">Member</span></div>
+        <div class="wk" style="grid-column:2 / span 6">W36</div>
+        <div class="wk" style="grid-column:8 / span 7">W37</div>
+        <div class="wk" style="grid-column:15 / span 7">W38</div>
+        <div class="wk" style="grid-column:22 / span 7">W39</div>
+        <div class="wk" style="grid-column:29 / span 3">W40</div>
+      </div>
+      <div class="row hrow2" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who hcorner" style="grid-column:1"></div>
+        <div class="dh" style="grid-column:2" data-testid="calendar-day-header-2026-09-01"><em>Tu</em><b>1</b></div>
+        <div class="dh" style="grid-column:3" data-testid="calendar-day-header-2026-09-02"><em>We</em><b>2</b></div>
+        <div class="dh" style="grid-column:4" data-testid="calendar-day-header-2026-09-03"><em>Th</em><b>3</b></div>
+        <div class="dh today" style="grid-column:5" data-testid="calendar-day-header-2026-09-04"><em>Fr</em><b>4</b></div>
+        <div class="dh we" style="grid-column:6" data-testid="calendar-day-header-2026-09-05"><em>Sa</em><b>5</b></div>
+        <div class="dh we" style="grid-column:7" data-testid="calendar-day-header-2026-09-06"><em>Su</em><b>6</b></div>
+        <div class="dh" style="grid-column:8" data-testid="calendar-day-header-2026-09-07"><em>Mo</em><b>7</b></div>
+        <div class="dh" style="grid-column:9" data-testid="calendar-day-header-2026-09-08"><em>Tu</em><b>8</b></div>
+        <div class="dh" style="grid-column:10" data-testid="calendar-day-header-2026-09-09"><em>We</em><b>9</b></div>
+        <div class="dh" style="grid-column:11" data-testid="calendar-day-header-2026-09-10"><em>Th</em><b>10</b></div>
+        <div class="dh" style="grid-column:12" data-testid="calendar-day-header-2026-09-11"><em>Fr</em><b>11</b></div>
+        <div class="dh we" style="grid-column:13" data-testid="calendar-day-header-2026-09-12"><em>Sa</em><b>12</b></div>
+        <div class="dh we" style="grid-column:14" data-testid="calendar-day-header-2026-09-13"><em>Su</em><b>13</b></div>
+        <div class="dh" style="grid-column:15" data-testid="calendar-day-header-2026-09-14"><em>Mo</em><b>14</b></div>
+        <div class="dh" style="grid-column:16" data-testid="calendar-day-header-2026-09-15"><em>Tu</em><b>15</b></div>
+        <div class="dh" style="grid-column:17" data-testid="calendar-day-header-2026-09-16" title="Polish National Day · PL only"><em>We</em><b>16</b><i class="dot part"></i></div>
+        <div class="dh" style="grid-column:18" data-testid="calendar-day-header-2026-09-17"><em>Th</em><b>17</b></div>
+        <div class="dh" style="grid-column:19" data-testid="calendar-day-header-2026-09-18"><em>Fr</em><b>18</b></div>
+        <div class="dh we" style="grid-column:20" data-testid="calendar-day-header-2026-09-19"><em>Sa</em><b>19</b></div>
+        <div class="dh we" style="grid-column:21" data-testid="calendar-day-header-2026-09-20"><em>Su</em><b>20</b></div>
+        <div class="dh hol" style="grid-column:22" data-testid="calendar-day-header-2026-09-21" title="Company Day · paid holiday for everyone in view"><em>Mo</em><b>21</b><i class="dot"></i></div>
+        <div class="dh" style="grid-column:23" data-testid="calendar-day-header-2026-09-22"><em>Tu</em><b>22</b></div>
+        <div class="dh" style="grid-column:24" data-testid="calendar-day-header-2026-09-23"><em>We</em><b>23</b></div>
+        <div class="dh" style="grid-column:25" data-testid="calendar-day-header-2026-09-24"><em>Th</em><b>24</b></div>
+        <div class="dh" style="grid-column:26" data-testid="calendar-day-header-2026-09-25"><em>Fr</em><b>25</b></div>
+        <div class="dh we" style="grid-column:27" data-testid="calendar-day-header-2026-09-26"><em>Sa</em><b>26</b></div>
+        <div class="dh we" style="grid-column:28" data-testid="calendar-day-header-2026-09-27"><em>Su</em><b>27</b></div>
+        <div class="dh" style="grid-column:29" data-testid="calendar-day-header-2026-09-28"><em>Mo</em><b>28</b></div>
+        <div class="dh" style="grid-column:30" data-testid="calendar-day-header-2026-09-29"><em>Tu</em><b>29</b></div>
+        <div class="dh" style="grid-column:31" data-testid="calendar-day-header-2026-09-30"><em>We</em><b>30</b></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-ivan-demchenko" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av4">ID</span>
+          <span class="who-text"><b>Ivan Demchenko</b><i>Senior Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell hol-own" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:15 / span 5" data-testid="calendar-absence-ivan-demchenko-2026-09-14" title="Vacation · approved · 2026-09-14 – 2026-09-18 · 5 working days"><span>5 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-anna-kovalenko" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av2">AK</span>
+          <span class="who-text"><b>Anna Kovalenko</b><i>Product Designer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band pending" style="grid-column:24 / span 3" data-testid="calendar-absence-anna-kovalenko-2026-09-23" title="Vacation · pending · 2026-09-23 – 2026-09-25 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-pavel-mishin" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av5">PM</span>
+          <span class="who-text"><b>Pavel Mishin</b><i>Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:29 / span 3" data-testid="calendar-absence-pavel-mishin-2026-09-28" title="Vacation · approved · 2026-09-28 – 2026-09-30 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-marta-sokolova" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av1">MS</span>
+          <span class="who-text"><b>Marta Sokolova</b><i>QA Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:3 / span 3" data-testid="calendar-absence-marta-sokolova-2026-09-02" title="Vacation · approved · 2026-09-02 – 2026-09-04 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-sergey-volkov" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av3">SV</span>
+          <span class="who-text"><b>Sergey Volkov</b><i>Engineering Lead</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:8 / span 5" data-testid="calendar-absence-sergey-volkov-2026-09-07" title="Vacation · approved · 2026-09-07 – 2026-09-11 · 5 working days"><span>5 d</span></div>
+        <div class="band pending" style="grid-column:31 / span 1" data-testid="calendar-absence-sergey-volkov-2026-09-30" title="Vacation · pending · 2026-09-30 – 2026-09-30 · 1 working days"><span></span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-elena-petrova" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av6">EP</span>
+          <span class="who-text"><b>Elena Petrova</b><i>Account Manager</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell hol-own" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band pending" style="grid-column:17 / span 3" data-testid="calendar-absence-elena-petrova-2026-09-16" title="Vacation · pending · 2026-09-16 – 2026-09-18 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-dmitry-orlov" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av2">DO</span>
+          <span class="who-text"><b>Dmitry Orlov</b><i>Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:22 / span 5" data-testid="calendar-absence-dmitry-orlov-2026-09-21" title="Vacation · approved · 2026-09-21 – 2026-09-25 · 5 working days"><span>5 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-olga-admin" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av5">OA</span>
+          <span class="who-text"><b>Olga Admin</b><i>Operations</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+      </div>
+    </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="state">
+    <div class="state-label">State 2 — scope: Teams · two projects ticked</div>
+    <div class="legendtxt" style="max-width:none">Rows are the union of the members assigned to <code>Acme Redesign</code> and <code>Internal Tools</code>. Elena and Dmitry are on <code>Beta Migration</code> only, and Marta and Olga are on no project, so none of the four appears.</div>
+    <div class="stage">
+      <div class="shell">
+        <aside class="side">
+          <div class="side-head"><span class="mark">Team<b>merly</b></span></div>
+          <nav class="nav">
+            <a><i class="ic"></i>Timesheets</a>
+            <a><i class="ic"></i>Project management</a>
+            <a><i class="ic"></i>People</a>
+            <a><i class="ic"></i>Reports</a>
+            <a class="grp"><i class="ic"></i>Time off</a>
+            <a class="sub on" data-testid="nav-time-off-calendar">Calendar</a>
+            <a class="sub">Holidays</a>
+            <a class="sub">Requests</a>
+            <a><i class="ic"></i>Documents</a>
+            <a><i class="ic"></i>Hiring</a>
+            <a><i class="ic"></i>Organization</a>
+          </nav>
+        </aside>
+        <div class="main">
+          <div class="top"><span style="font-weight:var(--font-weight-medium)">Olga Admin</span><span class="av av5">OA</span></div>
+          <div class="content" data-testid="time-off-calendar-page">
+            <div class="phead">
+              <div>
+                <h1 class="ptitle">Time off calendar</h1>
+                <p class="psub">Who is away, and when.</p>
+              </div>
+              <div class="nav-range">
+                <button class="ico" data-testid="calendar-prev">‹</button>
+                <button class="todaybtn" data-testid="calendar-today">Today</button>
+                <button class="ico" data-testid="calendar-next">›</button>
+                <span class="rangelabel" data-testid="calendar-range-label">September 2026</span>
+              </div>
+            </div>
+    <div class="bar">
+      <div class="ctl"><label>Scope</label><div class="segs">
+        <button class="seg" data-testid="calendar-scope-all">All</button><button class="seg on" data-testid="calendar-scope-teams">Teams</button><button class="seg" data-testid="calendar-scope-people">People</button>
+      </div></div>
+      <div class="ctl"><label>Teams</label><button class="picker" data-testid="calendar-teams-picker">Acme Redesign, Internal Tools<i class="chev"></i></button></div>
+      <div class="ctl"><label>Window</label><div class="segs">
+        <button class="seg" data-testid="calendar-window-week">Week</button><button class="seg" data-testid="calendar-window-2weeks">2 weeks</button><button class="seg on" data-testid="calendar-window-month">Month</button>
+      </div></div>
+    </div>
+    <div class="legend" data-testid="calendar-legend">
+      <span><i class="sw approved"></i>Vacation · approved</span>
+      <span><i class="sw pending"></i>Vacation · pending</span>
+      <span><i class="sw holiday"></i>Public holiday</span>
+      <span><i class="sw weekend"></i>Weekend</span>
+      <span><i class="sw todaysw"></i>Today</span>
+    </div>
+    <div class="grid" data-testid="calendar-grid">
+      <div class="row hrow" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who hcorner" style="grid-column:1"><span class="hcorner-label">Member</span></div>
+        <div class="wk" style="grid-column:2 / span 6">W36</div>
+        <div class="wk" style="grid-column:8 / span 7">W37</div>
+        <div class="wk" style="grid-column:15 / span 7">W38</div>
+        <div class="wk" style="grid-column:22 / span 7">W39</div>
+        <div class="wk" style="grid-column:29 / span 3">W40</div>
+      </div>
+      <div class="row hrow2" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who hcorner" style="grid-column:1"></div>
+        <div class="dh" style="grid-column:2" data-testid="calendar-day-header-2026-09-01"><em>Tu</em><b>1</b></div>
+        <div class="dh" style="grid-column:3" data-testid="calendar-day-header-2026-09-02"><em>We</em><b>2</b></div>
+        <div class="dh" style="grid-column:4" data-testid="calendar-day-header-2026-09-03"><em>Th</em><b>3</b></div>
+        <div class="dh today" style="grid-column:5" data-testid="calendar-day-header-2026-09-04"><em>Fr</em><b>4</b></div>
+        <div class="dh we" style="grid-column:6" data-testid="calendar-day-header-2026-09-05"><em>Sa</em><b>5</b></div>
+        <div class="dh we" style="grid-column:7" data-testid="calendar-day-header-2026-09-06"><em>Su</em><b>6</b></div>
+        <div class="dh" style="grid-column:8" data-testid="calendar-day-header-2026-09-07"><em>Mo</em><b>7</b></div>
+        <div class="dh" style="grid-column:9" data-testid="calendar-day-header-2026-09-08"><em>Tu</em><b>8</b></div>
+        <div class="dh" style="grid-column:10" data-testid="calendar-day-header-2026-09-09"><em>We</em><b>9</b></div>
+        <div class="dh" style="grid-column:11" data-testid="calendar-day-header-2026-09-10"><em>Th</em><b>10</b></div>
+        <div class="dh" style="grid-column:12" data-testid="calendar-day-header-2026-09-11"><em>Fr</em><b>11</b></div>
+        <div class="dh we" style="grid-column:13" data-testid="calendar-day-header-2026-09-12"><em>Sa</em><b>12</b></div>
+        <div class="dh we" style="grid-column:14" data-testid="calendar-day-header-2026-09-13"><em>Su</em><b>13</b></div>
+        <div class="dh" style="grid-column:15" data-testid="calendar-day-header-2026-09-14"><em>Mo</em><b>14</b></div>
+        <div class="dh" style="grid-column:16" data-testid="calendar-day-header-2026-09-15"><em>Tu</em><b>15</b></div>
+        <div class="dh" style="grid-column:17" data-testid="calendar-day-header-2026-09-16" title="Polish National Day · PL only"><em>We</em><b>16</b><i class="dot part"></i></div>
+        <div class="dh" style="grid-column:18" data-testid="calendar-day-header-2026-09-17"><em>Th</em><b>17</b></div>
+        <div class="dh" style="grid-column:19" data-testid="calendar-day-header-2026-09-18"><em>Fr</em><b>18</b></div>
+        <div class="dh we" style="grid-column:20" data-testid="calendar-day-header-2026-09-19"><em>Sa</em><b>19</b></div>
+        <div class="dh we" style="grid-column:21" data-testid="calendar-day-header-2026-09-20"><em>Su</em><b>20</b></div>
+        <div class="dh hol" style="grid-column:22" data-testid="calendar-day-header-2026-09-21" title="Company Day · paid holiday for everyone in view"><em>Mo</em><b>21</b><i class="dot"></i></div>
+        <div class="dh" style="grid-column:23" data-testid="calendar-day-header-2026-09-22"><em>Tu</em><b>22</b></div>
+        <div class="dh" style="grid-column:24" data-testid="calendar-day-header-2026-09-23"><em>We</em><b>23</b></div>
+        <div class="dh" style="grid-column:25" data-testid="calendar-day-header-2026-09-24"><em>Th</em><b>24</b></div>
+        <div class="dh" style="grid-column:26" data-testid="calendar-day-header-2026-09-25"><em>Fr</em><b>25</b></div>
+        <div class="dh we" style="grid-column:27" data-testid="calendar-day-header-2026-09-26"><em>Sa</em><b>26</b></div>
+        <div class="dh we" style="grid-column:28" data-testid="calendar-day-header-2026-09-27"><em>Su</em><b>27</b></div>
+        <div class="dh" style="grid-column:29" data-testid="calendar-day-header-2026-09-28"><em>Mo</em><b>28</b></div>
+        <div class="dh" style="grid-column:30" data-testid="calendar-day-header-2026-09-29"><em>Tu</em><b>29</b></div>
+        <div class="dh" style="grid-column:31" data-testid="calendar-day-header-2026-09-30"><em>We</em><b>30</b></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-ivan-demchenko" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av4">ID</span>
+          <span class="who-text"><b>Ivan Demchenko</b><i>Senior Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell hol-own" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:15 / span 5" data-testid="calendar-absence-ivan-demchenko-2026-09-14" title="Vacation · approved · 2026-09-14 – 2026-09-18 · 5 working days"><span>5 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-anna-kovalenko" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av2">AK</span>
+          <span class="who-text"><b>Anna Kovalenko</b><i>Product Designer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band pending" style="grid-column:24 / span 3" data-testid="calendar-absence-anna-kovalenko-2026-09-23" title="Vacation · pending · 2026-09-23 – 2026-09-25 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-pavel-mishin" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av5">PM</span>
+          <span class="who-text"><b>Pavel Mishin</b><i>Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:29 / span 3" data-testid="calendar-absence-pavel-mishin-2026-09-28" title="Vacation · approved · 2026-09-28 – 2026-09-30 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-sergey-volkov" style="grid-template-columns:var(--name-col) repeat(30, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av3">SV</span>
+          <span class="who-text"><b>Sergey Volkov</b><i>Engineering Lead</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell today" style="grid-column:5"></div>
+        <div class="cell we" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell" style="grid-column:8"></div>
+        <div class="cell" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell we" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell" style="grid-column:15"></div>
+        <div class="cell" style="grid-column:16"></div>
+        <div class="cell" style="grid-column:17"></div>
+        <div class="cell" style="grid-column:18"></div>
+        <div class="cell" style="grid-column:19"></div>
+        <div class="cell we" style="grid-column:20"></div>
+        <div class="cell we" style="grid-column:21"></div>
+        <div class="cell hol" style="grid-column:22"></div>
+        <div class="cell" style="grid-column:23"></div>
+        <div class="cell" style="grid-column:24"></div>
+        <div class="cell" style="grid-column:25"></div>
+        <div class="cell" style="grid-column:26"></div>
+        <div class="cell we" style="grid-column:27"></div>
+        <div class="cell we" style="grid-column:28"></div>
+        <div class="cell" style="grid-column:29"></div>
+        <div class="cell" style="grid-column:30"></div>
+        <div class="cell" style="grid-column:31"></div>
+        <div class="band approved" style="grid-column:8 / span 5" data-testid="calendar-absence-sergey-volkov-2026-09-07" title="Vacation · approved · 2026-09-07 – 2026-09-11 · 5 working days"><span>5 d</span></div>
+        <div class="band pending" style="grid-column:31 / span 1" data-testid="calendar-absence-sergey-volkov-2026-09-30" title="Vacation · pending · 2026-09-30 – 2026-09-30 · 1 working days"><span></span></div>
+      </div>
+    </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="state">
+    <div class="state-label">State 3 — scope: People · four picked · window: 2 weeks</div>
+    <div class="legendtxt" style="max-width:none">Four members chosen by hand over 14–27 Sep. The narrower window widens every day column; the grid is otherwise identical.</div>
+    <div class="stage">
+      <div class="shell">
+        <aside class="side">
+          <div class="side-head"><span class="mark">Team<b>merly</b></span></div>
+          <nav class="nav">
+            <a><i class="ic"></i>Timesheets</a>
+            <a><i class="ic"></i>Project management</a>
+            <a><i class="ic"></i>People</a>
+            <a><i class="ic"></i>Reports</a>
+            <a class="grp"><i class="ic"></i>Time off</a>
+            <a class="sub on" data-testid="nav-time-off-calendar">Calendar</a>
+            <a class="sub">Holidays</a>
+            <a class="sub">Requests</a>
+            <a><i class="ic"></i>Documents</a>
+            <a><i class="ic"></i>Hiring</a>
+            <a><i class="ic"></i>Organization</a>
+          </nav>
+        </aside>
+        <div class="main">
+          <div class="top"><span style="font-weight:var(--font-weight-medium)">Olga Admin</span><span class="av av5">OA</span></div>
+          <div class="content" data-testid="time-off-calendar-page">
+            <div class="phead">
+              <div>
+                <h1 class="ptitle">Time off calendar</h1>
+                <p class="psub">Who is away, and when.</p>
+              </div>
+              <div class="nav-range">
+                <button class="ico" data-testid="calendar-prev">‹</button>
+                <button class="todaybtn" data-testid="calendar-today">Today</button>
+                <button class="ico" data-testid="calendar-next">›</button>
+                <span class="rangelabel" data-testid="calendar-range-label">14 – 27 Sep 2026</span>
+              </div>
+            </div>
+    <div class="bar">
+      <div class="ctl"><label>Scope</label><div class="segs">
+        <button class="seg" data-testid="calendar-scope-all">All</button><button class="seg" data-testid="calendar-scope-teams">Teams</button><button class="seg on" data-testid="calendar-scope-people">People</button>
+      </div></div>
+      <div class="ctl"><label>People</label><button class="picker" data-testid="calendar-people-picker">Ivan D., Anna K., Elena P., Dmitry O.<i class="chev"></i></button></div>
+      <div class="ctl"><label>Window</label><div class="segs">
+        <button class="seg" data-testid="calendar-window-week">Week</button><button class="seg on" data-testid="calendar-window-2weeks">2 weeks</button><button class="seg" data-testid="calendar-window-month">Month</button>
+      </div></div>
+    </div>
+    <div class="legend" data-testid="calendar-legend">
+      <span><i class="sw approved"></i>Vacation · approved</span>
+      <span><i class="sw pending"></i>Vacation · pending</span>
+      <span><i class="sw holiday"></i>Public holiday</span>
+      <span><i class="sw weekend"></i>Weekend</span>
+      <span><i class="sw todaysw"></i>Today</span>
+    </div>
+    <div class="grid" data-testid="calendar-grid">
+      <div class="row hrow" style="grid-template-columns:var(--name-col) repeat(14, minmax(0, 1fr))">
+        <div class="who hcorner" style="grid-column:1"><span class="hcorner-label">Member</span></div>
+        <div class="wk" style="grid-column:2 / span 7">W38</div>
+        <div class="wk" style="grid-column:9 / span 7">W39</div>
+      </div>
+      <div class="row hrow2" style="grid-template-columns:var(--name-col) repeat(14, minmax(0, 1fr))">
+        <div class="who hcorner" style="grid-column:1"></div>
+        <div class="dh" style="grid-column:2" data-testid="calendar-day-header-2026-09-14"><em>Mo</em><b>14</b></div>
+        <div class="dh" style="grid-column:3" data-testid="calendar-day-header-2026-09-15"><em>Tu</em><b>15</b></div>
+        <div class="dh" style="grid-column:4" data-testid="calendar-day-header-2026-09-16" title="Polish National Day · PL only"><em>We</em><b>16</b><i class="dot part"></i></div>
+        <div class="dh" style="grid-column:5" data-testid="calendar-day-header-2026-09-17"><em>Th</em><b>17</b></div>
+        <div class="dh" style="grid-column:6" data-testid="calendar-day-header-2026-09-18"><em>Fr</em><b>18</b></div>
+        <div class="dh we" style="grid-column:7" data-testid="calendar-day-header-2026-09-19"><em>Sa</em><b>19</b></div>
+        <div class="dh we" style="grid-column:8" data-testid="calendar-day-header-2026-09-20"><em>Su</em><b>20</b></div>
+        <div class="dh hol" style="grid-column:9" data-testid="calendar-day-header-2026-09-21" title="Company Day · paid holiday for everyone in view"><em>Mo</em><b>21</b><i class="dot"></i></div>
+        <div class="dh" style="grid-column:10" data-testid="calendar-day-header-2026-09-22"><em>Tu</em><b>22</b></div>
+        <div class="dh" style="grid-column:11" data-testid="calendar-day-header-2026-09-23"><em>We</em><b>23</b></div>
+        <div class="dh" style="grid-column:12" data-testid="calendar-day-header-2026-09-24"><em>Th</em><b>24</b></div>
+        <div class="dh" style="grid-column:13" data-testid="calendar-day-header-2026-09-25"><em>Fr</em><b>25</b></div>
+        <div class="dh we" style="grid-column:14" data-testid="calendar-day-header-2026-09-26"><em>Sa</em><b>26</b></div>
+        <div class="dh we" style="grid-column:15" data-testid="calendar-day-header-2026-09-27"><em>Su</em><b>27</b></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-ivan-demchenko" style="grid-template-columns:var(--name-col) repeat(14, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av4">ID</span>
+          <span class="who-text"><b>Ivan Demchenko</b><i>Senior Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell hol-own" style="grid-column:4"></div>
+        <div class="cell" style="grid-column:5"></div>
+        <div class="cell" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell we" style="grid-column:8"></div>
+        <div class="cell hol" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell we" style="grid-column:15"></div>
+        <div class="band approved" style="grid-column:2 / span 5" data-testid="calendar-absence-ivan-demchenko-2026-09-14" title="Vacation · approved · 2026-09-14 – 2026-09-18 · 5 working days"><span>5 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-anna-kovalenko" style="grid-template-columns:var(--name-col) repeat(14, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av2">AK</span>
+          <span class="who-text"><b>Anna Kovalenko</b><i>Product Designer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell" style="grid-column:5"></div>
+        <div class="cell" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell we" style="grid-column:8"></div>
+        <div class="cell hol" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell we" style="grid-column:15"></div>
+        <div class="band pending" style="grid-column:11 / span 3" data-testid="calendar-absence-anna-kovalenko-2026-09-23" title="Vacation · pending · 2026-09-23 – 2026-09-25 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-elena-petrova" style="grid-template-columns:var(--name-col) repeat(14, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av6">EP</span>
+          <span class="who-text"><b>Elena Petrova</b><i>Account Manager</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell hol-own" style="grid-column:4"></div>
+        <div class="cell" style="grid-column:5"></div>
+        <div class="cell" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell we" style="grid-column:8"></div>
+        <div class="cell hol" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell we" style="grid-column:15"></div>
+        <div class="band pending" style="grid-column:4 / span 3" data-testid="calendar-absence-elena-petrova-2026-09-16" title="Vacation · pending · 2026-09-16 – 2026-09-18 · 3 working days"><span>3 d</span></div>
+      </div>
+      <div class="row" data-testid="calendar-member-row-dmitry-orlov" style="grid-template-columns:var(--name-col) repeat(14, minmax(0, 1fr))">
+        <div class="who" style="grid-column:1">
+          <span class="av av2">DO</span>
+          <span class="who-text"><b>Dmitry Orlov</b><i>Engineer</i></span>
+        </div>
+        <div class="cell" style="grid-column:2"></div>
+        <div class="cell" style="grid-column:3"></div>
+        <div class="cell" style="grid-column:4"></div>
+        <div class="cell" style="grid-column:5"></div>
+        <div class="cell" style="grid-column:6"></div>
+        <div class="cell we" style="grid-column:7"></div>
+        <div class="cell we" style="grid-column:8"></div>
+        <div class="cell hol" style="grid-column:9"></div>
+        <div class="cell" style="grid-column:10"></div>
+        <div class="cell" style="grid-column:11"></div>
+        <div class="cell" style="grid-column:12"></div>
+        <div class="cell" style="grid-column:13"></div>
+        <div class="cell we" style="grid-column:14"></div>
+        <div class="cell we" style="grid-column:15"></div>
+        <div class="band approved" style="grid-column:9 / span 5" data-testid="calendar-absence-dmitry-orlov-2026-09-21" title="Vacation · approved · 2026-09-21 – 2026-09-25 · 5 working days"><span>5 d</span></div>
+      </div>
+    </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
