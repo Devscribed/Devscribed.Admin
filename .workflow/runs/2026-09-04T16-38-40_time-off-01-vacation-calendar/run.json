@@ -1,0 +1,192 @@
+{
+  "runId": "2026-09-04T16-38-40_time-off-01-vacation-calendar",
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "specSha": "4a5b88bb7953f92d7d0e0048719046fa586b5d15e06cca980912ca17a2ee6429",
+  "task": "time-off-01-vacation-calendar",
+  "branch": "spec/time-off-vacation-calendar",
+  "baseRef": "0d986a177419c5189be5109a4a27c7e8afb02546",
+  "headAtInit": "0d986a177419c5189be5109a4a27c7e8afb02546",
+  "status": "implement",
+  "track": "spec",
+  "shapes": {
+    "pre_implement": "strict",
+    "implement": "single",
+    "static_gate": "script",
+    "review": "lead-open",
+    "qa": "targeted"
+  },
+  "unrefined": null,
+  "createdAt": "2026-09-04T16:38:40.888Z",
+  "updatedAt": "2026-09-04T16:56:53.655Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-04T16:38:41.065Z",
+      "endedAt": "2026-09-04T16:56:53.606Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/README.md",
+      "symbol": "Backward Compatibility 3",
+      "claim": "the README says the reports and holidays E2E suites are ones \"this area does not touch and which must stay green\"; the holidays E2E suite pins the very rule REQ-01-026 drops and cannot stay green untouched",
+      "witness": {
+        "kind": "scenario",
+        "detail": "e2e/tests/holidays.spec.ts:296-338 (TC-03-E2E-04) seeds a holiday with countryCode 'BY', calls setOwnCountryViaApi(request, 'BY') at :309 — which writes Account.phoneCountryCode — and then asserts `time-cell-{day}-holiday-marker` is visible on the weekly calendar. Under REQ-01-026 that member has no Membership.countryCode and the organization has none either, so the chain resolves null, GET /holidays?scope=mine returns global rows only, and the marker is not drawn. Three integration cases are in the same position: apps/api/test/holidays.spec.ts:381 (fixture at :402), apps/api/test/reports-amounts-owed.spec.ts:573 and :607, and apps/api/test/reports-time-off.spec.ts:404.",
+        "source": "specs/time-off/README.md, Backward Compatibility 3"
+      },
+      "suggestedFix": "the sentence should say the four cases move their fixture from the phone to the stated column while every assertion stands — filed as a note rather than a blocker because the product rule is stated completely (the contracts' call-site table: 'No call site keeps a phone-country read') and the repair is mechanical; it is planned as T10, a task of its own so the edits read as deliberate"
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-036",
+      "claim": "whether a two-letter code that is not an assigned ISO country ('XX') is accepted by the two country writes has two readings",
+      "witness": {
+        "kind": "scenario",
+        "detail": "PUT /api/organizations/{orgId}/settings/country with { \"countryCode\": \"XX\" }. REQ-01-036 refuses anything \"neither empty nor a valid alpha-2 value\", and Edge case 10 defines \"XX\" as a value that does not normalize to a valid alpha-2 value — so 422. The contracts' Validation Rule 9 states the constraint as \"Empty, or exactly 2 uppercase letters\" and the note under the table says the rule is the one \"the holiday rows' country validator already does\", which is validateHolidayCountryCode (packages/validation/src/holidays.ts:93, test /^[A-Z]{2}$/) — so 200. No case exercises it.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md, Validation Rules row 9"
+      },
+      "suggestedFix": "one clause saying whether the write checks membership of the ISO list or only the two-uppercase-letters shape. Planned as the Validation Rules table states it (validateHolidayCountryCode on both writes), since that table is the normative statement of what each write refuses and the read side skips a stored 'XX' regardless (REQ-01-027)"
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-27",
+      "claim": "the case says a user and a viewer \"receive the identical body\" from the member detail read, and the shipped projection carries caller-dependent fields, so a literal reading of that clause cannot pass",
+      "witness": {
+        "kind": "scenario",
+        "detail": "MembersService.getDetail returns callerRole, canEditRole and availableRoles (apps/api/src/members/members.service.ts:352-374); callerRole is 'user' for one caller and 'viewer' for the other, so a deep-equality assertion between the two bodies fails on a field this spec does not touch. The rest of the sentence says what is meant — \"field included: the read is gated by no capability and the field is not conditional on one\".",
+        "source": "specs/time-off/01-vacation-calendar.cases.md, TC-01-INT-27"
+      },
+      "suggestedFix": "narrow the clause to the field the case is about. Planned as: countryCode present and equal for both callers, alongside the target-derived fields; no product code differs between the two readings"
+    }
+  ],
+  "halt": null,
+  "preflight": {
+    "at": "2026-09-04T16:38:41.012Z",
+    "checks": [
+      {
+        "name": "config-valid",
+        "ok": true,
+        "detail": ".claude/ai-workflow.config.json parses and every track resolves"
+      },
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/time-off-vacation-calendar\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-available",
+        "ok": true,
+        "detail": "the suite would take 3100/4100 — 3000/4000 is held, 1 step(s) along"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "30 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260825130709_hiring_vacancies_candidates_applications",
+      "20260826094500_application_cv_size",
+      "20260826121829_add_invitations_and_job_title",
+      "20260826150000_hiring_categories",
+      "20260826170000_hiring_criteria",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_manage_booking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260828170000_application_cv",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_candidate_soft_delete",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants"
+    ]
+  }
+}
