@@ -90,16 +90,25 @@ reports needs the calendar to exist.
 
 ## Blast Radius
 
-**Database.** One nullable column, `Organization.countryCode`. No new table, no altered column, no
-new `NOT NULL`, no rename, no drop, no backfill. The migration is additive in the strict sense
-`infra/deploy.sh` relies on, so the new-schema-then-new-code order it enforces is safe and the
-reverse — old code against the new schema — is safe too.
+**Database.** Two nullable columns — `countryCode` on `Organization` **and on `Membership`**. No
+new table, no altered column, no new `NOT NULL`, no rename, no drop, no backfill. A reviewer
+checking the migration is additive should expect to find both; the second is the one easily
+missed, because the feature reads as organization-scoped. The migration is additive in the strict
+sense `infra/deploy.sh` relies on, so the new-schema-then-new-code order it enforces is safe and
+the reverse — old code against the new schema — is safe too.
 
-**Shared code that breaks on contact.** `packages/validation/src/roles.ts` gains two capabilities
-and their lowercase-dashed twins. `Capability` is a union typed against `ROLE_CAPABILITIES`, so
-adding a member forces every role's list to be revisited at compile time — which is the intended
-behaviour and the reason the type is shaped that way. Adding capabilities is otherwise
-backward-compatible: no existing capability is removed, renamed or regranted.
+**Shared code that breaks on contact.** `packages/validation/src/roles.ts` gains one capability,
+`ViewTimeOffCalendar`, and its lowercase-dashed twin. Neither country write adds one — they reuse
+`ManageHolidays` and `edit-detail`, which already grant exactly the admin and manager who set
+them. `Capability` is a union typed against `ROLE_CAPABILITIES`, so adding a member forces every
+role's list to be revisited at compile time, which is the intended behaviour and the reason the
+type is shaped that way. Adding a capability is otherwise backward-compatible: no existing
+capability is removed, renamed or regranted.
+
+**Two shipped member routes change shape.** `GET .../members/{memberId}` gains `countryCode` in
+its explicit projection and `PUT .../members/{memberId}` gains it in its body. Both keep every
+status, message and guard they have; the read is the only thing that can tell the new picker what
+is stored, which is why it is named here rather than assumed.
 
 **The country rule moves money, in both directions, and this is the one to read twice.** Every
 call site that resolves a member's country reads `Account.phoneCountryCode` today, and this area

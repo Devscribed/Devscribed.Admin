@@ -84,12 +84,14 @@ are kept.
 - **Covers:** REQ-01-026, REQ-01-027, REQ-01-040
 - **Steps:** Call the helper with each `(membership, organization)` pair: `('US', 'BY')`;
   `(null, 'BY')`; `(null, null)`; `('US', null)`; `('XX', 'PL')` where `XX` does not normalize;
-  `('', 'PL')`; `('pl', 'BY')` lowercase; `('US', 'xx')` where the organization's does not
-  normalize.
-- **Expected Result:** `US`, `BY`, `null`, `US`, `PL`, `PL`, `PL`, `US`. The membership wins
-  whenever it normalizes; an unusable membership value falls through to the organization rather
-  than terminating the chain; an unusable organization value with no membership value gives
-  `null`; the result is always uppercase.
+  `('', 'PL')`; `('pl', 'BY')` lowercase; `('US', 'xx')`; **`(null, 'xx')`** and **`('XX', 'YY')`**,
+  where the organization's value is the last one left and does not normalize.
+- **Expected Result:** `US`, `BY`, `null`, `US`, `PL`, `PL`, `PL`, `US`, `null`, `null`. The
+  membership wins whenever it normalizes; an unusable membership value falls through to the
+  organization rather than terminating the chain; and the last two pairs are the branch that
+  matters most — with nothing usable left, the chain **rejects** rather than returning the raw
+  unusable string, which is the backwards implementation of REQ-01-040 this case exists to fail.
+  The result is always uppercase.
 
 ### TC-01-UNIT-02
 
@@ -275,7 +277,7 @@ are kept.
 - **Expected Result:** `200` for the manager — `manage-holidays` grants admin and manager alike.
   `404` for both the `user` and the `viewer`, byte-identical, so neither learns the route exists.
 
-### TC-01-INT-23
+### TC-01-INT-25
 
 - **Level:** Integration
 - **Covers:** REQ-01-042, REQ-01-043
@@ -288,7 +290,7 @@ are kept.
   one; after the second their `Membership.countryCode` is `null` and they carry the `PL` one, by
   the organization fallback. The member's role and job title are unchanged by both writes.
 
-### TC-01-INT-24
+### TC-01-INT-26
 
 - **Level:** Integration
 - **Covers:** REQ-01-044
@@ -298,6 +300,17 @@ are kept.
 - **Expected Result:** `403` carrying `editForbidden` both times — the route's existing refusal,
   unchanged by the new field, and a member may not state their own holiday country any more than
   they may set their own role.
+
+### TC-01-INT-27
+
+- **Level:** Integration
+- **Covers:** REQ-01-045
+- **Asserts:** `GET /api/organizations/{orgId}/members/{memberId}` → 200
+- **Steps:** With the organization country set to `PL`, read a member who has `US` stated, then a
+  member who has nothing stated.
+- **Expected Result:** `countryCode` is `"US"` for the first and `null` for the second — the
+  **stored** value, never the resolved one. A `null` here is what the picker renders as its default
+  option, and a screen that received `"PL"` would show a country nobody had stated for that member.
 
 ### TC-01-INT-16
 
@@ -468,15 +481,13 @@ are kept.
 ### TC-01-E2E-07
 
 - **Level:** E2E
-- **Covers:** REQ-01-033, REQ-01-035
-- **Steps:** Seed a `PL` holiday and a member with no country of their own. As an `admin`, open
-  Settings › Holidays, set the organization country to Poland, save, then open the calendar. Sign
-  out and back in as a `manager`, and open Settings › Holidays again.
-- **Expected Result:** The admin's save succeeds and that member's row then carries the `PL` day's
-  per-cell holiday marker, which it did not before. For the manager, `org-country-select` renders
-  the stored value read-only and `org-country-save` is not drawn at all — the control a role
-  cannot use is not shown to them.
-- **Selectors:** `org-country-select`, `org-country-save` (present for admin, absent for manager),
+- **Covers:** REQ-01-033
+- **Steps:** Seed a `PL` holiday and a member with no country stated. As a `manager`, open
+  Settings › Holidays, set the organization country to Poland, save, then open the calendar.
+- **Expected Result:** The manager's save succeeds — the control is theirs, not drawn read-only —
+  and that member's row then carries the `PL` day's per-cell holiday marker, which it did not
+  before. The holiday list on the page is unchanged by the save.
+- **Selectors:** `org-country-select`, `org-country-save`,
   `calendar-cell-holiday-{membershipId}-{date}`
 
 ### TC-01-E2E-08

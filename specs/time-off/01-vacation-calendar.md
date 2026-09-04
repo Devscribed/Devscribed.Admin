@@ -1,11 +1,13 @@
 ---
 id: "01"
 title: Vacation Calendar
-routes: ["/org/{orgId}/time-off/calendar", "/org/{orgId}/settings/holidays"]
+routes: ["/org/{orgId}/time-off/calendar", "/org/{orgId}/settings/holidays", "/org/{orgId}/members/{memberId}"]
 api:
   - "GET /api/organizations/{orgId}/time-off/calendar"
   - "PUT /api/organizations/{orgId}/settings/country"
-entities: [Organization]
+  - "GET /api/organizations/{orgId}/members/{memberId}"
+  - "PUT /api/organizations/{orgId}/members/{memberId}"
+entities: [Organization, Membership]
 tags: [vacation-calendar, wallchart, timeline, time-off, absence, holiday, country-resolution, scope, teams, projects, members, week, month]
 depends-on:
   - "user-management/09"   # Vacation Requests — the absence rows this draws
@@ -61,15 +63,17 @@ Blast radius and backward compatibility for this spec are in [README.md](README.
 - **Actors:** `admin`, `manager` and `user` open the calendar and see every member it is scoped
   to. `viewer` has no access and is shown no navigation row. `admin` and `manager` state both
   countries.
-- **Preconditions:** the caller is an `active` member of the organization. Nothing else is
-  required — an organization with no holidays, no projects and no vacation requests renders an
-  empty grid rather than an error, because "nobody is away" is an answer this screen exists to
-  give.
+- **Preconditions:** the caller is an `active` member of the organization. Nothing else — with no
+  holidays, no projects and no requests the grid draws empty rather than erroring, because
+  "nobody is away" is an answer this screen exists to give.
 
 ## Roles & Permission Matrix
 
 Capability checks run against `normalizeRole()` (`packages/validation/src/roles.ts`), so they work
-on today's `admin` / `member` column and survive the role-enum migration untouched.
+on today's `admin` / `member` column and survive the role-enum migration untouched. `edit-detail`
+belongs to the lowercase-dashed `MemberCapability` union that `can(role, …)` reads; every other
+row belongs to `Capability`, which `RequireCapability` decorators name. Both unions ship, both
+grant admin and manager here, and only `Capability` gains a member from this spec.
 
 | Capability | admin | manager | user | viewer |
 |---|---|---|---|---|
@@ -78,8 +82,7 @@ on today's `admin` / `member` column and survive the role-enum migration untouch
 | `ManageHolidays` — set the organization country | ✅ | ✅ | ❌ | ❌ |
 | `edit-detail` — set a member's country | ✅ | ✅ | ❌ | ❌ |
 
-`viewer` is refused because reports/01 already settles what a viewer may see of time off: their
-own, and nothing else.
+`viewer` is refused because reports/01 already settles what a viewer sees of time off: their own.
 
 ## Functional Requirements
 
@@ -95,7 +98,7 @@ WHERE the caller holds `ViewTimeOffCalendar`, THE SYSTEM SHALL render the calend
 IF a caller without `ViewTimeOffCalendar` requests the calendar, THEN THE SYSTEM SHALL answer
 `404` and draw nothing.
 
-**Decided:** 404 rather than 403 — unknown and unauthorized are byte-identical here as everywhere.
+**Decided:** unknown and unauthorized are byte-identical here as everywhere.
 
 #### REQ-01-003 — the navigation row
 
@@ -178,17 +181,17 @@ IF `endDate` is earlier than `startDate`, THEN THE SYSTEM SHALL answer `422` car
 IF the inclusive range exceeds 92 days, THEN THE SYSTEM SHALL answer `422` carrying
 `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide`.
 
-**Decided:** 92 days is a quarter, which is the widest window a per-day column can be added for
-later without changing this contract. It is deliberately far tighter than the 370 days reports
-allow, because this response carries a cell per member per day.
+**Decided:** a quarter — the widest window a per-day column could later be added for without
+changing this contract, and far tighter than reports allow because this response carries a cell
+per member per day.
 
 #### REQ-01-017 — days are calendar days
 
 THE SYSTEM SHALL compare `VacationRequest.startDate`, `VacationRequest.endDate` and `Holiday.date`
 against the raw ISO range, never against a timezone-shifted UTC instant.
 
-**Decided:** all three are Postgres `DATE`. A `DATE` compared against a `TIMESTAMPTZ` is silently
-truncated, which drops the boundary day for any member east or west of UTC.
+**Decided:** all three are Postgres `DATE`, and a `DATE` compared against a `TIMESTAMPTZ` is
+silently truncated — which drops the boundary day for anybody east or west of UTC.
 
 #### REQ-01-018 — today is the caller's today
 
@@ -224,8 +227,7 @@ its true `startDate` and `endDate` and a flag on each edge that falls outside th
 THE SYSTEM SHALL draw a band as one unbroken run across every day from its start to its end,
 including weekends and holidays inside it.
 
-**Decided:** breaking the band at a weekend would read as two absences, which is a different
-fact from the one the row states.
+**Decided:** breaking the band at a weekend would read as two absences.
 
 #### REQ-01-024 — the band's day count is the frozen one
 
@@ -236,9 +238,9 @@ submission.
 
 THE SYSTEM SHALL emit `kind: "vacation"` on every band.
 
-**Decided:** the one field this spec adds ahead of its need. The time-off policy catalogue is a
-later spec, and it lands by giving this field more values — so the grid's colour map is keyed by
-type from the first commit instead of being retrofitted onto a payload that has no type in it.
+**Decided:** the one field this spec adds ahead of its need. The policy catalogue lands by giving
+it more values, so the grid's colour map is keyed by type from the first commit rather than
+retrofitted onto a payload that has none.
 
 ### Holidays, and the country they belong to
 
@@ -250,8 +252,7 @@ normalizes to a valid ISO 3166-1 alpha-2 value, and as `Organization.countryCode
 **Decided:** both links are stated by a person, and nothing is inferred.
 `Account.phoneCountryCode` — today's only source — is dropped rather than ranked: a dial code is
 a contact detail a foreign SIM makes wrong. `MemberProfile.country` is a postal address behind a
-PII capability, and reading it would make the holidays somebody is paid a side effect of filling
-in a contract.
+PII capability, and would make the holidays somebody is paid a side effect of a contract.
 
 #### REQ-01-040 — a member with no country at all
 
@@ -287,9 +288,8 @@ only the cells of the members it applies to.
 
 THE SYSTEM SHALL shade Saturday and Sunday columns as non-working days.
 
-**Decided:** a fixed Monday–Friday week, which is the same week `calculateWorkingDays` counts in
-spec `user-management/09`. A configurable working week would put this screen and the frozen
-`workingDays` on that request into disagreement.
+**Decided:** a fixed Monday–Friday week, the same one `calculateWorkingDays` counts in spec
+`user-management/09`. A configurable week would disagree with the frozen `workingDays`.
 
 ### The countries, and who states them
 
@@ -298,8 +298,8 @@ spec `user-management/09`. A configurable working week would put this screen and
 WHEN a caller holding `edit-detail` submits an ISO 3166-1 alpha-2 country for a member, THE
 SYSTEM SHALL store it on `Membership.countryCode`.
 
-**Decided:** a field on the member update that already ships. The screen carrying a member's role
-and job title is where their country belongs, and one field does not earn an endpoint.
+**Decided:** a field on the member update that already ships — one field does not earn an
+endpoint, and the screen carrying a member's role is where their country belongs.
 
 #### REQ-01-043 — clearing a member's country
 
@@ -307,13 +307,20 @@ WHEN a caller holding `edit-detail` submits an empty country for a member, THE S
 `null` on `Membership.countryCode`.
 
 **Decided:** `null` is not a member without holidays — REQ-01-026 reads the organization's
-country for exactly this row, so clearing the field returns them to the default rather than
-stranding them.
+country for exactly this row.
 
 #### REQ-01-044 — the member write is refused to everyone else
 
 IF a caller without `edit-detail` submits a member country, THEN THE SYSTEM SHALL answer `403`
 carrying `MEMBER_MESSAGES.editForbidden`.
+
+#### REQ-01-045 — reading a member's country
+
+WHEN a caller holding `edit-detail` opens a member's detail, THE SYSTEM SHALL return that
+member's stored `Membership.countryCode` on the member detail read.
+
+**Decided:** the stored value, `null` included, never the resolved one, which would show a country
+nobody had stated. The read's projection is explicit, so a field absent from it cannot be drawn.
 
 #### REQ-01-033 — setting the organization's country
 
@@ -332,10 +339,9 @@ WHEN a caller holding `ManageHolidays` submits an empty country, THE SYSTEM SHAL
 
 IF a caller without `ManageHolidays` submits a country, THEN THE SYSTEM SHALL answer `404`.
 
-**Decided:** `ManageHolidays` rather than a capability of its own — it grants exactly the admin
-and manager this write is for, and a separate capability granted to the same two roles is a
-distinction no grant expresses and no case could reach. 404 is what `manage-holidays` already
-answers on the create and edit beside it.
+**Decided:** `ManageHolidays` rather than a capability of its own, which would be a distinction
+no grant expresses and no case could reach. 404 is what it already answers on the holiday create
+and edit beside it.
 
 #### REQ-01-036 — an invalid country is refused
 
@@ -352,7 +358,7 @@ WHILE a scope resolves to no rows, THE SYSTEM SHALL draw the empty state in plac
 
 WHILE the rows have no absence in the window, THE SYSTEM SHALL draw the full grid with no bands.
 
-**Decided:** an empty month is the answer, not the absence of one. A "no data" panel here hides
+**Decided:** an empty month is the answer, not the absence of one — a "no data" panel would hide
 the fact the reader came for.
 
 #### REQ-01-039 — cross-organization reads
@@ -414,11 +420,13 @@ Invariants:
 | 5 | An approved request draws a solid band across its days; a pending one draws a hatched band | TC-01-E2E-01 |
 | 6 | A rejected request and a cancelled one draw nothing | TC-01-INT-09 |
 | 7 | A band spanning a weekend is one continuous run and reports its frozen working-day count | TC-01-INT-10, TC-01-E2E-01 |
-| 8 | A member's holiday country resolves from their profile, then their phone, then the organization, and is `null` when none of the three is usable | TC-01-UNIT-01, TC-01-INT-12 |
+| 8 | A member's holiday country is the one stated on them, else the one stated on the organization, and is `null` when neither is usable | TC-01-UNIT-01, TC-01-INT-12 |
 | 9 | A country-scoped holiday marks only the cells of the members it applies to | TC-01-INT-13, TC-01-E2E-04 |
 | 10 | A holiday that applies to everyone in view shades the whole column | TC-01-E2E-04 |
-| 11 | Setting the organization country gives members without a country of their own that country's holidays | TC-01-INT-14 |
-| 12 | A manager cannot set the organization country and is told so | TC-01-INT-15 |
+| 11 | Setting the organization country gives every member nobody has stated a country for that country's holidays | TC-01-INT-14 |
+| 18 | A country stated on a member overrides the organization's, and clearing it returns them to the organization's | TC-01-INT-25 |
+| 19 | The member detail screen shows the country stored on that member, not the one they resolve to | TC-01-INT-27 |
+| 12 | A manager sets the organization country, and a user and a viewer are refused it identically | TC-01-INT-15 |
 | 13 | A range longer than 92 days is refused with the message that names the bound | TC-01-INT-16 |
 | 14 | A scope resolving to more than 100 members is refused rather than truncated | TC-01-INT-17 |
 | 15 | An empty team or people selection is refused rather than drawn as an empty grid | TC-01-INT-06, TC-01-INT-08 |

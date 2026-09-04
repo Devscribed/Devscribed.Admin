@@ -9,6 +9,7 @@ here by id.
 |---|---|---|---|
 | `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `ViewTimeOffCalendar` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
 | `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
+| `GET /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; capability checked in the service | `200` | `404` (wrong organization; member not found) |
 | `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) · `404` (wrong organization) |
 
 No route here carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
@@ -23,8 +24,11 @@ beside. **The member country is the exception and keeps its route's existing 403
 `PUT .../members/{memberId}` ships that refusal today for role and job title, and one route does
 not get two refusal shapes because a field was added to it.
 
-**That third row is an existing route.** It gains `countryCode` in its body and changes in no
-other way: same guards, same statuses, same messages for everything it already accepts.
+**The member rows are existing routes.** The read gains `countryCode` in its projection and the
+write gains it in its body; neither changes in any other way — same guards, same statuses, same
+messages for everything they already carry. The read's projection is explicit
+(`MembersService.getDetail` builds it field by field), which is why the field has to be added to
+it rather than assumed to ride along.
 
 ### `GET /api/organizations/{orgId}/time-off/calendar`
 
@@ -104,6 +108,28 @@ Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-0
 { "countryCode": "PL" }
 ```
 
+### `GET /api/organizations/{orgId}/members/{memberId}`
+
+The shipped projection gains one field (REQ-01-045). Everything else it returns is unchanged.
+
+```json
+{
+  "id": "7e590f6e-cfe3-479d-85af-05558414df70",
+  "fullName": "Ivan Demchenko",
+  "role": "user",
+  "jobTitle": "Senior Engineer",
+  "countryCode": null
+}
+```
+
+`countryCode` is the **stored** value, not the resolved one — `null` means "use the
+organization's" and is what the picker's default option renders.
+
+### `PUT /api/organizations/{orgId}/members/{memberId}`
+
+The shipped body gains `countryCode` beside the `role` and `jobTitle` it already takes
+(REQ-01-042, REQ-01-043).
+
 ## Error Messages
 
 | Export | Route | Message | New |
@@ -119,7 +145,7 @@ Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-0
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateBody` | — | No active member matches this scope. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint` | — | Members without a country of their own get this country's holidays. | yes |
 | `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Country code must be 2 uppercase letters. | no |
-| `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You don't have permission to edit this member. | no |
+| `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You do not have permission to edit members | no |
 
 `HOLIDAY_MESSAGES.countryCodeInvalid` already ships
 (`packages/validation/src/holiday-messages.ts`) and is reused unchanged; the country field on this
@@ -183,11 +209,13 @@ The client validates 1–4, 6, 7 and 9 to keep the controls honest before a requ
 server re-validates all nine, and 5 and 8 exist only on the server because neither is reachable
 from a control the screen draws.
 
-**Decided:** rule 9 refuses `pl` rather than upcasing it, which is what the holiday rows'
-country validator already does and what keeps the stored value the one their uniqueness index
-compares. Normalizing on the write was rejected: it would give one value two behaviours, on the
-holiday form and on the country field beside it. This bounds the write only — REQ-01-026 still
-upcases a stored candidate such as a `pl` profile country when it resolves the chain on read.
+**Decided:** rule 9 refuses `pl` rather than upcasing it, which is what the holiday rows' country
+validator already does and what keeps the stored value the one their uniqueness index compares.
+Normalizing on the write was rejected: it would give one value two behaviours, on the holiday
+form and on the country field beside it. The read is deliberately more forgiving than the write —
+REQ-01-026 upcases whatever it finds in either column — because a lowercase value can still reach
+a column through a migration or a direct write, and a holiday silently not applying is worse than
+a value quietly accepted.
 
 ## Required data-testid Attributes
 
@@ -274,7 +302,7 @@ update the screen already submits — no new form, no second save button.
 | Empty (no rows) | `calendar-empty-state` replaces the grid, titled from `TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle`. The filter bar stays. |
 | Empty (no absences) | The full grid draws, every cell blank. No empty state — REQ-01-038. |
 | Refused (422) | `calendar-error-banner` above the grid carries the message; the last good grid stays on screen underneath rather than being cleared. |
-| Permission-limited | A `viewer` never reaches the route and never sees the nav row; a `manager` sees the organization country and cannot save it. |
+| Permission-limited | A `viewer` never reaches the calendar route and never sees the nav row. Both country pickers are drawn only for the admin and manager who may save them; no role sees either control read-only, because the pages holding them are already refused to everybody else. |
 | Narrow viewport | Below `--layout-breakpoint-desktop` the grid scrolls horizontally inside its own container; the member column stays pinned and the page body never scrolls sideways. |
 | Keyboard | The three scope buttons and the three window buttons are one roving-tabindex group each. Each absence band is a button carrying its dates, status and working-day count as its accessible name. |
 
