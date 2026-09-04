@@ -136,7 +136,7 @@
           "shapes": {
             "single": {
               "agent": "implementer",
-              "model": "opus"
+              "model": "sonnet"
             },
             "orchestrated": {
               "$comment": "Sound only when the report names edits in disjoint files.",
@@ -160,13 +160,13 @@
         "review": {
           "$comment": "A defect fix earns the careful reviewer: the code around a bug is the code that already fooled somebody.",
           "enabled": true,
-          "use": "lead-open",
+          "use": "solo-open",
           "shapes": {
             "lead-open": {
               "agent": "code-reviewer-lead",
               "model": "opus",
-              "shardAgent": "code-reviewer-open",
-              "shardModel": "opus",
+              "shardAgent": "code-reviewer-sweeps",
+              "shardModel": "sonnet",
               "shardSize": 15
             },
             "lead-sweeps": {
@@ -177,8 +177,8 @@
               "shardSize": 15
             },
             "solo-open": {
-              "agent": "code-reviewer-open",
-              "model": "opus"
+              "agent": "code-reviewer-sweeps",
+              "model": "sonnet"
             }
           }
         },
@@ -229,7 +229,7 @@
           "shapes": {
             "single": {
               "agent": "implementer",
-              "model": "opus"
+              "model": "sonnet"
             }
           }
         },
@@ -245,7 +245,7 @@
         "review": {
           "$comment": "The cheap shape by default — a patch diff is small enough for one child, and the checklist is what a small diff needs. lead-open buys the careful reviewer when a patch turns out to touch something load-bearing.",
           "enabled": true,
-          "use": "lead-sweeps",
+          "use": "solo-sweeps",
           "shapes": {
             "lead-sweeps": {
               "agent": "code-reviewer-lead",
@@ -263,7 +263,7 @@
             },
             "solo-sweeps": {
               "agent": "code-reviewer-sweeps",
-              "model": "opus"
+              "model": "sonnet"
             }
           }
         },
