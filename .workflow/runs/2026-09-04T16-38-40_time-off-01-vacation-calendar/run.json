@@ -6,7 +6,7 @@
   "branch": "spec/time-off-vacation-calendar",
   "baseRef": "0d986a177419c5189be5109a4a27c7e8afb02546",
   "headAtInit": "30b415ebe25b11477cb42fb2ecaaa44394665721",
-  "status": "ready",
+  "status": "halted",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -17,7 +17,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T16:38:40.888Z",
-  "updatedAt": "2026-09-04T19:48:19.504Z",
+  "updatedAt": "2026-09-04T19:48:19.649Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -1032,5 +1032,10 @@
         "specs/time-off/01-vacation-calendar.contracts.md"
       ]
     }
-  ]
+  ],
+  "halt": {
+    "reason": "aborted",
+    "detail": "the run has been going 190 minutes, past the 180-minute breaker (breakers.runTimeoutMin)",
+    "at": "2026-09-04T19:48:19.648Z"
+  }
 }
