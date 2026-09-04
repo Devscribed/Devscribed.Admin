@@ -19,6 +19,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { REGISTERS } from './criteria.mjs';
+import { shardPlan } from './spec-shards.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -208,27 +209,37 @@ if (mode === 'diff') {
   console.log('  Sweep these lines and the rules they touch. Contradiction is checked against the whole document.');
 }
 
+/* The split, ready to dispatch and not dispatched. One shard per member of the bundle, because a
+   shard handed a subject and no file list reads the whole bundle to answer it — which is the
+   reading a split exists to spread out. Which criteria a member settles comes from the
+   register's `where` column, so a criterion added there places itself. */
+const plan = shardPlan(ROOT, specRel);
+
 console.log(`\n## Criteria — from ${REGISTERS.spec}`);
 if (!sharded) {
-  console.log(`Profile ${profileName} runs no shards. Sweep every family yourself, in this order, and set "shards": [].`);
+  console.log(`Profile ${profileName} names no shard agent. Answer every criterion yourself, set "shards": [],`);
+  console.log('and say so in `shardDecision`.');
   for (const f of all) console.log(`  ${f.family.padEnd(16)} ${f.ids.join(' ')}`);
 } else {
-  console.log(`Profile ${profileName} — dispatch subagent_type "${profile.shardAgent}" on ${profile.shardModel ?? 'the default model'}.`);
-  console.log(`${groups.length} shard(s). Dispatch them in ONE message, one Task call each.\n`);
-  for (const g of groups) {
-    console.log(`  shard ${g.shard}: ${g.families.join(' + ')}`);
-    console.log(`    criteria: ${g.ids.join(' ')}`);
-    for (const e of g.enumerate) console.log(`    enumerate: ${e}`);
+  console.log(`Profile ${profileName} — shard agent "${profile.shardAgent}" on ${profile.shardModel ?? 'the default model'}.`);
+  console.log(`${plan.shards.length} shard(s) are available, one per member of the bundle:\n`);
+  for (const s of plan.shards) {
+    console.log(`  shard ${s.shard}  ${s.file}  (${s.lines} lines, ${s.criteria.length} criteria)`);
+    console.log(`    criteria: ${s.criteria.map((c) => c.id).join(' ')}`);
+    console.log(`    enumerate: ${s.enumerate}`);
   }
-  console.log('\n  Quote each criterion\'s text from the register into the shard\'s prompt. A shard reads no register.');
+  console.log('\n  **Dispatching is your decision.** Delegate when the reading is more than one pass');
+  console.log('  should hold; read it yourself when it is not. Say which in `shardDecision` either way.');
+  console.log('  A shard gets one file and the text of its criteria — it reads no register and no');
+  console.log('  sibling file. Dispatch them in ONE message, one call each, or they run in series.');
 }
 
-console.log('\n## Yours, and no shard\'s');
-for (const f of judgeFamilies) {
-  console.log(`  ${f.family.padEnd(16)} ${f.ids.join(' ')}`);
-  console.log(`    ${f.enumerate}`);
-}
-if (unassigned.length) console.log(`  unassigned      ${unassigned.join(' ')}\n    no family claims these — answer them yourself and say so in the verdict`);
+console.log('\n## Yours, whoever else reads');
+console.log(`  ${plan.judge.map((c) => c.id).join(' ')}`);
+console.log('    no single file settles these: a contradiction lives between two regions, and');
+console.log('    scope is a question about the document rather than about a slice of it.');
+if (plan.unplaced.length) console.log(`  unplaced: ${plan.unplaced.join(' ')} — the register places these nowhere; answer them and say so`);
+for (const m of plan.missingMembers) console.log(`  no ${m.member} file, so its criteria are yours: ${m.ids.join(' ')}`);
 
 console.log(`\n## Accounting`);
 console.log('The verdict carries a `criteria` map with every id in the register, and `admitted` is true');

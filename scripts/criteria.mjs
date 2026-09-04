@@ -20,6 +20,13 @@ export const REGISTERS = {
   review: '.claude/skills/code-review/references/blocking-criteria.md',
 };
 
+/**
+ * The values the spec register's `where` column may take: which member of the bundle answers a
+ * criterion. `any` is answered from whichever file the shard holds; `judge` is a criterion no
+ * single file settles, so it never reaches a shard.
+ */
+export const WHERE = new Set(['behaviour', 'contracts', 'cases', 'design', 'any', 'judge']);
+
 const cache = new Map();
 
 /**
@@ -36,7 +43,14 @@ export function readRegister(root, which) {
   const key = `${which}:${path}`;
   if (cache.has(key)) return cache.get(key);
 
-  const out = { path: REGISTERS[which], ids: new Set(), severity: new Map(), exists: existsSync(path) };
+  const out = {
+    path: REGISTERS[which],
+    ids: new Set(),
+    severity: new Map(),
+    where: new Map(),
+    question: new Map(),
+    exists: existsSync(path),
+  };
   if (out.exists) {
     /* Split on either ending. A checkout that materialises these pages with CRLF leaves a `\r`
        at the end of every row, and `.` does not match a carriage return — so the row regex below
@@ -49,6 +63,13 @@ export function readRegister(root, which) {
       const cells = m[2].split('|').map((c) => c.trim());
       const sev = cells.find((c) => c === 'blocks' || c === 'note');
       if (sev) out.severity.set(m[1], sev);
+      /* Which member of the bundle answers this criterion, so the reading can be split by file
+         rather than by subject, and `judge` for the ones no single file settles. */
+      const where = cells.find((c) => WHERE.has(c));
+      if (where) out.where.set(m[1], where);
+      /* The criterion's own text, so a shard is handed the question rather than a page to read
+         and an id to find in it. */
+      if (cells[0]) out.question.set(m[1], cells[0]);
     }
   }
   cache.set(key, out);

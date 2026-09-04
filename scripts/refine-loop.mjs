@@ -530,14 +530,18 @@ async function gateJudge(spec, ledger, round, request, since) {
     '',
     request || 'no request given',
     '',
-    /* The shape of the pass reaches the judge as a command rather than as a paragraph. It prints
-       the bundle, the criteria families, which of them go to shards and which stay, and the
-       shard agent and model to use — all derived from the register and the config, so the judge
-       picks none of it and two passes over one document shard the same way. */
+    /* The split is computed and offered; whether to use it is the judge's. `spec-slice` prints
+       one shard per member of the bundle with the criteria that member settles, so a judge that
+       delegates does not have to invent the division — and one that does not delegate says so
+       in the verdict rather than leaving the choice invisible. */
     `Run \`node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''}`
-    + ` --profile ${PROFILE.name}\` first. It gives you the bundle, the criteria families and`,
-    `the shape of this pass. That shape is configuration; do not choose your own.`,
-    '',
+    + ` --profile ${PROFILE.name}\` first. It prints the bundle, this pass's mode, and a ready`,
+    `split: one shard per member, the criteria that member settles, and the shard agent to use.`,
+    ``,
+    `**Dispatching is yours to decide.** Delegate when the reading is more than one pass should`,
+    `hold, and read it yourself when it is not. Either way the verdict says which you did and`,
+    `why, in \`shardDecision\`, and records every shard you dispatched in \`shards\`.`,
+    ``,
     since
       ? [
         `Judge the change: this document has already been judged in full and repaired. The range `
@@ -768,15 +772,12 @@ async function main() {
           `the verdict carries no criteria map, so no enumerated criterion was run. `
           + `Re-run the round; a pass that reports nothing is not a pass.`);
       }
-      /* A profile that shards and a verdict that shows no shard mean the judge read everything
-         itself. That is a different pass from the one that was asked for and paid for, and the
-         only place it is visible is here. */
-      if (!dryRun && PROFILE.shardAgent && !(verdict.shards ?? []).length) {
-        record.judge = { status: 'judge-error', agent: JUDGE_AGENT, ranOn: verdict.ranOn ?? null };
-        saveLedger(ledger);
-        finish(ledger, 'error', 'judge-error',
-          `profile ${PROFILE.name} dispatches ${PROFILE.shardAgent}, and the verdict records no shard. `
-          + `The judge read the bundle itself; re-run, or use --profile solo deliberately.`);
+      /* Whether to shard is the judge's call, so an empty `shards` is a legitimate answer and
+         not an error. What is not optional is saying which way it went: a pass that delegates
+         and one that does not are different passes, and a ledger that cannot tell them apart
+         cannot be used to compare them. */
+      if (!dryRun && PROFILE.shardAgent && !(verdict.shards ?? []).length && !verdict.shardDecision) {
+        note('the judge dispatched no shard and gave no reason — `shardDecision` is missing from the verdict');
       }
       const demoted = enforceRules(verdict, { criteria: true });
       const shift = criteriaShift(ledger, round, verdict);
@@ -787,6 +788,7 @@ async function main() {
         mode: verdict.mode ?? (since ? 'diff' : 'full'),
         agent: JUDGE_AGENT,
         askedFor: JUDGE_MODEL,
+        shardDecision: verdict.shardDecision ?? null,
         ranOn: verdict.ranOn ?? null,
         admitted: verdict.admitted ?? null,
         shards: (verdict.shards ?? []).length,
