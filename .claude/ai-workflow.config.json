@@ -1,7 +1,9 @@
 {
-  "$comment": "The spec-to-ship pipeline. `shipConfig` is the whole of it: one block per track, and inside each the stages that track runs, written out in full. Nothing is inherited between tracks — what you read under a track is exactly what that track runs. Validate any edit with `npm run config` before starting a run; it is also checked automatically by ship, wf init and preflight.",
+  "$comment": "The spec-to-ship pipeline. One rule governs this whole file: a thing that can run more than one way lists its ways under `shapes`, each written out in full, and `use` names the one that runs. Nothing is merged, nothing is inherited, and no null means \"delete a key\" — what you read under a shape is exactly what that shape runs. Validate any edit with `npm run config`; it is also checked by ship, wf init and preflight, so a bad edit stops a run before a lock or a branch exists.",
+
   "shipConfig": {
-    "$comment": "A track is a weight of document. It is resolved from the document's path by `match`, or named with `--track`. Stage order is fixed: preflight, pre_implement, implement, static_gate, review, qa. Every track must list all six; a stage it does not run is `enabled: false` rather than absent, so a reader never has to know the full list to see what is missing. `static_gate` and `qa` may not be disabled on any track — a lighter document buys speed against the stages that read intent, never against the ones that check the result.",
+    "$comment": "A track is a weight of document, resolved from its path by `match` or named with --track. Stage order is fixed: preflight, pre_implement, implement, static_gate, review, qa. Every track lists all six; one it does not run is `enabled: false` rather than absent, so a reader never needs the full list to see what is missing. `static_gate` and `qa` may not be disabled on any track — a lighter document buys speed against the stages that read intent, never against the ones that check the result. Change what a stage runs by changing its `use`; override it for a single run with --plan-shape, --implement-shape or --review-shape.",
+
     "spec": {
       "$comment": "A three-file spec bundle that the refine loop admitted. The full pipeline.",
       "match": "^specs/(?!bugs/|patches/)",
@@ -12,24 +14,36 @@
           "enabled": true
         },
         "pre_implement": {
-          "$comment": "Compiles the spec into handoff.json. `strict` answers a closed compile checklist by id and writes shippingSurfaces; the `classic` variant is the original open prompt. Both write the same handoff.json.",
+          "$comment": "Compiles the spec into handoff.json. Both shapes write the same file.",
           "enabled": true,
-          "agent": "pre-implementer-strict",
-          "model": "opus",
-          "variants": {
+          "use": "strict",
+          "shapes": {
+            "strict": {
+              "$comment": "Answers a closed compile checklist by id and writes shippingSurfaces, so a plan that skipped a question is visible in the verdict rather than in the diff three stages later.",
+              "agent": "pre-implementer-strict",
+              "model": "opus"
+            },
             "classic": {
-              "agent": "pre-implementer"
+              "$comment": "The original open prompt, no checklist.",
+              "agent": "pre-implementer",
+              "model": "opus"
             }
           }
         },
         "implement": {
-          "$comment": "Writes the code. The default is one opus implementer, synchronous — the safe shape for a small or tangled diff. The `orchestrated` variant is an opus lead that splits the handoff into disjoint file sets and dispatches sonnet shards in parallel waves; it is faster and only sound when the plan's file globs are disjoint. Pick one for a run with --implement-profile.",
+          "$comment": "Writes the code.",
           "enabled": true,
-          "agent": "implementer",
-          "model": "opus",
-          "variants": {
+          "use": "single",
+          "shapes": {
+            "single": {
+              "$comment": "One implementer, synchronous. The safe shape for a small or tangled diff.",
+              "agent": "implementer",
+              "model": "opus"
+            },
             "orchestrated": {
+              "$comment": "A lead splits the handoff into disjoint file sets and dispatches children in parallel waves. Faster, and sound only when the plan's file globs are disjoint.",
               "agent": "implementer-lead",
+              "model": "opus",
               "shardAgent": "implementer",
               "shardModel": "sonnet",
               "maxShards": 4
@@ -38,40 +52,53 @@
         },
         "static_gate": {
           "enabled": true,
-          "script": "scripts/static-gate.mjs"
+          "use": "script",
+          "shapes": {
+            "script": {
+              "script": "scripts/static-gate.mjs"
+            }
+          }
         },
         "review": {
-          "$comment": "Judges the diff. The default gives each shard open-ended judgement and no checklist, on opus. The `sweeps` variant gives it the enumerate-then-judge method in .claude/skills/code-review/SKILL.md, on sonnet. shardSize is the largest number of files one shard is handed. Pick one for a run with --review-profile.",
+          "$comment": "Judges the diff. shardSize is the largest number of files one child is handed.",
           "enabled": true,
-          "agent": "code-reviewer-lead",
-          "model": "opus",
-          "shardAgent": "code-reviewer-open",
-          "shardModel": "opus",
-          "shardSize": 15,
-          "variants": {
-            "sweeps": {
-              "shardAgent": "code-reviewer-sweeps",
-              "shardModel": "sonnet"
+          "use": "lead-open",
+          "shapes": {
+            "lead-open": {
+              "$comment": "A lead splits the slice; each child judges open-ended, with no checklist.",
+              "agent": "code-reviewer-lead",
+              "model": "opus",
+              "shardAgent": "code-reviewer-open",
+              "shardModel": "opus",
+              "shardSize": 15
             },
-            "solo": {
-              "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
+            "lead-sweeps": {
+              "$comment": "The same lead; each child works the enumerate-then-judge sweeps in .claude/skills/code-review/SKILL.md, on sonnet.",
+              "agent": "code-reviewer-lead",
+              "model": "opus",
+              "shardAgent": "code-reviewer-sweeps",
+              "shardModel": "sonnet",
+              "shardSize": 15
+            },
+            "solo-open": {
+              "$comment": "One reviewer over the whole slice, synchronous — the same definition the children run, with no lead and no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
               "agent": "code-reviewer-open",
-              "shardAgent": null,
-              "shardModel": null,
-              "shardSize": null
+              "model": "opus"
             }
           }
         },
         "qa": {
           "enabled": true,
-          "agent": "qa",
-          "model": "sonnet",
-          "levels": [
-            "unit",
-            "int",
-            "e2e"
-          ],
-          "skipE2eIfLowerFailed": true
+          "use": "targeted",
+          "shapes": {
+            "targeted": {
+              "$comment": "levels is the order QA runs them in; skipE2eIfLowerFailed stops before the expensive one when a cheaper level has already failed.",
+              "agent": "qa",
+              "model": "sonnet",
+              "levels": ["unit", "int", "e2e"],
+              "skipE2eIfLowerFailed": true
+            }
+          }
         }
       },
       "convergence": {
@@ -89,6 +116,7 @@
         "qa": 30
       }
     },
+
     "bug": {
       "$comment": "An investigation report. It already carries the cause to file:line and the fix approach, so there is nothing left to compile into a plan.",
       "match": "^specs/bugs/",
@@ -104,11 +132,16 @@
         },
         "implement": {
           "enabled": true,
-          "agent": "implementer",
-          "model": "opus",
-          "variants": {
+          "use": "single",
+          "shapes": {
+            "single": {
+              "agent": "implementer",
+              "model": "opus"
+            },
             "orchestrated": {
+              "$comment": "Sound only when the report names edits in disjoint files.",
               "agent": "implementer-lead",
+              "model": "opus",
               "shardAgent": "implementer",
               "shardModel": "sonnet",
               "maxShards": 4
@@ -117,40 +150,49 @@
         },
         "static_gate": {
           "enabled": true,
-          "script": "scripts/static-gate.mjs"
+          "use": "script",
+          "shapes": {
+            "script": {
+              "script": "scripts/static-gate.mjs"
+            }
+          }
         },
         "review": {
           "$comment": "A defect fix earns the careful reviewer: the code around a bug is the code that already fooled somebody.",
           "enabled": true,
-          "agent": "code-reviewer-lead",
-          "model": "opus",
-          "shardAgent": "code-reviewer-open",
-          "shardModel": "opus",
-          "shardSize": 15,
-          "variants": {
-            "sweeps": {
-              "shardAgent": "code-reviewer-sweeps",
-              "shardModel": "sonnet"
+          "use": "lead-open",
+          "shapes": {
+            "lead-open": {
+              "agent": "code-reviewer-lead",
+              "model": "opus",
+              "shardAgent": "code-reviewer-open",
+              "shardModel": "opus",
+              "shardSize": 15
             },
-            "solo": {
-              "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
+            "lead-sweeps": {
+              "agent": "code-reviewer-lead",
+              "model": "opus",
+              "shardAgent": "code-reviewer-sweeps",
+              "shardModel": "sonnet",
+              "shardSize": 15
+            },
+            "solo-open": {
               "agent": "code-reviewer-open",
-              "shardAgent": null,
-              "shardModel": null,
-              "shardSize": null
+              "model": "opus"
             }
           }
         },
         "qa": {
           "enabled": true,
-          "agent": "qa",
-          "model": "sonnet",
-          "levels": [
-            "unit",
-            "int",
-            "e2e"
-          ],
-          "skipE2eIfLowerFailed": true
+          "use": "targeted",
+          "shapes": {
+            "targeted": {
+              "agent": "qa",
+              "model": "sonnet",
+              "levels": ["unit", "int", "e2e"],
+              "skipE2eIfLowerFailed": true
+            }
+          }
         }
       },
       "convergence": {
@@ -166,6 +208,7 @@
         "qa": 30
       }
     },
+
     "patch": {
       "$comment": "A change of agreed behaviour small enough to state and check in one file. Admission is the entry condition in .claude/skills/patch/SKILL.md, not a judged round.",
       "match": "^specs/patches/",
@@ -180,47 +223,61 @@
           "enabled": false
         },
         "implement": {
-          "$comment": "No orchestrated variant: the entry condition bounds a patch at two product files, and a lead that shards one file is pure overhead.",
+          "$comment": "One shape only: the entry condition bounds a patch at two product files, and a lead that shards one file is pure overhead.",
           "enabled": true,
-          "agent": "implementer",
-          "model": "opus"
+          "use": "single",
+          "shapes": {
+            "single": {
+              "agent": "implementer",
+              "model": "opus"
+            }
+          }
         },
         "static_gate": {
           "enabled": true,
-          "script": "scripts/static-gate.mjs"
+          "use": "script",
+          "shapes": {
+            "script": {
+              "script": "scripts/static-gate.mjs"
+            }
+          }
         },
         "review": {
-          "$comment": "The cheap shape by default — a patch diff is small enough for one shard, and the checklist is what a small diff needs. The `open` variant buys the careful reviewer when a patch turns out to touch something load-bearing.",
+          "$comment": "The cheap shape by default — a patch diff is small enough for one child, and the checklist is what a small diff needs. lead-open buys the careful reviewer when a patch turns out to touch something load-bearing.",
           "enabled": true,
-          "agent": "code-reviewer-lead",
-          "model": "opus",
-          "shardAgent": "code-reviewer-sweeps",
-          "shardModel": "sonnet",
-          "shardSize": 15,
-          "variants": {
-            "open": {
-              "shardAgent": "code-reviewer-open",
-              "shardModel": "opus"
+          "use": "lead-sweeps",
+          "shapes": {
+            "lead-sweeps": {
+              "agent": "code-reviewer-lead",
+              "model": "opus",
+              "shardAgent": "code-reviewer-sweeps",
+              "shardModel": "sonnet",
+              "shardSize": 15
             },
-            "solo": {
-              "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
+            "lead-open": {
+              "agent": "code-reviewer-lead",
+              "model": "opus",
+              "shardAgent": "code-reviewer-open",
+              "shardModel": "opus",
+              "shardSize": 15
+            },
+            "solo-sweeps": {
               "agent": "code-reviewer-sweeps",
-              "shardAgent": null,
-              "shardModel": null,
-              "shardSize": null
+              "model": "opus"
             }
           }
         },
         "qa": {
           "enabled": true,
-          "agent": "qa",
-          "model": "sonnet",
-          "levels": [
-            "unit",
-            "int",
-            "e2e"
-          ],
-          "skipE2eIfLowerFailed": true
+          "use": "targeted",
+          "shapes": {
+            "targeted": {
+              "agent": "qa",
+              "model": "sonnet",
+              "levels": ["unit", "int", "e2e"],
+              "skipE2eIfLowerFailed": true
+            }
+          }
         }
       },
       "convergence": {
@@ -237,11 +294,13 @@
       }
     }
   },
+
   "breakers": {
-    "$comment": "Whole-run fuses, the same for every track, enforced by scripts/ship.mjs before each stage is dispatched. runTokenCap counts every token the agents report - input, output and both cache figures - summed over the stage logs, so it survives a --resume. The observed range is 1.6M for a patch run and 155M for the largest spec run; the cap sits above that and catches a runaway, not a long run.",
+    "$comment": "Whole-run fuses, the same for every track, enforced by scripts/ship.mjs before each stage is dispatched. runTokenCap counts every token the agents report — input, output and both cache figures — summed over the stage logs, so it survives a --resume. The observed range is 1.6M for a patch run and 155M for the largest spec run; the cap sits above that and catches a runaway, not a long run.",
     "runTimeoutMin": 180,
     "runTokenCap": 250000000
   },
+
   "isolation": {
     "$comment": "Worktrees isolate files and nothing else. Ports, both databases, the mail sink and .local-storage are shared, so runs are serialised until those are per-run too: concurrentRuns is the lock's invariant and the validator refuses any other value.",
     "concurrentRuns": 1,
@@ -249,37 +308,35 @@
       "CI": "1"
     }
   },
-  "protectedBranches": [
-    "main"
-  ],
+
+  "protectedBranches": ["main"],
+
   "refine": {
-    "$comment": "The pre-pipeline gate, and the only thing here that is not per-track: it judges spec bundles, which is the one track that requires it. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre_implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note.",
-    "$profiles": "profile picks who judges and who repairs. `solo` is a single opus judge, synchronous, one pass over the whole bundle. `sharded` is an opus judge that splits the criteria families across sonnet shards, then decides what is worth returning — faster and cheaper per pass, and the judge still signs every finding. Override for one run with --profile.",
+    "$comment": "The pre-pipeline gate, and the only thing here that is not per-track: it judges spec bundles, which is the one track that requires it. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre_implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note. Override the shape for one run with --shape.",
     "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; it applies only to tracks with requiresRefine true, and `--accept-unrefined <reason>` overrides it and is recorded in run.json.",
-    "profile": "sharded",
-    "profiles": {
-      "solo": {
-        "judgeAgent": "spec-reviewer",
-        "judgeModel": "opus",
-        "fixerAgent": "spec-fixer",
-        "fixerModel": "opus"
-      },
+    "use": "sharded",
+    "shapes": {
       "sharded": {
+        "$comment": "An opus judge that splits the criteria families across sonnet children, then decides what is worth returning. One child per member of the bundle, dispatched by the loop before the judge runs; the register's `where` column says which member answers each criterion, and judge criteria never reach a child. Faster and cheaper per pass, and the judge still signs every finding.",
         "judgeAgent": "spec-reviewer-lead",
         "judgeModel": "opus",
         "fixerAgent": "spec-fixer-minimal",
         "fixerModel": "opus",
         "shardAgent": "spec-reviewer",
-        "shardModel": "sonnet",
-        "$note": "One shard per member of the bundle, dispatched by the loop before the judge runs. The register's where column says which member answers each criterion; judge criteria never reach a shard."
+        "shardModel": "sonnet"
+      },
+      "solo": {
+        "$comment": "A single opus judge, synchronous, one pass over the whole bundle, and the broader fixer.",
+        "judgeAgent": "spec-reviewer",
+        "judgeModel": "opus",
+        "fixerAgent": "spec-fixer",
+        "fixerModel": "opus"
       }
     },
     "requireCriteriaMap": true,
     "requireJudgeModel": true,
     "shipRequiresRefine": true,
     "rounds": 2,
-    "judgeModel": "opus",
-    "fixerModel": "opus",
     "timeoutMin": 45,
     "maxGrowthPerFinding": 15,
     "blockingRules": [

@@ -7,7 +7,7 @@
  * Three gates, and only the last two cost a model:
  *
  *   T0  spec-lint          a script. Pointers, joins, cross-product completeness.
- *   T2  the judge          spec-reviewer-lead or spec-reviewer, by profile. Full on the first round;
+ *   T2  the judge          spec-reviewer-lead or spec-reviewer, by shape. Full on the first round;
  *                          from the second, the range the previous repair produced and nothing
  *                          else.
  *   T1  pre-implement      the spec compiled into a plan, by the agent the pipeline runs. It
@@ -15,7 +15,7 @@
  *                          whole document every time and cannot be given a range, so it is
  *                          not the gate the loop converges on.
  *
- * Whichever gate blocked, the profile's fixer repairs that verdict, the round is committed, and the
+ * Whichever gate blocked, the shape's fixer repairs that verdict, the round is committed, and the
  * next round's judge is given **that commit** as a range. A finding blocks only under the
  * closed rule list; a blocker filed under any other rule is demoted to a note here, whichever
  * agent wrote it.
@@ -26,7 +26,7 @@
  * halts for a person instead of spending another pass.
  *
  * Options:
- *   --profile <name>   which judge and fixer run, and whether the judge shards its reading
+ *   --shape <name>     which judge and fixer run, and whether the judge shards its reading
  *   --rounds <n>       judged rounds before stopping (default from config)
  *   --request <text>   the request the spec answers; without it the Summary is the request
  *   --skip <gates>     comma-separated: t1, t2
@@ -42,13 +42,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { enforceCriteria, readRegister } from './criteria.mjs';
-import { stageFor, timeoutFor } from './ship-config.mjs';
+import { loadConfig, stageFor, timeoutFor } from './ship-config.mjs';
 import { bundleMembers, stemFor } from './spec-paths.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const argv = process.argv.slice(2);
-const VALUE_FLAGS = new Set(['rounds', 'request', 'skip', 'permission-mode', 'profile', 'plan-profile']);
+const VALUE_FLAGS = new Set(['rounds', 'request', 'skip', 'permission-mode', 'shape', 'plan-shape']);
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
 
@@ -61,25 +61,30 @@ const specArg = (() => {
   return undefined;
 })();
 
-const cfg = JSON.parse(readFileSync(join(ROOT, '.claude/ai-workflow.config.json'), 'utf8'));
+/* One reader of the configuration, and it validates before a round is paid for. */
+const cfg = (() => {
+  try { return loadConfig(ROOT); }
+  catch (e) { process.stderr.write(`refine: ${e.message}
+`); process.exit(1); }
+})();
 const RC = cfg.refine ?? {};
 
 /**
  * The shape of the pass: which judge, which fixer, and whether the judge shards its reading.
- * Configuration, overridable for one run with `--profile`, and recorded in the ledger — so a
+ * Configuration, overridable for one run with `--shape`, and recorded in the ledger — so a
  * result can be attributed to the shape that produced it rather than to the config file as it
  * stands today. An unknown name fails here rather than silently running the default.
  */
-const profileName = opt('profile', RC.profile ?? 'solo');
-if (RC.profiles && !RC.profiles[profileName]) {
-  process.stderr.write(`refine: no profile "${profileName}" — have ${Object.keys(RC.profiles).join(', ')}\n`);
+const shapeName = opt('shape', RC.use);
+if (!RC.shapes?.[shapeName]) {
+  process.stderr.write(`refine: no shape "${shapeName}" — have ${Object.keys(RC.shapes ?? {}).join(', ')}\n`);
   process.exit(1);
 }
-const PROFILE = { name: profileName, ...(RC.profiles?.[profileName] ?? {}) };
-const JUDGE_AGENT = PROFILE.judgeAgent ?? 'spec-reviewer-lead';
-const JUDGE_MODEL = PROFILE.judgeModel ?? RC.judgeModel ?? 'opus';
-const FIXER_AGENT = PROFILE.fixerAgent ?? 'spec-fixer-minimal';
-const FIXER_MODEL = PROFILE.fixerModel ?? RC.fixerModel ?? 'opus';
+const SHAPE = { name: shapeName, ...(RC.shapes?.[shapeName] ?? {}) };
+const JUDGE_AGENT = SHAPE.judgeAgent;
+const JUDGE_MODEL = SHAPE.judgeModel;
+const FIXER_AGENT = SHAPE.fixerAgent;
+const FIXER_MODEL = SHAPE.fixerModel;
 
 const rounds = Number(opt('rounds', RC.rounds ?? 2));
 const skip = new Set((opt('skip', '') || '').split(',').filter(Boolean));
@@ -186,12 +191,12 @@ function loadLedger(spec) {
        turns the resumed run into another full pass, the one thing the range exists to avoid.
        Dropping it is what makes a stopped loop resumable at the round it stopped in. */
     while (l.rounds?.length && l.rounds[l.rounds.length - 1].status === 'running') l.rounds.pop();
-    if (l.spec === spec) return { ...l, path, profile: PROFILE.name, judgeAgent: JUDGE_AGENT, fixerAgent: FIXER_AGENT };
+    if (l.spec === spec) return { ...l, path, shape: SHAPE.name, judgeAgent: JUDGE_AGENT, fixerAgent: FIXER_AGENT };
   }
   return {
     spec, stem, path,
     startedAt: new Date().toISOString(),
-    profile: PROFILE.name,
+    shape: SHAPE.name,
     judgeAgent: JUDGE_AGENT,
     fixerAgent: FIXER_AGENT,
     rounds: [],
@@ -524,7 +529,7 @@ const lastFixPath = (ledger, round) =>
   `.workflow/refine/${ledger.stem}.probe/${round - 1}/fix.verdict.json`;
 
 async function gateJudge(spec, ledger, round, request, since) {
-  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, profile ${PROFILE.name})`);
+  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
   const prompt = [
     spec,
@@ -536,7 +541,7 @@ async function gateJudge(spec, ledger, round, request, since) {
        delegates does not have to invent the division — and one that does not delegate says so
        in the verdict rather than leaving the choice invisible. */
     `Run \`node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''}`
-    + ` --profile ${PROFILE.name}\` first. It prints the bundle, this pass's mode, and a ready`,
+    + ` --shape ${SHAPE.name}\` first. It prints the bundle, this pass's mode, and a ready`,
     `split: one shard per member, the criteria that member settles, and the shard agent to use.`,
     ``,
     `**Dispatching is yours to decide.** Delegate when the reading is more than one pass should`,
@@ -777,7 +782,7 @@ async function main() {
          not an error. What is not optional is saying which way it went: a pass that delegates
          and one that does not are different passes, and a ledger that cannot tell them apart
          cannot be used to compare them. */
-      if (!dryRun && PROFILE.shardAgent && !(verdict.shards ?? []).length && !verdict.shardDecision) {
+      if (!dryRun && SHAPE.shardAgent && !(verdict.shards ?? []).length && !verdict.shardDecision) {
         note('the judge dispatched no shard and gave no reason — `shardDecision` is missing from the verdict');
       }
       const demoted = enforceRules(verdict, { criteria: true });

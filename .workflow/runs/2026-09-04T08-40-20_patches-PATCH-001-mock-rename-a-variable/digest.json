@@ -1,11 +1,11 @@
 {
   "runId": "2026-09-04T08-40-20_patches-PATCH-001-mock-rename-a-variable",
-  "capturedAt": "2026-09-04T09:15:48.498Z",
+  "capturedAt": "2026-09-04T10:44:24.132Z",
   "spec": "specs/patches/PATCH-001-mock-rename-a-variable.md",
   "specSha": "31757f683aacf3239cf722807223241b942cb3def4a656e6be259fd655a11441",
   "branch": "test/flow-check",
   "baseRef": "d26d6dedb2a44395cb98047e79e61e86af0daf13",
-  "headAtCapture": "311edf0a4978395843c1e371e6626fc68f2a1715",
+  "headAtCapture": "7a861594970245e60175e2ef4fce59c796e7ccbc",
   "status": "ready",
   "halt": null,
   "budget": {
@@ -14,32 +14,32 @@
     "infra": 0
   },
   "pipeline": {
-    "fingerprint": "26afcdc93346fcf1",
+    "fingerprint": "2bee4c5b943f89e7",
     "files": {
-      ".claude/agents/code-reviewer-lead.md": "ba2a09905e3b",
+      ".claude/agents/code-reviewer-lead.md": "31bcbb15ef61",
       ".claude/agents/code-reviewer-open.md": "6395150332b9",
       ".claude/agents/code-reviewer-sweeps.md": "8d17ff906597",
-      ".claude/agents/implementer-lead.md": "8ed3c4032ccc",
+      ".claude/agents/implementer-lead.md": "937fca0f01b4",
       ".claude/agents/implementer.md": "45f6883c86b7",
       ".claude/agents/pre-implementer-strict.md": "d99a97a5f355",
       ".claude/agents/pre-implementer.md": "6b62e14dda9d",
       ".claude/agents/qa.md": "1d305259ff49",
       ".claude/agents/references/lead-contract.md": "7b65b1a9dfe3",
       ".claude/agents/references/verdict-contract.md": "58eb4e3e2a37",
-      ".claude/ai-workflow.config.json": "3cc8fd117693",
+      ".claude/ai-workflow.config.json": "78e9e3ab58bf",
       ".claude/skills/code-review/SKILL.md": "e8ca68421d13",
       ".claude/skills/code-review/references/blocking-criteria.md": "9b471737b10e",
-      "scripts/review-slice.mjs": "df34a085d632",
-      "scripts/ship-config.mjs": "d0940f2bc32a",
-      "scripts/ship.mjs": "e2601d6b2cfe",
+      "scripts/review-slice.mjs": "4b115d1c1da7",
+      "scripts/ship-config.mjs": "7afd834fce4b",
+      "scripts/ship.mjs": "c62b9bddf7bc",
       "scripts/static-gate.mjs": "7bf6b1ec4b11",
-      "scripts/wf.mjs": "26c5ea78fee6"
+      "scripts/wf.mjs": "b0fd5bbc5629"
     }
   },
   "diff": {
-    "files": 33,
-    "added": 844,
-    "removed": 13
+    "files": 74,
+    "added": 2255,
+    "removed": 115
   },
   "totals": {
     "wallSec": 362,

@@ -24,7 +24,7 @@ nothing to pass:
 |---|---|---|---|
 | `/ship <spec>` | `specs/<area>/NN-name.md` | every stage; refused unless refine admitted it | `spec/<slug>` |
 | `/ship bug <report>` | `specs/bugs/BUG-NNN-*.md` | no plan stage — the report carries the cause | `fix/<slug>` |
-| `/ship patch <note>` | `specs/patches/PATCH-NNN-*.md` | no plan stage, review on its cheap profile | `fix/<slug>` |
+| `/ship patch <note>` | `specs/patches/PATCH-NNN-*.md` | no plan stage, review on its cheap shape | `fix/<slug>` |
 
 `bug` and `patch` before the path are how a person says which they mean; the script does not
 need them and `--track <name>` overrides the path when they disagree. **Every track runs the
@@ -34,7 +34,7 @@ against the ones that check the result.
 If the named document does not exist yet, write it first — `/bug` for a defect, `/patch` for a
 small change of agreed behaviour — and do not ship something else instead.
 
-Useful variants:
+Useful shapes:
 
 ```bash
 node scripts/ship.mjs <doc> --skip qa       # small change, you will run the suites yourself

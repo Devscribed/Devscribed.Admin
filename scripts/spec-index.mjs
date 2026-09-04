@@ -175,6 +175,10 @@ export function buildIndex(root) {
       key: `${s.area}/${s.num}`,
       path: s.path,
       area: s.area,
+      /* The weight of the document, which is also the track a run against it takes. The board
+         groups by it: ten bug reports filed under a heading that says "specs" is a board that
+         answers the wrong question. */
+      weight: s.area === 'bugs' ? 'bug' : s.area === 'patches' ? 'patch' : 'spec',
       num: s.num,
       title: fm.title,
       dependsOn: fm.dependsOn,

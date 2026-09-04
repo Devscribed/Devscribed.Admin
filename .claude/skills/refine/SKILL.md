@@ -18,10 +18,10 @@ or the loop stops and says why.
 | Gate | What it is | What it costs |
 |---|---|---|
 | **T0** `spec-lint` | a script — pointers, joins, cross-product completeness | nothing |
-| **T2** the judge | `spec-reviewer-lead` (opus, shards the reading across sonnet) or `spec-reviewer` (one opus pass), by profile: the whole document on round one, the previous repair's range after that | one pass |
+| **T2** the judge | `spec-reviewer-lead` (opus, shards the reading across sonnet) or `spec-reviewer` (one opus pass), by shape: the whole document on round one, the previous repair's range after that | one pass |
 | **T1** `pre-implement` | the spec compiled into a plan by the agent the pipeline runs — once, after T2 is clean, as the last gate | one pass |
 
-Whichever gate blocked, the profile's fixer repairs its verdict and the round is committed.
+Whichever gate blocked, the shape's fixer repairs its verdict and the round is committed.
 
 **The judge blocks only under a criterion.** `.claude/skills/spec-review/references/admission-criteria.md`
 is the closed register: every check that may stop a spec, each with an id, and the verdict says
@@ -35,12 +35,12 @@ repair grows the spec instead of finishing it. When a criterion the document alr
 blocks in a later round, the loop prints it: that is either a defect the repair introduced or the
 judge changing its mind, and both are worth a person's eye.
 
-Useful variants:
+Useful shapes:
 
 ```bash
-node scripts/refine-loop.mjs <spec> --profile sharded  # opus judge, sonnet shards (the default)
-node scripts/refine-loop.mjs <spec> --profile solo      # one opus judge, synchronous
-node scripts/spec-slice.mjs <spec> --profile solo       # what that profile would do, run nothing
+node scripts/refine-loop.mjs <spec> --shape sharded  # opus judge, sonnet children (what `use` names)
+node scripts/refine-loop.mjs <spec> --shape solo     # one opus judge, synchronous
+node scripts/spec-slice.mjs <spec> --shape solo      # what that shape would do, run nothing
 node scripts/refine-loop.mjs <spec> --rounds 1      # one judged round, then stop
 node scripts/refine-loop.mjs <spec> --skip t1       # skip the plan gate
 node scripts/refine-loop.mjs <spec> --no-fix        # stop at the verdict, repair by hand

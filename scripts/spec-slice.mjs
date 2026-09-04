@@ -17,7 +17,7 @@
  * the question — a contradiction lives between two regions — so it travels with the criterion
  * rather than with whoever is reading.
  *
- *   node scripts/spec-slice.mjs <spec> [--since <sha>] [--profile <name>] [--json]
+ *   node scripts/spec-slice.mjs <spec> [--since <sha>] [--shape <name>] [--json]
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -29,7 +29,7 @@ import { readRegister, REGISTERS } from './criteria.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const argv = process.argv.slice(2);
-const TAKES_VALUE = new Set(['--since', '--profile']);
+const TAKES_VALUE = new Set(['--since', '--shape']);
 const flag = (n) => {
   const i = argv.indexOf(n);
   return i === -1 ? null : argv[i + 1];
@@ -39,7 +39,7 @@ const positional = argv.filter((a, i) => !a.startsWith('--') && !TAKES_VALUE.has
 
 const specRel = positional[0];
 if (!specRel) {
-  console.error('usage: node scripts/spec-slice.mjs <spec> [--since <sha>] [--profile <name>] [--json]');
+  console.error('usage: node scripts/spec-slice.mjs <spec> [--since <sha>] [--shape <name>] [--json]');
   process.exit(1);
 }
 if (!existsSync(join(ROOT, specRel))) {
@@ -130,8 +130,8 @@ const cfg = (() => {
   }
 })();
 const refine = cfg.refine ?? {};
-const profileName = flag('--profile') ?? refine.profile ?? 'solo';
-const profile = refine.profiles?.[profileName] ?? {};
+const shapeName = flag('--shape') ?? refine.use;
+const profile = refine.shapes?.[shapeName] ?? {};
 
 const result = {
   spec: specRel,
@@ -189,7 +189,7 @@ if (result.shardAgent) {
   console.log('  numbers above. A shard you dispatch carries its files and the text of its criteria;');
   console.log('  it reads no register. Send them in one message or they run in series.');
 } else {
-  console.log(`  Profile ${profileName} names no shard agent, so this pass is yours alone.`);
+  console.log(`  Shape ${shapeName} names no shard agent, so this pass is yours alone.`);
 }
 console.log('  Say what you decided, and why, in `shardDecision`.');
 

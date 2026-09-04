@@ -41,13 +41,16 @@ const QA_LEVELS = ['unit', 'int', 'e2e'];
 const KEYS = {
   root: ['shipConfig', 'breakers', 'isolation', 'protectedBranches', 'refine'],
   track: ['match', 'branchPrefix', 'requiresRefine', 'stages', 'convergence', 'timeoutMin'],
-  stage: {
-    preflight: ['enabled'],
-    pre_implement: ['enabled', 'agent', 'model', 'variants'],
-    implement: ['enabled', 'agent', 'model', 'shardAgent', 'shardModel', 'maxShards', 'variants'],
-    static_gate: ['enabled', 'script', 'variants'],
-    review: ['enabled', 'agent', 'model', 'shardAgent', 'shardModel', 'shardSize', 'variants'],
-    qa: ['enabled', 'agent', 'model', 'levels', 'skipE2eIfLowerFailed', 'variants'],
+  /* A stage block itself: whether it runs, and which of its shapes does. */
+  stage: ['enabled', 'use', 'shapes'],
+  /* What one shape may say. A shape is complete on its own — nothing is merged into it. */
+  shape: {
+    preflight: [],
+    pre_implement: ['agent', 'model'],
+    implement: ['agent', 'model', 'shardAgent', 'shardModel', 'maxShards'],
+    static_gate: ['script'],
+    review: ['agent', 'model', 'shardAgent', 'shardModel', 'shardSize'],
+    qa: ['agent', 'model', 'levels', 'skipE2eIfLowerFailed'],
   },
   convergence: ['maxCodeAttempts', 'maxHandoffReplans', 'infraRetries', 'autoContestAfter'],
   breakers: ['runTimeoutMin', 'runTokenCap'],
@@ -108,31 +111,38 @@ export function trackFor(cfg, docPath, override = null, root = HERE) {
 }
 
 /**
- * One stage of one track, with a variant folded in.
+ * One stage of one track, in the shape that will run.
  *
- * The stage block is itself the default shape; a variant is a partial override of it, named
- * on the command line. An unknown variant name throws rather than falling back — a run
- * silently taking the default is a run whose result cannot be attributed.
+ * A stage block says whether it runs and which of its `shapes` does; a shape is complete on its
+ * own. Nothing is merged: what is written under the shape is what comes back, plus `enabled`
+ * and the shape's name. Two things can name the shape, and the file is the first of them:
+ *
+ * - **`"use": "<name>"` in the block** — the track's standing choice, and what a person reading
+ *   the config sees.
+ * - **`--plan-shape` / `--implement-shape` / `--review-shape`** — one run's choice, which beats
+ *   the standing one and is recorded in `run.json`.
+ *
+ * An unknown name throws rather than falling back: a run silently taking something else is a
+ * run whose result cannot be attributed to the shape that produced it.
  */
-export function stageFor(cfg, track, stage, variant = null) {
+export function stageFor(cfg, track, stage, shape = null) {
   const t = cfg.shipConfig?.[track];
   if (!t) throw new Error(`no track "${track}" — have ${trackNames(cfg).join(', ')}`);
   if (!STAGES.includes(stage)) throw new Error(`no stage "${stage}" — have ${STAGES.join(', ')}`);
-  const base = t.stages?.[stage] ?? {};
-  const { variants, ...rest } = base;
-  if (!variant || variant === 'default') return { variant: 'default', ...rest };
-  const v = variants?.[variant];
-  if (!v) {
-    const have = ['default', ...settings(variants)].join(', ');
-    throw new Error(`no ${track}/${stage} variant "${variant}" — have ${have}`);
+  const block = t.stages?.[stage] ?? {};
+  const chosen = shape ?? block.use ?? null;
+  if (!chosen) return { shape: null, enabled: block.enabled };
+  const s = block.shapes?.[chosen];
+  if (!s) {
+    const have = settings(block.shapes).join(', ') || '(none)';
+    throw new Error(`no ${track}/${stage} shape "${chosen}" — have ${have}`);
   }
-  /* `null` in a variant removes the key. A shallow merge can otherwise only add or change, so
-     "the same reviewer, without a lead" would have no way to say that there is no shard agent —
-     and a leftover shardAgent makes a solo run dispatch children. */
-  const merged = { variant, ...rest, ...v };
-  for (const [k, val] of Object.entries(merged)) if (val === null) delete merged[k];
-  return merged;
+  const { $comment, ...rest } = s;
+  return { shape: chosen, enabled: block.enabled, ...rest };
 }
+
+/** Every shape a stage offers, in the order the file lists them. */
+export const shapesOf = (cfg, track, stage) => settings(cfg.shipConfig?.[track]?.stages?.[stage]?.shapes);
 
 /** The stage timeout for a track, in minutes. */
 export const timeoutFor = (cfg, track, stage, fallback = 45) =>
@@ -209,34 +219,42 @@ export function validate(cfg, root = HERE) {
     }
 
     for (const s of STAGES) {
-      const st = t.stages?.[s];
-      if (st === undefined) continue;
+      const block = t.stages?.[s];
+      if (block === undefined) continue;
       const sat = `${at}.stages.${s}`;
-      if (!st || typeof st !== 'object') { p.push(`${sat}: not an object`); continue; }
-      closed(st, KEYS.stage[s], sat);
+      if (!block || typeof block !== 'object') { p.push(`${sat}: not an object`); continue; }
+      closed(block, KEYS.stage, sat);
 
-      if (typeof st.enabled !== 'boolean') {
-        p.push(`${sat}.enabled: expected true or false, got ${JSON.stringify(st.enabled)}`);
+      if (typeof block.enabled !== 'boolean') {
+        p.push(`${sat}.enabled: expected true or false, got ${JSON.stringify(block.enabled)}`);
       }
-      if (st.enabled === false && ALWAYS_ON.includes(s)) {
+      if (block.enabled === false && ALWAYS_ON.includes(s)) {
         p.push(`${sat}.enabled: ${s} may not be disabled on any track — it is what checks the result. `
           + 'Skip it for one run with `--skip ' + s + '` if that is what you mean.');
       }
-      if (st.enabled !== true) continue; // nothing below applies to a stage that does not run
+      if (block.enabled !== true) continue; // nothing below applies to a stage that does not run
+      if (s === 'preflight') continue;      // a fixed script, with nothing to choose
 
-      /* The shape itself, then every variant, under the same rules — a variant that names a
-         renamed agent fails at the moment somebody asks for it, which is the worst time. */
-      /* Resolve each variant exactly the way a run will, `null` unsets included — a validator
-         that merges differently from the resolver approves a shape nothing runs. */
-      const resolve = (v) => {
-        const m = { ...st, ...st.variants[v] };
-        for (const [k, val] of Object.entries(m)) if (val === null) delete m[k];
-        return m;
-      };
-      const shapes = [['', st], ...settings(st.variants).map((v) => [`.variants.${v}`, resolve(v)])];
-      for (const [suffix, sh] of shapes) {
-        const w = `${sat}${suffix}`;
-        if (settings(st.variants).length && suffix) closed(st.variants[suffix.split('.').pop()], KEYS.stage[s], w);
+      /* `use` and `shapes` come as a pair, and `use` must name one of them. A block that names
+         a shape it does not have is the config claiming something that does not exist, and the
+         run that asks for it is the wrong place to find that out. */
+      const names = settings(block.shapes);
+      if (!block.shapes || typeof block.shapes !== 'object' || !names.length) {
+        p.push(`${sat}.shapes: expected at least one named shape`);
+        continue;
+      }
+      if (typeof block.use !== 'string' || !names.includes(block.use)) {
+        p.push(`${sat}.use: ${JSON.stringify(block.use)} is not one of ${names.join(', ')}`);
+      }
+
+      /* Every shape, under the same rules, whether or not `use` names it — a shape that names a
+         renamed agent otherwise fails at the moment somebody asks for it, which is the worst
+         time to find out. */
+      for (const name of names) {
+        const sh = block.shapes[name];
+        const w = `${sat}.shapes.${name}`;
+        if (!sh || typeof sh !== 'object') { p.push(`${w}: not an object`); continue; }
+        closed(sh, KEYS.shape[s], w);
 
         if (AGENT_STAGES.includes(s)) {
           if (!sh.agent) p.push(`${w}: "agent" is missing`);
@@ -252,10 +270,9 @@ export function validate(cfg, root = HERE) {
           if (!agentExists(sh.shardAgent)) p.push(`${w}.shardAgent: no definition at .claude/agents/${sh.shardAgent}.md`);
           if (!sh.shardModel) p.push(`${w}: "shardModel" is missing, and "shardAgent" is set`);
           else if (!MODELS.includes(sh.shardModel)) p.push(`${w}.shardModel: "${sh.shardModel}" is not one of ${MODELS.join(', ')}`);
-        }
-        /* A shard setting with nobody to apply it to is a variant that forgot to unset one key,
-           and it reads as "this shape splits" to whoever edits the file next. */
-        if (sh.shardAgent === undefined) {
+        } else {
+          /* A shard setting with nobody to apply it to reads as "this shape splits" to whoever
+             edits the file next, and it does not. */
           for (const k of ['shardModel', 'shardSize', 'maxShards']) {
             if (sh[k] !== undefined) p.push(`${w}.${k}: set without a "shardAgent", so nothing reads it`);
           }
@@ -337,14 +354,21 @@ export function validate(cfg, root = HERE) {
   const rc = cfg.refine;
   if (!rc || typeof rc !== 'object') p.push('refine: missing, or not an object');
   else {
-    const prof = rc.profiles?.[rc.profile];
-    if (!prof) p.push(`refine.profile: "${rc.profile}" is not one of ${settings(rc.profiles).join(', ') || '(none declared)'}`);
-    for (const [pname, pv] of Object.entries(rc.profiles ?? {})) {
+    const names = settings(rc.shapes);
+    if (!names.includes(rc.use)) {
+      p.push(`refine.use: ${JSON.stringify(rc.use)} is not one of ${names.join(', ') || '(none declared)'}`);
+    }
+    for (const name of names) {
+      const sh = rc.shapes[name];
       for (const key of ['judgeAgent', 'fixerAgent', 'shardAgent']) {
-        if (pv[key] && !agentExists(pv[key])) p.push(`refine.profiles.${pname}.${key}: no definition at .claude/agents/${pv[key]}.md`);
+        if (sh[key] && !agentExists(sh[key])) p.push(`refine.shapes.${name}.${key}: no definition at .claude/agents/${sh[key]}.md`);
       }
       for (const key of ['judgeModel', 'fixerModel', 'shardModel']) {
-        if (pv[key] && !MODELS.includes(pv[key])) p.push(`refine.profiles.${pname}.${key}: "${pv[key]}" is not one of ${MODELS.join(', ')}`);
+        if (sh[key] && !MODELS.includes(sh[key])) p.push(`refine.shapes.${name}.${key}: "${sh[key]}" is not one of ${MODELS.join(', ')}`);
+      }
+      /* Same rule the stages have: a shard model with no shard agent is a setting nothing reads. */
+      if (!sh.shardAgent && sh.shardModel) {
+        p.push(`refine.shapes.${name}.shardModel: set without a "shardAgent", so nothing reads it`);
       }
     }
     if (!Array.isArray(rc.blockingRules) || !rc.blockingRules.length) {
@@ -401,19 +425,24 @@ if (invokedDirectly) {
       + `code ${c.maxCodeAttempts}, replans ${c.maxHandoffReplans}, infra ${c.infraRetries}\n`);
     for (const s of STAGES) {
       const st = stageFor(cfg, n, s);
-      const variants = settings(t.stages?.[s]?.variants);
+      const all = shapesOf(cfg, n, s);
       let how = 'a preflight script';
       if (st.enabled === false) how = '—';
       else if (st.script) how = `node ${st.script}`;
       else if (st.agent) {
-        how = `${st.agent} on ${st.model}${st.effort ? ` (${st.effort})` : ''}`;
+        how = `${st.agent} on ${st.model}`;
         if (st.shardAgent) how += `, shards ${st.shardAgent} on ${st.shardModel}`;
         if (st.shardSize) how += `, ${st.shardSize}/shard`;
         if (st.maxShards) how += `, ≤${st.maxShards} at once`;
         if (st.levels) how += `, levels ${st.levels.join('+')}`;
       }
       const timeout = t.timeoutMin?.[s] ? `  ${t.timeoutMin[s]}m` : '';
-      const alt = variants.length ? `  [also: ${variants.join(', ')}]` : '';
+      /* Which shape is running, and what else this stage could be asked for. Reading one block
+         answers the first; only this line answers the second. */
+      const others = all.filter((v) => v !== st.shape);
+      const alt = st.shape
+        ? `  [${st.shape}${others.length ? `; also ${others.join(', ')}` : ''}]`
+        : '';
       process.stdout.write(`  ${st.enabled === false ? '  ' : 'on'}  ${s.padEnd(14)} ${how}${timeout}${alt}\n`);
     }
   }

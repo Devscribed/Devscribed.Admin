@@ -200,7 +200,7 @@ newer document does — by stating the whole new rule in its own text, and writi
 
 Use the `ship` skill (`/ship`) to run a spec through pre-implement → implement → static gate →
 review → QA. `/ship bug <report>` and `/ship patch <note>` run the lighter tracks: no plan is
-compiled, and for a patch the review runs its cheap profile. **Every track runs the static
+compiled, and for a patch the review runs its cheap shape. **Every track runs the static
 gate and QA** — a lighter document buys speed against the stages that read intent, never
 against the ones that check the result. Routing lives in `scripts/wf.mjs`, not in a prompt: every finding names where the
 defect lives, only findings addressed to `code` are ever retried, and a finding the implementer
@@ -232,11 +232,12 @@ port ladder kept in two files, **and any setting the config accepts that no scri
 which is the one that costs most, because the printer reports it back and a person believes it
 took effect.
 
-**Which agent a stage runs is a variant, not a constant.** Alternatives live in that stage
-block's `variants` and are selected for one run — `--profile` for refine,
-`--implement-profile`, `--review-profile`, `--plan-profile` for ship. So one run goes parallel on
+**Which agent a stage runs is a shape, not a constant.** Every way a stage can run is written
+out in full under its `shapes`, and the block's `use` names the one that runs. A flag names a
+different one for a single run — `--shape` for refine, `--plan-shape`, `--implement-shape`,
+`--review-shape` for ship. So one run goes parallel on
 sonnet shards and the next goes synchronous on one opus agent, with no edit between them, and
-every variant in force is written into the ledger or `run.json`. **No shape a new agent replaced
+every shape in force is written into the ledger or `run.json`. **No shape a new agent replaced
 is withdrawn** — every method stays selectable, and
 [.claude/agents/VARIANTS.md](.claude/agents/VARIANTS.md) maps every name that used to exist to
 the one that carries it now. What is not kept is a second copy of a definition: two files

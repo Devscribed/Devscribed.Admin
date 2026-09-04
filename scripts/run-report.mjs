@@ -827,6 +827,7 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 .specdot.on{background:var(--primary)}
 .grouphd{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.55;margin:18px 0 6px;padding:0 14px}
 .grouphd:first-child{margin-top:0}
+.grouphd.sub2{text-transform:none;letter-spacing:0;opacity:.4;margin:10px 0 4px}
 .kindchip{flex:0 0 auto;font-size:11px;padding:2px 8px;border-radius:8px;background:var(--secondary-container);
   color:var(--on-secondary-container)}
 .kindchip.refine{background:#EADDFF;color:#21005D}
@@ -1417,9 +1418,8 @@ function renderIndex() {
   document.getElementById('hdStatus').innerHTML =
     IDX.specs.some((s) => s.running) ? '<span class="chip c-run">что-то идёт</span>' : '';
   const touched = IDX.specs.filter((s) => s.entries.length);
-  const untouched = IDX.specs.filter((s) => !s.entries.length);
   document.getElementById('hdMeta').innerHTML =
-    touched.length + ' из ' + IDX.specs.length + ' спек что-то запускали · $' +
+    touched.length + ' из ' + IDX.specs.length + ' документов что-то запускали · $' +
     touched.reduce((a, s) => a + s.totals.costUsd, 0).toFixed(2) + ' всего';
 
   const row = (s) => '<button class="specrow" data-go="#spec:' + esc(s.path) + '">' +
@@ -1437,11 +1437,23 @@ function renderIndex() {
       ? '<span class="num"><b>$' + s.totals.costUsd.toFixed(2) + '</b>' + s.entries.length + ' прогон(ов)</span>'
       : '') + '</button>';
 
+  /* Grouped by the weight of the document, which is the track a run against it takes. Inside a
+     weight, what somebody has already run comes first. */
+  const WEIGHTS = [['spec', 'Спеки'], ['bug', 'Баги'], ['patch', 'Патчи']];
+  const group = (w, label) => {
+    const mine = IDX.specs.filter((s) => (s.weight || 'spec') === w);
+    if (!mine.length) return '';
+    const hit = mine.filter((s) => s.entries.length);
+    const cold = mine.filter((s) => !s.entries.length);
+    return '<div class="grouphd">' + label + ' · ' + hit.length + ' из ' + mine.length + '</div>'
+      + hit.map(row).join('')
+      + (cold.length ? '<div class="grouphd sub2">пока не запускалось</div>' + cold.map(row).join('') : '');
+  };
+
   document.getElementById('specList').innerHTML =
-    (touched.length ? '<div class="grouphd">Работа велась</div>' + touched.map(row).join('') : '') +
-    (untouched.length ? '<div class="grouphd">Пока не запускалось</div>' + untouched.map(row).join('') : '') +
+    WEIGHTS.map(([w, label]) => group(w, label)).join('') +
     (IDX.orphans.length
-      ? '<div class="grouphd">Прогоны без спеки — она переименована или удалена</div>' +
+      ? '<div class="grouphd">Прогоны без документа — он переименован или удалён</div>' +
         IDX.orphans.map((e) => '<button class="specrow" data-go="#' + esc(e.id) + '">' +
           '<span class="specdot"></span><span class="lead"><span class="nm">' + esc(e.id) + '</span>' +
           '<span class="sub">' + esc(e.status) + '</span></span></button>').join('')

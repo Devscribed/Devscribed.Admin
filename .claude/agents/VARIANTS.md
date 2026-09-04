@@ -1,4 +1,4 @@
-# Agent variants — what runs, and how to switch
+# Agent shapes — what runs, and how to switch
 
 Every family here is one **core** agent and, where the work is big enough to split, one
 **lead**. The core holds the logic; the lead is a capability over it and holds no rule the core
@@ -21,7 +21,7 @@ What the files are and which document owns which rule is in [`.claude/README.md`
 | review | `sweeps` / `open` | the lead with the other core | the same lead, the other method |
 | review | `solo` | whichever core the track uses | one reviewer, no lead, no split |
 
-`npm run config` prints what each track resolves to and every variant it could run instead. It
+`npm run config` prints what each track resolves to and every shape it could run instead. It
 is the answer to "what actually runs", not this table.
 
 ## Every name that used to exist, and what it is now
@@ -57,19 +57,19 @@ the stage that would have run it.
 result can always be attributed to the shape that produced it:
 
 ```bash
-node scripts/refine-loop.mjs <spec> --profile solo          # one opus judge, synchronous
-node scripts/refine-loop.mjs <spec> --profile sharded       # children on sonnet, opus judge
+node scripts/refine-loop.mjs <spec> --shape solo            # one opus judge, synchronous
+node scripts/refine-loop.mjs <spec> --shape sharded         # children on sonnet, opus judge
 
-node scripts/ship.mjs <doc> --implement-profile orchestrated
-node scripts/ship.mjs <doc> --review-profile solo           # the core agent, no lead
-node scripts/ship.mjs <doc> --review-profile sweeps         # the lead, the other method
+node scripts/ship.mjs <doc> --implement-shape orchestrated
+node scripts/ship.mjs <doc> --review-shape solo-open        # the core agent, no lead
+node scripts/ship.mjs <doc> --review-shape lead-sweeps      # the lead, the other method
 ```
 
-A variant a track does not declare is refused by name rather than silently ignored: `patch` has
+A shape a track does not declare is refused by name rather than silently ignored: `patch` has
 no `orchestrated` implement, because the entry condition bounds a patch at two files.
 
-`node scripts/spec-slice.mjs <spec> --profile <name>` prints what a refine profile would do
-without running anything.
+`node scripts/spec-slice.mjs <spec> --shape <name>` prints what a refine shape would do without
+running anything.
 
 ## Two cores for code review, on purpose
 

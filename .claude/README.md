@@ -69,43 +69,55 @@ reads it. **Run `npm run config` after any edit** — it validates the file and 
 track resolves to. It is also run automatically by `ship`, by every `wf` command, and as the
 first row of preflight, so a bad edit stops a run before a lock or a branch exists.
 
-The shape is track first — `spec`, `bug`, `patch` — and each track writes out all six stages in
-full. **Nothing is inherited between tracks:** what you read under `patch` is what `patch` runs.
+**One rule governs the whole file: a thing that can run more than one way lists its ways under
+`shapes`, each written out in full, and `use` names the one that runs.** Nothing is merged,
+nothing is inherited — not between tracks and not between a shape and the block above it — and
+there is no `null` that means "delete a key". What you read under a shape is what that shape
+runs.
 
 ```
-shipConfig.<track>                     match, branchPrefix, requiresRefine
-shipConfig.<track>.stages.<stage>      enabled, agent, model, effort, shard*, and the stage's own keys
-  …stages.<stage>.variants.<name>      a partial override of that block; null removes a key
-shipConfig.<track>.convergence         maxCodeAttempts, maxHandoffReplans, infraRetries, autoContestAfter
-shipConfig.<track>.timeoutMin          per stage, in minutes
-breakers, isolation, protectedBranches, refine     shared by every track
+shipConfig.<track>                        match, branchPrefix, requiresRefine
+shipConfig.<track>.stages.<stage>         enabled, use, shapes
+  …stages.<stage>.shapes.<name>           one complete way to run it: agent, model, shard*,
+                                          and the stage's own keys
+shipConfig.<track>.convergence            maxCodeAttempts, maxHandoffReplans, infraRetries,
+                                          autoContestAfter
+shipConfig.<track>.timeoutMin             per stage, in minutes
+breakers, isolation, protectedBranches    shared by every track
+refine                                    use + shapes, the same idiom, for the refine loop
 ```
+
+To change what a stage runs, change its `use`. To add a way to run it, add a shape. Every key
+in a shape is one a script reads — `npm run pipeline` refuses one that nothing does.
 
 ### Solo or lead is one field
 
 The same core agent, run two ways:
 
 ```json
-"review": { "agent": "code-reviewer-open", "model": "opus" }
+"review": {
+  "enabled": true,
+  "use": "lead-open",
+  "shapes": {
+    "lead-open": { "agent": "code-reviewer-lead", "model": "opus",
+                   "shardAgent": "code-reviewer-open", "shardModel": "opus", "shardSize": 15 },
+    "solo-open": { "agent": "code-reviewer-open", "model": "opus" }
+  }
+}
 ```
 
-One reviewer, synchronous, over the whole slice.
+`lead-open` is a lead on opus dispatching the same definition to children on opus; change
+`shardModel` to `sonnet` and the children get cheaper, and the judgement they apply is the same
+file either way. `solo-open` has no `shardAgent` at all — which you can see, rather than having
+to work out from a `null`.
 
-```json
-"review": { "agent": "code-reviewer-lead", "model": "opus",
-            "shardAgent": "code-reviewer-open", "shardModel": "opus", "shardSize": 15 }
-```
-
-A lead on opus dispatching the same definition to children on opus. Change `shardModel` to
-`sonnet` and the children get cheaper; the judgement they apply is the same file either way.
-
-Every review stage already carries a `solo` variant, so you can compare a lead against the agent
-it dispatches without editing anything:
+Every review stage carries a `solo-*` shape, so you can compare a lead against the agent it
+dispatches without editing anything:
 
 ```bash
-node scripts/ship.mjs <doc> --review-profile solo
-node scripts/ship.mjs <doc> --review-profile sweeps
-npm run config -- --track patch          # what patch resolves to, and what else it could run
+node scripts/ship.mjs <doc> --review-shape solo-open
+node scripts/ship.mjs <doc> --review-shape lead-sweeps
+npm run config -- --track patch          # what patch runs, and what else it could be asked for
 ```
 
 ### What the validator refuses
@@ -156,7 +168,7 @@ Run it after renaming an agent, adding a setting, or moving a rule between files
    it already has it — the lead reads the core file.
 3. **Renaming or adding one?** Update `ai-workflow.config.json`, then `npm run config`. The
    validator will tell you every track you forgot.
-4. **A new shape rather than a new rule?** That is a `variants` entry, not a new agent file.
+4. **A new shape rather than a new rule?** That is a `shapes` entry, not a new agent file.
 
 Agent prompts are **rules only** — no measurements, no history, no justification. Write the
 conclusion, not the evidence for it; the evidence goes in `docs/`, written for people. See the

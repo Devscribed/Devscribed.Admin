@@ -70,17 +70,18 @@ for as long as the things routed to it are actually small.
 | Stage | Who | Produces |
 |---|---|---|
 | `preflight` | script | environment checks; refuses to start on `main`, with the lock held, or on a spec no refine loop admitted |
-| `pre_implement` | `pre-implementer-strict` (variant `classic`: `pre-implementer`) | `handoff.json` — the plan, compiled from the spec, with every compile question answered by id |
-| `implement` | `implementer` (variant `orchestrated`: `implementer-lead` dispatching `implementer`) | code and tests |
+| `pre_implement` | `pre-implementer-strict`, shape `strict` (`classic`: `pre-implementer`) | `handoff.json` — the plan, compiled from the spec, with every compile question answered by id |
+| `implement` | `implementer`, shape `single` (`orchestrated`: `implementer-lead` dispatching `implementer`) | code and tests |
 | `static_gate` | `scripts/static-gate.mjs` | two rules; see below |
-| `review` | `code-reviewer-lead` dispatching `code-reviewer-open` or `-sweeps` (variant `solo`: the core alone) | verdict against the closed register in `.claude/skills/code-review/references/blocking-criteria.md` |
+| `review` | `code-reviewer-lead` dispatching `code-reviewer-open` or `-sweeps`, shapes `lead-open` / `lead-sweeps` (`solo-*`: the core alone) | verdict against the closed register in `.claude/skills/code-review/references/blocking-criteria.md` |
 | `qa` | `qa` | unit in full, integration and E2E targeted, plus the spec's acceptance criteria |
 
 Which agent a stage runs is written out under its track, at
-`shipConfig.<track>.stages.<stage>`. Alternatives live in that block's `variants` and are
-selected for one run with `--plan-profile`, `--implement-profile` or `--review-profile`; any
-variant in force is written into `run.json`. `.claude/agents/VARIANTS.md` lists them and says
-what each replaced.
+`shipConfig.<track>.stages.<stage>`. Every way that stage can run is a named entry in its
+`shapes`, written out in full, and the block's `use` names the one that runs. A run can name a
+different one with `--plan-shape`, `--implement-shape` or `--review-shape`, and any shape not
+named by `use` is written into `run.json`. `.claude/agents/VARIANTS.md` lists the agents and
+says what each replaced.
 
 The run ends at **`ready`**, not `merged`: a green branch, and a human opens the PR. `main`
 deploys itself, so a pipeline that merges is a pipeline that deploys.
@@ -166,16 +167,21 @@ Everything is in `.claude/ai-workflow.config.json`, and `scripts/ship-config.mjs
 thing that reads it. The shape is track first:
 
 ```
-shipConfig.<track>                 match, branchPrefix, requiresRefine
-shipConfig.<track>.stages.<stage>  enabled, agent, model, effort, shard*, and the stage's own keys
-shipConfig.<track>.stages.<stage>.variants.<name>   a partial override of that block
-shipConfig.<track>.convergence     maxCodeAttempts, maxHandoffReplans, infraRetries, autoContestAfter
-shipConfig.<track>.timeoutMin      per stage, in minutes
-breakers, isolation, protectedBranches, refine                shared by every track
+shipConfig.<track>                        match, branchPrefix, requiresRefine
+shipConfig.<track>.stages.<stage>         enabled, use, shapes
+shipConfig.<track>.stages.<stage>.shapes.<name>   one complete way to run it: agent, model,
+                                          shard*, and the stage's own keys
+shipConfig.<track>.convergence            maxCodeAttempts, maxHandoffReplans, infraRetries,
+                                          autoContestAfter
+shipConfig.<track>.timeoutMin             per stage, in minutes
+breakers, isolation, protectedBranches    shared by every track
+refine                                    use + shapes, the same idiom, for the pre-pipeline gate
 ```
 
-Nothing is inherited between tracks. What you read under `patch` is what `patch` runs, and the
-cost — three places to edit when an agent is renamed — is what the validator exists to catch.
+Nothing is inherited — not between tracks, and not between a shape and the block above it.
+What you read under a shape is exactly what that shape runs: there is no merge to do in your
+head and no `null` that means "delete a key". The cost is repetition when an agent is renamed,
+and that is what the validator exists to catch.
 
 **Validate before you run.** `npm run config` parses the file, checks it, and prints what each
 track resolves to; `--track <name>` narrows it and `--json` gives the resolved blocks. It is

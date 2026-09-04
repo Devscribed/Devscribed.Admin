@@ -52,9 +52,9 @@ function pipelineFiles(cfg) {
   for (const track of trackNames(cfg)) {
     for (const stage of STAGES) {
       const block = cfg.shipConfig?.[track]?.stages?.[stage] ?? {};
-      for (const variant of ['default', ...Object.keys(block.variants ?? {})]) {
+      for (const shape of Object.keys(block.shapes ?? {})) {
         let s;
-        try { s = stageFor(cfg, track, stage, variant); } catch { continue; }
+        try { s = stageFor(cfg, track, stage, shape); } catch { continue; }
         for (const agent of [s.agent, s.shardAgent]) if (agent) out.add(`.claude/agents/${agent}.md`);
         if (s.script) out.add(s.script);
       }
@@ -225,7 +225,7 @@ const readJson = (p) => {
 const agentFor = (block) => {
   if (block.agentType) return block.agentType;
   try {
-    return stageFor(CFG, run.track ?? 'spec', block.stage, run.variants?.[block.stage]).agent ?? block.stage;
+    return stageFor(CFG, run.track ?? 'spec', block.stage, run.shapes?.[block.stage] ?? run.variants?.[block.stage]).agent ?? block.stage;
   } catch {
     return block.stage;
   }

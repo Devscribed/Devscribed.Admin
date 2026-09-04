@@ -26,7 +26,7 @@
  * It also depends on history being permanent. An amended or rebased commit makes the sha a
  * verdict names unreachable, and the slice cannot be computed at all.
  *
- *   node scripts/review-slice.mjs [runId] [--head <sha>] [--variant <name>] [--json]
+ *   node scripts/review-slice.mjs [runId] [--head <sha>] [--shape <name>] [--json]
  */
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -39,7 +39,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
 
 const argv = process.argv.slice(2);
-const TAKES_VALUE = new Set(['--head', '--variant']);
+const TAKES_VALUE = new Set(['--head', '--shape']);
 const flag = (n) => {
   const i = argv.indexOf(n);
   return i === -1 ? null : argv[i + 1];
@@ -178,9 +178,9 @@ if (asJson) {
    reads the files, and how many files one of them is handed. It is printed here because the
    root runs this first, so one command hands it both the work and the shape. */
 const track = run.track ?? 'spec';
-const variantName = flag('--variant') ?? run.variants?.review ?? 'default';
+const shapeName = flag('--shape') ?? run.shapes?.review ?? null;
 const review = (() => {
-  try { return stageFor(readConfig(ROOT), track, 'review', variantName); }
+  try { return stageFor(readConfig(ROOT), track, 'review', shapeName); }
   catch { return {}; }
 })();
 const shardSize = review.shardSize ?? 15;
@@ -208,11 +208,11 @@ if (verdicts.length) {
 console.log(`
 ## How to shard`);
 if (review.shardAgent) {
-  console.log(`Track ${track}, variant ${variantName} — dispatch subagent_type "${review.shardAgent}"${review.shardModel ? ` on ${review.shardModel}` : ''}.`);
+  console.log(`Track ${track}, shape ${review.shape} — dispatch subagent_type "${review.shardAgent}"${review.shardModel ? ` on ${review.shardModel}` : ''}.`);
   console.log(`At most ${shardSize} files per shard, balanced by changed lines — ${Math.max(1, Math.ceil(worklist.length / shardSize))} shard(s) here.`);
   console.log(`Both live in .claude/ai-workflow.config.json under shipConfig.${track}.stages.review. Do not choose your own.`);
 } else {
-  console.log(`Track ${track}, variant ${variantName} — this shape runs no children. Read the slice yourself.`);
+  console.log(`Track ${track}, shape ${review.shape} — this shape runs no children. Read the slice yourself.`);
 }
 console.log(`\n## Accounting`);
 console.log(`Your verdict must set \`reviewedUpTo\` to ${HEAD.slice(0, 7)} and account for all ${worklist.length}:`);

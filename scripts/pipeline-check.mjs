@@ -102,10 +102,11 @@ const stageKeys = new Set();
 for (const track of trackNames(cfg)) {
   for (const stage of STAGES) {
     const block = cfg.shipConfig[track].stages?.[stage] ?? {};
-    for (const variant of ['default', ...Object.keys(block.variants ?? {})]) {
+    for (const shape of Object.keys(block.shapes ?? {})) {
       let s;
-      try { s = stageFor(cfg, track, stage, variant); } catch { continue; }
-      for (const k of Object.keys(s)) if (!k.startsWith('$') && k !== 'variant') stageKeys.add(k);
+      try { s = stageFor(cfg, track, stage, shape); } catch { continue; }
+      /* `shape` and `enabled` are stageFor's own answer, not settings inside a shape. */
+      for (const k of Object.keys(s)) if (!k.startsWith('$') && k !== 'shape' && k !== 'enabled') stageKeys.add(k);
     }
   }
 }

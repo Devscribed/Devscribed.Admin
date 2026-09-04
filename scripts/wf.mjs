@@ -123,8 +123,8 @@ function parseArgs(argv) {
       const key = a.slice(2);
       const next = argv[i + 1];
       const value = next === undefined || next.startsWith('--') ? true : (i++, next);
-      /* A repeated flag collects rather than overwrites: `--variant implement=orchestrated
-         --variant review=sweeps` names two stages, and keeping only the last would silently
+      /* A repeated flag collects rather than overwrites: `--shape implement=orchestrated
+         --shape review=lead-sweeps` names two stages, and keeping only the last would silently
          run one of them in a shape nobody asked for. */
       if (key in out) out[key] = [].concat(out[key], value);
       else out[key] = value;
@@ -547,12 +547,12 @@ function cmdInit(args) {
     /* Which pipeline this document earned. Read back by the router, which will not send a
        finding to a stage this track does not run. */
     track,
-    /* Any stage that ran a named variant rather than the track's own shape, and the reason
-       if this run started on a spec nothing admitted. Both are read back by the board and by
-       anyone comparing two runs: a result that cannot be attributed to a shape measures
+    /* The shape each stage ran in when it was not the one the track's `use` names, and the
+       reason if this run started on a spec nothing admitted. Both are read back by the board
+       and by anyone comparing two runs: a result that cannot be attributed to a shape measures
        nothing. A stage absent here ran what its track declares. */
-    variants: Object.fromEntries(
-      (Array.isArray(args.variant) ? args.variant : args.variant ? [args.variant] : [])
+    shapes: Object.fromEntries(
+      (Array.isArray(args.shape) ? args.shape : args.shape ? [args.shape] : [])
         .map((v) => String(v).split('='))
         .filter((v) => v.length === 2),
     ),

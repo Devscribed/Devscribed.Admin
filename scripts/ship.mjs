@@ -31,9 +31,9 @@
  *   --track <name>     spec | bug | patch — which stages this document earns, and what each
  *                      one is. Read off the document's path when omitted, so the flag is only
  *                      for overriding that.
- *   --plan-profile <v>       run a named variant of one stage instead of the shape the track
- *   --implement-profile <v>  declares. `npm run config` lists what each track has; `default`
- *   --review-profile <v>     is the block itself.
+ *   --plan-shape <name>      run one stage in a shape other than the one its `use` names.
+ *   --implement-shape <name> `npm run config` lists every shape each track offers, and the
+ *   --review-shape <name>    choice is recorded in run.json.
  *   --accept-unrefined <reason>  start even though the spec's refine ledger is not a pass
  *   --dry-run          print what each stage would run, change nothing
  */
@@ -50,7 +50,7 @@ const WF = join(ROOT, 'scripts', 'wf.mjs');
 
 const argv = process.argv.slice(2);
 const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry',
-  'implement-profile', 'review-profile', 'plan-profile', 'accept-unrefined', 'track']);
+  'implement-shape', 'review-shape', 'plan-shape', 'accept-unrefined', 'track']);
 
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
@@ -125,7 +125,7 @@ function runState() {
  * The track, and the shape each stage runs in.
  *
  * The track comes first: it decides which stages a document of this weight earns and what each
- * of them is. A `--*-profile` flag then names a variant of one stage. Both are resolved once,
+ * of them is. A `--*-shape` flag then names one stage's shape. Both are resolved once,
  * printed at the start and written into run.json, so a result is attributable to the shape that
  * produced it rather than to whatever the config says the next time somebody looks.
  */
@@ -143,11 +143,11 @@ const TRACK = (() => {
   catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
 })();
 
-const VARIANT_FLAG = { pre_implement: 'plan-profile', implement: 'implement-profile', review: 'review-profile' };
+const SHAPE_FLAG = { pre_implement: 'plan-shape', implement: 'implement-shape', review: 'review-shape' };
 const STAGE = {};
 if (TRACK.name) {
   for (const stage of STAGES) {
-    try { STAGE[stage] = stageFor(cfg, TRACK.name, stage, opt(VARIANT_FLAG[stage] ?? '', null)); }
+    try { STAGE[stage] = stageFor(cfg, TRACK.name, stage, opt(SHAPE_FLAG[stage] ?? '', null)); }
     catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
   }
 }
@@ -230,7 +230,7 @@ function promptFor(stage, run, verdictPath) {
         ? 'the spec and the handoff' : 'the spec';
       /* Name the run. Without it the slice falls back to the newest directory under
          .workflow/runs, which is this run only until somebody starts another one. */
-      const slice = `node scripts/review-slice.mjs ${run.id} --variant ${STAGE.review?.variant ?? 'default'}`;
+      const slice = `node scripts/review-slice.mjs ${run.id} --shape ${STAGE.review?.shape}`;
       const ledger = `\n\n## Your worklist\n\nRun \`${slice}\` first. It splits the diff into what must be read this `
         + `pass and what an earlier pass settled, and it decides the second by comparing each file against the commit that pass `
         + `actually saw. You may not write a verdict while the worklist is non-empty; if the fuse runs out first, report the `
@@ -616,7 +616,7 @@ async function main() {
         const state = skip.has(stage) ? 'skipped' : p.enabled === false ? 'disabled' : 'would run';
         const how = p.script ? `node ${p.script}`
           : p.agent ? `claude -p --agent ${p.agent}${p.model ? ` --model ${p.model}` : ''}`
-            + (p.variant !== 'default' ? `  (variant ${p.variant})` : '')
+            + (p.shape ? `  (shape ${p.shape})` : '')
             + (p.shardAgent ? `  shards ${p.shardAgent} on ${p.shardModel}` : '')
             : 'a preflight script';
         note(`${stage.padEnd(14)} ${state}${state === 'would run' ? `  ${how}` : ''}`);
@@ -635,8 +635,8 @@ async function main() {
       ...(carry ? ['--carry', carry] : []),
       ...(unrefined ? ['--accept-unrefined', unrefined] : []),
       ...Object.entries(STAGE)
-        .filter(([, p]) => p?.variant && p.variant !== 'default')
-        .flatMap(([stage, p]) => ['--variant', `${stage}=${p.variant}`]),
+        .filter(([, p]) => p?.shape)
+        .flatMap(([stage, p]) => ['--shape', `${stage}=${p.shape}`]),
       ...(flag('no-carry') ? ['--no-carry'] : [])) !== 0) process.exit(1);
     step('preflight');
     if (wf('preflight') !== 0) process.exit(2);
