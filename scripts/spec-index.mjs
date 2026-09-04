@@ -14,6 +14,7 @@
  * once, for the one entry a reader has open.
  */
 
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +43,41 @@ function logCost(path) {
 /* ── the specs themselves ─────────────────────────────────────────────────── */
 
 /**
+ * When each document under `specs/` was last written, from git rather than from the filesystem.
+ *
+ * An mtime is the moment a file last appeared in *this working tree*, not the moment somebody
+ * wrote it. A checkout, a branch switch or a merge stamps one instant on everything it touches,
+ * so a cluster of documents ends up sharing a timestamp and their order on the board becomes
+ * whatever the tie-break happens to say — three specs written a week apart all read
+ * `2026-09-02 14:50:05` and sorted by path. A commit time is the writing time, and it survives
+ * a clone.
+ *
+ * One `git log` walk, newest first, taking the first commit that names each path. A file that
+ * is dirty or untracked has no committed version worth trusting and keeps its mtime, which for
+ * those is genuinely when it was written.
+ */
+function writtenTimes(root) {
+  const git = (...args) => {
+    try { return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }); }
+    catch { return ''; }
+  };
+  const out = new Map();
+  let at = 0;
+  for (const line of git('log', '--format=%ct', '--name-only', '--', 'specs').split('\n')) {
+    const l = line.trim();
+    if (/^\d+$/.test(l)) { at = Number(l) * 1000; continue; }
+    if (l && !out.has(l)) out.set(l, at);
+  }
+  /* `R  old -> new` for a rename; the new path is the one on disk. */
+  for (const line of git('status', '--porcelain', '--', 'specs').split('\n')) {
+    const f = line.slice(3).trim();
+    if (!f) continue;
+    out.delete(f.includes(' -> ') ? f.split(' -> ')[1].trim() : f);
+  }
+  return out;
+}
+
+/**
  * `specs/requests/02-request-topics.md` — the head of a bundle, not its members — and the
  * lighter documents beside it, `specs/bugs/BUG-NNN-*.md` and `specs/patches/PATCH-NNN-*.md`.
  *
@@ -53,6 +89,7 @@ const DOC_NAME = /^(?:(\d+)|(?:BUG|PATCH)-(\d+))-.+\.md$/;
 function specFiles(root) {
   const base = join(root, 'specs');
   if (!existsSync(base)) return [];
+  const written = writtenTimes(root);
   const out = [];
   for (const area of readdirSync(base)) {
     const dir = join(base, area);
@@ -63,9 +100,10 @@ function specFiles(root) {
       if (/\.(contracts|cases|design)\.md$/.test(f)) continue;
       /* When the document itself was last written. A document nobody has run has no other
          clock, and "the newest one" is what somebody who just wrote one is looking for. */
+      const rel = `specs/${area}/${f}`;
       out.push({
-        area, file: f, path: `specs/${area}/${f}`, num: m[1] ?? m[2],
-        writtenAt: statIf(join(dir, f))?.mtimeMs ?? 0,
+        area, file: f, path: rel, num: m[1] ?? m[2],
+        writtenAt: written.get(rel) ?? statIf(join(dir, f))?.mtimeMs ?? 0,
       });
     }
   }
@@ -101,7 +139,9 @@ const isBlocker = (f) => f?.severity && f.severity !== 'note' && f.severity !== 
  * chosen here instead would drift away from the fuses the moment one of them changed.
  */
 function staleAfter(root) {
-  const MARGIN_MS = 5 * 60_000;
+  /* Margin over the fuse, because `updatedAt` is written when a stage starts and not while it
+     runs: a stage may legitimately be quiet for its whole fuse. */
+  const MARGIN_MS = 15 * 60_000;
   const cfg = jsonIf(join(root, '.claude', 'ai-workflow.config.json'));
   const fuses = Object.values(cfg?.shipConfig ?? {})
     .flatMap((t) => Object.entries(t?.timeoutMin ?? {}).filter(([k]) => !k.startsWith('$')).map(([, v]) => Number(v)))
@@ -131,12 +171,16 @@ function shipEntries(root) {
        says about itself. `events.jsonl` is appended on every tool call an agent makes, so it is
        the finest-grained clock there is; `stages/` moves once per attempt; `updatedAt` is only
        as fresh as the last thing the orchestrator managed to write. */
-    const touched = [
-      run?.updatedAt ? Date.parse(run.updatedAt) : 0,
-      statIf(join(dir, 'events.jsonl'))?.mtimeMs ?? 0,
-      ...(existsSync(stages) ? readdirSync(stages).map((f) => statIf(join(stages, f))?.mtimeMs ?? 0) : []),
-    ];
-    const updatedAt = Math.max(...touched) || statIf(dir)?.mtimeMs || null;
+    /* `updatedAt` is content the orchestrator wrote, and content is the only clock a checkout
+       cannot move: restoring a run directory from git resets every mtime under it, and a run
+       that died in August would then read as a minute old. Mtimes stand in only for a run whose
+       run.json never got one. */
+    const updatedAt = run?.updatedAt
+      ? Date.parse(run.updatedAt)
+      : Math.max(
+        statIf(join(dir, 'events.jsonl'))?.mtimeMs ?? 0,
+        ...(existsSync(stages) ? readdirSync(stages).map((f) => statIf(join(stages, f))?.mtimeMs ?? 0) : [0]),
+      ) || statIf(dir)?.mtimeMs || null;
     const idleMs = updatedAt ? Date.now() - updatedAt : null;
 
     out.push({
