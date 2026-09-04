@@ -7,12 +7,19 @@ here by id.
 
 | Route | Guards | Success | Errors |
 |---|---|---|---|
-| `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`, `RequireCapability('ViewTimeOffCalendar')` | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
-| `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`, `RequireCapability('ViewHolidays')` | `200` | `404` (no `ViewHolidays`; wrong organization) · `403` `HOLIDAY_MESSAGES.countryForbidden` (REQ-01-035) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
+| `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `ViewTimeOffCalendar` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
+| `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ViewHolidays` and `ManageOrganizationCountry` checked in the service | `200` | `404` (no `ViewHolidays`; wrong organization) · `403` `HOLIDAY_MESSAGES.countryForbidden` (REQ-01-035) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
 
-The country write is guarded at `ViewHolidays` and refuses at `ManageOrganizationCountry` inside
-the service, which is the shape `HolidaysService.remove` already uses for `DELETE /holidays/{id}`:
-the view gate answers 404, the action gate answers 403 with the tabulated wording.
+Neither route carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
+both routes here must answer `404` when the caller lacks the view capability, so the check runs in
+the service instead — the shape `HolidaysService.deleteHoliday` already uses for
+`DELETE /api/organizations/{orgId}/holidays/{holidayId}`, where the view gate answers 404 and the
+delete gate answers 403. On the country write the view gate answers 404 and the action gate
+answers 403 with the tabulated wording.
+
+**Decided:** 404 with the check in the service. Keeping `RequireCapability` and accepting its
+`403` was rejected, because the calendar's refusal must be byte-identical to a wrong-organization
+read (REQ-01-002, REQ-01-039).
 
 ### `GET /api/organizations/{orgId}/time-off/calendar`
 
@@ -104,8 +111,9 @@ Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-0
 | `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` | `GET /api/organizations/{orgId}/time-off/calendar` | This view covers more than 100 people. Narrow the scope to see the calendar. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle` | — | Nobody to show | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateBody` | — | No active member matches this scope. | yes |
+| `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint` | — | Members without a country of their own get this country's holidays. | yes |
 | `HOLIDAY_MESSAGES.countryForbidden` | `PUT /api/organizations/{orgId}/settings/country` | You don't have permission to change the organization country. | yes |
-| `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country` | Enter a valid 2-letter country code. | no |
+| `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country` | Country code must be 2 uppercase letters. | no |
 
 `HOLIDAY_MESSAGES.countryCodeInvalid` already ships
 (`packages/validation/src/holiday-messages.ts`) and is reused unchanged; the country field on this
@@ -159,11 +167,17 @@ instead, with the profile and organization candidates loaded alongside.
 | 6 | `projectIds` | Non-empty when `scope=teams` | `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` | no |
 | 7 | `memberIds` | Non-empty when `scope=people` | `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` | no |
 | 8 | resolved rows | ≤ 100 | `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` | yes |
-| 9 | `countryCode` | Empty, or exactly 2 letters normalizing to uppercase alpha-2 | `HOLIDAY_MESSAGES.countryCodeInvalid` | no |
+| 9 | `countryCode` (PUT body) | Empty, or exactly 2 uppercase letters | `HOLIDAY_MESSAGES.countryCodeInvalid` | no |
 
 The client validates 1–4, 6, 7 and 9 to keep the controls honest before a request is spent; the
 server re-validates all nine, and 5 and 8 exist only on the server because neither is reachable
 from a control the screen draws.
+
+**Decided:** rule 9 refuses `pl` rather than upcasing it, which is what the holiday rows'
+country validator already does and what keeps the stored value the one their uniqueness index
+compares. Normalizing on the write was rejected: it would give one value two behaviours, on the
+holiday form and on the country field beside it. This bounds the write only — REQ-01-026 still
+upcases a stored candidate such as a `pl` profile country when it resolves the chain on read.
 
 ## Required data-testid Attributes
 
@@ -230,8 +244,8 @@ The member column is `position: sticky; left: 0` so the names survive a horizont
 ### `/org/{orgId}/settings/holidays`
 
 Gains one control above the existing country filter: a `Select` labelled **Organization country**,
-with the hint *"Members without a country of their own get this country's holidays."* It is the
-country picker the holiday form already uses. For a `manager` it renders read-only with no save
+hinted from `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`. It is the country picker the holiday form
+already uses. For a `manager` it renders read-only with no save
 control (REQ-01-035); for a `user` or `viewer` the page itself is already a 404.
 
 ## UI Description
@@ -251,22 +265,22 @@ control (REQ-01-035); for a `user` or `viewer` the page itself is already a 404.
 | # | Situation | Exact behaviour |
 |---|---|---|
 | 1 | A vacation starts before the window and ends inside it | The band draws from the window's first column with `startsBeforeWindow: true`, and its accessible name carries the true start date (REQ-01-022). |
-| 2 | A vacation covers the whole window | One band spans every column, both edge flags true. |
-| 3 | A vacation is entirely outside the window | No band is returned for it. |
+| 2 | A vacation starts before the window and ends after it | One band spans every column, both edge flags true (REQ-01-022). No case of its own: TC-01-INT-10 walks the same clipping rule with one edge outside, and the second edge is that branch again. |
+| 3 | A vacation is entirely outside the window | No band is returned for it (TC-01-INT-09). |
 | 4 | A member is on two of the ticked projects | One row, not two — the Teams scope is a union over memberships (REQ-01-006). |
-| 5 | `scope=teams` names only archived projects | Their `ProjectMember` rows still resolve, so the members draw; archiving hides a project from selectors, it does not unassign anybody. |
+| 5 | `scope=teams` names only archived projects | Their `ProjectMember` rows still resolve, so the members draw; archiving hides a project from selectors, it does not unassign anybody. No case of its own: the named-project branch of REQ-01-006 never consults the archived flag, so this is TC-01-INT-05 again. Only the `none` bucket of REQ-01-007 reads that flag. |
 | 6 | `scope=teams` ticks `none` and a project | Both sets are returned, duplicates collapsed to one row each. |
 | 7 | `scope=people` names a member removed after the picker was opened | The row is dropped (REQ-01-011); the remaining rows draw and no error is raised. |
 | 8 | `scope=people` names 100 members and the caller adds one more | `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers`; the previous grid stays on screen. |
-| 9 | Two holidays fall on one date, one global and one `PL` | Both appear in `holidays[]`; a `PL` member carries both ids, everybody else carries the global one. The column shades whole only if the union reaches every row. |
+| 9 | Two holidays fall on one date, one global and one `PL` | Both appear in `holidays[]`; a `PL` member carries both ids, everybody else carries the global one. `appliesToAllInView` is answered per holiday, not per date, so the column shades whole on the global one alone (TC-01-INT-13). |
 | 10 | A member's `MemberProfile.country` is `"XX"` and their phone country is `"PL"` | `"XX"` does not normalize, so the chain skips it and resolves `PL` (REQ-01-027). |
 | 11 | A member's profile country is `"pl"` lowercase | Normalizes to `PL` and matches the `PL` holiday (REQ-01-028 is case-insensitive). |
 | 12 | The organization country is set while a calendar is open | The next fetch reflects it; nothing is pushed. The rule is evaluated on read, so no job has to have run for the answer to be right. |
-| 13 | A holiday is deleted between two fetches | The second fetch omits it. Nothing on this screen is cached across a range change. |
+| 13 | A holiday is deleted between two fetches | The second fetch omits it. Nothing on this screen is cached across a range change. No case of its own: the second fetch is an ordinary read, and the deletion is `organization/03`'s own rule. |
 | 14 | `startDate` equals `endDate` | A one-column grid. Valid, and the `Week` preset is simply not what produced it. |
-| 15 | The window crosses a year boundary | Allowed — the 92-day bound is the only limit, and ISO week numbers restart correctly across it. |
-| 16 | A member has an approved and a pending request that touch but do not overlap | Two bands, adjacent, visually separated by their own 3px margins. |
-| 17 | Two non-cancelled requests overlap for one member | Impossible through the product — spec `user-management/09` refuses an overlapping submission. If such a pair exists in the data, both bands draw stacked and neither is hidden, so the anomaly is visible rather than silently resolved. |
+| 15 | The window crosses a year boundary | Allowed — the 92-day bound is the only limit, and ISO week numbers restart correctly across it (TC-01-INT-16). |
+| 16 | A member has an approved and a pending request that touch but do not overlap | Two bands, adjacent, visually separated by their own 3px margins. No case of its own: the margin is drawn on every band, which TC-01-E2E-01 asserts on two bands already. |
+| 17 | Two non-cancelled requests overlap for one member | Impossible through the product — spec `user-management/09` refuses an overlapping submission. If such a pair exists in the data, both bands draw stacked and neither is hidden, so the anomaly is visible rather than silently resolved. No case: the state cannot be reached through any route the cases call. |
 | 18 | The caller has no `Account.timezone` | Today's marker falls back to UTC; every other date is a calendar day and is unaffected (REQ-01-017). |
 | 19 | An admin clears the organization country while members rely on it | Those members fall back to `null` on the next read and see only global holidays. No stored value changes; the chain is evaluated on read. |
 | 20 | A `manager` submits a country through the API directly | `403` `HOLIDAY_MESSAGES.countryForbidden` — the read-only rendering is a convenience, the refusal is the gate (REQ-01-035). |

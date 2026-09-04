@@ -136,6 +136,11 @@ IF `scope` is `teams` or `people` and its selection list is empty, THEN THE SYST
 **Decided:** an empty selection is ambiguous between "nothing ticked yet" and "everyone", and
 answering it with an empty grid teaches the reader that their team has nobody in it.
 
+#### REQ-01-041 — an unknown scope is refused
+
+IF `scope` is absent or is not one of `all`, `teams` or `people`, THEN THE SYSTEM SHALL answer
+`422` carrying `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid`.
+
 #### REQ-01-010 — a member unknown to the organization is ignored
 
 WHEN a `projectId` or `memberId` names a row outside the caller's organization, THE SYSTEM SHALL
@@ -294,6 +299,9 @@ spec `user-management/09`. A configurable working week would put this screen and
 WHEN an `admin` submits an ISO 3166-1 alpha-2 country, THE SYSTEM SHALL store it on
 `Organization.countryCode`.
 
+**Decided:** two admins writing at once is last-write-wins; no lock and no version check is added,
+because the write is one column with no read-modify-write.
+
 #### REQ-01-034 — clearing it
 
 WHEN an `admin` submits an empty country, THE SYSTEM SHALL store `null` on
@@ -370,7 +378,7 @@ Invariants:
 
 | Gap | Why acceptable now | What closes it |
 |---|---|---|
-| A holiday falling inside an approved vacation is still deducted as a working day, and the band says so | The frozen `workingDays` contract is what specs 07–09 and every issued report rest on; changing it retroactively would move money already reported | The amendment `organization/03` already names: resolve the holiday set at submit time and store which holidays the request counted |
+| A holiday falling inside an approved vacation is still deducted as a working day, and the band says so | The frozen `workingDays` contract is what specs 07–09 and every issued report rest on; changing it retroactively would move money already reported | A later amendment proposed here: resolve the holiday set at submit time and store which holidays the request counted, leaving every issued report's number untouched |
 | `Organization.countryCode` is `null` for every organization that predates this spec, so the third link of the chain does nothing until an admin sets it | The first two links behave exactly as they do today, so nothing regresses on the day the migration lands | An admin setting the country on the Holidays page; the field is drawn with an explanatory hint rather than left blank and unexplained |
 | A member with no country of their own and no organization country still sees only global holidays | It is the behaviour that ships today, and the new chain can only widen it | Setting the organization country, which is the whole point of the third link |
 | The 100-row cap is a flat number, not a measurement | No organization in this product is near it, and the refusal names the fix | A measurement against a real organization, recorded in `docs/research/` |

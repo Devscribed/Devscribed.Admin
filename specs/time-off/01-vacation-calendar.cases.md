@@ -9,8 +9,8 @@ Every cell is what happened.
 
 | Step | Command | Observed |
 |---|---|---|
-| Database | `docker compose ps` | `devscribed-postgres` up 5 days, healthy, `0.0.0.0:5433->5432` and `0.0.0.0:5434->5432`. |
-| Migrate + start the pair | `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<probe>.spec.ts --workers=1 --retries=0` from `e2e/` | `globalSetup` reported `Datasource "db": PostgreSQL database "devscribed_e2e" ... at localhost:5434`, `30 migrations found`, `No pending migrations to apply`. Nest mapped its routes and Next reported `Local: http://localhost:3100`, `Ready in 1530ms`. |
+| Database | `docker compose ps` | The Postgres container was up and healthy. |
+| Migrate + start the pair | `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<probe>.spec.ts --workers=1 --retries=0` from `e2e/` | `globalSetup` migrated the E2E database it chose and reported `30 migrations found`, `No pending migrations to apply`. Nest mapped its routes and Next reported ready; both servers answered on the pair the harness claimed. |
 | The address this spec claims | `GET /api/organizations/{orgId}/time-off/calendar?startDate=2026-09-01&endDate=2026-09-30` | **404** — nothing answers there today, so the route is free. |
 
 ### Reaching the states the cases need
@@ -192,10 +192,12 @@ are kept.
 - **Covers:** REQ-01-020, REQ-01-021, REQ-01-025
 - **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 200
 - **Steps:** One member with four requests in the window: approved, pending, rejected, and one
-  approved-then-cancelled. Read the calendar.
+  approved-then-cancelled; and a fifth, approved, falling wholly after the window. Read the
+  calendar.
 - **Expected Result:** Two bands — the approved one and the pending one — each carrying
   `kind: "vacation"` and its own status. The rejected and cancelled requests produce no band and
-  their ids appear nowhere in the response.
+  their ids appear nowhere in the response, and neither does the request outside the window
+  (Edge case 3).
 
 ### TC-01-INT-10
 
@@ -240,10 +242,12 @@ are kept.
 - **Level:** Integration
 - **Covers:** REQ-01-028, REQ-01-031
 - **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 200
-- **Steps:** Two members, one resolving to `PL` and one to `null`, and one `PL` holiday inside the
-  window. Read with `scope=all`.
-- **Expected Result:** The holiday appears once in `holidays[]` with
-  `appliesToAllInView: false`. Only the `PL` member's `holidayIds` contains it.
+- **Steps:** Two members, one resolving to `PL` and one to `null`; one `PL` holiday inside the
+  window and a global holiday on that same date. Read with `scope=all`.
+- **Expected Result:** Both holidays appear once each in `holidays[]` — the `PL` one with
+  `appliesToAllInView: false`, the global one with `true`, so one date carries both answers
+  (Edge case 9). Only the `PL` member's `holidayIds` contains the `PL` one; both members carry
+  the global one.
 
 ### TC-01-INT-14
 
@@ -274,9 +278,11 @@ are kept.
 - **Covers:** REQ-01-016
 - **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 422
   TIME_OFF_CALENDAR_MESSAGES.rangeTooWide
-- **Steps:** Read a 93-day range, then a 92-day range.
+- **Steps:** Read a 93-day range, then a 92-day range, then a 60-day range running from December
+  into the following January.
 - **Expected Result:** `422` carrying `rangeTooWide` for the first; `200` for the second — the
-  bound is inclusive.
+  bound is inclusive. `200` for the third, whose `days[]` spans the year boundary and whose ISO
+  week numbers restart across it (Edge case 15).
 
 ### TC-01-INT-17
 
@@ -323,9 +329,10 @@ are kept.
 - **Covers:** REQ-01-036
 - **Asserts:** `PUT /api/organizations/{orgId}/settings/country` → 422
   HOLIDAY_MESSAGES.countryCodeInvalid
-- **Steps:** Submit `POL`, then `1`, then `pl`.
-- **Expected Result:** `422` carrying `countryCodeInvalid` for the first two; `200` for `pl`, which
-  normalizes and is stored as `PL` (Edge case 11).
+- **Steps:** Submit `POL`, then `1`, then `pl`, then `PL`.
+- **Expected Result:** `422` carrying `countryCodeInvalid` for the first three — lowercase is
+  refused rather than upcased, so the stored value is the one the holiday rows compare. `200` for
+  `PL`, stored as `PL`.
 
 ### TC-01-INT-22
 
@@ -336,6 +343,16 @@ are kept.
 - **Expected Result:** `200` with `members: []` and a populated `days[]`. An empty scope is a
   successful read of nothing, not a refusal — the refusal case is the *unselected* one
   (TC-01-INT-06).
+
+### TC-01-INT-23
+
+- **Level:** Integration
+- **Covers:** REQ-01-041
+- **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 422
+  TIME_OFF_CALENDAR_MESSAGES.scopeInvalid
+- **Steps:** Read with `scope=everyone`, then with no `scope` parameter at all.
+- **Expected Result:** `422` carrying `scopeInvalid` both times, and no `members` array in either
+  body. An unrecognized scope is refused, never defaulted to `all`.
 
 ### TC-01-E2E-01
 
@@ -390,10 +407,13 @@ are kept.
 - **Covers:** REQ-01-030, REQ-01-031
 - **Steps:** Two members, one resolving to `PL` and one to nothing. Seed a global holiday on
   2026-09-21 and a `PL` holiday on 2026-09-16. Open the calendar with `scope=all` over September.
-- **Expected Result:** The global day carries a whole-column holiday marker and its ground reaches
-  both rows. The `PL` day carries **no** column marker, and its per-cell marker is present on the
-  `PL` member's row and absent on the other's.
+- **Expected Result:** The global day carries a whole-column holiday marker whose ground reaches
+  both rows, and its column header names the holiday — the text `Company Day` is readable in
+  `calendar-day-header-2026-09-21`. The `PL` day carries **no** column marker and names nothing in
+  its header, and its per-cell marker is present on the `PL` member's row and absent on the
+  other's.
 - **Selectors:** `calendar-day-holiday-{date}` (present for the global day, absent for the PL day),
+  `calendar-day-header-{date}` (carrying the holiday's name on the global day),
   `calendar-cell-holiday-{membershipId}-{date}` (present for the PL member, absent for the other)
 
 ### TC-01-E2E-05

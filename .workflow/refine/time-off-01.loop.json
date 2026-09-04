@@ -10,7 +10,7 @@
       "round": 1,
       "startedAt": "2026-09-04T13:45:24.060Z",
       "head": "bf6d5ca693283757fb911e1b87c208244fa3915e",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -83,7 +83,22 @@
           "S-57": "note",
           "S-58": "clear"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 5,
+      "keys": [
+        "spec/contradiction:Routes",
+        "spec/stale-statement:HOLIDAY_MESSAGES.countryCodeInvalid",
+        "spec/contradiction:Validation Rules row 9",
+        "spec/untestable-case:Verification Plan / Bringing it up",
+        "spec/stale-statement:HolidaysService.remove"
+      ],
+      "fix": {
+        "fixed": 7,
+        "decided": 3,
+        "left": 1
+      },
+      "endedAt": "2026-09-04T14:07:26.401Z"
     }
   ],
   "status": "running",
