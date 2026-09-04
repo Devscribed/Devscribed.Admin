@@ -1,0 +1,40 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1104,
+      "failed": 0,
+      "ms": 1210
+    },
+    "int": {
+      "skipped": true,
+      "reason": "diff touches no apps/api file; only apps/web/app/org/[orgId]/requests/NewRequestModal.tsx and e2e specs"
+    },
+    "e2e": {
+      "passed": 52,
+      "failed": 0,
+      "flaky": 1,
+      "files": [
+        "tests/requests.spec.ts",
+        "tests/client-participants.spec.ts",
+        "tests/request-topics.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [
+    {
+      "test": "requests/01 — Requests › a cancelled request leaves the addressee no action and no composer",
+      "file": "tests/requests.spec.ts:455",
+      "detail": "ECONNRESET on POST /api/signup on first attempt; passed clean on rerun. Unrelated to this diff (signup helper, not the modal)."
+    }
+  ],
+  "findings": [],
+  "notes": [
+    "Walked the modal by hand (tests/qa-look.spec.ts, copied from the template and deleted after): opens with To first and unset, About/Title/Description/Project/For disabled, Priority/Needed by/Create request enabled; submitting unset shows request-new-error-assignee-kind with 'Choose who this request is for' and focuses To; choosing Client offers only client-owned projects in Project and no options in For until a project is chosen (placeholder 'Choose a project first'); reopening the modal reseeds To to unset. Screenshots matched the spec's field order and copy exactly; no console error, uncaught error or failed request during the walk.",
+    "Confirmed server-side validateRequestAssignee (packages/validation/src/requests.ts) already returns REQUEST_MESSAGES.assigneeInvalid for a missing/unknown kind, so the new client-side check reports a message the server already enforces — no message was added.",
+    "Confirmed the Needed by seed reads todayInTimeZone(session.account.timezone) and the max reads requestNeededByMax(today) from packages/validation (PATCH-002), matching the spec's caller-timezone requirement.",
+    "TC-03-E2E-06 and TC-01-E2E-01 (extended) both exist under those ids in the diff and exercise the data-testids and routes the spec names.",
+    "requests.spec.ts's TC-01-E2E-02 was updated correctly per the spec's explicit carve-out: it still submits with the addressee kind unset first (asserting the new error) before choosing a kind and submitting again to check the rest of the fields' errors together — it does not skip the unset-kind case."
+  ]
+}

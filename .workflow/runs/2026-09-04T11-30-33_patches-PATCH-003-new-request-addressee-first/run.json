@@ -6,7 +6,7 @@
   "branch": "fix/new-request-addressee-first",
   "baseRef": "00049feefa3a5f514b57fef557e6aa6f892588f1",
   "headAtInit": "00049feefa3a5f514b57fef557e6aa6f892588f1",
-  "status": "qa",
+  "status": "ready",
   "track": "patch",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T11:30:33.382Z",
-  "updatedAt": "2026-09-04T11:45:32.388Z",
+  "updatedAt": "2026-09-04T11:54:21.699Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -50,8 +50,11 @@
       "lastVerdict": "pass"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-04T11:45:32.557Z",
+      "endedAt": "2026-09-04T11:54:21.647Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
