@@ -59,10 +59,10 @@ describe('Holidays (spec organization/03)', () => {
       role: string;
       phoneCountryCode?: string | null;
       /**
-       * Time off spec 01 REQ-01-026 — the member's holiday country is now stated on the
-       * MEMBERSHIP. The phone country beside it is left where a case has one, so the case
-       * also witnesses that it reaches nothing.
-       */
+        * Time off spec 01 REQ-01-026 — the member's holiday country, stated on the
+        * MEMBERSHIP. Where a case seeds a phone country too it seeds a DIFFERENT one, so
+        * the case fails if the resolution ever reads the phone again.
+        */
       countryCode?: string | null;
       timezone?: string;
     },
@@ -411,7 +411,10 @@ describe('Holidays (spec organization/03)', () => {
     const belarusian = await createMember(admin.organizationId, {
       email: 'by@acme.com',
       role: 'user',
-      phoneCountryCode: 'BY',
+      // The two disagree on purpose: the membership says BY and the phone says US, and
+      // this case expects the BY holiday. A resolution that read the phone again would
+      // return Independence Day here instead of Victory Day, and this case would fail.
+      phoneCountryCode: 'US',
       countryCode: 'BY',
     });
     const mine = await listHolidays(

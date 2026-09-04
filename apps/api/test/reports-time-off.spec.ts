@@ -415,7 +415,10 @@ describe('Reports · Time Off (spec reports/01)', () => {
       role: 'viewer',
       firstName: 'Vera',
       lastName: 'Ipso',
-      phoneCountryCode: 'BY',
+      // The membership says BY and the phone says US. The case asserts the BY day is in
+      // the group and the US day is not, so it fails in both directions if the country
+      // is ever resolved from the phone again.
+      phoneCountryCode: 'US',
       countryCode: 'BY',
     });
     await seedHoliday(admin, { date: '2026-07-03', name: 'BY Day', countryCode: 'BY' });

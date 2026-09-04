@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { can, normalizeRole, validateHolidayCountryCode } from '@devscribed/validation';
+import { can, normalizeRole, validateStatedCountryCode } from '@devscribed/validation';
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
 
@@ -63,10 +63,17 @@ export class OrganizationCountryService {
   ): Promise<OrganizationCountryView> {
     const caller = await this.requireCapability(session, 'manage-holidays');
 
-    // The WRITE rule, deliberately the strict one: `pl` is refused rather than upcased,
-    // which is what keeps the stored value the one the holiday rows' country is compared
-    // against. The READ (`resolveMemberHolidayCountry`) is the forgiving half.
-    const result = validateHolidayCountryCode((input ?? {}).countryCode);
+    // Validation Rule 9 — two tests, and both of them strict: `pl` is refused rather than
+    // upcased, and `XX` is refused though it has the right shape, because this column is
+    // the INPUT to REQ-01-026's resolution and a value that names no country removes
+    // holiday pay in silence while the page reads it back as set. The READ
+    // (`resolveMemberHolidayCountry`) is the forgiving half.
+    //
+    // An absent `countryCode` key clears the column, which is the opposite of the member
+    // update beside it, and deliberately: this body IS the resource — one field, replaced
+    // whole by a PUT — while the member update carries three fields and must be able to
+    // save a role without stating a country.
+    const result = validateStatedCountryCode((input ?? {}).countryCode);
     if (!result.valid) {
       throw new UnprocessableEntityException({
         error: 'validation_error',

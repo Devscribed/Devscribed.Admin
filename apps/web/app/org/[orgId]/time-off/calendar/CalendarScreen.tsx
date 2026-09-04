@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, IconButton, InfoBanner, Preloader, ReportControls, ToggleButton } from '@devscribed/ds';
+import { Button, IconButton, InfoBanner, ReportControls, ToggleButton } from '@devscribed/ds';
 import {
+  HOLIDAY_MESSAGES,
   TIME_OFF_CALENDAR_MESSAGES,
   TIME_OFF_CALENDAR_UNASSIGNED,
   stepTimeOffCalendarAnchor,
   timeOffBandAccessibleName,
+  timeOffCalendarToday,
   timeOffCalendarWindowRange,
   type TimeOffCalendarScope,
   type TimeOffCalendarWeekStart,
@@ -26,14 +28,6 @@ const MONTH_NAMES = [
 ];
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-/** Today in the viewer's own calendar, as `YYYY-MM-DD` — the anchor the screen opens on. */
-function todayISO(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
 
 function parts(iso: string): { year: number; month: number; day: number; weekday: number } {
   const [year, month, day] = iso.split('-').map(Number);
@@ -67,6 +61,51 @@ const WINDOW_SEGMENTS = [
 ];
 
 /**
+ * §UI Description, Loading — the header rows plus six member rows, drawn in the grid's own
+ * geometry so the page does not jump when the answer arrives, and announced as a status so
+ * a reader who cannot see it is told the grid is loading rather than empty. The filter bar
+ * above stays interactive, which is why this replaces the grid and not the page.
+ */
+function GridSkeleton({ columns }: { columns: string }) {
+  const days = Array.from({ length: 14 });
+  return (
+    <div className="time-off-calendar-scroll" role="status" aria-label="Loading the calendar">
+      <div className="time-off-calendar-grid time-off-calendar-skeleton" aria-hidden>
+        <div className="time-off-calendar-row" style={{ gridTemplateColumns: columns }}>
+          <div className="time-off-calendar-who time-off-calendar-corner" style={{ gridColumn: 1 }}>
+            Member
+          </div>
+          {days.map((_, index) => (
+            <div key={index} className="time-off-calendar-week" style={{ gridColumn: index + 2 }} />
+          ))}
+        </div>
+        <div
+          className="time-off-calendar-row time-off-calendar-head"
+          style={{ gridTemplateColumns: columns }}
+        >
+          <div className="time-off-calendar-who time-off-calendar-corner" style={{ gridColumn: 1 }} />
+          {days.map((_, index) => (
+            <div key={index} className="time-off-calendar-day" style={{ gridColumn: index + 2 }}>
+              <span className="time-off-calendar-shimmer" />
+            </div>
+          ))}
+        </div>
+        {Array.from({ length: 6 }).map((_, row) => (
+          <div key={row} className="time-off-calendar-row" style={{ gridTemplateColumns: columns }}>
+            <div className="time-off-calendar-who" style={{ gridColumn: 1 }}>
+              <span className="time-off-calendar-shimmer" />
+            </div>
+            {days.map((_, index) => (
+              <div key={index} className="time-off-calendar-cell" style={{ gridColumn: index + 2 }} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Time off spec 01 — the wallchart. One row per member, one column per calendar day, a
  * band per absence, and nothing written: every control changes what is asked for and the
  * server answers the whole of it (`holidayIds`, `appliesToAllInView` and the band's edge
@@ -85,10 +124,18 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
   const session = useSession();
   const firstDayOfWeek: TimeOffCalendarWeekStart =
     session.account.firstDayOfWeek === 'Sunday' ? 'Sunday' : 'Monday';
+  /**
+   * REQ-01-018 / REQ-01-049 — today is the caller's, read in the zone their ACCOUNT states
+   * and never from the browser's clock. The endpoint marks `range.today` from the same
+   * field through the same helper; resolving it locally instead put the two a day apart for
+   * anybody whose browser is not in their own zone, and the `Today` control then landed on
+   * a window that does not hold their today with no marker anywhere to say so.
+   */
+  const today = (): string => timeOffCalendarToday(session.account.timezone);
 
   const [scope, setScope] = useState<TimeOffCalendarScope>('all');
   const [windowPreset, setWindowPreset] = useState<TimeOffCalendarWindow>('month');
-  const [anchor, setAnchor] = useState<string>(() => todayISO());
+  const [anchor, setAnchor] = useState<string>(today);
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [memberIds, setMemberIds] = useState<string[]>([]);
 
@@ -181,12 +228,19 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
           const body = await response.json().catch(() => null);
           const fields = body?.fields as Record<string, string> | undefined;
           // The endpoint answers with the first failure and nothing else, so the banner
-          // draws the one message that arrived.
-          setError(fields ? Object.values(fields)[0] : (body?.message ?? null));
+          // draws the one message that arrived. A refusal that carries no message at all
+          // (a 404 after a capability was revoked mid-session) falls back to the generic
+          // one below rather than to an empty banner.
+          setError(fields ? Object.values(fields)[0] : (body?.message ?? HOLIDAY_MESSAGES.toastServerError));
         }
       } catch (err) {
         if ((err as Error)?.name === 'AbortError') return;
-        setError(TIME_OFF_CALENDAR_MESSAGES.emptyStateBody);
+        // A read that never happened is NOT a fact about the reader's data: the empty-state
+        // line ("No active member matches this scope.") is the answer to a successful read
+        // of nothing, and drawing it here would tell an admin whose organization is full of
+        // active members that none of them matches. The shipped generic failure message
+        // claims nothing about the rows.
+        setError(HOLIDAY_MESSAGES.toastServerError);
       }
       if (signal.aborted) return;
       setLoading(false);
@@ -243,7 +297,7 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
             >
               <ChevronLeftIcon />
             </IconButton>
-            <Button onClick={() => setAnchor(todayISO())} data-testid="calendar-today">
+            <Button onClick={() => setAnchor(today())} data-testid="calendar-today">
               Today
             </Button>
             <IconButton
@@ -331,7 +385,7 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
       )}
 
       {loading && !data ? (
-        <Preloader />
+        <GridSkeleton columns={gridColumns} />
       ) : data && !hasRows ? (
         <div className="time-off-calendar-empty" data-testid="calendar-empty-state">
           <div className="time-off-calendar-empty-title">

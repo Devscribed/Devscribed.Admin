@@ -1,6 +1,10 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { HOLIDAY_MESSAGES, MEMBER_MESSAGES, TIME_OFF_CALENDAR_MESSAGES } from '@devscribed/validation';
+import {
+  MEMBER_MESSAGES,
+  PROFILE_MESSAGES,
+  TIME_OFF_CALENDAR_MESSAGES,
+} from '@devscribed/validation';
 import * as bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
@@ -857,17 +861,25 @@ describe('Vacation calendar (time off spec 01)', () => {
   });
 
   // TC-01-INT-21
-  it('the organization country write refuses anything but empty or two uppercase letters', async () => {
+  it('the organization country write refuses anything but an assigned uppercase alpha-2', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    // Something is already stored, so the read-back after the refusal has a value to keep.
+    await setOrgCountry(admin.cookies, admin.organizationId, 'BY');
 
-    for (const bad of ['POL', '1', 'pl']) {
+    for (const bad of ['POL', '1', 'pl', 'XX']) {
       const response = await setOrgCountry(admin.cookies, admin.organizationId, bad);
       expect(response.status).toBe(422);
       expect(response.body).toEqual({
         error: 'validation_error',
-        fields: { countryCode: 'Country code must be 2 uppercase letters.' },
+        fields: { countryCode: 'Enter a valid country' },
       });
     }
+
+    // `XX` is the one that matters: it is two uppercase letters and names no assigned
+    // country, so storing it would leave a value REQ-01-026 discards on every read while
+    // the page showed it as set. The read-back still answers what was there before.
+    const readBack = await getOrgCountry(admin.cookies, admin.organizationId);
+    expect(readBack.body).toEqual({ countryCode: 'BY' });
 
     const accepted = await setOrgCountry(admin.cookies, admin.organizationId, 'PL');
     expect(accepted.status).toBe(200);
@@ -937,7 +949,7 @@ describe('Vacation calendar (time off spec 01)', () => {
   });
 
   // TC-01-INT-25
-  it('a member country overrides the organization, clearing returns them to it, and `pl` is a 400', async () => {
+  it('a member country overrides the organization, clearing returns them to it, and `pl` and `XX` are 400s', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
     const manager = await createMember(admin.organizationId, {
       email: 'mgr@acme.com', role: 'manager',
@@ -979,22 +991,24 @@ describe('Vacation calendar (time off spec 01)', () => {
     const afterCleared = await calendar(admin.cookies, admin.organizationId, month());
     expect(rowFor(afterCleared.body, member.membershipId).holidayIds).toEqual([polish.id]);
 
-    const lowercase = await updateMember(
-      manager.cookies,
-      admin.organizationId,
-      member.membershipId,
-      { role: 'user', jobTitle: 'Engineer', countryCode: 'pl' },
-    );
-    // 400, the status this route already refuses an invalid role and job title with —
-    // not the 422 the organization country write answers.
-    expect(lowercase.status).toBe(400);
-    expect(lowercase.body).toEqual({
-      errors: { countryCode: 'Country code must be 2 uppercase letters.' },
-    });
-    const stillCleared = await prisma.membership.findUniqueOrThrow({
-      where: { id: member.membershipId },
-    });
-    expect(stillCleared.countryCode).toBeNull();
+    // `pl` and `XX` are both refused, with 400 — the status this route already refuses an
+    // invalid role and job title with, not the 422 the organization country write answers.
+    // `XX` is the one that matters: the right shape, and storing it would leave a country
+    // the read discards.
+    for (const bad of ['pl', 'XX']) {
+      const refused = await updateMember(
+        manager.cookies,
+        admin.organizationId,
+        member.membershipId,
+        { role: 'user', jobTitle: 'Engineer', countryCode: bad },
+      );
+      expect(refused.status).toBe(400);
+      expect(refused.body).toEqual({ errors: { countryCode: 'Enter a valid country' } });
+      const stillCleared = await prisma.membership.findUniqueOrThrow({
+        where: { id: member.membershipId },
+      });
+      expect(stillCleared.countryCode).toBeNull();
+    }
   });
 
   // TC-01-INT-26
@@ -1128,6 +1142,8 @@ describe('Vacation calendar (time off spec 01)', () => {
     expect(TIME_OFF_CALENDAR_MESSAGES.rangeInverted).toBe(
       'The end date must be on or after the start date.',
     );
-    expect(HOLIDAY_MESSAGES.countryCodeInvalid).toBe('Country code must be 2 uppercase letters.');
+    // Both country writes carry this one, and not `HOLIDAY_MESSAGES.countryCodeInvalid`
+    // ("Country code must be 2 uppercase letters."), which is false of `XX`.
+    expect(PROFILE_MESSAGES.country.invalid).toBe('Enter a valid country');
   });
 });

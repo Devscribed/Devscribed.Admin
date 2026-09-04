@@ -357,6 +357,9 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           flexWrap: 'wrap',
         }}
       >
+        {/* The same 220 the country filter directly below it carries: two selects in one
+            column that measured differently would read as two unrelated controls. No token
+            names a control width — `MultiFilter`'s own 200 is the same literal. */}
         <div style={{ minWidth: 220 }}>
           <Select
             label="Organization country"

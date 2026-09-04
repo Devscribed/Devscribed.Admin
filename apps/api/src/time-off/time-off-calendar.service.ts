@@ -10,6 +10,8 @@ import {
   isoWeekOf,
   normalizeRole,
   resolveMemberHolidayCountry,
+  resolveTimeOffCalendarTimezone,
+  timeOffCalendarToday,
   validateTimeOffCalendarRange,
   validateTimeOffCalendarScope,
   type TimeOffCalendarScope,
@@ -188,12 +190,14 @@ export class TimeOffCalendarService {
       };
     });
 
-    const timezone = this.resolveTimezone(account?.timezone ?? null);
+    // REQ-01-018, through the shared helper the screen also calls, so the day this marks
+    // and the window that screen opens on can never be two different days.
+    const timezone = resolveTimeOffCalendarTimezone(account?.timezone ?? null);
     return {
       range: {
         startDate,
         endDate,
-        today: this.todayIn(timezone),
+        today: timeOffCalendarToday(timezone),
         timezone,
       },
       days: calendarDaysBetween(startDate, endDate).map((date) => ({
@@ -401,29 +405,4 @@ export class TimeOffCalendarService {
     return value.toISOString().slice(0, 10);
   }
 
-  /**
-   * REQ-01-018 — the zone today is read in. A `null`, empty or unrecognized value falls
-   * back to UTC rather than 500ing on a stale profile value, the `currentYearIn` idiom.
-   */
-  private resolveTimezone(timezone: string | null): string {
-    if (timezone) {
-      try {
-        new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
-        return timezone;
-      } catch {
-        return 'UTC';
-      }
-    }
-    return 'UTC';
-  }
-
-  private todayIn(timezone: string): string {
-    // `en-CA` formats as `YYYY-MM-DD`, which is the calendar date this screen marks.
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
-  }
 }

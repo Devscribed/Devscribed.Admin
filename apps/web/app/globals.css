@@ -1100,8 +1100,26 @@
   font-weight: var(--font-weight-bold);
 }
 
+/* @literal 2px — the inset that marks today's column. The scale's smallest step is
+   --space-1 at 4px, and a 4px inset reads as a border on the cell rather than as a marker
+   beside it. Recorded in the spec's DS gaps table with the two 3px values. */
 .time-off-calendar-cell.is-today {
   box-shadow: inset 2px 0 0 0 var(--action-primary);
+}
+
+/* The loading skeleton's placeholders — the grid's own geometry, greyed. No animation:
+   `ds-pulse-loader` is the design system's, staggered across three dots, and a shimmer of
+   our own would be a second motion vocabulary beside it. */
+.time-off-calendar-skeleton .time-off-calendar-shimmer {
+  display: block;
+  width: 100%;
+  height: var(--space-4);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+}
+
+.time-off-calendar-skeleton .time-off-calendar-who .time-off-calendar-shimmer {
+  max-width: 160px;
 }
 
 /* @literal 3px — the band's side margin, which is what separates two adjacent bands

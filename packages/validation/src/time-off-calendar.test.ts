@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   TIME_OFF_CALENDAR_MESSAGES,
+  resolveTimeOffCalendarTimezone,
   stepTimeOffCalendarAnchor,
+  timeOffCalendarToday,
   timeOffCalendarWindowRange,
+  validateStatedCountryCode,
   validateTimeOffCalendarRange,
   validateTimeOffCalendarScope,
 } from './time-off-calendar';
@@ -95,6 +98,27 @@ describe('TC-01-UNIT-02: the range rules and the window presets', () => {
     });
   });
 
+  it('refuses a date that is not a calendar date at all', () => {
+    // REQ-01-014 refuses a value that "is not an ISO calendar date", which is a wider net
+    // than "absent": a month that does not exist, a day that month does not have, a
+    // free-text date, and a value that is not a string.
+    for (const bad of ['2026-13-01', '2026-02-30', '2026-9-1', 'not-a-date', '2026-09-01T00:00:00Z', 12345]) {
+      expect(validateTimeOffCalendarRange(bad, '2026-09-30')).toEqual({
+        valid: false,
+        field: 'startDate',
+        error: 'Choose a start and an end date.',
+      });
+      expect(validateTimeOffCalendarRange('2026-09-01', bad)).toEqual({
+        valid: false,
+        field: 'endDate',
+        error: 'Choose a start and an end date.',
+      });
+    }
+    // A leap day the year does have is a calendar date; the same day a year later is not.
+    expect(validateTimeOffCalendarRange('2028-02-29', '2028-03-01').valid).toBe(true);
+    expect(validateTimeOffCalendarRange('2027-02-29', '2027-03-01').valid).toBe(false);
+  });
+
   it('refuses an unknown scope rather than defaulting it to all', () => {
     expect(validateTimeOffCalendarScope('everyone')).toEqual({
       valid: false,
@@ -119,5 +143,51 @@ describe('TC-01-UNIT-02: the range rules and the window presets', () => {
     expect(TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption).toBe(
       "Use the organization's country",
     );
+  });
+});
+
+/**
+ * The write rule for the two country columns, and the reason it is not the holiday
+ * validator: these columns are the input to the resolution, not a label.
+ */
+describe('validateStatedCountryCode — Validation Rule 9', () => {
+  it('clears on empty, null and undefined', () => {
+    for (const empty of [null, undefined, '', '   ']) {
+      expect(validateStatedCountryCode(empty)).toEqual({ valid: true, value: null });
+    }
+  });
+
+  it('accepts an assigned uppercase alpha-2 and stores what was submitted', () => {
+    expect(validateStatedCountryCode('PL')).toEqual({ valid: true, value: 'PL' });
+    expect(validateStatedCountryCode('BY')).toEqual({ valid: true, value: 'BY' });
+  });
+
+  it('refuses the wrong shape, and refuses XX though the shape is right', () => {
+    for (const bad of ['POL', '1', 'pl', 'P', 'XX', 'YY', 'ZZ', 42, {}]) {
+      expect(validateStatedCountryCode(bad)).toEqual({
+        valid: false,
+        error: 'Enter a valid country',
+      });
+    }
+  });
+});
+
+/** REQ-01-018 — the caller's today, and the fallback for a zone nobody can read. */
+describe('timeOffCalendarToday', () => {
+  const instant = new Date('2026-09-30T23:00:00.000Z');
+
+  it('answers the calendar date of the ZONE, not of the machine', () => {
+    // 25 hours apart: at this instant they are two different days, which is exactly the
+    // disagreement a screen reading the browser's clock introduced.
+    expect(timeOffCalendarToday('Pacific/Kiritimati', instant)).toBe('2026-10-01');
+    expect(timeOffCalendarToday('Pacific/Niue', instant)).toBe('2026-09-30');
+    expect(timeOffCalendarToday('UTC', instant)).toBe('2026-09-30');
+  });
+
+  it('falls back to UTC for a null, empty or unrecognized zone', () => {
+    for (const zone of [null, undefined, '', '   ', 'Mars/Olympus']) {
+      expect(resolveTimeOffCalendarTimezone(zone)).toBe('UTC');
+      expect(timeOffCalendarToday(zone, instant)).toBe('2026-09-30');
+    }
   });
 });

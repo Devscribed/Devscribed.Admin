@@ -1,5 +1,4 @@
 import { expect, test, type APIRequestContext, type Page } from './fixtures';
-import { TIME_OFF_CALENDAR_MESSAGES } from '@devscribed/validation';
 import {
   VALID,
   assignProjectMembersViaApi,
@@ -275,6 +274,18 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await page.getByTestId('calendar-window-week').click();
     await expect(dayHeaders).toHaveCount(7);
     await expect(rows).toHaveCount(4);
+    // The window STARTS on the caller's `firstDayOfWeek` — 'Monday' for an account that
+    // has never changed it — which is the half of REQ-01-019 a day count cannot see.
+    const today = new Date();
+    const utcToday = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+    );
+    const monday = new Date(utcToday);
+    monday.setUTCDate(monday.getUTCDate() - ((utcToday.getUTCDay() + 6) % 7));
+    await expect(dayHeaders.first()).toHaveAttribute(
+      'data-testid',
+      `calendar-day-header-${monday.toISOString().slice(0, 10)}`,
+    );
 
     // Under Month a step is a whole calendar month, first day to last — never a
     // fixed-length span straddling two of them.
@@ -361,9 +372,9 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await page.getByTestId('calendar-teams-picker').click();
     await page.getByRole('option', { name: nobody.name, exact: true }).click();
     await expect(page.getByTestId('calendar-empty-state')).toBeVisible();
-    await expect(page.getByTestId('calendar-empty-state')).toContainText(
-      TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle,
-    );
+    // The document's literal text, like the banner assertion above it: asserting the
+    // constant the screen imports would certify whatever the screen happens to say.
+    await expect(page.getByTestId('calendar-empty-state')).toContainText('Nobody to show');
     await expect(page.getByTestId('calendar-grid')).toHaveCount(0);
   });
 
@@ -461,7 +472,7 @@ test.describe('time-off/01 — Vacation calendar', () => {
 
     // A stored `null` renders as the default option.
     await expect(page.getByTestId('member-country-select')).toContainText(
-      TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption,
+      "Use the organization's country",
     );
     await page.getByTestId('member-country-select').click();
     await page.getByRole('option', { name: 'Poland', exact: true }).click();

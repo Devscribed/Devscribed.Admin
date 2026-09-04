@@ -11,6 +11,9 @@
  * lexicographically in calendar order and carry no zone at all.
  */
 
+import { PROFILE_MESSAGES, validateCountryCode } from './autofill';
+import { validateHolidayCountryCode } from './holidays';
+
 /**
  * §Error Messages, verbatim. The seven above the line are 422 bodies; the four below it
  * are drawn by a screen and reach no route, and live here so no screen writes them inline.
@@ -220,4 +223,74 @@ export function timeOffBandAccessibleName(band: {
 }): string {
   const kind = BAND_KIND_LABELS[band.kind] ?? band.kind;
   return `${kind} · ${band.status} · ${band.startDate} – ${band.endDate} · ${band.workingDays} working days`;
+}
+
+
+/**
+ * Validation Rule 9 — the write rule for the two country columns this spec adds, and the
+ * only rule either country write runs.
+ *
+ * **Two tests, not one.** The uppercase shape, so `pl` is refused rather than upcased and
+ * one value does not behave differently here and on the holiday form beside it; and
+ * membership of the assigned alpha-2 list, so `XX` is refused as well. A holiday's own
+ * country is a label that reaches nobody when it names no country, which is why
+ * `validateHolidayCountryCode` is right to accept it there — but these two columns are the
+ * INPUT to REQ-01-026's resolution, and an unusable one removes holiday pay in silence
+ * while the page reads the value back as set.
+ *
+ * The message is `PROFILE_MESSAGES.country.invalid` ("Enter a valid country"), which is
+ * true of everything this refuses; `HOLIDAY_MESSAGES.countryCodeInvalid` ("Country code
+ * must be 2 uppercase letters.") is false of `XX`.
+ *
+ * Empty, `null` and `undefined` all normalize to `null`, which is what clears the column
+ * (REQ-01-034, REQ-01-043). The stored value is the submitted one, never a normalized one.
+ */
+export function validateStatedCountryCode(
+  input: unknown,
+): { valid: true; value: string | null } | { valid: false; error: string } {
+  const shape = validateHolidayCountryCode(input);
+  if (!shape.valid) return { valid: false, error: PROFILE_MESSAGES.country.invalid };
+  if (shape.value === null) return { valid: true, value: null };
+  const assigned = validateCountryCode(shape.value);
+  if (!assigned.valid) return { valid: false, error: PROFILE_MESSAGES.country.invalid };
+  return { valid: true, value: shape.value };
+}
+
+
+/**
+ * REQ-01-018 — the caller's own calendar date, read in the zone their account states.
+ *
+ * Shared because both surfaces need the same answer and disagreed when they did not: the
+ * endpoint marks `range.today` from `Account.timezone`, and a screen that resolved today
+ * from the browser's clock instead would open — and its `Today` control would land — on a
+ * window that does not hold the caller's today, with no marker anywhere to say so. A
+ * caller in `Pacific/Kiritimati` at 23:00 UTC is already a day ahead of a UTC browser.
+ *
+ * A `null`, empty or unrecognized zone falls back to UTC rather than throwing, because a
+ * stale profile value must not 500 a read or blank a screen.
+ */
+export function resolveTimeOffCalendarTimezone(timezone: string | null | undefined): string {
+  if (timezone && timezone.trim().length > 0) {
+    try {
+      new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
+      return timezone;
+    } catch {
+      return 'UTC';
+    }
+  }
+  return 'UTC';
+}
+
+/** The calendar date `now` falls on in `timezone`, as `YYYY-MM-DD`. */
+export function timeOffCalendarToday(
+  timezone: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  // `en-CA` formats as `YYYY-MM-DD`, which is the calendar day this screen marks.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: resolveTimeOffCalendarTimezone(timezone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
 }

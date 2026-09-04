@@ -14,8 +14,8 @@ import {
   getAvailableRoles,
   getAvatarInitials,
   isValidRole,
-  validateHolidayCountryCode,
   validateJobTitle,
+  validateStatedCountryCode,
   visibleMembers,
   type MembershipStatus,
   type Role,
@@ -448,10 +448,13 @@ export class MembersService {
       // submission at all. `400`, the status this route already refuses an invalid role
       // and an invalid job title with, in the `{ errors }` shape it already uses for the
       // job title; not the `422` the organization country write answers.
+      // Validation Rule 9, the same two tests the organization write runs: the uppercase
+      // shape and membership of the assigned alpha-2 list, so `pl` and `XX` are both
+      // refused rather than stored for REQ-01-026 to discard on every read.
       const wantsCountry = input !== null && typeof input === 'object' && 'countryCode' in input;
       let countryCode: string | null = null;
       if (wantsCountry) {
-        const result = validateHolidayCountryCode(input.countryCode);
+        const result = validateStatedCountryCode(input.countryCode);
         if (!result.valid) {
           throw new BadRequestException({ errors: { countryCode: result.error } });
         }
