@@ -86,10 +86,10 @@ export class ClientsService {
 
     // The search is optional; a longer-than-120 string or a non-string is silently
     // treated as no filter, so a stray query param never turns into a 400 (spec §16).
-    const q = typeof query.q === 'string' ? query.q : '';
+    const searchTerm = typeof query.q === 'string' ? query.q : '';
     const searchFilter =
-      q.length > 0 && q.length <= 120
-        ? { name: { contains: q, mode: Prisma.QueryMode.insensitive } }
+      searchTerm.length > 0 && searchTerm.length <= 120
+        ? { name: { contains: searchTerm, mode: Prisma.QueryMode.insensitive } }
         : {};
 
     const clients = await this.prisma.client.findMany({
