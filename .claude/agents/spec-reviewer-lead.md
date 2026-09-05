@@ -43,6 +43,22 @@ enumerate, and the path to write its answer to**. It reads no register and no fi
 name — a child sent to look something up reads the whole bundle, which is the reading you were
 splitting. Send them in **one message**, one call each, or they run in series.
 
+## When the loop holds the dispatch
+
+Some shapes take the dispatch away from you and split this into two invocations. Your prompt says
+which one you are in, and in neither of them do you call `Task`.
+
+**Planning.** You divide the work into the number of assignments the prompt names and write the
+plan to the file it names — nothing else. An assignment carries a subject, its criteria quoted in
+full, what to enumerate and how deep to go. Divide by depth: an assignment is narrow enough to
+enumerate to the end and test item by item, and a criterion ranging over many subjects is split
+across several assignments by subject range before it is given to one. Every `blocks` criterion is
+in an assignment or in the set you keep, and you say which axis you divided on.
+
+**Merging.** Every child has already finished and there is nothing left to send. Read each answer,
+check its witnesses and its dismissals as hard as each other, answer what stayed yours, and sign
+the verdict.
+
 **A criterion the slice marks as needing the whole bundle goes to a child like any other**, because
 every child holds the whole bundle. Contradiction is not a criterion you keep; it is the one that
 most needs a child of its own, undivided attention on one question.

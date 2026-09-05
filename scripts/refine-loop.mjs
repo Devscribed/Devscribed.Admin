@@ -594,9 +594,194 @@ function unionVerdicts(verdicts) {
   };
 }
 
+/* ── the loop dispatches, the lead plans and merges ───────────────────────── */
+
+/* A lead told to send its children in one message sends them one message at a time, and did so
+   in every shape that asked. So the dispatch is no longer the model's to perform: the lead
+   plans, this function spawns the children together and awaits them all, and the lead is
+   invoked a second time over what came back. Three properties follow from the shape rather than
+   from a sentence in a prompt — the children are parallel, none is skipped, and no verdict can
+   be signed before the last one lands. */
+async function judgePlanned({ spec, ledger, round, request, since, out, stem }) {
+  const want = Math.max(1, Number(SHAPE.plannedShards));
+  const dir = `${stem}.shards`;
+  const planPath = `${dir}/plan.json`;
+  const members = [spec, ...bundleMembers(spec)].filter((p) => existsSync(join(ROOT, p)));
+  const mode = since
+    ? `Judge the range \`${since}..HEAD\`: this bundle has already been judged in full and `
+      + `repaired. Sweep the lines that commit changed and the rules they touch. A statement `
+      + `outside the range is a statement an earlier pass accepted; contradiction is the `
+      + `exception and is checked against the whole document.`
+    : 'Judge the bundle in full. This is its first pass.';
+
+  const planPrompt = [
+    spec,
+    '',
+    request || 'no request given',
+    '',
+    `Run \`node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''}`
+    + ` --shape ${SHAPE.name}\` first — the size of each member, how far its claims reach into`,
+    `the repository, and which criteria are in play.`,
+    '',
+    mode,
+    '',
+    `**This pass plans. It dispatches nothing.** You have no children in this invocation: the`,
+    `loop spawns them from your plan, all at once, and hands you what they wrote in the pass`,
+    `after this one. A \`Task\` call here buys nothing and is not an outcome.`,
+    '',
+    `**Divide the work into exactly ${want} assignments, and divide it by depth.** An assignment`,
+    `is one child's whole world — a subject narrow enough to enumerate to the end and test case`,
+    `by case, never a family of questions it would answer in a line each. A criterion that ranges`,
+    `over forty subjects is a candidate for several children, split by subject range, before it is`,
+    `a candidate for one; two children that reach the same defect from different directions are a`,
+    `better plan than two that halve it and each see half.`,
+    '',
+    `**The axis is yours.** By criterion, by subject range within a criterion, by the region of`,
+    `the bundle a question lives in, or by the code a claim reaches into — you decide, and you say`,
+    `in \`shardDecision\` what you decided and why.`,
+    '',
+    `**Every criterion the register marks \`blocks\` is in at least one assignment**, except the`,
+    `ones that stay yours. **Quote each criterion's text into the assignment in full**: your`,
+    `children never open the register and read nothing you did not write down.`,
+    '',
+    `Every child holds the whole bundle — ${members.map((m) => `\`${m}\``).join(', ')} — so what`,
+    `you divide is the question, never the document.`,
+    '',
+    `Write your plan to \`${planPath}\`, then print the same JSON and nothing after it.`,
+    '',
+    '```json',
+    '{ "shardDecision": "the axis you divided on, and why this bundle wanted it",',
+    '  "mine": ["S-xx", "S-yy"],',
+    '  "shards": [',
+    '    { "shard": 1,',
+    '      "subject": "a few words naming what this child owns",',
+    '      "criteria": [ { "id": "S-09", "text": "the criterion, quoted in full" } ],',
+    '      "enumerate": "the list to build before answering anything about it",',
+    '      "depth": "the test to apply to each item, and what to open in the code" } ] }',
+    '```',
+  ].join('\n');
+
+  const plan = await runAgent({
+    agent: JUDGE_AGENT,
+    model: JUDGE_MODEL,
+    prompt: planPrompt,
+    verdictPath: planPath,
+    timeoutMin: RC.timeoutMin ?? 45,
+    logStem: `${stem}.plan`,
+  });
+
+  let shards = Array.isArray(plan?.shards) ? plan.shards.filter((s) => s && s.criteria) : [];
+  if (!shards.length) {
+    note('the plan carried no assignments — the pass produced nothing');
+    return { status: 'error', error: 'spec-reviewer-lead wrote no shard plan' };
+  }
+  if (shards.length !== want) note(`the plan divides the register into ${shards.length}, not ${want}`);
+
+  const childPath = (i) => `${dir}/shard-${i + 1}.json`;
+  const childPrompt = (s, i) => [
+    `You are child ${i + 1} of ${shards.length}, dispatched by spec-reviewer-lead. The rules for a`,
+    `child in your definition bind you: you never block, you never set severity, and the only`,
+    `output of this pass is the file named at the end.`,
+    '',
+    `**The bundle. Read every one of these, in full:**`,
+    ...members.map((m) => `- \`${m}\``),
+    '',
+    mode,
+    '',
+    `## Your subject`,
+    '',
+    String(s.subject ?? '(unnamed)'),
+    '',
+    `## Your criteria`,
+    '',
+    `These are quoted in full and they are the whole of what you answer. There is no register for`,
+    `you to open and no criterion of yours that is not written here.`,
+    '',
+    ...(s.criteria ?? []).flatMap((c) => [`### ${c.id}`, '', String(c.text ?? ''), '']),
+    `## What to enumerate`,
+    '',
+    String(s.enumerate ?? 'every subject your criteria range over, one line each'),
+    '',
+    `## How deep to go`,
+    '',
+    String(s.depth ?? 'name the test you applied to each item and the case you tried against it'),
+    '',
+    `Breadth is another child's. A subject you cleared and tried nothing against is not checked,`,
+    `and where the spec names a validator, an export, a constant, a column or a guard, open it —`,
+    `the code settles what the words commit to.`,
+    '',
+    `Write your answer to \`${childPath(i)}\`, then print the same JSON and nothing after it.`,
+  ].join('\n');
+
+  /* The whole point of the rewrite: one await over every child, so they run together and the
+     merge cannot begin until the last of them has written. */
+  const answers = await Promise.all(shards.map((s, i) => runAgent({
+    agent: SHAPE.shardAgent,
+    model: SHAPE.shardModel,
+    prompt: childPrompt(s, i),
+    verdictPath: childPath(i),
+    timeoutMin: RC.shardTimeoutMin ?? RC.timeoutMin ?? 45,
+    logStem: `${dir}/shard-${i + 1}`,
+  })));
+
+  const landed = answers.map((a, i) => ({ i, ok: a && a.status !== 'error', claims: (a?.claims ?? []).length }));
+  const lost = landed.filter((l) => !l.ok);
+  note(`${landed.length - lost.length} of ${landed.length} children answered, `
+    + `${landed.reduce((n, l) => n + l.claims, 0)} claim(s) between them`);
+  if (lost.length) note(`children that wrote nothing: ${lost.map((l) => l.i + 1).join(', ')}`);
+
+  const mergePrompt = [
+    spec,
+    '',
+    request || 'no request given',
+    '',
+    `Your ${shards.length} children have all finished. **This pass dispatches nothing** — there is`,
+    `nothing left to send and a \`Task\` call is not an outcome of it.`,
+    '',
+    `Your plan is at \`${planPath}\`. Their answers:`,
+    ...shards.map((s, i) => `- ${i + 1}. ${s.subject ?? '(unnamed)'} — `
+      + (landed[i].ok ? `\`${childPath(i)}\`` : 'wrote nothing')),
+    '',
+    mode,
+    '',
+    `Read every one of them. **A child's claim is a claim, not a conclusion**: check its witness`,
+    `in the document or the code before you keep it, and check its dismissals as hard as its`,
+    `claims — a child that enumerated an item and let it go on the strength of a code comment has`,
+    `cleared nothing. Name in \`shards\` any answer of theirs you overturned, and why.`,
+    '',
+    `**What stayed yours you answer yourself**: scope against the request in both directions,`,
+    `divergence, and any criterion your plan left with nobody. A criterion whose child wrote`,
+    `nothing is unanswered, not \`clear\`.`,
+    '',
+    `\`sweeps\` is the enumeration this pass actually performed — sum what your children`,
+    `enumerated into it as numbers, one entry per family. Prose there records nothing and a`,
+    `passing verdict carrying no counts is rejected.`,
+    '',
+    `Write your verdict to \`${out}\`. That file is the only output of this pass: a judgement that`,
+    `is not in it did not happen, whatever you say in your final message. Write it even when`,
+    `nothing blocks — \`"status": "pass"\` with an empty \`findings\` array is a verdict and is the`,
+    `outcome this loop is looking for. Then print the same JSON and nothing after it.`,
+  ].join('\n');
+
+  const verdict = await runAgent({
+    agent: JUDGE_AGENT,
+    model: JUDGE_MODEL,
+    prompt: mergePrompt,
+    verdictPath: out,
+    timeoutMin: RC.timeoutMin ?? 45,
+    logStem: `${stem}.merge`,
+  });
+  if (verdict && verdict.status !== 'error') {
+    verdict.profile = SHAPE.name;
+    verdict.shardDecision = verdict.shardDecision ?? plan.shardDecision ?? null;
+    verdict.dispatchedBy = 'loop';
+  }
+  return verdict;
+}
+
 async function gateJudge(spec, ledger, round, request, since) {
   const passes = Math.max(1, Number(SHAPE.judgePasses ?? 1));
-  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name}${passes > 1 ? `, ${passes} passes unioned` : ''})`);
+  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name}${SHAPE.plannedShards ? `, ${SHAPE.plannedShards} children dispatched by the loop` : ''}${passes > 1 ? `, ${passes} passes unioned` : ''})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
   const buildPrompt = (out) => [
     spec,
@@ -675,6 +860,9 @@ async function gateJudge(spec, ledger, round, request, since) {
   const dispatchOf = async (i) => {
     const out = outFor(i + 1);
     const stem = `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}${passes === 1 ? '' : `.pass-${i + 1}`}`;
+    if (SHAPE.plannedShards && !dryRun) {
+      return judgePlanned({ spec, ledger, round, request, since, out, stem });
+    }
     const call = (extra) => runAgent({
       agent: JUDGE_AGENT,
       model: JUDGE_MODEL,

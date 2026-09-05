@@ -365,6 +365,16 @@
         "shardAgent": "spec-reviewer",
         "shardModel": "sonnet",
         "minShards": 10
+      },
+      "sharded-15": {
+        "$comment": "The loop dispatches, not the lead. The lead plans a division of the register into 15 assignments and writes it to a file; this script spawns the 15 children together and awaits every one; the lead is then invoked a second time over their answers and signs the verdict. plannedShards is what selects that shape of pass. A lead that holds the dispatch itself sends its children one message at a time, which serialises them and lets it begin merging before the last has answered.",
+        "judgeAgent": "spec-reviewer-lead",
+        "judgeModel": "opus",
+        "fixerAgent": "spec-fixer-minimal",
+        "fixerModel": "opus",
+        "shardAgent": "spec-reviewer",
+        "shardModel": "sonnet",
+        "plannedShards": 15
       }
     },
     "requireCriteriaMap": true,
