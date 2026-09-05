@@ -182,17 +182,10 @@ console.log(`  ${wholeBundle.length} need the whole bundle and cannot be split o
 console.log(`    ${wholeBundle.join(' ')}`);
 if (unplaced.length) console.log(`  the register places nowhere: ${unplaced.join(' ')}`);
 
-console.log('\n## Reading it');
-if (result.shardAgent) {
-  console.log(`  A shard agent is available: "${result.shardAgent}"${result.shardModel ? ` on ${result.shardModel}` : ''}.`);
-  console.log('  Whether to use it, how many, and what each one reads are yours to decide from the');
-  console.log('  numbers above. A shard you dispatch carries its files and the text of its criteria;');
-  console.log('  it reads no register. Send them in one message or they run in series.');
-} else {
-  console.log(`  Shape ${shapeName} names no shard agent, so this pass is yours alone.`);
-}
-console.log('  Say what you decided, and why, in `shardDecision`.');
-
-console.log('\n## Accounting');
-console.log('  The verdict carries a `criteria` map with every id in the register, and `admitted` is');
-console.log('  true only when every id the register marks `blocks` reads `clear` or `n/a`.');
+/* Facts, and no advice about what to do with them. Two passes were told here how to dispatch,
+   in words that outranked the definition they contradicted; an inventory that instructs is a
+   second copy of a rule, and the reader obeys whichever it read last. */
+console.log('\n## Shape');
+console.log(`  ${shapeName}`);
+console.log(`  shardAgent  ${result.shardAgent ?? 'none'}`);
+console.log(`  shardModel  ${result.shardModel ?? 'none'}`);

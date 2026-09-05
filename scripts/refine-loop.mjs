@@ -607,13 +607,8 @@ async function gateJudge(spec, ledger, round, request, since) {
     '',
     request || 'no request given',
     '',
-    /* The split is computed and offered; whether to use it is the judge's. `spec-slice` prints
-       one shard per member of the bundle with the criteria that member settles, so a judge that
-       delegates does not have to invent the division — and one that does not delegate says so
-       in the verdict rather than leaving the choice invisible. */
-    `Run \`node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''}`
-    + ` --shape ${SHAPE.name}\` first. It prints the bundle, this pass's mode, and a ready`,
-    `split: one shard per member, the criteria that member settles, and the shard agent to use.`,
+    /* The inventory, named and nothing more. What it is for is in the definition that runs it. */
+    `node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''} --shape ${SHAPE.name}`,
     ``,
     ...(SHAPE.plannedShards
       ? [
