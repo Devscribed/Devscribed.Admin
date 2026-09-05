@@ -783,6 +783,25 @@ async function main() {
           `the verdict carries no criteria map, so no enumerated criterion was run. `
           + `Re-run the round; a pass that reports nothing is not a pass.`);
       }
+      /* An admission rests on an enumeration. `sweeps` is where the judge says how many items
+         each sweep listed — "a sweep reporting zero enumerated is a sweep that did not run" —
+         and a pass whose sweeps are prose, or absent, has recorded no enumeration at all. A
+         blocked verdict is going to be repaired and judged again, so the shape of a diagnostic
+         field there is a note; a pass is the last word and carries the burden. */
+      const sweepCounts = verdict.sweeps && !Array.isArray(verdict.sweeps)
+        && typeof verdict.sweeps === 'object'
+        ? Object.values(verdict.sweeps).filter((n) => typeof n === 'number')
+        : [];
+      const enumerated = sweepCounts.some((n) => n > 0);
+      if (!dryRun && RC.requireSweepCounts && verdict.status === 'pass' && !enumerated) {
+        record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
+        saveLedger(ledger);
+        finish(ledger, 'error', 'judge-error',
+          'the pass carries no sweep counts, so nothing it admits was enumerated. '
+          + 'Re-run the round; `sweeps` is how many items each sweep listed, not a description of them.');
+      }
+      if (!enumerated) note('the verdict records no sweep counts — nothing says what was enumerated');
+
       /* Whether to shard is the judge's call, so an empty `shards` is a legitimate answer and
          not an error. What is not optional is saying which way it went: a pass that delegates
          and one that does not are different passes, and a ledger that cannot tell them apart
@@ -862,6 +881,9 @@ async function main() {
     record.gate = gate;
     record.blockers = blockers.length;
     record.keys = blockers.map(keyOf);
+    /* The criteria a round actually blocked under, kept because the next round's stall test is
+       about them and not about how many findings each pass happened to file. */
+    record.criteriaBlocked = [...new Set(blockers.map((f) => f.criterion).filter(Boolean))];
     saveLedger(ledger);
 
     /* A finding that survived a repair has been tried and not fixed. Another round buys nothing. */
@@ -872,10 +894,24 @@ async function main() {
         finish(ledger, 'blocked', 'stuck-finding',
           `${survived.join(', ')} survived a repair — the requirement is ambiguous or the finding is wrong. A person decides.`);
       }
-      if (previous.gate === gate && blockers.length >= previous.blockers) {
+      /* Not shrinking is only a stall when the round is grinding the same criteria. A round
+         whose findings are disjoint from the round before it has discovered, not re-judged —
+         the count says nothing, because the pool a pass samples from is larger than a pass.
+         Halting there throws a judged round away with its repairs unmade, and the next
+         invocation starts cold and samples somewhere else again. */
+      const criteriaBefore = new Set(previous.criteriaBlocked ?? []);
+      const criteriaNow = blockers.map((f) => f.criterion).filter(Boolean);
+      const reground = criteriaNow.filter((c) => criteriaBefore.has(c));
+      if (previous.gate === gate && blockers.length >= previous.blockers && reground.length) {
         finish(ledger, 'blocked', 'not-converging',
-          `round ${round - 1} left ${previous.blockers} blocker(s), round ${round} found ${blockers.length}. `
-          + 'A loop that does not shrink is judging the document again rather than the repair.');
+          `round ${round - 1} left ${previous.blockers} blocker(s), round ${round} found ${blockers.length}, `
+          + `and ${[...new Set(reground)].join(', ')} blocked in both. `
+          + 'A loop that does not shrink on the criteria it just repaired is judging the document again rather than the repair.');
+      }
+      if (previous.gate === gate && blockers.length >= previous.blockers) {
+        note(`round ${round} found ${blockers.length} blocker(s) against round ${round - 1}'s ${previous.blockers}, `
+          + 'under criteria none of them shared — discovery, not a stall');
+        record.discovering = true;
       }
     }
 
