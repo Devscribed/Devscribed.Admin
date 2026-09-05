@@ -20,3 +20,4 @@ itself.
 | [2026-09-03](2026-09-03-the-refine-loop-grew-the-spec.md) | Two refine rounds that never reached the judge: nine findings by origin, two of them written by the previous repair, and a bundle that grew 105 lines |
 | [2026-09-04](2026-09-04-three-judges-over-one-spec.md) | One spec text judged three times — old judge, new judge, new judge with shards: what each blocked, what sharding recovered and lost, and four hypotheses it killed |
 | [2026-09-04](2026-09-04-what-a-run-costs-by-track.md) | What every run on disk actually cost: $1.64 for a patch track against $7.81–$108.61 for a spec, the digest bug that reported $0 for all of them, and a token breaker set fifty times too low |
+| [2026-09-05](2026-09-05-what-a-refine-pass-samples.md) | Why one spec took three refine invocations and still reached review with spec defects: five passes over one frozen text, the defect four of them found and five earlier passes cleared, and three hypotheses it killed |
