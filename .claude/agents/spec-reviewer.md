@@ -170,8 +170,9 @@ Write it to the path your prompt names, and print the same JSON.
 
 `admitted` is `true` only when every `blocks` criterion reads `clear` or `n/a`.
 
-`file` is the spec you were given, in every finding without exception — or its paired
-`.design.md`. A verdict naming any other path is malformed, however true the observation.
+`file` is the member of the bundle the finding is in — the spec you were given, its
+`.contracts.md`, its `.cases.md`, its `.design.md` or its mock. A verdict naming a path outside
+the bundle is malformed, however true the observation.
 
 `sweeps` records how many items each sweep enumerated, not how many findings it produced; a sweep
 reporting zero enumerated is a sweep that did not run.

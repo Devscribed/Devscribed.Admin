@@ -554,22 +554,21 @@ function unionVerdicts(verdicts) {
     }
   }
 
-  /* Two passes name one defect under two rules — the same country-code disagreement arrives as
-     an ambiguity from one and as a contradiction from another — and they disagree by a line or
-     two on where it starts. The place and the severity are what identify it; the rule is what
-     the pass made of it, and every rule it was filed under is kept. */
-  const placeOf = (f) => `${f.file ?? ''}#${f.symbol ?? f.line ?? '?'}|${f.severity ?? '?'}`;
+  /* The place and the severity identify a finding; the rule and the file are what each pass
+     made of it, and both are kept. */
+  const idOf = (f) => `${placeOf(f)}|${f.severity ?? '?'}`;
   const byKey = new Map();
   for (const v of kept) {
     for (const f of v.findings ?? []) {
-      const seen = byKey.get(placeOf(f));
+      const seen = byKey.get(idOf(f));
       if (seen) {
         seen.raisedBy += 1;
         if (!seen.rules.includes(f.rule)) seen.rules.push(f.rule);
         if (!seen.criteria.includes(f.criterion)) seen.criteria.push(f.criterion);
+        if (!seen.files.includes(f.file)) seen.files.push(f.file);
         continue;
       }
-      byKey.set(placeOf(f), { ...f, raisedBy: 1, rules: [f.rule], criteria: [f.criterion] });
+      byKey.set(idOf(f), { ...f, raisedBy: 1, rules: [f.rule], criteria: [f.criterion], files: [f.file] });
     }
   }
   const findings = [...byKey.values()]
@@ -782,11 +781,24 @@ function criteriaShift(ledger, round, verdict) {
 
 const blockersOf = (v) => (v.findings ?? []).filter((f) => f.severity === 'blocker');
 const keyOf = (f) => `${f.rule ?? '?'}:${f.symbol ?? f.file ?? '?'}`;
-/* What identifies a finding across passes. Two passes name one defect under two rules — the
-   same disagreement arrives as an ambiguity from one and as a contradiction from another — so
-   a key carrying the rule reads a survivor as something new, and the check that exists to stop
-   a loop repairing one finding twice never fires. The place is what does not move. */
-const placeOf = (f) => `${f.file ?? ''}#${f.symbol ?? f.line ?? '?'}`;
+/* What identifies a finding across passes.
+ *
+ * Not the rule: two passes name one defect under two — the same disagreement arrives as an
+ * ambiguity from one and as a contradiction from another — so a key carrying the rule reads a
+ * survivor as something new, and the check that exists to stop a loop repairing one finding
+ * twice never fires.
+ *
+ * Not the file either: one pass files a finding against the member it is in and another against
+ * the spec it was given, and both readings have been in the definition at once.
+ *
+ * The symbol is what does not move — a requirement id, a case id, a table, a section — once the
+ * qualifier a pass puts in front of it is dropped. */
+const symbolOf = (f) => String(f.symbol ?? f.line ?? '?')
+  .replace(/^.*[·:]\s*/, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+const placeOf = (f) => symbolOf(f);
 
 /**
  * Lines a commit added to the bundle, net of what it removed. A repair that answers a finding
