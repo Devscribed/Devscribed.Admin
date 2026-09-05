@@ -266,8 +266,20 @@ not, so the correction costs nothing that has ever happened.
 - `spec-lint` gained three joins a judge was making by reading — the mock against the DS-gaps table,
   the permission matrix against the Guards cells, the Verification Plan against hosts, ports and
   database names. Against this bundle's history they reproduce four of the eighteen refine blockers
-  (#4, #10, #12, #18) in about 0.3 seconds, find one real defect no judge ever filed, and change
-  nothing across the other 34 specs in the repository.
+  (#4, #10, #12, #18) in about 0.3 seconds and find one real defect no judge ever filed: the matrix
+  grants `ManageOrganizationCountry` while the only route that writes the country is guarded by
+  `RequireCapability('ViewHolidays')`, the read capability.
+
+  They fire at exactly the commits where the oracle says each defect lived and go silent at
+  `0f20da7`, where it was repaired. Regression: `spec-lint` only processes a complete bundle, and
+  this repository has **three** — `time-off/01`, `requests/02` and `requests/03`. Baseline against
+  new across those three: no change in either direction.
+
+  Two pre-existing bugs had to be fixed to get there. `tableAfter` read past the end of a section
+  carrying no table, which is every `## Roles` heading outside the contracts file, and it crashed
+  the moment the matrix was parsed from the behaviour file. The Guards cell was matched
+  lowercase-dashed only, so a matrix written in the decorator's PascalCase joined to nothing and
+  the check that exists to find an unserved grant found none.
 - S-59 — the value sets a document states twice, enumerated. In the treatment arm it moved
   `REQ-01-036` from "noticed as an ambiguity" to "named as a contradiction", reached through a list
   of 12 value sets.
