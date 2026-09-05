@@ -528,10 +528,78 @@ const lastVerdictPath = (ledger, round) =>
 const lastFixPath = (ledger, round) =>
   `.workflow/refine/${ledger.stem}.probe/${round - 1}/fix.verdict.json`;
 
+/**
+ * Two judgements of one text, as one verdict.
+ *
+ * A pass reads a bundle larger than it holds and answers a criterion by what it noticed, so two
+ * passes over identical text return overlapping but different sets. Taking the union is what
+ * turns "what this pass saw" into "what a pass of this kind sees", and it costs a second pass
+ * and no wall clock when they run together.
+ *
+ * The merge is worst-case per criterion, findings deduplicated on their key, and `raisedBy` on
+ * each finding — a finding two passes filed independently is worth reading before one that a
+ * single pass filed.
+ */
+const WORST = ['clear', 'n/a', 'note', 'blocked'];
+function unionVerdicts(verdicts) {
+  const kept = verdicts.filter((v) => v && v.status !== 'error');
+  if (kept.length <= 1) return kept[0] ?? verdicts[0];
+
+  const criteria = {};
+  for (const v of kept) {
+    for (const [id, answer] of Object.entries(v.criteria ?? {})) {
+      const a = WORST.indexOf(answer);
+      const b = WORST.indexOf(criteria[id] ?? 'clear');
+      criteria[id] = a > b ? answer : (criteria[id] ?? answer);
+    }
+  }
+
+  /* Two passes name one defect under two rules — the same country-code disagreement arrives as
+     an ambiguity from one and as a contradiction from another — and they disagree by a line or
+     two on where it starts. The place and the severity are what identify it; the rule is what
+     the pass made of it, and every rule it was filed under is kept. */
+  const placeOf = (f) => `${f.file ?? ''}#${f.symbol ?? f.line ?? '?'}|${f.severity ?? '?'}`;
+  const byKey = new Map();
+  for (const v of kept) {
+    for (const f of v.findings ?? []) {
+      const seen = byKey.get(placeOf(f));
+      if (seen) {
+        seen.raisedBy += 1;
+        if (!seen.rules.includes(f.rule)) seen.rules.push(f.rule);
+        if (!seen.criteria.includes(f.criterion)) seen.criteria.push(f.criterion);
+        continue;
+      }
+      byKey.set(placeOf(f), { ...f, raisedBy: 1, rules: [f.rule], criteria: [f.criterion] });
+    }
+  }
+  const findings = [...byKey.values()]
+    .sort((a, b) => (b.raisedBy - a.raisedBy) || String(a.id ?? '').localeCompare(String(b.id ?? '')));
+
+  const sweeps = {};
+  for (const v of kept) {
+    if (!v.sweeps || Array.isArray(v.sweeps) || typeof v.sweeps !== 'object') continue;
+    for (const [k, n] of Object.entries(v.sweeps)) {
+      if (typeof n === 'number') sweeps[k] = Math.max(sweeps[k] ?? 0, n);
+    }
+  }
+
+  return {
+    ...kept[0],
+    status: kept.some((v) => v.status === 'blocked') ? 'blocked' : kept[0].status,
+    admitted: kept.every((v) => v.admitted !== false) ? kept[0].admitted : false,
+    criteria,
+    findings,
+    sweeps: Object.keys(sweeps).length ? sweeps : kept[0].sweeps,
+    passes: kept.length,
+    shardDecision: kept.map((v, i) => `pass ${i + 1}: ${v.shardDecision ?? 'no decision recorded'}`).join(' — '),
+  };
+}
+
 async function gateJudge(spec, ledger, round, request, since) {
-  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name})`);
+  const passes = Math.max(1, Number(SHAPE.judgePasses ?? 1));
+  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name}${passes > 1 ? `, ${passes} passes unioned` : ''})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
-  const prompt = [
+  const buildPrompt = (out) => [
     spec,
     '',
     request || 'no request given',
@@ -577,20 +645,41 @@ async function gateJudge(spec, ledger, round, request, since) {
        records and never told what to produce, the agent produces the natural artefact of
        checking. A pass that judges correctly and writes nowhere costs the same as one that
        failed, and its verdict — `clear` on both occasions — is lost. */
-    `Write your verdict to \`${verdictPath}\`. That file is the only output of this pass: a`,
+    `Write your verdict to \`${out}\`. That file is the only output of this pass: a`,
     `judgement that is not in it did not happen, whatever you say in your final message. Write it`,
     `even when nothing blocks — \`"status": "pass"\` with an empty \`findings\` array is a verdict`,
     `and is the outcome this loop is looking for. Then print the same JSON and nothing after it.`,
   ].join('\n');
 
-  return runAgent({
-    agent: JUDGE_AGENT,
-    model: JUDGE_MODEL,
-    prompt,
-    verdictPath,
-    timeoutMin: RC.timeoutMin ?? 45,
-    logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}`,
-  });
+  /* Each pass writes its own file and the union is written to the path the rest of the loop
+     reads, so the fixer, the ledger and `keepVerdict` are unchanged by how many ran. They are
+     dispatched together; nested they overlap, and standalone the CLI runs them in turn. */
+  const outFor = (n) => (passes === 1 ? verdictPath
+    : `.workflow/refine/${ledger.stem}.probe/${round}/pass-${n}.verdict.json`);
+
+  const answers = await Promise.all(
+    Array.from({ length: passes }, (_, i) => runAgent({
+      agent: JUDGE_AGENT,
+      model: JUDGE_MODEL,
+      prompt: buildPrompt(outFor(i + 1)),
+      verdictPath: outFor(i + 1),
+      timeoutMin: RC.timeoutMin ?? 45,
+      logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}${passes === 1 ? '' : `.pass-${i + 1}`}`,
+    })),
+  );
+
+  if (passes === 1) return answers[0];
+
+  const errors = answers.filter((v) => !v || v.status === 'error');
+  if (errors.length === answers.length) return answers[0];
+  if (errors.length) note(`${errors.length} of ${passes} passes produced no verdict; the union is of the rest`);
+
+  const union = unionVerdicts(answers);
+  const raised = (union.findings ?? []).filter((f) => f.severity === 'blocker');
+  note(`${passes} passes: ${raised.length} distinct blocker(s), `
+    + `${raised.filter((f) => f.raisedBy > 1).length} of them raised by more than one`);
+  if (!dryRun) writeFileSync(join(ROOT, verdictPath), `${JSON.stringify(union, null, 2)}\n`);
+  return union;
 }
 
 /* ── repair ───────────────────────────────────────────────────────────────── */
@@ -693,6 +782,11 @@ function criteriaShift(ledger, round, verdict) {
 
 const blockersOf = (v) => (v.findings ?? []).filter((f) => f.severity === 'blocker');
 const keyOf = (f) => `${f.rule ?? '?'}:${f.symbol ?? f.file ?? '?'}`;
+/* What identifies a finding across passes. Two passes name one defect under two rules — the
+   same disagreement arrives as an ambiguity from one and as a contradiction from another — so
+   a key carrying the rule reads a survivor as something new, and the check that exists to stop
+   a loop repairing one finding twice never fires. The place is what does not move. */
+const placeOf = (f) => `${f.file ?? ''}#${f.symbol ?? f.line ?? '?'}`;
 
 /**
  * Lines a commit added to the bundle, net of what it removed. A repair that answers a finding
@@ -881,6 +975,7 @@ async function main() {
     record.gate = gate;
     record.blockers = blockers.length;
     record.keys = blockers.map(keyOf);
+    record.places = blockers.map(placeOf);
     /* The criteria a round actually blocked under, kept because the next round's stall test is
        about them and not about how many findings each pass happened to file. */
     record.criteriaBlocked = [...new Set(blockers.map((f) => f.criterion).filter(Boolean))];
@@ -889,10 +984,11 @@ async function main() {
     /* A finding that survived a repair has been tried and not fixed. Another round buys nothing. */
     const previous = ledger.rounds[round - 2];
     if (previous?.keys) {
-      const survived = record.keys.filter((k) => previous.keys.includes(k));
+      const before = previous.places ?? previous.keys;
+      const survived = blockers.filter((f, i) => before.includes(previous.places ? record.places[i] : record.keys[i]));
       if (survived.length) {
         finish(ledger, 'blocked', 'stuck-finding',
-          `${survived.join(', ')} survived a repair — the requirement is ambiguous or the finding is wrong. A person decides.`);
+          `${survived.map(keyOf).join(', ')} survived a repair — the requirement is ambiguous or the finding is wrong. A person decides.`);
       }
       /* Not shrinking is only a stall when the round is grinding the same criteria. A round
          whose findings are disjoint from the round before it has discovered, not re-judged —

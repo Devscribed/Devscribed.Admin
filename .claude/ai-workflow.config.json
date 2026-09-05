@@ -314,7 +314,7 @@
   "refine": {
     "$comment": "The pre-pipeline gate, and the only thing here that is not per-track: it judges spec bundles, which is the one track that requires it. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre_implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note. Override the shape for one run with --shape.",
     "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireSweepCounts: a verdict that passes carries `sweeps` as a map of how many items each sweep enumerated, and one that does not is a judge error — an admission rests on an enumeration, and prose in that field records none. A blocked verdict gets a note instead, since it will be judged again. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; it applies only to tracks with requiresRefine true, and `--accept-unrefined <reason>` overrides it and is recorded in run.json.",
-    "use": "sharded",
+    "use": "solo-minimal",
     "shapes": {
       "sharded": {
         "$comment": "An opus judge that may split the criteria families across sonnet children, then decides what is worth returning. The loop computes the split and offers it; whether to dispatch is the judge's, and the verdict's `shardDecision` records which way it went. The register's `where` column says which member answers each criterion, and judge criteria — contradiction and scope among them — never reach a child. The judge signs every finding either way.",
@@ -330,6 +330,14 @@
         "judgeAgent": "spec-reviewer",
         "judgeModel": "opus",
         "fixerAgent": "spec-fixer",
+        "fixerModel": "opus"
+      },
+      "solo-minimal": {
+        "$comment": "The single opus judge of `solo` with the minimal fixer of `sharded`. One agent reads the bundle and answers the register, carrying no split decision, no merge and no shard record; the repair is still the shortest edit that clears the criterion. judgePasses dispatches that judge more than once over the same text and takes the union: a pass answers a criterion by what it noticed, so two passes overlap without agreeing, and each finding carries `raisedBy`.",
+        "judgeAgent": "spec-reviewer",
+        "judgeModel": "opus",
+        "judgePasses": 2,
+        "fixerAgent": "spec-fixer-minimal",
         "fixerModel": "opus"
       }
     },
