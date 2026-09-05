@@ -117,6 +117,14 @@ sentence, and stop.
 A document with eleven false statements is eleven findings, or one finding whose witness names all
 eleven with their line numbers. It is never "the document needs review".
 
+**A defect has siblings, and finding one is when you go looking.** Before you leave a finding,
+sweep the document for every other place of its shape: one case pinned to a date that will fall
+into the past means every case's fixture is read for the same; one stale symbol means every symbol
+of that kind is checked; one row citing the wrong requirement means every row is read against the
+rule it cites. **A pass that files the first instance and not the second has found the example and
+missed the defect** — and the second is what the next gate finds, under a criterion this one
+already answered.
+
 ## The closed rule list
 
 A finding blocks only under one of these, in `rule`:
