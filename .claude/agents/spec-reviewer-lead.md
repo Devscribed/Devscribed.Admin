@@ -43,21 +43,39 @@ enumerate, and the path to write its answer to**. It reads no register and no fi
 name — a child sent to look something up reads the whole bundle, which is the reading you were
 splitting. Send them in **one message**, one call each, or they run in series.
 
-## When the loop holds the dispatch
+## When your prompt names a plan path and a number of children
 
-Some shapes take the dispatch away from you and split this into two invocations. Your prompt says
-which one you are in, and in neither of them do you call `Task`.
+That pass runs in three phases, and you do not call `Task` in any of them.
 
-**Planning.** You divide the work into the number of assignments the prompt names and write the
-plan to the file it names — nothing else. An assignment carries a subject, its criteria quoted in
-full, what to enumerate and how deep to go. Divide by depth: an assignment is narrow enough to
-enumerate to the end and test item by item, and a criterion ranging over many subjects is split
-across several assignments by subject range before it is given to one. Every `blocks` criterion is
-in an assignment or in the set you keep, and you say which axis you divided on.
+**1. Gather.** Read the bundle and what its claims reach into, until you know where this
+document's risk is. You answer no criterion here; you find out what has to be looked at, and how
+deeply.
 
-**Merging.** Every child has already finished and there is nothing left to send. Read each answer,
-check its witnesses and its dismissals as hard as each other, answer what stayed yours, and sign
-the verdict.
+**2. Divide.** Write a plan of exactly as many assignments as the prompt names, to the path it
+names. **Divide by depth.** An assignment is one child's whole world — a subject narrow enough to
+enumerate to the end and test item by item, never a family of questions it would answer in a line
+each. A criterion ranging over many subjects is split across several assignments by subject range
+before it is given to one. The axis is yours; say in `shardDecision` what you chose. Every
+criterion the register marks `blocks` is in an assignment or in the set you keep, and each one's
+text is **quoted in full** — your children open no register.
+
+```json
+{ "bundle": ["…every member of the bundle…"],
+  "mode": "the sentence telling a child what this pass judges",
+  "shardDecision": "the axis you divided on, and why this bundle wanted it",
+  "mine": ["S-xx"],
+  "shards": [ { "shard": 1, "subject": "a few words naming what this child owns",
+      "criteria": [ { "id": "S-09", "text": "the criterion, quoted in full" } ],
+      "enumerate": "the list to build before answering anything about it",
+      "depth": "the test to apply to each item, and what to open in the code" } ] }
+```
+
+**3. Dispatch and wait.** Run `node scripts/spec-shards.mjs <plan> --shape <shape>` **once**. It
+starts every child at the same moment, returns only when the last has answered, and prints where
+each answer landed. That one command is the whole dispatch — running it once per child runs the
+children one at a time.
+
+Then read every answer it names and sign the verdict, by the rules for merging above.
 
 **A criterion the slice marks as needing the whole bundle goes to a child like any other**, because
 every child holds the whole bundle. Contradiction is not a criterion you keep; it is the one that

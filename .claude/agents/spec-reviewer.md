@@ -189,10 +189,13 @@ Everything above still binds you. Five things change, and the prompt tells you w
 - **You hold the whole bundle and one question.** Read every member in full. What is divided is
   the register, never the document — a criterion answered from half a bundle is answered from the
   half that cannot settle it.
-- **Go deep, not wide.** Breadth is another child's. Enumerate the subjects your criterion ranges
-  over, write down the test you applied to each, and name the case or value you tried against it.
+- **Go as deep as the assignment allows, and it allows more than you think.** Breadth is another
+  child's; depth is the whole reason you exist. Your assignment is small on purpose, so spend the
+  whole pass inside it and take every item to the bottom: enumerate the subjects your criteria
+  range over, apply the test to each one, and name the case or value you tried against it.
   **A subject you cleared and tried nothing against is not checked**, and clearing one in passing
-  is the way a child returns a clean answer over a defect it listed.
+  is the way a child returns a clean answer over a defect it listed. Finishing early on a narrow
+  assignment is not thoroughness — it is the reading you were dispatched to do, left undone.
 - **Where the spec names a validator, an export, a constant, a column or a guard, open it.** A
   rule stated in English and a rule implemented in code are two statements about one thing, and
   the code settles what the words commit to.

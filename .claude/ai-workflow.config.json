@@ -366,8 +366,18 @@
         "shardModel": "sonnet",
         "minShards": 10
       },
-      "sharded-15": {
-        "$comment": "The loop dispatches, not the lead. The lead plans a division of the register into 15 assignments and writes it to a file; this script spawns the 15 children together and awaits every one; the lead is then invoked a second time over their answers and signs the verdict. plannedShards is what selects that shape of pass. A lead that holds the dispatch itself sends its children one message at a time, which serialises them and lets it begin merging before the last has answered.",
+      "planned-10": {
+        "$comment": "One judge invocation in three phases, and the dispatch is a tool rather than a state machine: the lead gathers, writes a plan of 10 assignments divided by depth, then runs scripts/spec-shards.mjs once — it starts every child at the same moment and returns when the last has answered — and signs the verdict over what came back. plannedShards is what selects that shape of pass and names the count. A lead that holds the dispatch itself sends its children one message at a time.",
+        "judgeAgent": "spec-reviewer-lead",
+        "judgeModel": "opus",
+        "fixerAgent": "spec-fixer-minimal",
+        "fixerModel": "opus",
+        "shardAgent": "spec-reviewer",
+        "shardModel": "sonnet",
+        "plannedShards": 10
+      },
+      "planned-15": {
+        "$comment": "One judge invocation in three phases, and the dispatch is a tool rather than a state machine: the lead gathers, writes a plan of 15 assignments divided by depth, then runs scripts/spec-shards.mjs once — it starts every child at the same moment and returns when the last has answered — and signs the verdict over what came back. plannedShards is what selects that shape of pass and names the count. A lead that holds the dispatch itself sends its children one message at a time.",
         "judgeAgent": "spec-reviewer-lead",
         "judgeModel": "opus",
         "fixerAgent": "spec-fixer-minimal",
