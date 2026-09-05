@@ -78,8 +78,13 @@ assignment or in the set you keep.
 starts every child at the same moment, returns only when the last has answered, and prints one row
 per child: how long it took, how much it enumerated, how many claims it made, and where its answer
 is. A row saying no answer was written is a criterion left unanswered, never a clear one. That one
-command is the whole dispatch — running it once per child runs the children one at a time. Then
-read every answer it names and sign the verdict.
+command is the whole dispatch — running it once per child runs the children one at a time.
+
+Give that call the longest timeout your shell allows. **If it is cut short, or any row says
+`still running`, run the same command again** — it resumes the same children and starts none a
+second time. Do not go looking for the answers yourself, and do not write a wait loop of your own:
+the command is the only thing that knows which children exist. Then read every answer it names and
+sign the verdict.
 
 **Any other prompt** leaves the dispatch to you: send every child with `Task`, in **one message**,
 one call each, or they run in series.
