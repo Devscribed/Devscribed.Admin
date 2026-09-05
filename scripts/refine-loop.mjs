@@ -619,8 +619,11 @@ async function gateJudge(spec, ledger, round, request, since) {
       ? [
         /* The three phases, what an assignment is and what may not be called are the lead's
            method and live in its definition. What belongs here is what changes between runs. */
-        `Children: **${SHAPE.plannedShards}**. Plan: \`${planPathFor(ledger, round)}\`. Shape:`,
-        `\`${SHAPE.name}\`.`,
+        JSON.stringify({
+          children: SHAPE.plannedShards,
+          plan: planPathFor(ledger, round),
+          shape: SHAPE.name,
+        }),
         ``,
       ]
       : SHAPE.minShards

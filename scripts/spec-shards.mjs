@@ -75,33 +75,15 @@ const outDir = opt('out', `${planPath.replace(/\.json$/, '')}.answers`);
 mkdirSync(join(ROOT, outDir), { recursive: true });
 const answerPath = (s, i) => `${outDir}/shard-${s.shard ?? i + 1}.json`;
 
-/* The assignment, and nothing more. What a child is and how it works is its own definition's;
-   repeating any of it here would be a second copy of a rule, paid for on every dispatch. */
-const promptFor = (s, i) => [
-  `You are child ${i + 1} of ${shards.length}, dispatched by spec-reviewer-lead.`,
-  '',
-  '**The bundle. Read every one of these, in full:**',
-  ...members.map((m) => `- \`${m}\``),
-  '',
-  String(plan.mode ?? 'Judge the bundle in full.'),
-  '',
-  '## Your subject',
-  '',
-  String(s.subject ?? '(unnamed)'),
-  '',
-  '## Your criteria, quoted in full',
-  '',
-  ...s.criteria.flatMap((c) => [`### ${c.id}`, '', String(c.text ?? ''), '']),
-  '## What to enumerate',
-  '',
-  String(s.enumerate ?? 'every subject your criteria range over, one line each'),
-  '',
-  '## How deep to go',
-  '',
-  String(s.depth ?? 'name the test you applied to each item and the case you tried against it'),
-  '',
-  `Write your answer to \`${answerPath(s, i)}\`.`,
-].join('\n');
+/* What a child is told is its own definition's, in full. This hands it the four values that
+   change per dispatch and no sentence of instruction: a script that composes prose keeps a
+   second copy of a rule, and the two drift. */
+const promptFor = (s, i) => JSON.stringify({
+  assignment: planPath,
+  shard: s.shard ?? i + 1,
+  of: shards.length,
+  answer: answerPath(s, i),
+});
 
 const timeoutMin = Number(opt('timeout-min', RC.timeoutMin ?? 45));
 const permissionMode = opt('permission-mode', 'bypassPermissions');
@@ -111,7 +93,6 @@ const runChild = (s, i) => new Promise((done) => {
   const out = answerPath(s, i);
   const logStem = `${outDir}/shard-${s.shard ?? i + 1}`;
   const prompt = promptFor(s, i);
-  writeFileSync(join(ROOT, `${logStem}.prompt.md`), prompt);
   const args = ['-p', prompt, '--agent', SHAPE.shardAgent,
     '--permission-mode', permissionMode, '--output-format', 'json'];
   if (SHAPE.shardModel) args.push('--model', SHAPE.shardModel);
@@ -165,7 +146,6 @@ process.stdout.write(`\n${results.length - lost.length} of ${results.length} ans
   + ` (${totalSeconds}s of work, ${(totalSeconds / Math.max(wall, 1)).toFixed(1)}x parallel), `
   + `${results.reduce((n, r) => n + (r.claims ?? 0), 0)} claim(s)\n`);
 if (lost.length) {
-  process.stdout.write(`children that wrote nothing: ${lost.map((r) => r.shard).join(', ')}`
-    + ` — their logs are beside their answers. A criterion they held is unanswered, not clear.\n`);
+  process.stdout.write(`no answer from: ${lost.map((r) => r.shard).join(', ')}`
+    + ` — logs beside their answer paths\n`);
 }
-process.stdout.write('\nRead every answer above. A claim is a claim, not a conclusion.\n');

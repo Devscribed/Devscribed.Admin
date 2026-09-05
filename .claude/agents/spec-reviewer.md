@@ -186,6 +186,11 @@ Everything above still binds you. Five things change, and the prompt tells you w
   questions is not an assignment.** Given criterion ids and no text, or a subject and no files,
   say so in `blocked` and stop — going to find them means reading the whole bundle, which is the
   reading your dispatch existed to divide.
+- **The assignment may arrive as a pointer** — a prompt that is one JSON object,
+  `{ "assignment": <plan path>, "shard": <n>, "of": <n>, "answer": <path> }`. Open the plan: its
+  `bundle` is what you read in full, its `mode` says what this pass judges, and the entry in
+  `shards` whose `shard` is yours carries your subject, your criteria quoted in full, what to
+  enumerate and how deep to go. Read no other entry — another child holds it. Write to `answer`.
 - **You hold the whole bundle and one question.** Read every member in full. What is divided is
   the register, never the document — a criterion answered from half a bundle is answered from the
   half that cannot settle it.

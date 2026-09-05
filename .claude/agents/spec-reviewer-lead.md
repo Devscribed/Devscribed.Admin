@@ -43,9 +43,11 @@ enumerate, and the path to write its answer to**. It reads no register and no fi
 name — a child sent to look something up reads the whole bundle, which is the reading you were
 splitting. Send them in **one message**, one call each, or they run in series.
 
-## When your prompt names a plan path and a number of children
+## When your prompt carries `{ "children", "plan", "shape" }`
 
-That pass runs in three phases, and you do not call `Task` in any of them.
+That object is the whole of what changes for this pass: how many children to divide the work
+between, the path to write your plan to, and the shape name to pass the dispatcher. The pass runs
+in three phases, and you do not call `Task` in any of them.
 
 **1. Gather.** Read the bundle and what its claims reach into, until you know where this
 document's risk is. You answer no criterion here; you find out what has to be looked at, and how
@@ -71,9 +73,10 @@ text is **quoted in full** — your children open no register.
 ```
 
 **3. Dispatch and wait.** Run `node scripts/spec-shards.mjs <plan> --shape <shape>` **once**. It
-starts every child at the same moment, returns only when the last has answered, and prints where
-each answer landed. That one command is the whole dispatch — running it once per child runs the
-children one at a time.
+starts every child at the same moment, returns only when the last has answered, and prints one row
+per child: how long it took, how much it enumerated, how many claims it made, and where its answer
+is. A row saying no answer was written is a criterion left unanswered, never a clear one. That one
+command is the whole dispatch — running it once per child runs the children one at a time.
 
 Then read every answer it names and sign the verdict, by the rules for merging above.
 
