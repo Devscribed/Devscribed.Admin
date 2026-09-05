@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 
 import { enforceCriteria, readRegister } from './criteria.mjs';
 import { loadConfig, stageFor, timeoutFor } from './ship-config.mjs';
-import { bundleMembers, stemFor } from './spec-paths.mjs';
+import { bundleMembers, repairPaths, stemFor } from './spec-paths.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -122,7 +122,7 @@ function headSha() {
  */
 function commitGate(ledger, { round, gate, summary, spec }) {
   if (dryRun) return null;
-  const files = ['.workflow/refine', ...(spec ? [spec, ...bundleMembers(spec)] : [])]
+  const files = ['.workflow/refine', ...(spec ? [spec, ...repairPaths(spec)] : [])]
     .filter((f) => existsSync(join(ROOT, f)));
   try { git('add', '--', ...files); } catch { /* nothing staged */ }
   /* Both halves are limited to this gate's paths. A gate runs for a quarter of an hour while a
@@ -762,7 +762,12 @@ async function main() {
     let verdict = null;
     let gate = null;
     if (!skip.has('t2')) {
-      const since = round > 1 ? ledger.rounds[round - 2]?.commit ?? null : null;
+      /* The base is the previous round's *starting* head, not its repair commit. `commit..HEAD`
+         excludes the repair the pass exists to judge, and `spec-slice` then reports an empty
+         bundle diff — which reads as "the fixer touched nothing" and convicts a fixer that did
+         its work. `head..HEAD` spans that round's lint, verdict and repair commits. */
+      const prior = round > 1 ? ledger.rounds[round - 2] : null;
+      const since = prior ? prior.head ?? prior.commit ?? null : null;
       verdict = await gateJudge(spec, ledger, round, request, since);
       if (verdict.status === 'error') finish(ledger, 'error', 'judge-error', verdict.error);
       /* A judged pass that reports no criterion did not run one. The register says so — "a

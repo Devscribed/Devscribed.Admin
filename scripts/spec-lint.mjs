@@ -119,6 +119,7 @@ function tableAfter(lines, fromLine) {
     if (lines[i].trim().startsWith('#')) return { rows, header: [], end: i };
     i += 1;
   }
+  if (i >= lines.length) return { rows, header: [], end: i };  // a section with no table
   const header = splitRow(lines[i]);
   i += 2; // header + separator
   for (; i < lines.length; i += 1) {
@@ -325,12 +326,14 @@ function parseContracts(lines, file) {
           for (const s of txt.match(/\b[1-5]\d\d\b/g) ?? []) statuses.add(s);
           for (const e of txt.match(/\b(?:[A-Z][A-Z0-9_]*_)?MESSAGES\.[\w.]+/g) ?? []) messagesHere.add(e);
         }
-        /* Lowercase-dashed capability names out of the Guards cell — `view-clients`,
-           `create-request`. The PascalCase spelling of the same right is the decorator's, and
-           the matrix below is written in neither, so only this shape is comparable. */
+        /* Capability names out of the Guards cell, in both spellings the documents use —
+           lowercase-dashed (`view-clients`, `create-request`) and the decorator's PascalCase
+           (`ViewHolidays`). A matrix row is written in whichever the author reached for, so a
+           join that reads only one of them sees a grant no route requires and says nothing. */
         const guards = new Set(
-          (plain(row.cells[cGuards] ?? '').match(/\b[a-z]+(?:-[a-z]+)+\b/g) ?? [])
-            .filter((g) => !['org-scope', 'no-guard'].includes(g)),
+          (plain(row.cells[cGuards] ?? '')
+            .match(/\b(?:[a-z]+(?:-[a-z]+)+|[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+)\b/g) ?? [])
+            .filter((g) => !['org-scope', 'no-guard', 'RequireCapability', 'SessionGuard', 'OrgScopeGuard'].includes(g)),
         );
         routes.set(key, { statuses, messages: messagesHere, guards, line: sec.start + row.line });
       }
@@ -667,6 +670,147 @@ function checkContractAgreement(contracts, file) {
   }
 }
 
+/* ── the mock against the DS-gaps table ───────────────────────────────────────
+ *
+ * The design-system rule is that a screen improvises no colour and no size: what `@ds` lacks
+ * goes into the design system and is recorded in this spec's DS-gaps table. The mock is where
+ * the improvisation actually happens, and the table is where it is supposed to be declared —
+ * two files, one claim, which is the join a judge kept having to make by reading.
+ *
+ * Two directions, and both have cost a round:
+ *   - a custom property the mock declares in its own `:root` is a token `@ds` does not carry,
+ *     so it needs a row;
+ *   - a colour written as a literal anywhere else is an improvisation, so it needs a row or an
+ *     `@literal` marker saying there is no name to declare.
+ */
+const DECLARES_PROPERTY = /^\s*(--[\w-]+)\s*:/;
+const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\s*\(/;
+
+function checkMockTokens(mockLines, gapsText, mockFile) {
+  if (!mockLines?.length) return;
+  const declared = [];
+  for (const [i, raw] of mockLines.entries()) {
+    const m = raw.match(DECLARES_PROPERTY);
+    if (m) declared.push({ name: m[1], line: i + 1 });
+  }
+
+  for (const d of declared) {
+    if (!gapsText.includes(d.name)) {
+      add('ds/undeclared-token', mockFile, d.line,
+        `the mock declares ${d.name}, which no DS-gaps row names`,
+        'a name the design system does not carry is a gap — give it a row, or use an @ds token');
+    }
+  }
+
+  const declaredAt = new Set(declared.map((d) => d.line));
+  for (const [i, raw] of mockLines.entries()) {
+    const line = i + 1;
+    if (declaredAt.has(line)) continue;            // a declaration is where a gap is filled
+    if (/@literal/.test(raw)) continue;            // marked, with its reason, on the line
+    if (!COLOUR_LITERAL.test(raw)) continue;
+    if (/^\s*(?:\/\*|\*|<!--)/.test(raw)) continue; // a comment naming a colour is prose
+    add('ds/colour-literal', mockFile, line,
+      `a colour literal outside a token declaration: ${raw.trim().slice(0, 80)}`,
+      'read it through var(…), or mark the line @literal and give it a DS-gaps row');
+  }
+}
+
+/* ── the permission matrix against the guards that serve it ───────────────────
+ *
+ * A capability the matrix grants and the bundle then never mentions again is a grant no route
+ * in this document exercises: either a control is drawn with nothing behind it, or the row is
+ * left over from a rule that moved. Both are the reader's problem and neither is arithmetic a
+ * judge should be spending a pass on.
+ *
+ * Only that direction, and only on total silence. A capability named anywhere else in the
+ * bundle — a Guards cell, a route's prose, a case — is a capability this document accounts
+ * for, whether or not the join is where a script can see it.
+ */
+const CAPABILITY = /^(?:[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+|[a-z]+(?:-[a-z]+)+)$/;
+
+/**
+ * The matrix as data, from whichever member carries it. Bundles put the section in either the
+ * behaviour file or the contracts, and a parse that reads only one of them finds no rows and
+ * reports nothing — a silence indistinguishable from agreement.
+ */
+function parseMatrix(lines) {
+  const matrix = [];
+  for (const sec of sections(lines, 2)) {
+    if (!plain(sec.title).toLowerCase().startsWith('roles')) continue;
+    const { rows, header } = tableAfter(sec.body, 0);
+    const roles = header.slice(1).map((h) => plain(h).toLowerCase().trim());
+    for (const row of rows) {
+      const raw = row.cells[0] ?? '';
+      if (!plain(raw)) continue;
+      const granted = new Set();
+      roles.forEach((role, i) => {
+        if (plain(row.cells[i + 1] ?? '').includes('✅')) granted.add(role);
+      });
+      /* The capability is the row's first backticked token, and only when the label opens with
+         one: `ViewHolidays` — read the organization country. A row that describes an action in
+         prose — "Read the catalogue through `GET …/request-topics`" — names no capability, and
+         reading one out of the route it mentions invents a grant nobody wrote. */
+      const named = raw.match(/^`([^`]+)`/);
+      matrix.push({ capability: named ? named[1] : null, granted, line: sec.start + row.line });
+    }
+  }
+  return matrix;
+}
+
+/* `ViewTimeOffCalendar` and `view-time-off-calendar` are one capability written two ways, and
+   both spellings appear in these documents — the decorator's in a matrix row, the helper's in
+   a Guards cell. Comparing them as written finds a disagreement that is not one. */
+const canonical = (s) => s.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+
+function checkMatrixIsServed(contracts, matrix, file) {
+  const guarded = new Set();
+  for (const route of contracts.routes.values()) for (const g of route.guards) guarded.add(canonical(g));
+  if (!guarded.size) return;                       // no Guards column parsed: nothing to join to
+
+  for (const row of matrix) {
+    if (!row.granted.size) continue;               // a row that grants nothing needs no route
+    if (!row.capability || !CAPABILITY.test(row.capability)) continue;
+    if (!guarded.has(canonical(row.capability))) {
+      add('matrix/unserved-grant', file, row.line,
+        `the matrix grants ${row.capability} and no route's Guards cell requires it`,
+        'name the route that exercises the grant, or drop the row');
+    }
+  }
+}
+
+/* ── the verification plan names no environment ───────────────────────────────
+ *
+ * The plan records routes, states and observers. A port, a host or a database name in it is a
+ * fact about the machine somebody happened to run it on, and it is wrong for the next reader
+ * by construction — the suite moves its own ports and the database follows them.
+ */
+const ENVIRONMENT = [
+  [/\blocalhost\b|\b127\.0\.0\.1\b|\b0\.0\.0\.0\b/, 'a host'],
+  [/\/\/[\w.-]+:\d{4,5}\b/, 'a host and port'],
+  [/\bports?\s+\d{4,5}\b/i, 'a port'],
+  /* A docker mapping — `5433:5432`, `5433→5432` — which is neither a route nor a state. A
+     `file.ts:1310` citation is not one, and the leading digits are what tells them apart. */
+  [/\b\d{4,5}\s*(?::|->|→)\s*\d{4,5}\b/, 'a port mapping'],
+  [/\bdevscribed_(?:dev|test)\b/, 'a database name'],
+  [/\bpostgres(?:ql)?:\/\//, 'a connection string'],
+];
+
+function checkVerificationPlan(lines, file) {
+  for (const sec of sections(lines, 2)) {
+    if (!plain(sec.title).toLowerCase().includes('verification')) continue;
+    sec.body.forEach((raw, i) => {
+      for (const [re, what] of ENVIRONMENT) {
+        if (re.test(raw)) {
+          add('plan/environment', file, sec.start + i + 1,
+            `the Verification Plan names ${what}: ${raw.trim().slice(0, 80)}`,
+            'record the route, the state and the observer — never where it ran');
+          return;
+        }
+      }
+    });
+  }
+}
+
 function checkAcceptance(lines, cases, file) {
   const ids = new Set(cases.map((c) => c.id));
   const secs = sections(lines, 2).filter((s) => plain(s.title).toLowerCase().startsWith('acceptance'));
@@ -749,6 +893,19 @@ checkContractAgreement(contracts, files.contracts);
 checkCases(cases, reqs, contracts, files);
 checkE2ESelectorsDeclared(cases, contracts, files);
 checkAcceptance(lines.behaviour, cases, files.behaviour);
+
+/* The mock and the area README are outside the bundle the checks above parse, and both carry
+   claims the bundle is judged against. Read them where they exist and skip them where they
+   do not — a spec without a mock is not thereby wrong. */
+const mockFile = `${specPath.replace(/\.md$/, '')}.mock.html`;
+const gapsSection = sections(lines.contracts, 2).find((s) => plain(s.title).toLowerCase().startsWith('ds gaps'));
+checkMockTokens(read(mockFile), (gapsSection?.body ?? []).join('\n'), mockFile);
+for (const [k, f] of Object.entries(files)) {
+  const matrix = parseMatrix(lines[k]);
+  if (matrix.length) checkMatrixIsServed(contracts, matrix, f);
+}
+for (const [k, f] of Object.entries(files)) checkVerificationPlan(lines[k], f);
+
 checkBudget(lines.behaviour, files.behaviour, reqs.size);
 checkGrowth(specPath);
 
