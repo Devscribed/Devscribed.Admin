@@ -611,10 +611,23 @@ async function gateJudge(spec, ledger, round, request, since) {
     + ` --shape ${SHAPE.name}\` first. It prints the bundle, this pass's mode, and a ready`,
     `split: one shard per member, the criteria that member settles, and the shard agent to use.`,
     ``,
-    `**Dispatching is yours to decide.** Delegate when the reading is more than one pass should`,
-    `hold, and read it yourself when it is not. Either way the verdict says which you did and`,
-    `why, in \`shardDecision\`, and records every shard you dispatched in \`shards\`.`,
-    ``,
+    ...(SHAPE.minShards
+      ? [
+        `**Dispatch exactly ${SHAPE.minShards} children, in one message.** This is not a`,
+        `recommendation and reading the bundle yourself instead is not an outcome: a verdict`,
+        `recording fewer than ${SHAPE.minShards} shards is rejected and the pass is run again.`,
+        ``,
+        `**How you divide the register between them is yours.** Every child holds the whole`,
+        `bundle; what you split is the criteria, not the document. Give each child its criteria`,
+        `with their text, and record in \`shards\` what each one owned.`,
+        ``,
+      ]
+      : [
+        `**Dispatching is yours to decide.** Delegate when the reading is more than one pass should`,
+        `hold, and read it yourself when it is not. Either way the verdict says which you did and`,
+        `why, in \`shardDecision\`, and records every shard you dispatched in \`shards\`.`,
+        ``,
+      ]),
     since
       ? [
         `Judge the change: this document has already been judged in full and repaired. The range `
@@ -656,16 +669,34 @@ async function gateJudge(spec, ledger, round, request, since) {
   const outFor = (n) => (passes === 1 ? verdictPath
     : `.workflow/refine/${ledger.stem}.probe/${round}/pass-${n}.verdict.json`);
 
-  const answers = await Promise.all(
-    Array.from({ length: passes }, (_, i) => runAgent({
+  /* A lead free to read the bundle itself takes that freedom, and has taken it in every round
+     this repository has recorded. The requirement is in the prompt and the count is checked
+     here: a pass that under-dispatched is run once more, told what it did. */
+  const dispatchOf = async (i) => {
+    const out = outFor(i + 1);
+    const stem = `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}${passes === 1 ? '' : `.pass-${i + 1}`}`;
+    const call = (extra) => runAgent({
       agent: JUDGE_AGENT,
       model: JUDGE_MODEL,
-      prompt: buildPrompt(outFor(i + 1)),
-      verdictPath: outFor(i + 1),
+      prompt: extra ? `${extra}\n\n${buildPrompt(out)}` : buildPrompt(out),
+      verdictPath: out,
       timeoutMin: RC.timeoutMin ?? 45,
-      logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}${passes === 1 ? '' : `.pass-${i + 1}`}`,
-    })),
-  );
+      logStem: extra ? `${stem}.redispatch` : stem,
+    });
+    let v = await call(null);
+    const short = (x) => SHAPE.minShards && !dryRun && x && x.status !== 'error'
+      && (x.shards ?? []).length < SHAPE.minShards;
+    if (short(v)) {
+      note(`the lead recorded ${(v.shards ?? []).length} shard(s) of ${SHAPE.minShards} — re-running the pass`);
+      v = await call(`Your previous pass recorded ${(v.shards ?? []).length} shard(s). `
+        + `This pass dispatches exactly ${SHAPE.minShards} children and records all of them in \`shards\`. `
+        + `Reading the bundle yourself in place of a child is not an outcome of this pass.`);
+      if (short(v)) note(`the lead recorded ${(v.shards ?? []).length} shard(s) again — recorded as it stands`);
+    }
+    return v;
+  };
+
+  const answers = await Promise.all(Array.from({ length: passes }, (_, i) => dispatchOf(i)));
 
   if (passes === 1) return answers[0];
 

@@ -1,9 +1,7 @@
 {
   "$comment": "The spec-to-ship pipeline. One rule governs this whole file: a thing that can run more than one way lists its ways under `shapes`, each written out in full, and `use` names the one that runs. Nothing is merged, nothing is inherited, and no null means \"delete a key\" — what you read under a shape is exactly what that shape runs. Validate any edit with `npm run config`; it is also checked by ship, wf init and preflight, so a bad edit stops a run before a lock or a branch exists.",
-
   "shipConfig": {
     "$comment": "A track is a weight of document, resolved from its path by `match` or named with --track. Stage order is fixed: preflight, pre_implement, implement, static_gate, review, qa. Every track lists all six; one it does not run is `enabled: false` rather than absent, so a reader never needs the full list to see what is missing. `static_gate` and `qa` may not be disabled on any track — a lighter document buys speed against the stages that read intent, never against the ones that check the result. Change what a stage runs by changing its `use`; override it for a single run with --plan-shape, --implement-shape or --review-shape.",
-
     "spec": {
       "$comment": "A three-file spec bundle that the refine loop admitted. The full pipeline.",
       "match": "^specs/(?!bugs/|patches/)",
@@ -95,7 +93,11 @@
               "$comment": "levels is the order QA runs them in; skipE2eIfLowerFailed stops before the expensive one when a cheaper level has already failed.",
               "agent": "qa",
               "model": "sonnet",
-              "levels": ["unit", "int", "e2e"],
+              "levels": [
+                "unit",
+                "int",
+                "e2e"
+              ],
               "skipE2eIfLowerFailed": true
             }
           }
@@ -116,7 +118,6 @@
         "qa": 30
       }
     },
-
     "bug": {
       "$comment": "An investigation report. It already carries the cause to file:line and the fix approach, so there is nothing left to compile into a plan.",
       "match": "^specs/bugs/",
@@ -189,7 +190,11 @@
             "targeted": {
               "agent": "qa",
               "model": "sonnet",
-              "levels": ["unit", "int", "e2e"],
+              "levels": [
+                "unit",
+                "int",
+                "e2e"
+              ],
               "skipE2eIfLowerFailed": true
             }
           }
@@ -208,7 +213,6 @@
         "qa": 30
       }
     },
-
     "patch": {
       "$comment": "A change of agreed behaviour small enough to state and check in one file. Admission is the entry condition in .claude/skills/patch/SKILL.md, not a judged round.",
       "match": "^specs/patches/",
@@ -274,7 +278,11 @@
             "targeted": {
               "agent": "qa",
               "model": "sonnet",
-              "levels": ["unit", "int", "e2e"],
+              "levels": [
+                "unit",
+                "int",
+                "e2e"
+              ],
               "skipE2eIfLowerFailed": true
             }
           }
@@ -294,13 +302,11 @@
       }
     }
   },
-
   "breakers": {
     "$comment": "Whole-run fuses, the same for every track, enforced by scripts/ship.mjs before each stage is dispatched. runTokenCap counts every token the agents report — input, output and both cache figures — summed over the stage logs, so it survives a --resume. The observed range is 1.6M for a patch run and 155M for the largest spec run; the cap sits above that and catches a runaway, not a long run.",
     "runTimeoutMin": 180,
     "runTokenCap": 250000000
   },
-
   "isolation": {
     "$comment": "Worktrees isolate files and nothing else. Ports, both databases, the mail sink and .local-storage are shared, so runs are serialised until those are per-run too: concurrentRuns is the lock's invariant and the validator refuses any other value.",
     "concurrentRuns": 1,
@@ -308,9 +314,9 @@
       "CI": "1"
     }
   },
-
-  "protectedBranches": ["main"],
-
+  "protectedBranches": [
+    "main"
+  ],
   "refine": {
     "$comment": "The pre-pipeline gate, and the only thing here that is not per-track: it judges spec bundles, which is the one track that requires it. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre_implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note. Override the shape for one run with --shape.",
     "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireSweepCounts: a verdict that passes carries `sweeps` as a map of how many items each sweep enumerated, and one that does not is a judge error — an admission rests on an enumeration, and prose in that field records none. A blocked verdict gets a note instead, since it will be judged again. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; it applies only to tracks with requiresRefine true, and `--accept-unrefined <reason>` overrides it and is recorded in run.json.",
@@ -339,6 +345,26 @@
         "judgePasses": 2,
         "fixerAgent": "spec-fixer-minimal",
         "fixerModel": "opus"
+      },
+      "sharded-5": {
+        "$comment": "The lead dispatches exactly 5 sonnet children and divides the register between them itself; every child holds the whole bundle. minShards is checked against the verdict, and a pass that under-dispatched is run again.",
+        "judgeAgent": "spec-reviewer-lead",
+        "judgeModel": "opus",
+        "fixerAgent": "spec-fixer-minimal",
+        "fixerModel": "opus",
+        "shardAgent": "spec-reviewer",
+        "shardModel": "sonnet",
+        "minShards": 5
+      },
+      "sharded-10": {
+        "$comment": "The lead dispatches exactly 10 sonnet children and divides the register between them itself; every child holds the whole bundle. minShards is checked against the verdict, and a pass that under-dispatched is run again.",
+        "judgeAgent": "spec-reviewer-lead",
+        "judgeModel": "opus",
+        "fixerAgent": "spec-fixer-minimal",
+        "fixerModel": "opus",
+        "shardAgent": "spec-reviewer",
+        "shardModel": "sonnet",
+        "minShards": 10
       }
     },
     "requireCriteriaMap": true,
