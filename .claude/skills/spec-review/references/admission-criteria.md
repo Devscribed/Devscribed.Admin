@@ -76,6 +76,7 @@ disagree, the source governs and the disagreement is a defect of this page.
 | S-15 | Every rule has the data it needs — column, nullability, uniqueness, index — either in the schema today or in a migration this spec owns; and no column this spec adds is written by no rule. | `spec/contradiction` | blocks | judge | spec-review |
 | S-16 | No rule makes another unreachable: a refusal that fires before the check it complements, an ordering that leaves a second answer unobservable, two numbers for one set. | `spec/contradiction` | blocks | judge | spec-review |
 | S-17 | No requirement has two readings that produce materially different implementations. | `spec/ambiguous-requirement` | blocks | judge | spec-review |
+| S-59 | Every set of values the spec states more than once agrees with itself. List each one and the places that state it — the values a control offers, the values a rule accepts, the values a message names, the values a case sends, the values a column may hold — and read them against each other. A value one place offers and another refuses is a contradiction whichever is right. | `spec/contradiction` | blocks | judge | spec-review |
 
 ## Repository conventions a spec may not overrule
 

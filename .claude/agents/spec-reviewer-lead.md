@@ -49,6 +49,11 @@ a contradiction lives between two regions, and no child can be given one.
   it; a rule against the data model; a refusal that fires before the check it complements. Two
   statements can each be clear, never repeat a word, and still describe a product that cannot
   exist.
+- **The value sets, listed before they are judged.** Every set of values the bundle states more
+  than once, and the places that state it: what a control offers, what a rule accepts, what a
+  message names, what a case sends, what a column may hold. The list goes in your answer whole.
+  A set stated twice and never read against itself is where a document disagrees with itself
+  without ever repeating a word.
 - **Scope against the request**, in both directions.
 - **Divergence**, which is note-only and needs the other documents in view.
 - **The admission decision** and the `criteria` map.

@@ -155,7 +155,7 @@ Write it to the path your prompt names, and print the same JSON.
   "read": { "specs": ["specs/requests/01-requests.md"],
             "files": ["apps/api/src/requests/requests.service.ts"] },
   "sweeps": { "currency": 34, "conventions": 12, "selfSufficiency": 12, "testability": 18,
-              "dataAndState": 9, "obligations": 47, "contradiction": 21, "scope": 6 },
+              "dataAndState": 9, "obligations": 47, "contradiction": 21, "domains": 11, "scope": 6 },
   "criteria": { "S-01": "clear", "S-09": "blocked", "S-25": "n/a", "…": "every id in the register" },
   "findings": [
     { "id": "R1", "severity": "blocker", "criterion": "S-09", "rule": "spec/contradiction",
