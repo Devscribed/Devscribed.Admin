@@ -34,6 +34,7 @@ likely to be re-litigated.
 | [0015](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md)     | One core agent and one lead per family, with the rules every judge obeys written once outside them | current, renames 0002/0004/0008/0012/0013 |
 | [0016](0016-a-setting-nothing-reads-is-a-defect.md)                    | A setting nothing reads is a defect, and `npm run pipeline` says so | current                  |
 | [0018](0018-the-refine-judge-reads-alone-and-more-than-once.md)        | The refine judge reads alone and more than once, and the union of its passes is what the fixer answers | current, amends 0013 |
+| [0019](0019-a-prompt-lives-in-a-definition-and-a-script-hands-over-data.md) | A prompt lives in a definition; a script hands over data, and a tool prints facts rather than advice | current, extends 0015 |
 
 Measurements that led to these, including the hypotheses that did not survive, are in
 [docs/research/](../research/).

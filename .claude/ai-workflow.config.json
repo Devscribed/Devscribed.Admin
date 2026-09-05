@@ -339,7 +339,7 @@
         "fixerModel": "opus"
       },
       "solo-minimal": {
-        "$comment": "The single opus judge of `solo` with the minimal fixer of `sharded`. One agent reads the bundle and answers the register, carrying no split decision, no merge and no shard record; the repair is still the shortest edit that clears the criterion. judgePasses dispatches that judge more than once over the same text and takes the union: a pass answers a criterion by what it noticed, so two passes overlap without agreeing, and each finding carries `raisedBy`.",
+        "$comment": "The default. One opus spec-reviewer reads the whole bundle and answers the register, carrying no split decision, no merge and no shard record; the repair is the shortest edit that clears each criterion. judgePasses dispatches that judge twice over the same text and the loop takes the union: a pass answers a criterion by what it noticed, so two passes overlap without agreeing, and each finding carries raisedBy. The two passes are dispatched together, so the round costs one pass of wall clock. Sharding is not the default at any child count: a lead that shards reads the bundle twice, to divide and to merge, and those two readings are serial and cost more than this whole shape.",
         "judgeAgent": "spec-reviewer",
         "judgeModel": "opus",
         "judgePasses": 2,
