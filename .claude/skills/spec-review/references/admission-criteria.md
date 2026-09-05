@@ -77,6 +77,7 @@ disagree, the source governs and the disagreement is a defect of this page.
 | S-16 | No rule makes another unreachable: a refusal that fires before the check it complements, an ordering that leaves a second answer unobservable, two numbers for one set. | `spec/contradiction` | blocks | judge | spec-review |
 | S-17 | No requirement has two readings that produce materially different implementations. | `spec/ambiguous-requirement` | blocks | judge | spec-review |
 | S-59 | Every set of values the spec states more than once agrees with itself. List each one and the places that state it — the values a control offers, the values a rule accepts, the values a message names, the values a case sends, the values a column may hold — and read them against each other. A value one place offers and another refuses is a contradiction whichever is right. | `spec/contradiction` | blocks | judge | spec-review |
+| S-60 | A section this spec delegates to another document by pointing at it — blast radius and backward compatibility in the area `README.md`, and anything else the bundle owes and answers with a pointer — is this spec's section, and every claim in it is judged as if it stood here. List the documents the bundle points at that way and read them. A claim there the code refutes blocks under this id; one that disagrees with the bundle is S-09's. | `spec/stale-statement` | blocks | judge | spec-review |
 
 ## Repository conventions a spec may not overrule
 
@@ -114,7 +115,7 @@ opposite is a contradiction against the repository, and the repair is the spec's
 
 | id | The question | rule | severity | where | source |
 |---|---|---|---|---|---|
-| S-36 | Every case's steps can reach the state it asserts, under this spec's own rules. | `spec/untestable-case` | blocks | cases | spec-review |
+| S-36 | Every case's steps can reach the state it asserts, under this spec's own rules. List each case: the rows its steps seed, the field values its expected result asserts, and the rule or column that would have to produce each. A case that seeds one row of an entity and asserts two values of a field that entity holds once cannot run, whichever value is right. | `spec/untestable-case` | blocks | cases | spec-review |
 | S-37 | Every expected result follows from the steps that precede it. | `spec/untestable-case` | blocks | cases | spec-review |
 | S-38 | Every acceptance criterion is settled by one observation, and does not restate a functional requirement. | `spec/untestable-case` | blocks | behaviour | checklist — Coverage |
 | S-39 | A case amended for a new contract is amended on its Expected Result as well as its Steps. | `spec/untestable-case` | blocks | cases | checklist — Consistency |

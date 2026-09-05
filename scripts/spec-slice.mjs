@@ -65,9 +65,21 @@ const bundle = readdirSync(dir)
   .map((f) => `${dirname(specRel)}/${f}`.replace(/\\/g, '/'))
   .sort((a, b) => (a === specRel ? -1 : b === specRel ? 1 : a.localeCompare(b)));
 
-const files = bundle.map((path) => ({
+/* A section the bundle answers with a pointer is still the bundle's, so the document it points
+   at is counted here. It is not a bundle member — growth is measured against the members and
+   nothing else — but it is read and it is judged, and an inventory that leaves it out is why it
+   went unjudged. */
+const delegated = (() => {
+  const area = `${dirname(specRel).replace(/\\/g, '/')}/README.md`;
+  if (bundle.includes(area) || !existsSync(join(ROOT, area))) return [];
+  const points = bundle.some((p) => /\]\(README\.md\)|README\.md/.test(readFileSync(join(ROOT, p), 'utf8')));
+  return points ? [area] : [];
+})();
+
+const files = [...bundle, ...delegated].map((path) => ({
   path,
   lines: readFileSync(join(ROOT, path), 'utf8').split(/\r?\n/).length,
+  ...(delegated.includes(path) ? { delegated: true } : {}),
 }));
 const totalLines = files.reduce((a, f) => a + f.lines, 0);
 
@@ -99,7 +111,9 @@ for (const p of cited.keys()) {
 const since = flag('--since');
 const mode = since ? 'diff' : 'full';
 const changed = since
-  ? git('diff', '--numstat', `${since}..HEAD`, '--', ...bundle)
+  /* The delegated document is in the range too: the fixer may edit it, and a range pass that
+     cannot see the edit judges a repair that is not in front of it. */
+  ? git('diff', '--numstat', `${since}..HEAD`, '--', ...bundle, ...delegated)
     .split('\n')
     .filter(Boolean)
     .map((l) => {
@@ -161,7 +175,7 @@ console.log(`# Spec slice — ${specRel}`);
 console.log(`# ${mode === 'diff' ? `judging ${since.slice(0, 7)}..HEAD` : 'full pass'}\n`);
 
 console.log(`## The bundle — ${files.length} file(s), ${totalLines} lines`);
-for (const f of files) console.log(`  ${String(f.lines).padStart(5)}  ${f.path}`);
+for (const f of files) console.log(`  ${String(f.lines).padStart(5)}  ${f.path}${f.delegated ? '  (delegated section, judged, not counted for growth)' : ''}`);
 
 if (mode === 'diff') {
   console.log('\n## Changed since the round you are judging');

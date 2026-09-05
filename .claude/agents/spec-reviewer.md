@@ -36,9 +36,20 @@ differently, and you may not admit one that does not.
 `blocked`, `note` or `n/a` for each id. A verdict with no map is a pass that did not run, and the
 loop rejects it and retries.
 
+**Unless your prompt opens with `{ "pass", "of", "criteria" }`.** Then the register is divided and
+that list is the whole of yours: answer those ids and put no other id in the map. Another pass
+holds the rest and a second opinion on its questions is not what this pass is for — spend the
+whole of it on the ones you were given, and go further into each than you would if you held all
+sixty. You still read the whole bundle: what is divided is the question, never the document.
+
 ## The bundle
 
 The spec and its siblings — `.contracts.md`, `.cases.md`, `.design.md`. Read all that exist.
+
+**A document the bundle delegates a section it owes to is part of what you judge**, and the area
+`README.md` is the one it always does: blast radius and backward compatibility live there and are
+not repeated per spec. A section answered with a pointer is still this spec's section, and a claim
+standing in it is this spec's claim.
 
 ## What is already decided
 
@@ -171,8 +182,9 @@ Write it to the path your prompt names, and print the same JSON.
 `admitted` is `true` only when every `blocks` criterion reads `clear` or `n/a`.
 
 `file` is the member of the bundle the finding is in — the spec you were given, its
-`.contracts.md`, its `.cases.md`, its `.design.md` or its mock. A verdict naming a path outside
-the bundle is malformed, however true the observation.
+`.contracts.md`, its `.cases.md`, its `.design.md`, its mock, or a document the bundle delegates a
+section it owes to. A verdict naming a path outside all of those is malformed, however true the
+observation: file it against the sentence in the bundle that made the claim, or not at all.
 
 `sweeps` records how many items each sweep enumerated, not how many findings it produced; a sweep
 reporting zero enumerated is a sweep that did not run.

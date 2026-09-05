@@ -385,6 +385,28 @@
         "shardAgent": "spec-reviewer",
         "shardModel": "sonnet",
         "plannedShards": 15
+      },
+      "split-2": {
+        "$comment": "Two opus judges in parallel, each owning a different half of the register, unioned. The seam is the register’s own sections: one pass reads the bundle against the world outside it — claims about this repository and the conventions a spec may not overrule — and the other reads it against itself. Two passes over the whole register overlap on what both find easy and leave the same gaps; two that own different questions do not. judgeSplit names the sections each pass owns by a prefix of the heading, and a section no group claims goes to every pass.",
+        "judgeAgent": "spec-reviewer",
+        "judgeModel": "opus",
+        "judgePasses": 2,
+        "judgeSplit": [
+          [
+            "Currency",
+            "Repository conventions"
+          ],
+          [
+            "Contradiction",
+            "Self-sufficiency",
+            "Testability",
+            "Scope",
+            "Obligations",
+            "The one note-only rule"
+          ]
+        ],
+        "fixerAgent": "spec-fixer-minimal",
+        "fixerModel": "opus"
       }
     },
     "requireCriteriaMap": true,

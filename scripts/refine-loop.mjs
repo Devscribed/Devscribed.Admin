@@ -679,16 +679,45 @@ async function gateJudge(spec, ledger, round, request, since) {
   const outFor = (n) => (passes === 1 ? verdictPath
     : `.workflow/refine/${ledger.stem}.probe/${round}/pass-${n}.verdict.json`);
 
+  /**
+   * Which criteria each pass owns, when the shape divides them.
+   *
+   * `judgeSplit` is a list of groups, one per pass, each naming register sections by a prefix of
+   * their heading. Two passes over the same whole register overlap on what both find easy and
+   * leave the same gaps; two that own different questions do not. Sections, not counts: the
+   * register's own headings are where one kind of question ends and another begins.
+   *
+   * A section no group claims goes to every pass, so a heading added later is over-covered rather
+   * than dropped.
+   */
+  const splitFor = (i) => {
+    const groups = SHAPE.judgeSplit;
+    if (!Array.isArray(groups) || !groups[i]) return null;
+    const claimed = new Set(groups.flat());
+    const mine = groups[i];
+    const owns = (fam) => {
+      const hit = (g) => mine.some((p) => fam.startsWith(p));
+      return hit() || ![...claimed].some((p) => fam.startsWith(p));
+    };
+    return [...SPEC_CRITERIA.ids]
+      .filter((id) => owns(SPEC_CRITERIA.family.get(id) ?? '(none)'))
+      .sort();
+  };
+
   /* A lead free to read the bundle itself takes that freedom, and has taken it in every round
      this repository has recorded. The requirement is in the prompt and the count is checked
      here: a pass that under-dispatched is run once more, told what it did. */
   const dispatchOf = async (i) => {
     const out = outFor(i + 1);
     const stem = `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}${passes === 1 ? '' : `.pass-${i + 1}`}`;
+    const owned = splitFor(i);
+    const assignment = owned
+      ? `${JSON.stringify({ pass: i + 1, of: passes, criteria: owned })}\n\n`
+      : '';
     const call = (extra) => runAgent({
       agent: JUDGE_AGENT,
       model: JUDGE_MODEL,
-      prompt: extra ? `${extra}\n\n${buildPrompt(out)}` : buildPrompt(out),
+      prompt: `${assignment}${extra ? `${extra}\n\n${buildPrompt(out)}` : buildPrompt(out)}`,
       verdictPath: out,
       timeoutMin: RC.timeoutMin ?? 45,
       logStem: extra ? `${stem}.redispatch` : stem,
