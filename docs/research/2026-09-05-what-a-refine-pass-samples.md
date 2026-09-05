@@ -131,6 +131,107 @@ when every finding is new — which is discovery. The halt discarded five judged
 repairs unmade and cost 69 minutes. `stuck-finding`, the check that measures what the message
 describes, has never fired.
 
+## Two passes over the original draft
+
+The lab passes above judge `0f20da7`, which two repairs had already been through. The end-to-end
+run judges `bf6d5ca` — what `/spec` first wrote, the same text loop A judged — with `solo-minimal`
+and `judgePasses: 2`, and the baseline `spec-lint` restored so that T0 is clean exactly as it was
+for loop A.
+
+**Round 1: two passes, 8 and 9 blockers, 14 distinct. Loop A's round 1 on the same text found 5.**
+
+Three defects were raised by both passes; eleven by one. The overlap is far lower than in the lab
+passes over `0f20da7`, and for a reason worth stating: **overlap is a function of how large the
+defect pool is against how much a pass files.** A draft with thirty defects and a pass that files
+eight will rarely repeat itself; a twice-repaired document with four left will repeat itself
+often. The union is worth most exactly where the document is worst, which is round one.
+
+At least eight of the eighteen blockers the three historical loops raised appear in this single
+round — the message text (#2), `HolidaysService.remove` (#5), the Verification Plan's ports (#4),
+the `ViewHolidays` grant (#10, which loop A did not reach until round 2), validation rule 9 (#3),
+the DS gaps (#12/#18), `TC-01-INT-19` (#14) and the `RequireCapability`/404 disagreement (#1).
+S-59 fired once, on `TC-01-INT-21`.
+
+### The whole loop, from the same starting text
+
+| | the three historical invocations | this run |
+|---|---|---|
+| invocations | 3 | **1** |
+| judged rounds | 5, plus one aborted before its repair | **2** |
+| wall clock | 13:45 → 16:35, **2h 50m** | 11:32 → 12:30, **58m** |
+| round 1 blockers | 5 | **14** |
+| round 2, the judge | 5, then 4, then 2 across the three loops | **0 blockers, 6 notes**, 59/59 criteria |
+| round 2, the plan gate | — | 1: `TC-01-INT-12`, repaired |
+| outcome | `not-converging`, `budget`, then `pass` | **`budget`** — the round budget, not a clean verdict |
+
+**It did not reach a `pass`.** T2 came back empty in round 2, T1 — the plannability gate — then
+raised one finding, `TC-01-INT-12`, which is the same case loop C round 1 blocked on. The fixer
+settled it in 111 seconds for 4 lines, and the loop hit `rounds: 2` with that repair never judged.
+Loop B ended the same way. `rounds` is now 3: the loop finishes early on a clean verdict, so a
+third round is only paid for when a second one did not settle it.
+
+Round 1's repair was `fixed 23, decided 7, left 0` — thirty repairs at once — and grew the bundle
+by 93 lines, 3.1 a repair against a budget of 15. **The judge then found nothing in round 2.**
+
+That is the answer to the worry the forensics raised. Ten of the eighteen historical blockers were
+made by an earlier repair, in a three-generation chain where each minimal repair opened the next.
+Thirty repairs made together, against one verdict, produced no new blocker at all — because the
+fixer saw all thirty findings at once, which no round of the historical path ever did.
+
+Round 2's two passes ran in **509s and 648s inside a 648s round**: dispatched together, they
+overlap, and the second pass costs no wall clock. Round 2 was also a range pass judging
+`fcbb52d2..HEAD` — the previous round's *head*, which is the empty-range fix doing its job.
+
+**What this is not.** One run against one historical path, and four things changed at once — the
+judge, the second pass, the range the re-judge is given and the stall rule. It is an integration
+result, not an attribution, and the attribution for the judge is the five-a-side comparison above.
+The 2h 50m also includes a person deciding twice to run `/refine` again.
+
+### Round three, and where the loop's cost went
+
+`rounds` was raised to 3 and the loop resumed. Round 3: **T2 clean again — 0 blockers, 1 note,
+59/59.** T1 raised one more, `spec/stale-statement — Blast Radius / Backward Compatibility item 4`,
+repaired for 0 net lines, and the loop hit the budget again.
+
+The new stall rule earned itself in that round, in the log: *"round 3 found 1 blocker(s) against
+round 2's 1, under criteria none of them shared — discovery, not a stall."* Under the old count
+rule that round would have been halted as `not-converging` before its repair — the same halt that
+cost loop A 69 minutes.
+
+**The judge converges; the plan gate does not.** Rounds 2 and 3 both went: T2 clean, T1 one new
+finding, repair, next round. Each cost about twenty minutes and produced one repair.
+
+Both of T1's blockers are in T2's domain and neither is about compiling a plan:
+
+| round | T1's blocker | the register criterion that owns it |
+|---|---|---|
+| 2 | `spec/untestable-case` — `TC-01-INT-12` seeds two members with identical attributes and asserts different countries | S-36, S-37 |
+| 3 | `spec/stale-statement` — Blast Radius item 4's compile-time enforcement claim | S-05 |
+
+And **neither T1 verdict carries a criteria map** — `requireCriteriaMap` is applied to T2 only. So
+T1 blocks under the register's own rule names with no register accounting, no criteria map and no
+range, re-reading the whole bundle every round. That is the shape this whole document is about,
+relocated to the gate nobody closed.
+
+**Not changed here, on purpose.** Which gate owns a stale statement is a rule about the pipeline,
+and the evidence is two findings on two rounds of one document. It is written down and left for a
+person, which is what the repository says to do with a disagreement between two gates.
+
+## Two defects the union exposed in the contract
+
+**`file` meant two things at once.** Pass 1 filed every finding against the spec it was given;
+pass 2 filed each against the bundle member the finding is in. Both followed the definition, which
+said *"`file` is the spec you were given, in every finding without exception"* while the verdicts
+this repository has actually recorded name `.contracts.md` and `.cases.md` throughout. The
+definition now says the member.
+
+**The identity key counted three defects twice.** With `file` in the key, `HolidaysService.remove`,
+`HOLIDAY_MESSAGES.countryCodeInvalid` and `Verification Plan` — each raised by both passes —
+merged into nothing, and the round reported *17 distinct, 0 raised by more than one* when the truth
+was **14 distinct, 3 raised by both.** A finding is now identified by its symbol alone, normalised:
+a leading `Section · ` qualifier dropped, whitespace collapsed, case folded. Every file it was
+filed against is kept on it.
+
 ## A defect the union test found
 
 `unionVerdicts` deduplicated findings on `keyOf`, which is `rule:symbol` — and the five passes

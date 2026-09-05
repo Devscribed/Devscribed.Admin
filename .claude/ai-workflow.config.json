@@ -345,7 +345,7 @@
     "requireSweepCounts": true,
     "requireJudgeModel": true,
     "shipRequiresRefine": true,
-    "rounds": 2,
+    "rounds": 3,
     "timeoutMin": 45,
     "maxGrowthPerFinding": 15,
     "blockingRules": [
