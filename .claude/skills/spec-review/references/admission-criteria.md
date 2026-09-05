@@ -104,7 +104,7 @@ opposite is a contradiction against the repository, and the repair is the spec's
 | id | The question | rule | severity | where | source |
 |---|---|---|---|---|---|
 | S-30 | The reference test: cover every mention of another spec and read the sentence again — nothing the implementer needs went away with it. | `spec/incomplete-decision` | blocks | any | spec-review |
-| S-31 | Every route the spec adds or changes states its audience, its request, its response, every status it answers and every message it emits. | `spec/incomplete-decision` | blocks | contracts | spec-review |
+| S-31 | Every route the spec adds or changes states its audience, its request, its response, every status it answers and every message it emits. Then read the join the other way: list every value a screen must display, a case must assert or a rule must read, and name the route that supplies each. A value the spec requires and no route returns is a route the spec owes and has not stated — a table of well-formed rows cannot show a row that is missing. | `spec/incomplete-decision` | blocks | contracts | spec-review |
 | S-32 | Every behaviour this spec changes from what an older document describes is stated here in full, and the older document is neither edited nor marked. | `spec/incomplete-decision` | blocks | any | checklist — Consistency |
 | S-33 | Every vocabulary the spec introduces is enumerated exhaustively — the stored value and the displayed label of each member. | `spec/incomplete-decision` | blocks | any | spec-review |
 | S-34 | No "TBD", no "decide later", no requirement without stated behaviour. | `spec/incomplete-decision` | blocks | any | checklist — Prose |
