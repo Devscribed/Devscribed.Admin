@@ -1122,11 +1122,24 @@ async function main() {
     saveLedger(ledger);
     note(`bundle grew by ${record.growth} line(s) for ${record.repairs} repair(s)`);
 
+    /* Only a blocker left unsettled is worth a person's round. A note the fixer declined is
+       still a note: it does not hold admission, and stopping the loop over one throws away every
+       repair the round has left to make. The question is recorded either way — a note addressed
+       to the register is how the register gets fixed — but it waits for whoever reads the ledger
+       rather than halting the spec in front of it. */
     if (fix.left?.length) {
-      for (const l of fix.left) note(`left: ${l.id} — ${l.question}`);
-      finish(ledger, 'blocked', 'needs-a-person',
-        `${fix.left.length} finding(s) the fixer may not settle: a repair needing scope the spec does not have, `
-        + 'or a question only the product owner answers.');
+      const severityOf = new Map((verdict.findings ?? []).map((f) => [f.id, f.severity]));
+      const blocking = fix.left.filter((l) => severityOf.get(l.id) !== 'note');
+      for (const l of fix.left) {
+        note(`left${severityOf.get(l.id) === 'note' ? ' (note)' : ''}: ${l.id} — ${l.question}`);
+      }
+      record.leftForAPerson = fix.left.map((l) => ({ id: l.id, criterion: l.criterion, question: l.question }));
+      saveLedger(ledger);
+      if (blocking.length) {
+        finish(ledger, 'blocked', 'needs-a-person',
+          `${blocking.length} blocking finding(s) the fixer may not settle: a repair needing scope the spec `
+          + 'does not have, or a question only the product owner answers.');
+      }
     }
 
     /* A repair that adds text is a repair the next pass has to judge. Past the budget it is

@@ -59,7 +59,7 @@ disagree, the source governs and the disagreement is a defect of this page.
 | S-03 | Every status the spec attributes to a route that already ships is the status that route returns today. | `spec/stale-statement` | blocks | any | spec-review |
 | S-04 | Every schema fact the spec attributes to today — column, type, nullability, default, uniqueness, enum member — matches `apps/api/prisma/schema.prisma`. | `spec/stale-statement` | blocks | any | spec-review |
 | S-05 | Every "today the code does X" claim is true of the code today. | `spec/stale-statement` | blocks | any | spec-review |
-| S-06 | Every `@ds` export the spec relies on is exported by `apps/web/src/ds.ts`, and one that is not has a `## DS gaps` row. | `spec/stale-statement` | blocks | contracts | CLAUDE.md — Design system |
+| S-06 | Every `@ds` export the spec relies on is exported from the package root, `packages/ds/src/index.ts`, and one that is not has a `## DS gaps` row. A deep import into a component file is not an export this spec may rely on. | `spec/stale-statement` | blocks | contracts | CLAUDE.md — Design system |
 | S-07 | Every premise about the pipeline, the deploy or the test rig is cited by file path rather than restated. | `spec/stale-statement` | blocks | any | checklist — Consistency |
 | S-08 | Every number the spec states about its own contents equals the thing it counts. | `spec/stale-statement` | blocks | any | spec-review |
 
