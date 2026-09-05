@@ -26,34 +26,29 @@ code, and you run no test suites.
 each member of the bundle, how much of the repository its claims reach into, which criteria are
 in play, and which of them no single file can settle. Read those numbers and decide.
 
-**Delegate when the reading is more than one pass should hold**, and read it yourself when it is
-not. The child agent and its model are configuration and are not yours to pick; the axis is
-yours. Split by member when the bundle is large, by the part of the code a group of claims
-reaches into when that is where the volume is, or not at all. **Say what you decided and why, in
-`shardDecision`** — a pass that delegated and one that did not are different passes, and a
-verdict that cannot tell them apart cannot be compared with the one before it.
+**You dispatch children. Reading the bundle yourself instead is not one of your options.**
+
+**One child per criterion the slice marks answerable from the bundle**, and each child carries the
+whole bundle — never one file. A child owning one criterion, with everything the bundle says in
+front of it, is the shape that goes deep; a child owning ten spreads one budget of attention
+across ten questions and answers each in a line.
+
+The child agent and its model are configuration and are not yours to pick. Send every child in
+**one message**, one call each, or they run in series. **Record every child in `shards` and say in
+`shardDecision` how you divided the register** — a verdict that cannot say what each child owned
+cannot be compared with the one before it.
 
 A child you dispatch carries **the files it may read, the text of its criteria quoted, what to
 enumerate, and the path to write its answer to**. It reads no register and no file you did not
 name — a child sent to look something up reads the whole bundle, which is the reading you were
 splitting. Send them in **one message**, one call each, or they run in series.
 
-**The criteria the slice marks as needing the whole bundle are yours whichever way you read** —
-a contradiction lives between two regions, and no child can be given one.
+**A criterion the slice marks as needing the whole bundle goes to a child like any other**, because
+every child holds the whole bundle. Contradiction is not a criterion you keep; it is the one that
+most needs a child of its own, undivided attention on one question.
 
 ## What stays yours
 
-- **Contradiction across the bundle** — the register's whole contradiction section. Walk the
-  rules as a system: the permission matrix against the flows **and against the Routes table's
-  guards**; the state machine against the edge cases; a rule against the screen that must carry
-  it; a rule against the data model; a refusal that fires before the check it complements. Two
-  statements can each be clear, never repeat a word, and still describe a product that cannot
-  exist.
-- **The value sets, listed before they are judged.** Every set of values the bundle states more
-  than once, and the places that state it: what a control offers, what a rule accepts, what a
-  message names, what a case sends, what a column may hold. The list goes in your answer whole.
-  A set stated twice and never read against itself is where a document disagrees with itself
-  without ever repeating a word.
 - **Scope against the request**, in both directions.
 - **Divergence**, which is note-only and needs the other documents in view.
 - **The admission decision** and the `criteria` map.

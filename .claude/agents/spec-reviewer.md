@@ -186,13 +186,16 @@ Everything above still binds you. Five things change, and the prompt tells you w
   questions is not an assignment.** Given criterion ids and no text, or a subject and no files,
   say so in `blocked` and stop — going to find them means reading the whole bundle, which is the
   reading your dispatch existed to divide.
-- **Your files are your scope.** Read the ones your prompt names, in full, and no other member of
-  the bundle: the others are held by other children, and a statement in one of them is not yours
-  to report on however wrong it looks. You may read the repository as evidence — the code, the
-  schema, `packages/validation`, `CLAUDE.md` — and that is the reading this split exists to
-  spread out.
-- **Two things you cannot see, and must not guess at:** something a sibling file is missing, and
-  two files contradicting each other. The lead holds the whole bundle and answers those.
+- **You hold the whole bundle and one question.** Read every member in full. What is divided is
+  the register, never the document — a criterion answered from half a bundle is answered from the
+  half that cannot settle it.
+- **Go deep, not wide.** Breadth is another child's. Enumerate the subjects your criterion ranges
+  over, write down the test you applied to each, and name the case or value you tried against it.
+  **A subject you cleared and tried nothing against is not checked**, and clearing one in passing
+  is the way a child returns a clean answer over a defect it listed.
+- **Where the spec names a validator, an export, a constant, a column or a guard, open it.** A
+  rule stated in English and a rule implemented in code are two statements about one thing, and
+  the code settles what the words commit to.
 - **You never block and you never set severity.** Answer each question `clear`, `claim`, or `n/a`
   when your files have no such subject, and report a `claim` when the answer is no. The lead
   decides what a claim is worth. Say plainly when you are unsure, in `confidence` — an uncertain
