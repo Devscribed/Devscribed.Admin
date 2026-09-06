@@ -32,6 +32,22 @@ answer your edit produces. If the edit does not change that answer, it is not a 
 
 **Every finding lands in `fixed`, `decided` or `left`, and in exactly one.**
 
+## Every place that states the thing, before you touch any of them
+
+**A repair is a change to the document, not to a line.** Before you edit anything for a finding,
+name the subject it is about — the route, the value set, the column, the capability, the rule, the
+selector — and **list every place in the bundle that states it**: the requirement, the contract
+row, the case, the acceptance criterion, the edge-case row, the Summary, the mock, the delegated
+section in the area `README.md`. `grep` for the subject and read each hit; the list is what you
+are repairing, not the one line the finding named.
+
+**Then edit every place on that list in the same repair.** A place you leave standing disagrees
+with the one you changed, and the disagreement is a defect you wrote.
+
+Write the list into the repair's `edited` — every file you changed for it — and its `also` — every
+place you listed and left alone, with why it still holds. **A repair that lists one place has not
+looked.**
+
 ## The shortest repair that clears the criterion
 
 Take them in this order and stop at the first that closes the finding:
@@ -126,19 +142,13 @@ number is written.
 State behaviour, never implementation: never write a list of call sites, a file inventory or an
 instruction about which functions to edit.
 
-## Then the coref
+## Then read what the repairs made false
 
-**Run `node scripts/spec-coref.mjs <spec> --working` and repair what your own edits left
-standing**, until it lists nothing. It prints every subject your edits moved and every line
-elsewhere in the bundle still carrying it. Each line either holds against what you wrote or is
-the rest of your repair; a subject it marks removed where it was and standing here is always the
-second.
+When every finding is repaired, read the bundle once for what no list of places could name: a
+Summary that no longer says what the spec adds, a blast-radius sentence an edit contradicts, a
+fixture a new rule refuses, two repairs that decided the same question differently.
 
-**A repair is a change to the document, not to a line.** So read the bundle once for what the
-tool cannot see: a Summary that no longer lists what the spec adds, a blast-radius sentence your
-edit contradicts, a fixture your new rule refuses.
-
-These are not new findings and need no decision.
+These are not new findings and need no decision. They are the rest of the repair.
 
 ## Then the lint
 
@@ -157,7 +167,9 @@ Write `.workflow/refine/<area>-<nn>.fix.json`, and print the same JSON.
   "verdict": ".workflow/refine/requests-01.verdict.json",
   "fixed": [
     { "id": "R4", "criterion": "S-01", "rule": "spec/stale-statement",
-      "edited": ["specs/requests/01-requests.md"],
+      "subject": "the canAssignRole export",
+      "edited": ["specs/requests/01-requests.md", "specs/requests/01-requests.contracts.md"],
+      "also": ["specs/requests/README.md:44 — names it as prose about the area, and still holds"],
       "clears": "S-01 asks whether every symbol named as existing exists; the sentence now names the symbol that does",
       "change": "the cited export was renamed; the spec names the symbol and no line",
       "netLines": -1,
@@ -178,6 +190,11 @@ Write `.workflow/refine/<area>-<nn>.fix.json`, and print the same JSON.
   "filesTouched": ["specs/requests/01-requests.md"],
   "netLines": 1 }
 ```
+
+`subject` is what the repair is about, and `edited` and `also` between them carry **every place in
+the bundle that states it** — the ones you changed, and the ones you listed and left with the
+reason they still hold. Neither is a summary: a repair whose subject the bundle states in four
+places and whose record names one has not looked.
 
 `clears` says how the edit changes the criterion's answer. `netLines` is the bundle's line change
 for that finding, and the total is the loop's growth measure. `verifiedBy` is the command or file
