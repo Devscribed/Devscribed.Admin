@@ -98,11 +98,11 @@ once you have read its members; a constant, once you have read what it is; a fun
 have read what it answers for the call the spec makes. Naming the file, the symbol or the line that
 holds the thing settles nothing, and a comment beside the code is not the code.
 
-**Nothing is settled by the text that states it.** A case is not runnable because the case says so,
-and a requirement is not observed because it names a case. What settles a case is the rule, the
-column, the route or the fixture that would have to produce the state its expected result asserts;
-what settles a requirement is the case whose failure it would cause. Citing the lines you are
-judging is an item you have not done.
+**Nothing is settled by the text that states it.** A case is not runnable because the case says so.
+Every `testability` item carries `produces`: for each value its expected result asserts, the rule,
+the column, the route or the fixture that has to yield it — and whether one fixture can yield them
+all at once. Citing the lines you are judging is an item you have not done, and the loop reads
+`produces` on every case.
 
 **The bundle decides the length of some of these lists, and the loop checks them.** Every case in
 `.cases.md` is an item of the testability sweep; every route of the contracts sweep; every
@@ -218,6 +218,7 @@ Write it to the path your prompt names, and print the same JSON.
             "files": ["apps/api/src/requests/requests.service.ts"] },
   "enumerated": [
     { "sweep": "testability", "item": "TC-01-INT-19 — fixture pins two literal dates",
+      "produces": "range.today comes from Account.timezone (REQ-01-018); no control sets the clock, so the two asserted readings are true on one day",
       "settledBy": "cases.md:305 against vacation-requests.service.ts:105", "ok": false },
     { "sweep": "currency", "item": "HolidaysService.remove", "settledBy": "grep -n 'remove' holidays.service.ts", "ok": false }
   ],

@@ -958,6 +958,18 @@ async function main() {
       if (!dryRun && RC.requireEnumeration) {
         const listed = Array.isArray(verdict.enumerated) ? verdict.enumerated : [];
         const per = (sweep) => listed.filter((e) => String(e?.sweep ?? '') === sweep).length;
+        /* A case is not settled by its own lines. The sweep that lists every case must say, per
+           case, what would produce each value its expected result asserts. */
+        const unproduced = listed
+          .filter((e) => String(e?.sweep ?? '') === 'testability' && !String(e?.produces ?? '').trim())
+          .map((e) => String(e?.item ?? '?').split(/[\s—-]+/)[0]);
+        if (unproduced.length) {
+          record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
+          saveLedger(ledger);
+          finish(ledger, 'error', 'judge-error',
+            `${unproduced.length} case(s) enumerated with nothing that would produce them: `
+            + `${unproduced.slice(0, 8).join(', ')}. A case is not settled by its own lines.`);
+        }
         const owed = bundleCounts(spec);
         const short = Object.entries(owed).filter(([sweep, n]) => per(sweep) < n);
         if (!listed.length || short.length) {
