@@ -140,13 +140,15 @@ sentence, and stop.
 A document with eleven false statements is eleven findings, or one finding whose witness names all
 eleven with their line numbers. It is never "the document needs review".
 
-**A defect has siblings, and finding one is when you go looking.** Before you leave a finding,
-sweep the document for every other place of its shape: one case pinned to a date that will fall
-into the past means every case's fixture is read for the same; one stale symbol means every symbol
-of that kind is checked; one row citing the wrong requirement means every row is read against the
-rule it cites. **A pass that files the first instance and not the second has found the example and
-missed the defect** — and the second is what the next gate finds, under a criterion this one
-already answered.
+**A defect has siblings, and the enumeration is where you find them.** The moment an item on your
+list fails, go back to the top of that list and apply the same test to every other item on it,
+before you write the finding. One case whose fixture cannot be seeded means every case's fixture
+is read for the same; one stale symbol means every symbol of that kind is resolved; one row citing
+the wrong requirement means every row is read against the rule it cites.
+
+**A pass that files the first instance and not the second has found the example and missed the
+defect** — and the second is what the next gate finds, under a criterion this one already
+answered.
 
 ## The closed rule list
 
@@ -218,8 +220,13 @@ Write it to the path your prompt names, and print the same JSON.
 section it owes to. A verdict naming a path outside all of those is malformed, however true the
 observation: file it against the sentence in the bundle that made the claim, or not at all.
 
-`sweeps` records how many items each sweep enumerated, not how many findings it produced; a sweep
-reporting zero enumerated is a sweep that did not run.
+**`sweeps` is a map of numbers**, one per family, and each number is how many items that sweep
+listed — never how many findings it produced, and never a sentence about what it looked at. A
+sweep reporting zero enumerated is a sweep that did not run, and prose in that field is a verdict
+the loop rejects, whether it blocked or passed.
+
+The number is checkable against the bundle: a testability sweep over fewer items than the bundle
+has cases did not read the cases.
 
 ## Running as a child of spec-reviewer-lead
 

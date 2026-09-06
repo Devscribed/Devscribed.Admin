@@ -894,11 +894,14 @@ async function main() {
         ? Object.values(verdict.sweeps).filter((n) => typeof n === 'number')
         : [];
       const enumerated = sweepCounts.some((n) => n > 0);
-      if (!dryRun && RC.requireSweepCounts && verdict.status === 'pass' && !enumerated) {
+      /* Every verdict, not only a passing one. A blocked pass clears far more criteria than it
+         blocks, and a `clear` from a sweep that enumerated nothing is worth exactly as little
+         whichever way the verdict went. */
+      if (!dryRun && RC.requireSweepCounts && !enumerated) {
         record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
         saveLedger(ledger);
         finish(ledger, 'error', 'judge-error',
-          'the pass carries no sweep counts, so nothing it admits was enumerated. '
+          'the pass carries no sweep counts, so nothing it cleared was enumerated. '
           + 'Re-run the round; `sweeps` is how many items each sweep listed, not a description of them.');
       }
       if (!enumerated) note('the verdict records no sweep counts — nothing says what was enumerated');
