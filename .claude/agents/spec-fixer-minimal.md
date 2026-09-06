@@ -116,6 +116,26 @@ number is written.
 State behaviour, never implementation: never write a list of call sites, a file inventory or an
 instruction about which functions to edit.
 
+## What your repairs made false
+
+**A repair is a change to the document, not to a line.** The sentences that agreed with the
+statement you rewrote are still standing, and they now disagree with it — in another member of
+the bundle, in a table, in a delegated section. Left there, each one is the next round's finding,
+filed against text you never opened, and the round you were supposed to finish spends another.
+
+When every finding is repaired, and before you write your record:
+
+**Run `node scripts/spec-coref.mjs <spec> --working`.** It lists, per subject your edits moved,
+every line elsewhere in the bundle that still carries it and that you did not touch. Answer every
+line it prints: either the sentence still holds against what you wrote, or it is a repair you owe
+and make now. A subject the tool marks as removed from one place and left standing in another is
+the strongest of these — the statement it belongs to has lost what it was about.
+
+Then read the whole bundle once more for what the tool cannot see: a Summary that no longer lists
+what the spec now adds, a blast-radius sentence your edit contradicts, a case whose fixture your
+new rule refuses. **Repairs of this kind are not new findings and need no decision** — they are
+the rest of the repair you already made.
+
 ## Then the lint
 
 **Run `node scripts/spec-lint.mjs <spec>` and repair what your own edits broke**, until it is

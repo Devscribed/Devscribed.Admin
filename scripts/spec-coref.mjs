@@ -43,7 +43,10 @@ if (!spec) {
 
 const git = (...a) => {
   try {
-    return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    /* A bundle member that does not exist on one side of the range is normal — a spec without a
+       `.design.md` is not an error — and git says so on stderr. Printed, it reads as a failure of
+       the tool to whoever ran it. */
+    return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
   } catch {
     return '';
   }
