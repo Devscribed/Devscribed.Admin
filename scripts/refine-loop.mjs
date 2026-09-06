@@ -782,72 +782,6 @@ async function repair(spec, ledger, round) {
   });
 }
 
-/**
- * The round closes its own repair before it ends.
- *
- * Most of what a delta round finds is not a defect the judge missed: it is a sentence that
- * agreed with the statement the repair rewrote and was left standing, in a file the repair
- * never opened. `spec-coref` names those mechanically — every subject the range moved, and
- * every line elsewhere still carrying it.
- *
- * The fixer was told to run it and did not, while running the lint seventeen times in the same
- * pass. The difference is that the lint is checked by the next round's T0 and this was checked
- * by nobody. So the loop runs it, hands the worklist back, and the round does not end until its
- * own edits have been answered.
- */
-async function closeRepair(spec, ledger, round, commit) {
-  if (!commit || dryRun) return null;
-  const out = spawnSync('node', ['scripts/spec-coref.mjs', spec, '--range', `${commit}~..${commit}`, '--json'],
-    { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  let report;
-  try { report = JSON.parse(out.stdout); } catch { note('coref produced no report; the round closes unchecked'); return null; }
-
-  const subjects = (report.subjects ?? []).filter((s) => (s.standing ?? []).length);
-  if (!subjects.length) { note('coref: the repair left nothing standing that it moved'); return null; }
-
-  const strong = subjects.filter((s) => s.removedSomewhere);
-  note(`coref: ${subjects.length} subject(s) the repair moved are still named elsewhere`
-    + `${strong.length ? `, ${strong.length} of them removed from one place and left in another` : ''}`);
-
-  const worklist = subjects.slice(0, 40).map((s) => {
-    const lines = (s.standing ?? []).slice(0, 6)
-      .map((l) => `    ${l.file}:${l.line}  ${String(l.text).trim().slice(0, 150)}`);
-    return [`  ${s.token}${s.removedSomewhere ? '  (removed where it was, still standing here)' : ''}`, ...lines].join('\n');
-  }).join('\n\n');
-
-  const fixPath = `.workflow/refine/${ledger.stem}.fix.json`;
-  const prompt = [
-    `Close the repair you just made to \`${spec}\`.`,
-    ``,
-    `These are the subjects your edits moved, and the lines elsewhere in the bundle that still`,
-    `carry them and that you did not touch:`,
-    ``,
-    worklist,
-    ``,
-    `Answer every one: either the line still holds against what you wrote, or it is the rest of`,
-    `the repair and you make it now. Then read the bundle once for what this list cannot see — a`,
-    `Summary that no longer lists what the spec adds, a blast-radius sentence your edit`,
-    `contradicts, a fixture your new rule refuses.`,
-    ``,
-    `Run \`node scripts/spec-lint.mjs ${spec}\` when you are done and repair what you broke.`,
-    ``,
-    `Then rewrite \`${fixPath}\` — the whole record, this pass's repairs added to the ones already`,
-    `in it. The loop reads that file and nothing else.`,
-  ].join('\n');
-
-  const closed = await runAgent({
-    agent: FIXER_AGENT,
-    model: FIXER_MODEL,
-    prompt,
-    verdictPath: fixPath,
-    timeoutMin: RC.timeoutMin ?? 45,
-    logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${FIXER_AGENT}.close`,
-  });
-  if (closed?.status === 'error') { note(`the closing pass produced no record: ${closed.error}`); return null; }
-  note(`closed: ${(closed.fixed ?? []).length} fixed, ${(closed.decided ?? []).length} decided in total`);
-  return closed;
-}
-
 /* ── convergence ──────────────────────────────────────────────────────────── */
 
 /**
@@ -942,14 +876,9 @@ const placeOf = (f) => symbolOf(f);
  * deletes a sentence adds none. The number is the cheapest signal that a loop is growing the
  * thing it is refining, and it is read from git rather than from the fixer's account of itself.
  */
-/* A round may commit its repair in more than one piece — the fixer's, then the closing pass's —
-   so growth is measured across the round rather than over one commit. `from` is the round's
-   starting HEAD; the gate commits between it and here touch only `.workflow`, which the path
-   filter excludes. */
-function growthOf(sha, spec, from) {
+function growthOf(sha, spec) {
   if (!sha) return 0;
-  const range = from ? `${from}..${sha}` : `${sha}~1..${sha}`;
-  const out = git('diff', '--numstat', range, '--', spec, ...bundleMembers(spec));
+  const out = git('diff', '--numstat', `${sha}~1..${sha}`, '--', spec, ...bundleMembers(spec));
   let added = 0, removed = 0;
   for (const line of out.split('\n').filter(Boolean)) {
     const [a, d] = line.split('\t');
@@ -1184,24 +1113,7 @@ async function main() {
       spec,
       summary: `${record.fix.fixed} fixed, ${record.fix.decided} decided, ${record.fix.left} left`,
     });
-    /* Before the round is measured: the repair answers what it made false, and the closing
-       edits ride in the same commit so the next round's range holds the whole repair. */
-    const closed = await closeRepair(spec, ledger, round, record.commit);
-    if (closed) {
-      record.fix = { fixed: closed.fixed?.length ?? 0, decided: closed.decided?.length ?? 0, left: closed.left?.length ?? 0 };
-      record.closed = true;
-      keepVerdict(ledger, round, 'fix', `.workflow/refine/${ledger.stem}.fix.json`);
-      const amended = commitGate(ledger, {
-        round,
-        gate: `close ${FIXER_AGENT}`,
-        spec,
-        summary: `coherence: ${record.fix.fixed} fixed, ${record.fix.decided} decided`,
-      });
-      if (amended) record.commit = amended;
-      saveLedger(ledger);
-    }
-
-    record.growth = growthOf(record.commit, spec, record.head);
+    record.growth = growthOf(record.commit, spec);
     /* The allowance is per repair, not per blocker. The fixer is dispatched on the whole
        verdict and repairs the notes too, so a verdict of one blocker and six notes was being
        charged fifteen lines for seven repairs — and the loop stopped on arithmetic that did
