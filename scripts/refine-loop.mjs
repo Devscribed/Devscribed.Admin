@@ -1087,6 +1087,7 @@ async function main() {
         .map((r) => {
           const gaps = [];
           if (!String(r.subject ?? '').trim()) gaps.push('subject');
+          if (!String(r.found ?? '').trim()) gaps.push('found');
           if (!Array.isArray(r.also)) gaps.push('also');
           if (!Array.isArray(r.dependsOn)) gaps.push('dependsOn');
           return gaps.length ? `${r.id ?? '?'} (${gaps.join(', ')})` : null;
@@ -1096,7 +1097,8 @@ async function main() {
       if (missing.length) {
         finish(ledger, 'error', 'fixer-error',
           `${missing.length} of ${planned.length} repair(s) recorded no plan: ${missing.join('; ')}. `
-          + 'A repair states its subject, the places it left standing, and what its new text leans on.');
+          + 'A repair states its subject, the search that found its places, the places it left '
+          + 'standing, and what its new text leans on.');
       }
     }
 

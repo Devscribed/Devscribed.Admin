@@ -48,6 +48,11 @@ Write the list into the repair's `edited` — every file you changed for it — 
 place you listed and left alone, with why it still holds. **A repair that lists one place has not
 looked.**
 
+**`also` is what a search returned, not what you remembered.** Run the search over the bundle,
+account for every hit it gives you — edited, or listed with why it still holds — and record the
+search in the repair's `found`. **Never write how many places there are**; the search says how
+many, and a subject that names a number is a number you will be wrong about.
+
 ## What the sentence you write leans on
 
 **A repair introduces referents of its own.** The moment your new text points at something the
@@ -209,6 +214,7 @@ Write `.workflow/refine/<area>-<nn>.fix.json`, and print the same JSON.
       "subject": "the canAssignRole export",
       "edited": ["specs/requests/01-requests.md", "specs/requests/01-requests.contracts.md"],
       "also": ["specs/requests/README.md:44 — names it as prose about the area, and still holds"],
+      "found": "grep -rn canAssignRole specs/requests/",
       "dependsOn": [],
       "clears": "S-01 asks whether every symbol named as existing exists; the sentence now names the symbol that does",
       "change": "the cited export was renamed; the spec names the symbol and no line",
@@ -242,8 +248,8 @@ places and whose record names one has not looked.
 `dependsOn` carries every referent the repair's own new text leans on, and where the bundle decides
 it. An empty list is the answer for a repair that introduced none, and it is a claim you made.
 
-**The loop reads `subject`, `also` and `dependsOn` on every repair and stops the round when one is
-missing.** A repair recorded without them is a repair it cannot see.
+**The loop reads `subject`, `found`, `also` and `dependsOn` on every repair and stops the round when
+one is missing.** A repair recorded without them is a repair it cannot see.
 
 `clears` says how the edit changes the criterion's answer. `netLines` is the bundle's line change
 for that finding, and the total is the loop's growth measure. `verifiedBy` is the command or file
