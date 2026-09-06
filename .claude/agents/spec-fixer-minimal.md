@@ -65,10 +65,6 @@ and the case that does not are the same defect twice.
 **A dependency is settled by something you did not just write.** The route, the paragraph or the
 case you are writing settles nothing. Name where the bundle already decides it, or decide it.
 
-**A default is what a repair gets wrong.** When what you write depends on a value a caller may omit
-— a window, a status filter, a sort, a page size — open what computes that default and say what it
-is. The function that takes the parameter does not tell you.
-
 Every referent your repair introduced goes in the repair's `dependsOn`, with where the bundle
 decides it. A repair that introduced none says so with an empty list.
 
@@ -168,6 +164,14 @@ is a finding you added.
 a test id, a "today it does X". **A claim covers what you opened and no more.** **Prefer the
 symbol to the line number.** **A count carries the command that produced it**, run before the
 number is written.
+
+**Read the value, not the description of it.** A comment above the code, a parameter's name, a
+function that takes a filter — none of them tells you what the code answers when the caller passes
+nothing. Open what computes the default.
+
+**Never restate what shipping code returns.** Name the read that fills a control and state what the
+control must offer. Another route's rules are not this spec's to repeat, and a repeated rule is the
+next round's stale statement.
 
 State behaviour, never implementation: never write a list of call sites, a file inventory or an
 instruction about which functions to edit.
