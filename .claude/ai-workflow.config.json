@@ -425,6 +425,7 @@
       "spec/missing-artefact",
       "spec/scope-gap"
     ],
-    "requireEnumeration": true
+    "requireEnumeration": true,
+    "requireRepairPlan": true
   }
 }

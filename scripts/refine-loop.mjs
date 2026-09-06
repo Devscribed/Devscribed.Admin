@@ -590,6 +590,9 @@ function unionVerdicts(verdicts) {
     criteria,
     findings,
     sweeps: Object.keys(sweeps).length ? sweeps : kept[0].sweeps,
+    /* Concatenated, not maxed: where the register is divided, neither pass covers the bundle and
+       between them they must. Duplicates across passes are the overlap, and cost nothing. */
+    enumerated: kept.flatMap((v) => (Array.isArray(v.enumerated) ? v.enumerated : [])),
     passes: kept.length,
     shardDecision: kept.map((v, i) => `pass ${i + 1}: ${v.shardDecision ?? 'no decision recorded'}`).join(' — '),
   };
@@ -809,18 +812,23 @@ const placeOf = (f) => symbolOf(f);
  * no script can enumerate, and a floor invented for it is a number the judge learns to satisfy
  * rather than a reading it has to do.
  */
-function bundleCounts(spec) {
+function bundleCounts(spec, criteria) {
   const count = (file, re) => {
     const abs = join(ROOT, file);
     if (!existsSync(abs)) return 0;
     return readFileSync(abs, 'utf8').split(/\r?\n/).filter((l) => re.test(l)).length;
   };
+  /* A pass that owns a divided register is owed the lists of the families it holds and no
+     others: a currency pass has no business enumerating the cases, and a floor it cannot meet
+     is a floor it satisfies by padding. */
+  const owns = (family) => !criteria || [...(SPEC_CRITERIA.ids ?? [])]
+    .some((id) => criteria.includes(id) && (SPEC_CRITERIA.family.get(id) ?? '').startsWith(family));
   const base = spec.replace(/\.md$/, '');
   const owed = {};
   const cases = count(`${base}.cases.md`, /^#{2,4}\s+TC-\d+-(UNIT|INT|E2E)-\d+/);
-  if (cases) owed.testability = cases;
+  if (cases && owns('Testability')) owed.testability = cases;
   const reqs = count(spec, /^#{2,4}\s+REQ-\d+-\d+/);
-  if (reqs) owed.obligations = reqs;
+  if (reqs && owns('Obligations')) owed.obligations = reqs;
   return owed;
 }
 
@@ -1072,6 +1080,25 @@ async function main() {
     if (fix.status === 'error') finish(ledger, 'error', 'fixer-error', fix.error);
     record.fix = { fixed: fix.fixed?.length ?? 0, decided: fix.decided?.length ?? 0, left: fix.left?.length ?? 0 };
     note(`fixed ${record.fix.fixed}, decided ${record.fix.decided}, left ${record.fix.left}`);
+
+    if (!dryRun && RC.requireRepairPlan) {
+      const planned = [...(fix.fixed ?? []), ...(fix.decided ?? [])];
+      const missing = planned
+        .map((r) => {
+          const gaps = [];
+          if (!String(r.subject ?? '').trim()) gaps.push('subject');
+          if (!Array.isArray(r.also)) gaps.push('also');
+          if (!Array.isArray(r.dependsOn)) gaps.push('dependsOn');
+          return gaps.length ? `${r.id ?? '?'} (${gaps.join(', ')})` : null;
+        })
+        .filter(Boolean);
+      record.repairPlan = { planned: planned.length, unplanned: missing.length };
+      if (missing.length) {
+        finish(ledger, 'error', 'fixer-error',
+          `${missing.length} of ${planned.length} repair(s) recorded no plan: ${missing.join('; ')}. `
+          + 'A repair states its subject, the places it left standing, and what its new text leans on.');
+      }
+    }
 
     /* The round ends in the fixer's commit, and that commit is the next pass's boundary: it is
        the one that carries the document's repairs, which is what the next judge is given a

@@ -48,6 +48,23 @@ Write the list into the repair's `edited` — every file you changed for it — 
 place you listed and left alone, with why it still holds. **A repair that lists one place has not
 looked.**
 
+## What the sentence you write leans on
+
+**A repair introduces referents of its own.** The moment your new text points at something the
+reader must resolve — a window, a default, a preset, an ordering, a starting state, "the month the
+calendar opens on", "the first row" — ask whether the bundle decides it. Search for it the way you
+searched for the subject.
+
+**If the bundle does not decide it, do not lean on it.** Say the thing outright in the sentence you
+are writing, or have the case take the step that fixes it. Adding the decision to the bundle is the
+last choice, and only for a decision the spec already owes.
+
+**A phrase you write into two places is settled in both or in neither.** The case that resolves it
+and the case that does not are the same defect twice.
+
+Every referent your repair introduced goes in the repair's `dependsOn`, with where the bundle
+decides it. A repair that introduced none says so with an empty list.
+
 ## The shortest repair that clears the criterion
 
 Take them in this order and stop at the first that closes the finding:
@@ -61,9 +78,15 @@ Take them in this order and stop at the first that closes the finding:
 testid or a concurrency case the spec does not already oblige itself to contain is not a repair;
 it is a feature answering a finding. It goes to `left` with the question it turns on.
 
-**The one exception is `spec/missing-artefact`,** and only its own subject: the spec promised the
-artefact elsewhere in its own text — a selector its case asserts, a message row for a refusal it
-describes, a case for a rule it states. Keeping a promise already made is not new surface.
+**The exception is a promise the bundle already made,** whichever finding uncovered it: a selector
+its case asserts, a message row for a refusal it describes, a case for a rule it states, a read for
+a value its screen renders and its permission matrix grants. Keeping a promise already made is not
+new surface, and where the promise can be kept two ways you decide by the order below and write the
+decision down.
+
+**The test is the bundle's own text, never the finding's rule.** Surface nothing in the bundle asks
+for goes to `left`. Surface the bundle already obliges itself to have is the repair, and leaving it
+out is the defect the next round finds.
 
 **`S-58` is repaired by a sentence or by one line in Out of Scope** — what the shipping path does
 with the new kind of row. Never by specifying the route that would do it.
@@ -170,6 +193,7 @@ Write `.workflow/refine/<area>-<nn>.fix.json`, and print the same JSON.
       "subject": "the canAssignRole export",
       "edited": ["specs/requests/01-requests.md", "specs/requests/01-requests.contracts.md"],
       "also": ["specs/requests/README.md:44 — names it as prose about the area, and still holds"],
+      "dependsOn": [],
       "clears": "S-01 asks whether every symbol named as existing exists; the sentence now names the symbol that does",
       "change": "the cited export was renamed; the spec names the symbol and no line",
       "netLines": -1,
@@ -177,7 +201,10 @@ Write `.workflow/refine/<area>-<nn>.fix.json`, and print the same JSON.
   ],
   "decided": [
     { "id": "R1", "criterion": "S-09", "rule": "spec/contradiction",
+      "subject": "re-admission to another organization",
       "edited": ["specs/requests/01-requests.md"],
+      "also": ["specs/requests/01-requests.cases.md:88 — walks the refusal, and still holds"],
+      "dependsOn": [{ "thing": "the 409 body", "settledBy": "the error table, REQ-01-002" }],
       "question": "does re-admission to another organization restore the row or refuse",
       "chose": "refuse with 409", "rejected": "restore and rebind organizationId",
       "why": "rule 3 — rebinding moves a row the old organization's records still resolve through",
@@ -195,6 +222,12 @@ Write `.workflow/refine/<area>-<nn>.fix.json`, and print the same JSON.
 the bundle that states it** — the ones you changed, and the ones you listed and left with the
 reason they still hold. Neither is a summary: a repair whose subject the bundle states in four
 places and whose record names one has not looked.
+
+`dependsOn` carries every referent the repair's own new text leans on, and where the bundle decides
+it. An empty list is the answer for a repair that introduced none, and it is a claim you made.
+
+**The loop reads `subject`, `also` and `dependsOn` on every repair and stops the round when one is
+missing.** A repair recorded without them is a repair it cannot see.
 
 `clears` says how the edit changes the criterion's answer. `netLines` is the bundle's line change
 for that finding, and the total is the loop's growth measure. `verifiedBy` is the command or file
