@@ -62,6 +62,13 @@ last choice, and only for a decision the spec already owes.
 **A phrase you write into two places is settled in both or in neither.** The case that resolves it
 and the case that does not are the same defect twice.
 
+**A dependency is settled by something you did not just write.** The route, the paragraph or the
+case you are writing settles nothing. Name where the bundle already decides it, or decide it.
+
+**A default is what a repair gets wrong.** When what you write depends on a value a caller may omit
+— a window, a status filter, a sort, a page size — open what computes that default and say what it
+is. The function that takes the parameter does not tell you.
+
 Every referent your repair introduced goes in the repair's `dependsOn`, with where the bundle
 decides it. A repair that introduced none says so with an empty list.
 
