@@ -85,6 +85,12 @@ endpoint that gets there, or a fixture under `apps/api/src/test-support/` that t
 behind `assertFixturesOpen`. A state no route reaches is not a test case yet; it is a task this
 spec owes.
 
+**Reach it on any day the suite runs.** A case that seeds or asserts a calendar date passes until
+that date is past, and then fails with nobody having changed anything — and a fixture whose start
+is in the past cannot even be created through a route that refuses one. Derive every date from the
+run's own today, and where the case must see another month, name the control that navigates to it.
+A literal date is fine only where it is an argument to a pure function and no clock is involved.
+
 **Rehearse with a throwaway probe.** One scratch Playwright spec that signs in, arrives at the
 parent screen, and touches the ids the cases will name. Run it on the spec run's own ports, then
 delete it. The spec keeps the command and the result, never the file.
@@ -196,7 +202,10 @@ auth guard".
 **Verify a premise against the file that implements it.** Deploy order, what a script does, what
 the pipeline runs — read `infra/deploy.sh`, `.github/workflows/`, the Makefile, and cite the path.
 CLAUDE.md, an earlier spec and a code comment are claims about the code, not the code. Where they
-disagree with it, the spec says so and CLAUDE.md is amended in the same change.
+disagree with it, the spec says so and CLAUDE.md is amended in the same change. **Read the value,
+never the container**: a list settles a claim once you have read its members, a constant once you
+have read what it is, a function once you have read what it answers when the caller passes nothing.
+A name that describes the behaviour is not the behaviour.
 
 **An absolute rule is checked against the code it already governs.** Before writing "never",
 "always" or "every", find the call sites the rule forbids today. Each is fixed by this spec, carved
@@ -256,6 +265,10 @@ Reviewers trust a spec that admits its edges.
 
 **Out of Scope is a section, not a shrug.** List what a reader would reasonably expect and will not
 get, so nobody discovers it during review.
+
+**Never restate what a route you do not own returns.** Name the read that fills a control and say
+what the control must offer. Repeating another route's rules writes a claim about code this spec
+does not govern, and it is stale on the day that route changes.
 
 **Error messages live in one table.** The business spec owns validation messages and behaviour; a
 paired `.design.md` owns headings, placeholders, and micro-copy. Neither restates the other. Shared
