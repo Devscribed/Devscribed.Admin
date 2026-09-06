@@ -533,6 +533,16 @@ function checkCases(cases, reqs, contracts, files) {
     for (const required of ['Level', 'Covers', 'Steps', 'Expected Result']) {
       if (!f[required]) add('case/missing-field', files.cases, c.line, `${c.id} has no ${required} field`);
     }
+    /* A fixture pinned to a calendar date stops working on its own, with nobody having changed
+       it. A unit case is exempt: its dates are arguments to a function, not a clock. */
+    if (/^(Integration|E2E)/i.test(f.Level ?? '')) {
+      const dated = `${f.Steps ?? ''} ${f['Expected Result'] ?? ''}`.match(/\d{4}-\d{2}-\d{2}/g);
+      if (dated) {
+        add('case/absolute-date', files.cases, f['Steps@line'] ?? c.line,
+          `${c.id} seeds or asserts ${[...new Set(dated)].join(', ')}, so it stops passing once that date is past`,
+          'derive every date from the run’s own today, and have the case navigate to the window it needs');
+      }
+    }
     for (const id of (f.Covers ?? '').match(/REQ-\d{2}-\d{3}/g) ?? []) {
       if (!reqs.has(id)) {
         add('case/unknown-req', files.cases, f['Covers@line'] ?? c.line,
