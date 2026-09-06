@@ -777,13 +777,15 @@ function checkMatrixIsServed(contracts, matrix, file, contractsText = '') {
   for (const route of contracts.routes.values()) for (const g of route.guards) guarded.add(canonical(g));
   if (!guarded.size) return;                       // no Guards column parsed: nothing to join to
   /* A capability the service checks rather than a guard is served by the sentence that says so.
-     Joining on the Guards cell alone reports a spec that wrote the rule somewhere else. */
-  const named = canonical(contractsText);
+     Joining on the Guards cell alone reports a spec that wrote the rule somewhere else. The join
+     is per word: collapsing the document would let neighbouring words spell a capability nobody
+     wrote. */
+  const named = new Set((contractsText.match(/[A-Za-z][A-Za-z0-9_]*/g) ?? []).map(canonical));
 
   for (const row of matrix) {
     if (!row.granted.size) continue;               // a row that grants nothing needs no route
     if (!row.capability || !CAPABILITY.test(row.capability)) continue;
-    if (!guarded.has(canonical(row.capability)) && !named.includes(canonical(row.capability))) {
+    if (!guarded.has(canonical(row.capability)) && !named.has(canonical(row.capability))) {
       add('matrix/unserved-grant', file, row.line,
         `the matrix grants ${row.capability} and no route's Guards cell requires it`,
         'name the route that exercises the grant, or drop the row');
