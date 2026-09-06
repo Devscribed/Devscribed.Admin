@@ -87,10 +87,16 @@ numbers into code — all settled. Re-deriving them spends your pass on arithmet
 
 Build the list before you answer anything about it. **A sweep that produced no list did not run**,
 and zero enumerated items is a failed sweep, not a clean one. One line per item, at most a dozen
-words, and the whole list goes in your answer whether or not it produced a finding.
+words, and **the whole list goes in your verdict's `enumerated`** whether or not it produced a
+finding — a count with no list behind it is a number you wrote, not a sweep you ran.
 
 Against each item, the thing that settles it: the command and its output, the file and the line,
 the two sentences read together.
+
+**The bundle decides the length of some of these lists, and the loop checks them.** Every case in
+`.cases.md` is an item of the testability sweep; every route of the contracts sweep; every
+requirement of the obligations sweep. A list shorter than what the bundle holds is a sweep that
+stopped early, and the pass is run again.
 
 ## The boundary
 
@@ -199,6 +205,11 @@ Write it to the path your prompt names, and print the same JSON.
   "admitted": false,
   "read": { "specs": ["specs/requests/01-requests.md"],
             "files": ["apps/api/src/requests/requests.service.ts"] },
+  "enumerated": [
+    { "sweep": "testability", "item": "TC-01-INT-19 — fixture pins two literal dates",
+      "settledBy": "cases.md:305 against vacation-requests.service.ts:105", "ok": false },
+    { "sweep": "currency", "item": "HolidaysService.remove", "settledBy": "grep -n 'remove' holidays.service.ts", "ok": false }
+  ],
   "sweeps": { "currency": 34, "conventions": 12, "selfSufficiency": 12, "testability": 18,
               "dataAndState": 9, "obligations": 47, "contradiction": 21, "domains": 11, "scope": 6 },
   "criteria": { "S-01": "clear", "S-09": "blocked", "S-25": "n/a", "…": "every id in the register" },
@@ -225,8 +236,8 @@ listed — never how many findings it produced, and never a sentence about what 
 sweep reporting zero enumerated is a sweep that did not run, and prose in that field is a verdict
 the loop rejects, whether it blocked or passed.
 
-The number is checkable against the bundle: a testability sweep over fewer items than the bundle
-has cases did not read the cases.
+**`enumerated` is the list those numbers count**, every item of every sweep, each naming its
+`sweep`, what it is, what settled it, and whether it held. The loop counts it against the bundle.
 
 ## Running as a child of spec-reviewer-lead
 

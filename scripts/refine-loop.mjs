@@ -801,6 +801,29 @@ const placeOf = (f) => symbolOf(f);
  * deletes a sentence adds none. The number is the cheapest signal that a loop is growing the
  * thing it is refining, and it is read from git rather than from the fixer's account of itself.
  */
+/**
+ * What the bundle obliges a sweep to have listed.
+ *
+ * The cases and the requirements are headings on disk, so the length of two of the judge's lists
+ * is not its own to decide. Nothing else is counted here: the currency sweep ranges over claims
+ * no script can enumerate, and a floor invented for it is a number the judge learns to satisfy
+ * rather than a reading it has to do.
+ */
+function bundleCounts(spec) {
+  const count = (file, re) => {
+    const abs = join(ROOT, file);
+    if (!existsSync(abs)) return 0;
+    return readFileSync(abs, 'utf8').split(/\r?\n/).filter((l) => re.test(l)).length;
+  };
+  const base = spec.replace(/\.md$/, '');
+  const owed = {};
+  const cases = count(`${base}.cases.md`, /^#{2,4}\s+TC-\d+-(UNIT|INT|E2E)-\d+/);
+  if (cases) owed.testability = cases;
+  const reqs = count(spec, /^#{2,4}\s+REQ-\d+-\d+/);
+  if (reqs) owed.obligations = reqs;
+  return owed;
+}
+
 function growthOf(sha, spec) {
   if (!sha) return 0;
   const out = git('diff', '--numstat', `${sha}~1..${sha}`, '--', spec, ...bundleMembers(spec));
@@ -894,6 +917,28 @@ async function main() {
         ? Object.values(verdict.sweeps).filter((n) => typeof n === 'number')
         : [];
       const enumerated = sweepCounts.some((n) => n > 0);
+      /* The list the counts count, checked against what the bundle holds. A sweep is self-reported
+         and a number is free to write; the cases and the requirements are on disk and can be
+         counted. A testability list shorter than the bundle's cases is a sweep that stopped
+         part-way, and every criterion it cleared was cleared over the part it did not reach. */
+      if (!dryRun && RC.requireEnumeration) {
+        const listed = Array.isArray(verdict.enumerated) ? verdict.enumerated : [];
+        const per = (sweep) => listed.filter((e) => String(e?.sweep ?? '') === sweep).length;
+        const owed = bundleCounts(spec);
+        const short = Object.entries(owed).filter(([sweep, n]) => per(sweep) < n);
+        if (!listed.length || short.length) {
+          record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
+          saveLedger(ledger);
+          finish(ledger, 'error', 'judge-error',
+            listed.length
+              ? `the enumeration stops short of the bundle: ${short.map(([s, n]) => `${s} listed ${per(s)} of ${n}`).join(', ')}. `
+                + 'Re-run the round; a criterion cleared over part of a list was cleared over the part the sweep reached.'
+              : 'the verdict carries no `enumerated` list, so nothing it cleared was enumerated. '
+                + 'Re-run the round; the counts in `sweeps` are the length of that list.');
+        }
+        note(`enumerated ${listed.length} item(s); ${Object.entries(owed).map(([s, n]) => `${s} ${per(s)}/${n}`).join(', ')}`);
+      }
+
       /* Every verdict, not only a passing one. A blocked pass clears far more criteria than it
          blocks, and a `clear` from a sweep that enumerated nothing is worth exactly as little
          whichever way the verdict went. */
