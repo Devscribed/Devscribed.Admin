@@ -98,6 +98,12 @@ once you have read its members; a constant, once you have read what it is; a fun
 have read what it answers for the call the spec makes. Naming the file, the symbol or the line that
 holds the thing settles nothing, and a comment beside the code is not the code.
 
+**Nothing is settled by the text that states it.** A case is not runnable because the case says so,
+and a requirement is not observed because it names a case. What settles a case is the rule, the
+column, the route or the fixture that would have to produce the state its expected result asserts;
+what settles a requirement is the case whose failure it would cause. Citing the lines you are
+judging is an item you have not done.
+
 **The bundle decides the length of some of these lists, and the loop checks them.** Every case in
 `.cases.md` is an item of the testability sweep; every route of the contracts sweep; every
 requirement of the obligations sweep. A list shorter than what the bundle holds is a sweep that
