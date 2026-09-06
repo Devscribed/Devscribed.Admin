@@ -265,6 +265,9 @@ function finish(ledger, status, reason, detail) {
 
 /* ── T0 ───────────────────────────────────────────────────────────────────── */
 
+/* A lint finding's identity is its rule and its place, never its line: the repair moves lines. */
+const lintKey = (f) => `${f.rule}:${(f.message ?? '').split(/[\s,]/)[0]}`;
+
 function gateLint(spec) {
   step('T0  spec-lint');
   if (dryRun) { note(`would run: node scripts/spec-lint.mjs ${spec}`); return { findings: [] }; }
@@ -695,9 +698,24 @@ async function gateJudge(spec, ledger, round, request, since) {
 
 /* ── repair ───────────────────────────────────────────────────────────────── */
 
-async function repair(spec, ledger, round) {
+async function repair(spec, ledger, round, lintFindings = []) {
   step(`fix  ${FIXER_AGENT}  (round ${round})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
+  /* The script's findings join the judge's in the one file the fixer reads. They carry no
+     criterion — no register entry decided them — so the demotion leaves them as notes, and the
+     fixer repairs every finding it is given. */
+  if (!dryRun && lintFindings.length) {
+    const abs = join(ROOT, verdictPath);
+    const v = existsSync(abs) ? JSON.parse(readFileSync(abs, 'utf8').replace(/^﻿/, '')) : { findings: [] };
+    v.findings = [...(v.findings ?? []), ...lintFindings.map((f, i) => ({
+      id: `L${i + 1}`, severity: 'note', criterion: null, rule: f.rule,
+      file: f.file, line: f.line, claim: f.message,
+      witness: { kind: 'command', detail: f.message, source: `node scripts/spec-lint.mjs ${spec}` },
+      suggestedFix: f.fix ?? null, raisedBy: 'spec-lint',
+    }))];
+    writeFileSync(abs, `${JSON.stringify(v, null, 2)}
+`);
+  }
   const fixPath = `.workflow/refine/${ledger.stem}.fix.json`;
   return runAgent({
     agent: FIXER_AGENT,
@@ -884,11 +902,19 @@ async function main() {
     commitGate(ledger, { round, gate: 'T0 spec-lint', summary: lint.findings.length ? `${lint.findings.length} finding(s)` : 'clean' });
     if (lint.findings.length) {
       for (const f of lint.findings.slice(0, 20)) note(`${f.file}:${f.line}  ${f.rule} — ${f.message}`);
-      finish(ledger, 'blocked', 'lint',
-        `${lint.findings.length} lint finding(s). Every one has a mechanical repair and no judgement in it; `
-        + 'fix them and run again rather than paying a model to edit text.');
-    }
-    note('clean');
+      /* A finding a script can state is a finding the fixer can repair, so it rides into the
+         verdict rather than stopping the run. One that needs a person comes back in the fixer's
+         `left`, which halts on its own. A finding that survived the repair that was given it has
+         been tried. */
+      const stuck = (ledger.rounds[round - 2]?.lintKeys ?? []).filter((k) => lint.findings.some((f) => lintKey(f) === k));
+      if (stuck.length) {
+        finish(ledger, 'blocked', 'stuck-lint',
+          `${stuck.join(', ')} survived a repair. The lint states it, the fixer did not clear it, `
+          + 'and a person decides.');
+      }
+      note(`${lint.findings.length} finding(s), repaired with the verdict`);
+    } else note('clean');
+    record.lintKeys = lint.findings.map(lintKey);
 
     /* T2 — the judge. Full on the first round; the previous repair's range after that. */
     let verdict = null;
@@ -1076,7 +1102,7 @@ async function main() {
 
     if (noFix) { finish(ledger, 'blocked', 'verdict-only', 'stopped before the fixer, as asked.'); }
 
-    const fix = await repair(spec, ledger, round);
+    const fix = await repair(spec, ledger, round, lint.findings ?? []);
     if (fix.status === 'error') finish(ledger, 'error', 'fixer-error', fix.error);
     record.fix = { fixed: fix.fixed?.length ?? 0, decided: fix.decided?.length ?? 0, left: fix.left?.length ?? 0 };
     note(`fixed ${record.fix.fixed}, decided ${record.fix.decided}, left ${record.fix.left}`);

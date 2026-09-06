@@ -101,6 +101,11 @@ decision down.
 for goes to `left`. Surface the bundle already obliges itself to have is the repair, and leaving it
 out is the defect the next round finds.
 
+**A `## DS gaps` row is a repair, never new surface.** A custom property the mock declares, or a
+colour it writes with no name to declare, is a dependency the screen already has; the row records
+it — the gap, what it costs, and what closes it — or the mock takes an `@ds` token instead and the
+declaration goes. Where the bundle has no such table, adding it with its rows is the repair.
+
 **`S-58` is repaired by a sentence or by one line in Out of Scope** — what the shipping path does
 with the new kind of row. Never by specifying the route that would do it.
 
