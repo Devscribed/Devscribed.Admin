@@ -85,6 +85,12 @@ endpoint that gets there, or a fixture under `apps/api/src/test-support/` that t
 behind `assertFixturesOpen`. A state no route reaches is not a test case yet; it is a task this
 spec owes.
 
+**Read each case back from what would produce it.** Take the expected result, name the rule, the
+column, the route or the fixture that has to yield each asserted value, and check that one fixture
+can yield them all at once. A case that seeds one row of an entity and asserts two values of a
+field that entity holds once cannot run, whichever value is right — and a case is never made
+runnable by the case saying so.
+
 **Reach it on any day the suite runs.** A case that seeds or asserts a calendar date passes until
 that date is past, and then fails with nobody having changed anything — and a fixture whose start
 is in the past cannot even be created through a route that refuses one. Derive every date from the
