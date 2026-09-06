@@ -93,6 +93,11 @@ finding — a count with no list behind it is a number you wrote, not a sweep yo
 Against each item, the thing that settles it: the command and its output, the file and the line,
 the two sentences read together.
 
+**`ok` means you read the value, never that you found where it lives.** A list settles a claim only
+once you have read its members; a constant, once you have read what it is; a function, once you
+have read what it answers for the call the spec makes. Naming the file, the symbol or the line that
+holds the thing settles nothing, and a comment beside the code is not the code.
+
 **The bundle decides the length of some of these lists, and the loop checks them.** Every case in
 `.cases.md` is an item of the testability sweep; every route of the contracts sweep; every
 requirement of the obligations sweep. A list shorter than what the bundle holds is a sweep that

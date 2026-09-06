@@ -62,6 +62,11 @@ last choice, and only for a decision the spec already owes.
 **A phrase you write into two places is settled in both or in neither.** The case that resolves it
 and the case that does not are the same defect twice.
 
+**A convention one repair establishes binds every repair after it.** When an edit settles how a
+kind of statement is written — how a fixture picks its dates, how a case reaches a window, how a
+message key is named — every place you touch later in this run is written that way too, whatever
+finding sent you there. A sibling left on the old footing is the defect the next round finds.
+
 **A dependency is settled by something you did not just write.** The route, the paragraph or the
 case you are writing settles nothing. Name where the bundle already decides it, or decide it.
 
