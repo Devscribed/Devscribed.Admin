@@ -496,13 +496,14 @@ async function gatePlan(spec, ledger, round) {
   }, null, 2)}\n`);
 
   const verdictPath = `${dir}/pre_implement.verdict.json`;
-  const prompt =
-    `Compile the specification into a plan. The run is at \`${dir}/run.json\`; the spec it names is `
-    + `\`${spec}\`, and its bundle members beside it are part of it. Write the handoff to `
-    + `\`${dir}/handoff.json\` and your report to \`${dir}/stages/pre_implement.md\`. `
-    + `Write your verdict to \`${verdictPath}\` in the schema from your agent definition. `
-    + `Nothing is implemented yet and nothing will be implemented from this plan — it is run to `
-    + `find out whether the spec can be compiled at all.`;
+  const prompt = JSON.stringify({
+    run: `${dir}/run.json`,
+    spec,
+    handoff: `${dir}/handoff.json`,
+    report: `${dir}/stages/pre_implement.md`,
+    verdict: verdictPath,
+    probe: true,
+  }, null, 2);
 
   /* The same compiler the pipeline runs, read the same way — the point of running T1 here is
      that it is the pipeline's own gate, not a second opinion configured separately. */
@@ -602,80 +603,21 @@ async function gateJudge(spec, ledger, round, request, since) {
   const passes = Math.max(1, Number(SHAPE.judgePasses ?? 1));
   step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name}${SHAPE.plannedShards ? `, ${SHAPE.plannedShards} children dispatched by the loop` : ''}${passes > 1 ? `, ${passes} passes unioned` : ''})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
-  const buildPrompt = (out) => [
+  /* The pass, as values. Every rule about how to judge, what to run first, what a range pass
+     reads and where the answer goes is in the judge’s definition. */
+  const buildPrompt = (out, extra = {}) => JSON.stringify({
     spec,
-    '',
-    request || 'no request given',
-    '',
-    /* The inventory, named and nothing more. What it is for is in the definition that runs it. */
-    `node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''} --shape ${SHAPE.name}`,
-    ``,
-    ...(SHAPE.plannedShards
-      ? [
-        /* The three phases, what an assignment is and what may not be called are the lead's
-           method and live in its definition. What belongs here is what changes between runs. */
-        JSON.stringify({
-          children: SHAPE.plannedShards,
-          plan: planPathFor(ledger, round),
-          shape: SHAPE.name,
-        }),
-        ``,
-      ]
-      : SHAPE.minShards
-      ? [
-        `**Dispatch exactly ${SHAPE.minShards} children, in one message.** This is not a`,
-        `recommendation and reading the bundle yourself instead is not an outcome: a verdict`,
-        `recording fewer than ${SHAPE.minShards} shards is rejected and the pass is run again.`,
-        ``,
-        `**How you divide the register between them is yours.** Every child holds the whole`,
-        `bundle; what you split is the criteria, not the document. Give each child its criteria`,
-        `with their text, and record in \`shards\` what each one owned.`,
-        ``,
-      ]
-      : [
-        `**Dispatching is yours to decide.** Delegate when the reading is more than one pass should`,
-        `hold, and read it yourself when it is not. Either way the verdict says which you did and`,
-        `why, in \`shardDecision\`, and records every shard you dispatched in \`shards\`.`,
-        ``,
-      ]),
-    since
-      ? [
-        `Judge the change: this document has already been judged in full and repaired. The range `
-        + `is \`${since}..HEAD\`. Sweep the lines that commit changed and the rules those lines `
-        + `touch, plus contradiction across the whole document. A statement outside the range is a `
-        + `statement an earlier pass accepted.`,
-        ``,
-        /* What the repair was answering, and what it says it did. Judging a repair without them
-           is judging a diff whose purpose is invisible: the same finding gets filed again
-           because the change reads as unmotivated, and the loop halts on `stuck-finding` over a
-           question the fixer settled on purpose. These are the claim and the receipt — check
-           them against the document, never accept them. A finding recorded as fixed that the
-           text does not carry is the most valuable thing you can find in this pass. */
-        `What that repair was answering is in \`${lastVerdictPath(ledger, round)}\`, and what the`,
-        `fixer says it did about each finding — including what it settled by deciding, and the`,
-        `alternative it rejected — is in \`${lastFixPath(ledger, round)}\`. Read both.`,
-        ``,
-        `They are a claim to check, never a conclusion to accept. A finding listed as fixed is`,
-        `fixed only if the document now carries the repair; a decision recorded there is one the`,
-        `fixer made, not one you are bound by. Where the record and the text disagree, the text`,
-        `is what ships and the disagreement is your finding.`,
-      ].join('\n')
-      : 'Judge the document in full. This is its first pass.',
-    '',
-    /* Where to put the answer, in the prompt and not only in the definition. Twice a range pass
-       has ended in a markdown report addressed to whoever dispatched it: told to check two
-       records and never told what to produce, the agent produces the natural artefact of
-       checking. A pass that judges correctly and writes nowhere costs the same as one that
-       failed, and its verdict — `clear` on both occasions — is lost. */
-    `Write your verdict to \`${out}\`. That file is the only output of this pass: a`,
-    `judgement that is not in it did not happen, whatever you say in your final message. Write it`,
-    `even when nothing blocks — \`"status": "pass"\` with an empty \`findings\` array is a verdict`,
-    `and is the outcome this loop is looking for. Then print the same JSON and nothing after it.`,
-  ].join('\n');
+    request: request || null,
+    mode: since ? 'range' : 'full',
+    since,
+    shape: SHAPE.name,
+    verdict: out,
+    ...(since ? { answered: lastVerdictPath(ledger, round), repair: lastFixPath(ledger, round) } : {}),
+    ...(SHAPE.plannedShards ? { children: SHAPE.plannedShards, plan: planPathFor(ledger, round) } : {}),
+    ...(SHAPE.minShards ? { children: SHAPE.minShards } : {}),
+    ...extra,
+  }, null, 2);
 
-  /* Each pass writes its own file and the union is written to the path the rest of the loop
-     reads, so the fixer, the ledger and `keepVerdict` are unchanged by how many ran. They are
-     dispatched together; nested they overlap, and standalone the CLI runs them in turn. */
   const outFor = (n) => (passes === 1 ? verdictPath
     : `.workflow/refine/${ledger.stem}.probe/${round}/pass-${n}.verdict.json`);
 
@@ -704,32 +646,29 @@ async function gateJudge(spec, ledger, round, request, since) {
       .sort();
   };
 
-  /* A lead free to read the bundle itself takes that freedom, and has taken it in every round
-     this repository has recorded. The requirement is in the prompt and the count is checked
-     here: a pass that under-dispatched is run once more, told what it did. */
+  /* A shape that names a child count is checked against the verdict, and a pass that
+     under-dispatched is run once more with `shardsRecorded` naming what it did. */
   const dispatchOf = async (i) => {
     const out = outFor(i + 1);
     const stem = `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}${passes === 1 ? '' : `.pass-${i + 1}`}`;
     const owned = splitFor(i);
-    const assignment = owned
-      ? `${JSON.stringify({ pass: i + 1, of: passes, criteria: owned })}\n\n`
-      : '';
-    const call = (extra) => runAgent({
+    const call = (shardsRecorded) => runAgent({
       agent: JUDGE_AGENT,
       model: JUDGE_MODEL,
-      prompt: `${assignment}${extra ? `${extra}\n\n${buildPrompt(out)}` : buildPrompt(out)}`,
+      prompt: buildPrompt(out, {
+        ...(owned ? { pass: i + 1, of: passes, criteria: owned } : {}),
+        ...(shardsRecorded === undefined ? {} : { shardsRecorded }),
+      }),
       verdictPath: out,
       timeoutMin: RC.timeoutMin ?? 45,
-      logStem: extra ? `${stem}.redispatch` : stem,
+      logStem: shardsRecorded === undefined ? stem : `${stem}.redispatch`,
     });
-    let v = await call(null);
+    let v = await call(undefined);
     const short = (x) => SHAPE.minShards && !dryRun && x && x.status !== 'error'
       && (x.shards ?? []).length < SHAPE.minShards;
     if (short(v)) {
       note(`the lead recorded ${(v.shards ?? []).length} shard(s) of ${SHAPE.minShards} — re-running the pass`);
-      v = await call(`Your previous pass recorded ${(v.shards ?? []).length} shard(s). `
-        + `This pass dispatches exactly ${SHAPE.minShards} children and records all of them in \`shards\`. `
-        + `Reading the bundle yourself in place of a child is not an outcome of this pass.`);
+      v = await call((v.shards ?? []).length);
       if (short(v)) note(`the lead recorded ${(v.shards ?? []).length} shard(s) again — recorded as it stands`);
     }
     return v;
@@ -757,25 +696,11 @@ async function repair(spec, ledger, round) {
   step(`fix  ${FIXER_AGENT}  (round ${round})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
   const fixPath = `.workflow/refine/${ledger.stem}.fix.json`;
-  /* The output path is named here, as it is for the pre-implementer. It used to be sent as two
-     bare paths and the agent had to derive where to write from its own definition; it repaired
-     the whole verdict across four files, made 52 edits, and never called Write once. An agent
-     told what to read and not where to put the answer is being asked to guess the one thing the
-     orchestrator will check. */
-  const prompt = [
-    `Repair every finding in the verdict.`,
-    ``,
-    `Spec: \`${spec}\` — its bundle members beside it are part of it.`,
-    `Verdict: \`${verdictPath}\``,
-    ``,
-    `Write your record of the repair to \`${fixPath}\`, in the schema from your agent definition,`,
-    `and print the same JSON. The loop reads that file and nothing else: a repair you made and`,
-    `did not record there is a repair the loop cannot see, and the round stops as an error.`,
-  ].join('\n');
   return runAgent({
     agent: FIXER_AGENT,
     model: FIXER_MODEL,
-    prompt,
+    /* Three paths. What to do with them is the fixer's definition. */
+    prompt: JSON.stringify({ spec, verdict: verdictPath, record: fixPath }, null, 2),
     verdictPath: fixPath,
     timeoutMin: RC.timeoutMin ?? 45,
     logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${FIXER_AGENT}`,
