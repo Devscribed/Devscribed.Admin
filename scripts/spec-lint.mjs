@@ -772,15 +772,18 @@ function parseMatrix(lines) {
    a Guards cell. Comparing them as written finds a disagreement that is not one. */
 const canonical = (s) => s.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
 
-function checkMatrixIsServed(contracts, matrix, file) {
+function checkMatrixIsServed(contracts, matrix, file, contractsText = '') {
   const guarded = new Set();
   for (const route of contracts.routes.values()) for (const g of route.guards) guarded.add(canonical(g));
   if (!guarded.size) return;                       // no Guards column parsed: nothing to join to
+  /* A capability the service checks rather than a guard is served by the sentence that says so.
+     Joining on the Guards cell alone reports a spec that wrote the rule somewhere else. */
+  const named = canonical(contractsText);
 
   for (const row of matrix) {
     if (!row.granted.size) continue;               // a row that grants nothing needs no route
     if (!row.capability || !CAPABILITY.test(row.capability)) continue;
-    if (!guarded.has(canonical(row.capability))) {
+    if (!guarded.has(canonical(row.capability)) && !named.includes(canonical(row.capability))) {
       add('matrix/unserved-grant', file, row.line,
         `the matrix grants ${row.capability} and no route's Guards cell requires it`,
         'name the route that exercises the grant, or drop the row');
@@ -912,7 +915,7 @@ const gapsSection = sections(lines.contracts, 2).find((s) => plain(s.title).toLo
 checkMockTokens(read(mockFile), (gapsSection?.body ?? []).join('\n'), mockFile);
 for (const [k, f] of Object.entries(files)) {
   const matrix = parseMatrix(lines[k]);
-  if (matrix.length) checkMatrixIsServed(contracts, matrix, f);
+  if (matrix.length) checkMatrixIsServed(contracts, matrix, f, (lines.contracts ?? []).join(String.fromCharCode(10)));
 }
 for (const [k, f] of Object.entries(files)) checkVerificationPlan(lines[k], f);
 
