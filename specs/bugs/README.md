@@ -44,11 +44,16 @@ more than the diagnosis.
 | [012](BUG-012-calendar-grid-keeps-the-last-window-that-loaded.md) | The calendar grid keeps the last window that loaded, whatever the header says | major | ui | `CODE-DEFECT` | time-off/01 | TC-01-E2E-11 | green on `fix/calendar-grid-stale-window`, unmerged |
 | [013](BUG-013-calendar-header-shifts-with-the-range-label.md) | The calendar's back, Today and forward controls move every time the range label changes width | minor | ui | `SPEC-GAP` | time-off/01 | TC-01-E2E-12 | green on `fix/calendar-header-shifts`, unmerged |
 
-**011 to 013 were found the same way and are not fixed.** They came from a person using the
-running product and sending screenshots; each was then traced to `file:line` by reading the code.
-None has been through `/ship`, and none of their regression cases has been run — each report says
-so in its own Regression Test section, which records what the case reports when it fails today as
-a prediction rather than as an observation.
+**011 to 013 were found by hand and fixed by the pipeline.** They came from a person using the
+running product and sending screenshots; each was then traced to `file:line` by reading the code,
+and each was shipped through `/ship` on the `bug` track — static gate, review and QA, every stage
+green on the first attempt and no code budget spent. Their regression cases were written before
+the runs and have now been run.
+
+That order is the interesting part, and it is the opposite of 001–009 below: the diagnosis was
+manual and the fix was not. Each report's Regression Test section still reads as a prediction of
+what the case would report against the broken code, because that is what it was when it was
+written; the run is what turned the prediction into an observation.
 
 **Three reports, one screen each, and they are deliberately not one report.** 011 and 013 are both
 "the layout is wrong" and have nothing else in common: different files, different causes,
