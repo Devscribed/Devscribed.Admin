@@ -1,0 +1,12 @@
+{
+  "verdict": "pass",
+  "reviewedUpTo": "3500129",
+  "covered": {
+    "read": [
+      "e2e/tests/time-off-calendar.spec.ts",
+      "apps/web/app/globals.css"
+    ],
+    "unreached": []
+  },
+  "findings": []
+}
