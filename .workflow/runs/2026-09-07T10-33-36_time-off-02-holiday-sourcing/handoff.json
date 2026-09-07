@@ -1,7 +1,7 @@
 {
   "spec": {
     "path": "specs/time-off/02-holiday-sourcing.md",
-    "sha256": "e252bfbad0bbdee03cb5cfe416943d38392c567d49cd8701dacc3efe336887ba",
+    "sha256": "7aaee48d10ed3c57b2b5095973b06ac7f81c4c361ea3f023e142d9cc07be104e",
     "dependsOn": [
       "01"
     ]
@@ -60,7 +60,7 @@
       ],
       "detail": [
         "HolidayProvider is an abstract class used as its own DI token — the shape CalendarProvider, FileStorage, JobQueue and MailService already have. One method: holidays(countryCode, year) resolving to { entries, discarded } where entries are the nationwide Public entries that passed T1's acceptProviderEntries. It also carries `readonly name: string` and `readonly callBoundMs: number`.",
-        "`name` is 'nager' on BOTH drivers. TC-02-INT-01 runs against the double and expects an externalKey of 'nager:DE:{date}'; the double is a double OF Nager.Date, so the name it reports is the provider it doubles. HOLIDAY_PROVIDER selects the driver, not the provider's identity.",
+        "`name` is the driver's OWN name: 'nager' on the nager driver, 'fake' on the fake driver. The contracts file's Boundary values row states it — \"`{provider}` is the name of the driver that answered — `nager` in a deployed environment, `fake` under the local double\" — and TC-02-INT-01 requires `fake:DE:{date}`, \"never `nager`, which is the deployed driver's name\". HOLIDAY_PROVIDER selects the driver and the driver reports itself. CHANGE ON THE BRANCH: apps/api/src/holidays/provider/fake-holiday.provider.ts:29 currently reads `readonly name = 'nager';` and must read `readonly name = 'fake';`. Nothing else in the port changes — nager-holiday.provider.ts:15 already reports its own name.",
         "The nager driver: GET {base}/api/v3/PublicHolidays/{year}/{code} over HTTPS with no credential, base defaulting to https://date.nager.at. It parses the array, hands it to acceptProviderEntries, and carries an AbortSignal wired to a setTimeout — the fetchTransport shape at apps/api/src/signature/signwell/signwell-http-client.ts:613 — so an abandoned call releases its socket rather than merely being ignored. Any non-2xx, any unparseable body and any abort throws; REQ-02-009 turns that into an unsourced country in T4, never into a status.",
         "The fake driver ships a deterministic country table, because an E2E run reaches it only through the running API and TC-02-E2E-01 and TC-02-E2E-03 need a country that answers and a country that refuses with no seeding call available: PL answers Poland's shape (14 entries, all global, all Public, no two on one date), DE answers Germany's shape (20 entries of which 10 carry global:false and a counties array), US answers a nationwide set, one country answers an empty array (REQ-02-010), IN and AE refuse the connection (REQ-02-009), and one country never answers (REQ-02-011). It exposes seeding hooks so an integration case can state its own precondition, which is what the six rows of the contracts file's 'What the double must reproduce' table require.",
         "holiday-provider.config.ts reads HOLIDAY_PROVIDER, HOLIDAY_PROVIDER_BASE_URL and HOLIDAY_PROVIDER_TIMEOUT_MS. The house rule for a port's own *.provider.ts, verbatim from queue/queue.provider.ts and storage/storage.provider.ts: an explicit value wins, and the local driver is the default whenever NODE_ENV is not 'production'. A value that names no driver throws at boot rather than defaulting. (The hiring ports read their variable as given in every environment; those are the exception, not the pattern this follows.)",
@@ -153,12 +153,13 @@
         "sourcedCountrySet(organizationId): read every ACTIVE membership's countryCode and the organization's countryCode and includeOrgCountry (a missing OrganizationHolidaySourcing row reads as true, resolved in the service, never backfilled), then call T1's buildSourcedCountrySet.",
         "sync(session, { year, refresh }): manage-holidays or 404 (REQ-02-020), can(normalizeRole(role), …). year through validateSyncYear or 422 yearInvalid; refresh through validateRefreshFlag. For each country in the set: with an import record and no refresh, no call is made at all (REQ-02-007) and the country reports its stored state; otherwise the provider is called.",
         "Every provider call is raced against provider.callBoundMs in THIS service (REQ-02-011). A driver-side timeout would not bound a driver with no HTTP in it, and TC-02-INT-14 makes the fake never answer and still requires the request back inside the bound. A call that times out, throws, or answers unparseably is REQ-02-009: no import record, no holiday, the country reported `unsourced`, and the request still 200.",
-        "The entry decision table, one row per accepted entry, keyed on who the DATE ALREADY REACHES rather than who wrote the row on it: a row on that date whose countryCode equals the imported country OR is null → nothing written, counted skipped (REQ-02-006, Edge cases 7 and 7a — a null-country row already reaches this member and a second row would be paid twice); a row on that date for another country → written, the pair being distinct under the index (Edge case 7b); nothing on the date → written. A written row carries the provider's English name, the date, the uppercase alpha-2, paidHours 8.00, source 'imported', externalKey '{provider}:{country}:{date}', importedAt now, and createdByAccountId of the syncing account — the column is NOT NULL behind an FK and this is the only account in the transaction.",
+        "The entry decision table, one row per accepted entry, keyed on who the DATE ALREADY REACHES rather than who wrote the row on it: a row on that date whose countryCode equals the imported country OR is null → nothing written, counted skipped (REQ-02-006, Edge cases 7 and 7a — a null-country row already reaches this member and a second row would be paid twice); a row on that date for another country → written, the pair being distinct under the index (Edge case 7b); nothing on the date → written. A written row carries the provider's English name, the date, the uppercase alpha-2, paidHours 8.00, source 'imported', externalKey '{provider}:{country}:{date}' where {provider} is the answering driver's own name (T2 — 'nager' deployed, 'fake' under the double), importedAt now, and createdByAccountId of the syncing account — the column is NOT NULL behind an FK and this is the only account in the transaction.",
         "A sync NEVER deletes a Holiday row and NEVER modifies one whose source is 'manual' (invariants 1 and 2), under any state or event.",
         "The import record (REQ-02-021) carries provider, importedAt and holidayCount = written + skipped: what the provider OFFERED after the regional entries were discarded, not what this import wrote. `discarded` is not part of it. This is what makes a refresh of a fully-stored country record 10 and stay `sourced` rather than being mistaken for empty (REQ-02-023, Edge case 10). A country the provider offers nothing for records a count of zero and is `empty` (REQ-02-010), and is never re-asked without a refresh.",
         "The sync response is { year, countries: [{ countryCode, state, written, skipped, discarded }] } and is always 200.",
         "listHolidays: every row gains `source` in toSummary — and only `source`. `paidHours` stays a JSON number and createdAt/updatedAt stay; the route keeps every guard, status and query parameter it ships with. The `sourcing` block — { year, countries: [{ countryCode, state, holidayCount, lastImportedAt }] } over the sourced country set for the requested year, a country with no import record appearing as `unsourced` — is added ONLY for a caller holding view-holidays (REQ-02-025). A scope=mine read carries no `sourcing` key at all: absent, not null, not empty. The block is the list of every country the staff are in, and that read is open to every active member.",
-        "The controller carries POST holidays/sync and GET holidays/summary (T5's service) on @Controller('api/organizations/:orgId') behind SessionGuard + OrgScopeGuard, capability checked in the service because these answer 404 and CapabilityGuard answers 403. Registered in app.module.ts."
+        "The controller carries POST holidays/sync and GET holidays/summary (T5's service) on @Controller('api/organizations/:orgId') behind SessionGuard + OrgScopeGuard, capability checked in the service because these answer 404 and CapabilityGuard answers 403. Registered in app.module.ts.",
+        "The import record carries that same driver name in HolidayImport.provider — the Data Model calls the column 'the driver that answered', so a row written under the double reads 'fake' and one written in a deployed environment reads 'nager'. No shipping path reads the column and no requirement compares two rows written under different drivers."
       ]
     },
     {
@@ -194,7 +195,8 @@
         "REQ-02-018: a member with no MemberFinancials row and no snapshot has NO byCurrency key at all — absent, not null, not empty, not zero — and contributes nothing to totals.byCurrency, while keeping their holidayCount and paidHours (REQ-02-024).",
         "REQ-02-017: without view-amounts-owed, every amount and every currency is omitted from the body — no byCurrency key on any member row and none on totals. Omitted, never zeroed: a body cannot then be read for the shape of what it did not say.",
         "totals.holidayCount and totals.paidHours are sums over MEMBERS, never over countries. The two arrays count different things (Edge cases 22 and 23) and are not expected to sum to each other.",
-        "Every query scopes by session.organizationId. Edge case 23: an empty sourced set answers 200 with an empty countries array unless a global holiday exists, every active member at zero days, and totals.holidayCount 0."
+        "Every query scopes by session.organizationId. Edge case 23: an empty sourced set answers 200 with an empty countries array unless a global holiday exists, every active member at zero days, and totals.holidayCount 0.",
+        "Roles are in transition: the database holds `admin`/`member` and the capability matrix is keyed by the four-value target set `admin | manager | user | viewer`. `can()` does not normalize, so every check here is `can(normalizeRole(caller.role), <capability>)` — a stored `member` normalizes to `manager` and a stored `admin` to `admin`, and a raw stored value handed to `can()` falls through to false and would lock a manager out of a screen the permission matrix grants them. The summary's own gate is view-holidays (REQ-02-019, 404 when it fails) and its money gate is view-amounts-owed (REQ-02-017), resolved once at the entry point and passed down as `includeAmounts` so TC-02-INT-11 can supply it without a session."
       ]
     },
     {
@@ -224,7 +226,8 @@
         "GET and PUT /api/organizations/{orgId}/settings/holiday-sourcing, both answering { includeOrgCountry: boolean }. PUT accepts that one field and nothing else.",
         "Copied in shape from organization-country.{controller,service}.ts: @Controller('api/organizations/:orgId/settings/holiday-sourcing') behind SessionGuard + OrgScopeGuard, no CapabilityGuard, both capability checks in the service because both halves answer 404 — view-holidays on the read (REQ-02-019), manage-holidays on the write (REQ-02-020). Queries scope by session.organizationId; the path orgId is never a selector.",
         "An organization with no row reads includeOrgCountry true (REQ-02-002's default), resolved in the service rather than by a backfill, so no organization changes behaviour before somebody touches the checkbox.",
-        "A body whose includeOrgCountry is absent or not a boolean is 422 includeOrgCountryInvalid — refused, never coerced (Validation Rule 2). The write records updatedByAccountId."
+        "A body whose includeOrgCountry is absent or not a boolean is 422 includeOrgCountryInvalid — refused, never coerced (Validation Rule 2). The write records updatedByAccountId.",
+        "Roles are in transition: the database holds `admin`/`member` and the capability matrix is keyed by the four-value target set `admin | manager | user | viewer`. `can()` does not normalize, so every check here is `can(normalizeRole(caller.role), <capability>)` — a stored `member` normalizes to `manager` and a stored `admin` to `admin`, and a raw stored value handed to `can()` falls through to false and would lock a manager out of a screen the permission matrix grants them. The read half checks view-holidays and the write half manage-holidays, both answering 404 rather than 403 (REQ-02-019, REQ-02-020)."
       ]
     },
     {
@@ -258,7 +261,8 @@
         "holiday-summary sits ABOVE holidays-table in the document, built from Card, ReportTableHead and ReportGroupBody, with holiday-summary-country-{code}, -days, holiday-summary-member-{membershipId}, -days, -amount and holiday-summary-total-{currency}. The money ids are rendered only where the response carries byCurrency, which is the API's own gate (REQ-02-017) — the screen omits the column rather than drawing a zero. summaryUnavailable stands in the summary's place when its read fails; the list is unaffected. The summary draws its own Preloader and neither wait blocks the other.",
         "The list gains one column, holidays-row-{id}-source, reading the new `source` field. The empty state is drawn only when the year genuinely has no holiday AND every country in the set is `sourced` or `empty` — an unsourced country shows the warning instead, because 'no holidays' would be a claim the product cannot make.",
         "Every string comes from HOLIDAY_SOURCING_MESSAGES or HOLIDAY_MESSAGES; nothing is written inline. Every spacing, size and colour is a token. Imports are from '@devscribed/ds' at the package root — Card, ReportTableHead, ReportGroupBody, Checkbox, InfoBanner, Preloader and Button all ship today, which is why the DS gaps table is empty. No control is disabled for validation.",
-        "No new capability and no new gate: the page is already gated on view-holidays and redirects a user or a viewer to Members. The money column follows can(role, 'view-amounts-owed')."
+        "No new capability and no new gate: the page is already gated on view-holidays and redirects a user or a viewer to Members. The money column follows can(role, 'view-amounts-owed').",
+        "Roles are in transition: the database holds `admin`/`member` and the capability matrix is keyed by the four-value target set `admin | manager | user | viewer`. `can()` does not normalize, so every check here is `can(normalizeRole(caller.role), <capability>)` — a stored `member` normalizes to `manager` and a stored `admin` to `admin`, and a raw stored value handed to `can()` falls through to false and would lock a manager out of a screen the permission matrix grants them. On the screen the same call decides one thing only — whether the money column, the amount ids and the currency totals are rendered at all. The API omits the fields regardless (REQ-02-017), so the screen never draws a zero in place of a withheld amount, and `user`/`viewer` never reach the page: it redirects them to Members."
       ]
     },
     {
@@ -304,11 +308,12 @@
         "T7"
       ],
       "detail": [
-        "apps/api/test/holiday-sourcing.spec.ts carries TC-02-INT-01 to TC-02-INT-16, each named by its id, built on the signup/createMember helpers apps/api/test/holidays.spec.ts already uses. The port is replaced with overrideProvider(HolidayProvider) and a stub — the StubCalendarProvider pattern — which reports name 'nager' and can be pointed at Poland's shape, Germany's shape, an empty answer, a refused connection and a call that never answers.",
+        "apps/api/test/holiday-sourcing.spec.ts carries TC-02-INT-01 to TC-02-INT-16, each named by its id, built on the signup/createMember helpers apps/api/test/holidays.spec.ts already uses. The port is replaced with overrideProvider(HolidayProvider) and a stub — the StubCalendarProvider pattern — which inherits the fake driver's name 'fake' and can be pointed at Poland's shape, Germany's shape, an empty answer, a refused connection and a call that never answers.",
         "TC-02-INT-11 calls the summary service's capability-explicit method rather than signing a session in, because no shipped role holds view-holidays without view-amounts-owed. TC-02-INT-14 sets a short call bound and asserts the request returns inside it. TC-02-INT-09 sums the Amounts Owed report's holiday rows for the member and asserts equality to the cent. TC-02-INT-13 walks all four routes as a user, a viewer and an admin of another organization, then as a manager.",
         "e2e/tests/holidays.spec.ts gains TC-02-E2E-01 to TC-02-E2E-04, using the shipped helpers setMemberCountryViaApi, setOrganizationCountryViaApi, configureFinancials and backdateFinancials. Selectors are data-testid only and every one of them is named in the spec.",
         "Run targeted, never whole: `npm test -- test/holiday-sourcing.spec.ts` from apps/api, and `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/holidays.spec.ts tests/regressions.spec.ts` from e2e. Jest here is 29, where the file filter is a positional path.",
-        "The shipped holidays and reports suites must stay green. A fresh signup organization states no country and its members state none, so its sourced set is empty, no sync is issued and the shipped empty-state case is untouched."
+        "The shipped holidays and reports suites must stay green. A fresh signup organization states no country and its members state none, so its sourced set is empty, no sync is issued and the shipped empty-state case is untouched.",
+        "CHANGES ON THE BRANCH, from the amended TC-02-INT-01: apps/api/test/holiday-sourcing.spec.ts:303 asserts `nager:DE:${date}` and must assert `fake:DE:${date}`; :318 asserts the HolidayImport row `provider: 'nager'` and must assert `provider: 'fake'`. TC-02-INT-01 also asserts `createdByAccountId` of the admin who synced (REQ-02-004 now names the column). packages/validation/src/holiday-sourcing.test.ts:197 exercises holidayExternalKey with an explicit provider argument and is unaffected. No E2E case observes externalKey or the provider column."
       ]
     }
   ],
@@ -580,9 +585,9 @@
       "emittedBy": "apps/api/src/holidays/holidays.service.ts#deleteHoliday — already implemented"
     },
     {
-      "context": "the generic toast on every route above — shipped, unchanged. The Error Messages table's Message cell for this row reads '(shipped, unchanged)' rather than the text; the text is 'Something went wrong. Please try again.' and it ships today. See risks: the static gate reads that cell as a message and will report it missing.",
-      "module": "packages/validation/src/holiday-messages.ts#HOLIDAY_MESSAGES.toastServerError",
-      "emittedBy": "apps/web/app/org/[orgId]/settings/holidays/page.tsx — already implemented"
+      "context": "the generic toast on every route above — shipped, unchanged. The Error Messages row now carries the shipped text, 'Something went wrong. Please try again.', as every other carried-over row does.",
+      "module": "packages/validation/src/holiday-messages.ts:29#HOLIDAY_MESSAGES.toastServerError",
+      "emittedBy": "apps/web/app/org/[orgId]/settings/holidays/page.tsx — already implemented, and the text exists in no file under apps, so it is imported rather than written out"
     }
   ],
   "premises": [
@@ -596,7 +601,7 @@
     },
     {
       "claim": "a port is registered once in CoreModule, which is @Global, so overrideProvider in a test replaces the instance the routes call",
-      "verifiedAt": "apps/api/src/core.module.ts:53-80"
+      "verifiedAt": "apps/api/src/core.module.ts:7 and :84"
     },
     {
       "claim": "GET .../holidays returns paidHours as a JSON number, not a string, and both scope=mine readers depend on that",
@@ -604,7 +609,7 @@
     },
     {
       "claim": "Holiday.createdByAccountId is NOT NULL behind an FK to Account with onDelete: Restrict, so an imported row must name an account",
-      "verifiedAt": "apps/api/prisma/schema.prisma:932-935"
+      "verifiedAt": "apps/api/prisma/schema.prisma:938 and :952 (Holiday.createdByAccountId String, and the required Account relation, whose default referential action is Restrict)"
     },
     {
       "claim": "Holiday carries two uniqueness indexes — the composite one, and a hand-written partial unique on (organizationId, date) WHERE countryCode IS NULL — and Postgres treats NULLs as distinct in the first, which is exactly why REQ-02-006 cannot be delegated to the index",
@@ -612,19 +617,19 @@
     },
     {
       "claim": "Amounts Owed values each holiday with toMoney(paidHours × billRate) per row and then sums the ROUNDED rows, so the summary must round the same way to be equal to the cent",
-      "verifiedAt": "packages/validation/src/reports.ts#buildHolidayRow:554-571, apps/api/src/reports/reports.service.ts:787-800 and :855-866"
+      "verifiedAt": "packages/validation/src/reports.ts#buildHolidayRow:602, apps/api/src/reports/reports.service.ts:787-800 and :855-866"
     },
     {
       "claim": "MemberFinancials and MemberFinancialsSnapshot both carry a currency column, so a member whose currency changed mid-year genuinely has holidays valued in two",
-      "verifiedAt": "apps/api/prisma/schema.prisma:684 and :704"
+      "verifiedAt": "apps/api/prisma/schema.prisma:690 and :710"
     },
     {
       "claim": "can() does not normalize — CAPABILITY_MATRIX is keyed by the four-value union — so every new authorization check must call can(normalizeRole(role), …)",
-      "verifiedAt": "packages/validation/src/index.ts:855-857, packages/validation/src/roles.ts#normalizeRole"
+      "verifiedAt": "packages/validation/src/index.ts:856, packages/validation/src/roles.ts#normalizeRole"
     },
     {
       "claim": "validateCountryCode, validateHolidayName, resolveMemberHolidayCountry, isHolidayApplicableToMember, resolveRateAtDate, toMoney and toHours all exist under the names the spec cites",
-      "verifiedAt": "packages/validation/src/autofill.ts:683, packages/validation/src/holidays.ts:41, packages/validation/src/reports.ts:517, :554, :424, :389, :393"
+      "verifiedAt": "packages/validation/src/autofill.ts:683, packages/validation/src/holidays.ts:41, packages/validation/src/reports.ts:565, :593, :447, :389, :393"
     },
     {
       "claim": "every design-system component the cases file says the summary is built from is exported from the package root today, so the DS gaps table's 'None' is true",
@@ -645,6 +650,14 @@
     {
       "claim": "fetch in Node has no timeout of its own, so an AbortController wired to setTimeout is the whole of the guarantee",
       "verifiedAt": "apps/api/src/signature/signwell/signwell-http-client.ts:607-631"
+    },
+    {
+      "claim": "the Error Messages row for HOLIDAY_MESSAGES.toastServerError names a string that ships in packages/validation and is written out nowhere under apps, so the static gate's message rule passes it and its duplication rule stays silent",
+      "verifiedAt": "packages/validation/src/holiday-messages.ts:29; `git grep -lF -- \"Something went wrong. Please try again.\" -- apps` returns nothing"
+    },
+    {
+      "claim": "each driver reports its own name and the composed externalKey takes it, so a row written under the double reads 'fake:{CC}:{date}' — which is what the amended TC-02-INT-01 requires",
+      "verifiedAt": "apps/api/src/holidays/provider/holiday-provider.ts:32 (abstract readonly name), nager-holiday.provider.ts:15, fake-holiday.provider.ts:29 (to change), apps/api/src/holidays/holiday-sourcing.service.ts:365"
     }
   ],
   "doubleBehaviours": [
@@ -676,16 +689,8 @@
   "dsGaps": [],
   "risks": [
     {
-      "risk": "The static gate will raise one blocker this bundle cannot answer. scripts/static-gate.mjs takes each Error Messages row's Message cell and requires the text to exist in packages/validation; the last row's cell reads '(shipped, unchanged)', which is a note about HOLIDAY_MESSAGES.toastServerError rather than a message. Simulating the gate's own parser produces that 20-character probe and a spec/message-not-implemented finding.",
-      "mitigation": "Contest it — `node scripts/wf.mjs contest --finding <key> --reason \"the Message cell for HOLIDAY_MESSAGES.toastServerError is a note, not a message; the export ships at packages/validation/src/holiday-messages.ts:29 and its text 'Something went wrong. Please try again.' is present\"`. Do NOT add a string to packages/validation to satisfy a grep: writing text to pass a checker is the failure this note exists to prevent."
-    },
-    {
-      "risk": "HolidayImport.provider records 'nager' even when the double answered, because TC-02-INT-01 pins the composed externalKey to 'nager:DE:{date}' under the fake driver while the Data Model's prose for the column reads 'the driver that answered'.",
-      "mitigation": "The provider identity is the service being doubled and is one value across both drivers; HOLIDAY_PROVIDER selects the driver. This is the only reading under which a case passes, and no case observes the column's value. Recorded here so the reviewer sees the citation rather than the choice."
-    },
-    {
-      "risk": "The contracts file's GET .../holidays example shows paidHours as the string '8.00', while the route ships it as a JSON number and both scope=mine readers parse it as one. An implementer copying the example would reformat the Time Tracking calendar's hours and the vacation hint.",
-      "mitigation": "Keep paidHours a number and add only `source`. The same example omits createdAt and updatedAt, which certainly still ship, so it is abbreviated rather than normative — and the prose above it says the route keeps what it ships with and gains exactly two things."
+      "risk": "The driver-name change is a two-line edit with a three-file blast radius: the fake driver starts reporting 'fake', so every externalKey written under it and every HolidayImport row written under it changes value. An assertion pinned to 'nager' fails.",
+      "mitigation": "T2 changes the one line; T8 changes the two assertions (holiday-sourcing.spec.ts:303 and :318). Nothing else compares the value: no shipping path reads externalKey or HolidayImport.provider, and the unit test passes the provider name in explicitly. Rows already written in a deployed environment keep 'nager' and are not migrated — the column records what answered at the time, which is what it is for."
     },
     {
       "risk": "TC-02-E2E-01 asserts holiday-sourcing-status appears and then goes, against a driver that answers from memory — a race if the element is unmounted the moment the sync resolves.",
@@ -697,11 +702,30 @@
     },
     {
       "risk": "The currency in force on a date and the rate in force on a date could be resolved by two different selections and diverge for a member whose snapshots are close together.",
-      "mitigation": "One pure selection helper in packages/validation/src/reports.ts, called by both resolveRateAtDate and the new resolveCurrencyAtDate. Additive: no existing export changes signature or behaviour, and the shipped reports unit tests cover the refactor."
+      "mitigation": "One pure selection helper in packages/validation/src/reports.ts, called by both resolveRateAtDate (:447) and resolveCurrencyAtDate (:481). Additive: no existing export changes signature or behaviour, and the shipped reports unit tests cover the refactor."
     },
     {
       "risk": "The import writes tens of Holiday rows where a person wrote one, and every one of them is paid on Amounts Owed. An organization with three countries and eight people can gain forty paid rows from one page load.",
       "mitigation": "This is the intended behaviour and the area README calls it the largest single effect in the area. Nothing to mitigate in code; TC-02-INT-16 pins the one case where it would be wrong — a second paid row on a calendar day already carrying a global holiday."
+    },
+    {
+      "risk": "The list route keeps paidHours as a JSON number and gains only `source`. The contracts file now says so in prose beneath the sample, so a re-read of the spec cannot reintroduce the two-decimal string the summary route sends.",
+      "mitigation": "Nothing to do — apps/api/src/holidays/holidays.service.ts#toSummary already returns row.paidHours.toNumber() and adds row.source beside it. Named here so the reviewer sees the two shapes are deliberate: a number on the list, a two-decimal string on the summary."
     }
-  ]
+  ],
+  "replan": {
+    "why": "The static gate blocked on spec/message-not-implemented for the HOLIDAY_MESSAGES.toastServerError row, the implementer contested it, and the spec was amended (commit 384d8c6) — the four defects pre-implement raised as notes on attempt 1 are all now settled in the document.",
+    "settledInTheSpec": [
+      "The Error Messages row's Message cell now carries 'Something went wrong. Please try again.' instead of the note '(shipped, unchanged)'. The gate's probe is now a message that ships at packages/validation/src/holiday-messages.ts:29, and the text appears in no file under apps, so neither the message rule nor the duplication rule fires. Nothing is implemented for this row.",
+      "The Boundary values row now states that {provider} is the answering driver's own name — 'fake' under the double — and TC-02-INT-01 expects fake:DE:{date}. The previous plan read it the other way and the branch implements that reading; T2 and T8 carry the change.",
+      "The GET .../holidays sample now shows paidHours as a JSON number, with prose saying the list route sends a number and the summary route a two-decimal string. The branch already does this; nothing changes.",
+      "REQ-02-004 now names createdByAccountId of the account whose sync wrote the row. The branch already does this; TC-02-INT-01 now asserts it."
+    ],
+    "codeThatMustChange": [
+      "apps/api/src/holidays/provider/fake-holiday.provider.ts:29 — readonly name = 'fake'",
+      "apps/api/test/holiday-sourcing.spec.ts:303 — expect `fake:DE:${date}`",
+      "apps/api/test/holiday-sourcing.spec.ts:318 — expect provider: 'fake'",
+      "Nothing else. TC-02-INT-01 already asserts createdByAccountId of the syncing admin (holiday-sourcing.spec.ts:305) and the list route already sends paidHours as a number (holidays.service.ts#toSummary), so the other three amendments cost no code."
+    ]
+  }
 }

@@ -1,12 +1,12 @@
 {
   "runId": "2026-09-07T10-33-36_time-off-02-holiday-sourcing",
   "spec": "specs/time-off/02-holiday-sourcing.md",
-  "specSha": "e252bfbad0bbdee03cb5cfe416943d38392c567d49cd8701dacc3efe336887ba",
+  "specSha": "7aaee48d10ed3c57b2b5095973b06ac7f81c4c361ea3f023e142d9cc07be104e",
   "task": "time-off-02-holiday-sourcing",
   "branch": "spec/holiday-sourcing",
   "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
-  "headAtInit": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
-  "status": "halted",
+  "headAtInit": "384d8c604e528f5edbe852b8999816a9ca0d8b05",
+  "status": "implement",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T10:33:36.868Z",
-  "updatedAt": "2026-09-07T11:36:39.143Z",
+  "updatedAt": "2026-09-07T11:50:20.111Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -28,23 +28,21 @@
     },
     "pre_implement": {
       "status": "passed",
-      "attempts": 1,
-      "startedAt": "2026-09-07T10:33:37.044Z",
-      "endedAt": "2026-09-07T10:50:16.785Z",
-      "lastVerdict": "pass"
+      "attempts": 2,
+      "startedAt": "2026-09-07T11:43:16.160Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-07T11:50:20.061Z"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 2,
       "startedAt": "2026-09-07T11:33:05.110Z",
-      "endedAt": "2026-09-07T11:36:32.424Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "running",
+      "status": "pending",
       "attempts": 2,
       "startedAt": "2026-09-07T11:36:32.608Z",
-      "endedAt": "2026-09-07T11:36:39.095Z",
       "lastVerdict": "blocked"
     },
     "review": {
@@ -137,13 +135,40 @@
         "source": "apps/api/prisma/schema.prisma"
       },
       "suggestedFix": "Planned as the account that triggered the sync — the only account in the transaction, and one that necessarily holds manage-holidays. Not a blocker: the repository's own shape leaves exactly one implementation, and no requirement or case observes the column."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Boundary values — Identity / TC-02-INT-01",
+      "claim": "the amendment reverses the reading attempt 1 planned and this branch implements: `{provider}` is now the answering driver's own name, so the double must write `fake:DE:{date}` and `HolidayImport.provider` reads 'fake' locally, while the branch writes 'nager' from both drivers",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The contracts file now reads \"`{provider}` is the name of the driver that answered — `nager` in a deployed environment, `fake` under the local double\" and TC-02-INT-01 requires `fake:DE:{date}`, \"never `nager`, which is the deployed driver's name\". apps/api/src/holidays/provider/fake-holiday.provider.ts:29 currently declares `readonly name = 'nager'`, apps/api/test/holiday-sourcing.spec.ts:303 asserts `nager:DE:${date}` and :318 asserts `provider: 'nager'`. Under the amended spec those three lines are wrong and nothing else is: `git grep \"'nager'\" -- apps/api/src packages e2e` returns only the two drivers, the config's driver union and its two guards, and packages/validation/src/holiday-sourcing.test.ts:197, which passes the provider name in as an argument and is unaffected.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md"
+      },
+      "suggestedFix": "Not a blocker — the spec is unambiguous now and the plan carries the change: handoff T2 changes the driver's name, T8 changes the two assertions, and handoff.replan.codeThatMustChange lists all three lines. Recorded so the reviewer reads the reversal as deliberate rather than as a regression."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Data Model — HolidayImport.provider",
+      "claim": "the HolidayImport.provider row still reads 'The driver that answered, e.g. `nager`', which agrees with the amended Boundary values row but names only the deployed value",
+      "witness": {
+        "kind": "scenario",
+        "detail": "With the fake driver named 'fake', a HolidayImport row written locally or under the integration suite carries provider 'fake' and one written in a deployed environment carries 'nager'. The column's description gives only the deployed value as its example. No shipping path reads the column and only the integration suite observes it, so nothing is ambiguous about what to write — only about what a reader of that table expects to see locally.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md"
+      },
+      "suggestedFix": "Nothing to implement. The plan writes the answering driver's own name into the column, which is what the row says. Recorded because the same sentence in a later spec should name both values, as the Boundary values row now does."
     }
   ],
-  "halt": {
-    "reason": "contested",
-    "detail": "1 finding(s) contested by the implementer: spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`",
-    "at": "2026-09-07T11:36:39.142Z"
-  },
   "preflight": {
     "at": "2026-09-07T10:33:36.999Z",
     "checks": [
@@ -226,5 +251,27 @@
       "20260903130000_requests_03_client_participants",
       "20260904120000_time_off_01_vacation_calendar"
     ]
-  }
+  },
+  "resumes": [
+    {
+      "at": "2026-09-07T11:43:11.592Z",
+      "stage": "pre_implement",
+      "from": "contested",
+      "detail": "1 finding(s) contested by the implementer: spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`",
+      "reason": null,
+      "headAtInit": {
+        "from": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
+        "to": "384d8c604e528f5edbe852b8999816a9ca0d8b05"
+      },
+      "specEdits": [
+        "specs/time-off/02-holiday-sourcing.cases.md",
+        "specs/time-off/02-holiday-sourcing.contracts.md",
+        "specs/time-off/02-holiday-sourcing.md"
+      ],
+      "specSha": {
+        "from": "e252bfbad0bbdee03cb5cfe416943d38392c567d49cd8701dacc3efe336887ba",
+        "pendingUntilReplan": "7aaee48d10ed3c57b2b5095973b06ac7f81c4c361ea3f023e142d9cc07be104e"
+      }
+    }
+  ]
 }
