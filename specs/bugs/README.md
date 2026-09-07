@@ -40,6 +40,20 @@ more than the diagnosis.
 | [007](BUG-007-select-list-scrolls-the-modal-it-opens-in.md) | A select's list scrolls and clips the modal it opens in | major | ui | `SPEC-GAP` | organization/03 | TC-03-E2E-06 | fixed |
 | [007](BUG-007-request-topic-name-error-drawn-twice.md) | The Add topic modal draws the name error twice | minor | ui | `SPEC-GAP` | requests/02 | TC-02-E2E-01 | open |
 | [010](BUG-010-new-request-title-error-drawn-twice.md) | The New request modal draws the title error twice | minor | ui | `SPEC-GAP` | requests/01 | TC-01-E2E-02 | open |
+| [011](BUG-011-holidays-org-country-hint-is-overlapped.md) | The organization country hint is drawn under the filter below it | minor | ui | `SPEC-GAP` | time-off/01 | TC-01-E2E-10 | open |
+| [012](BUG-012-calendar-grid-keeps-the-last-window-that-loaded.md) | The calendar grid keeps the last window that loaded, whatever the header says | major | ui | `CODE-DEFECT` | time-off/01 | TC-01-E2E-11 | open |
+| [013](BUG-013-calendar-header-shifts-with-the-range-label.md) | The calendar's back, Today and forward controls move every time the range label changes width | minor | ui | `SPEC-GAP` | time-off/01 | TC-01-E2E-12 | open |
+
+**011 to 013 were found the same way and are not fixed.** They came from a person using the
+running product and sending screenshots; each was then traced to `file:line` by reading the code.
+None has been through `/ship`, and none of their regression cases has been run — each report says
+so in its own Regression Test section, which records what the case reports when it fails today as
+a prediction rather than as an observation.
+
+**Three reports, one screen each, and they are deliberately not one report.** 011 and 013 are both
+"the layout is wrong" and have nothing else in common: different files, different causes,
+different fixes. A single report would have one Root Cause section describing two defects, and
+the second would be the one that got fixed badly.
 
 ## These were found and fixed by hand
 
