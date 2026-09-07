@@ -1102,14 +1102,38 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The holiday's name in the column header, on a whole-column holiday only. It is the only
-   text in a day header that is not a date, so it takes the smallest step and wraps. */
+/* PATCH-021 — the holiday's marker in the column header, on a whole-column holiday only.
+   It was the name itself, set in the smallest step and allowed to wrap; a day column is
+   about 40px wide, so a name of more than one word ran three lines deep and the header row
+   grew by them. The row is shared by every column, so one named holiday anywhere in the
+   window made the whole grid taller — and moving to a month without one made it shorter
+   again, which is the jump.
+
+   The marker is a bar under the date, the name is on hover (the design system's `Tooltip`)
+   and inside the marker for a reader. Its box is `position: absolute`, set by the component
+   that draws it, so it adds no height whatever it holds: the header row is now the same
+   height in every window there is. */
 .time-off-calendar-day-holiday {
   font-style: normal;
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  text-align: center;
-  line-height: var(--line-height-label);
+  display: block;
+  /* @literal 14x3 — a bar the width of a two-digit date, thick enough to see and thin
+     enough not to read as a border on the cell. Neither is on the spacing scale, which
+     steps 4px: at 4px the bar is a block, and 12px is narrower than the numeral above it. */
+  width: 14px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--action-primary);
+}
+
+/* The name, present for a screen reader and for a test, drawn by the bar above. The clip
+   technique the app already uses where a node has to be readable but not seen. */
+.time-off-calendar-day-holiday-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .time-off-calendar-cell {

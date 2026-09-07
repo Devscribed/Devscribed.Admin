@@ -8,6 +8,7 @@ import {
   InfoBanner,
   ReportControls,
   ToggleButton,
+  Tooltip,
 } from '@devscribed/ds';
 import {
   HOLIDAY_MESSAGES,
@@ -523,14 +524,48 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
                     <b>{dayOfMonth}</b>
                     {/* REQ-01-030 — a holiday that reaches every row in view shades the
                         whole column AND names itself in the header. A partial one names
-                        nothing here (REQ-01-031); it marks its own members' cells. */}
+                        nothing here (REQ-01-031); it marks its own members' cells.
+
+                        PATCH-021 — the name is no longer *printed* in the header. A day
+                        column is about 40px wide, so `October Revolution Day` set three
+                        lines deep, and the header row grew by those lines whenever such a
+                        holiday was in view and shrank again when it was not: the whole grid
+                        moved between one month and the next. The name is now a marker under
+                        the date, taken out of the flow so it adds no height at all, with the
+                        name on hover and in the marker's own accessible text. */}
                     {whole && (
-                      <i
-                        className="time-off-calendar-day-holiday"
-                        data-testid={`calendar-day-holiday-${day.date}`}
+                      <Tooltip
+                        content={whole.name}
+                        /* Downwards. The scroller above clips both axes — `overflow-x: auto`
+                           computes `overflow-y` to `auto` — and the header is its top edge,
+                           so a bubble drawn upwards is cut in half by it. */
+                        placement="bottom"
+                        maxWidth={180}
+                        style={{
+                          position: 'absolute',
+                          /* @literal 3px, below the scale: the marker sits against the
+                             cell's own bottom padding rather than on the scale's 4px step,
+                             which would touch the row rule below it. */
+                          bottom: 3,
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                        }}
                       >
-                        {whole.name}
-                      </i>
+                        {/* The function form, and the `aria-describedby` it offers is
+                            deliberately not spread: the marker already carries the name as
+                            its own text below, and a description repeating the name reads
+                            it twice. */}
+                        {() => (
+                          <i
+                            className="time-off-calendar-day-holiday"
+                            data-testid={`calendar-day-holiday-${day.date}`}
+                          >
+                            <span className="time-off-calendar-day-holiday-name">
+                              {whole.name}
+                            </span>
+                          </i>
+                        )}
+                      </Tooltip>
                     )}
                   </div>
                 );
