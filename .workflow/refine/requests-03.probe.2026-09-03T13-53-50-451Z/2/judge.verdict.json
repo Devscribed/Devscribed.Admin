@@ -1,0 +1,25 @@
+{
+  "status": "pass",
+  "spec": "specs/requests/03-client-participants.md",
+  "range": "488d11978aec2ff49821390b740abb25865f19d1..HEAD",
+  "note": "The range 488d119..HEAD itself carries no spec content changes (only .workflow/refine/requests-03.loop.json), so the swept commit is 488d119 — the fix commit named in the handoff, which is the state HEAD still reflects. Checked its claim against the fixer's own record.",
+  "checked": {
+    "R1": {
+      "recordedFix": "chose 404 by default-deny (request-topics not among REQ-03-019's named exceptions), rejected leaving the route open",
+      "verifiedInText": true,
+      "evidence": [
+        "specs/requests/03-client-participants.md:194-196 (REQ-03-019) — unchanged, correctly left to rely on default-deny rather than naming request-topics as an exception, matching the 'rejected: leaving it open' decision",
+        "specs/requests/03-client-participants.md:392 (AC-3) — now names members, projects, contacts and request-topics as the four routes answering 404",
+        "specs/requests/03-client-participants.contracts.md:44 (Routes table) — request-topics row already carried 404 as a possible error",
+        "specs/requests/03-client-participants.contracts.md:62-68 — prose now states the route is listed because REQ-03-019 does not name it among its exceptions, so a client principal meets the default 404; staff are unaffected",
+        "specs/requests/03-client-participants.contracts.md:125-138 — per-route section retitled 'amended, and refused to a client principal', states the 404 and ties it to REQ-03-027 (a client contact has no read to make here)",
+        "specs/requests/03-client-participants.cases.md:53 (AC-3 summary row), :319-326 (TC-03-INT-13) — Asserts, Steps and Expected Result all exercise and confirm the request-topics 404 for a client contact and 200 for staff/admin"
+      ]
+    }
+  },
+  "contradictionSweep": {
+    "scope": "REQ-03-019, the Routes table, the request-topics route sections, AC-3, and TC-03-INT-13 across all three spec files, plus a search for other 'unchanged'/'not amended' claims touching this route",
+    "result": "no remaining contradiction; the older spec 02-request-topics.md's permission matrix (which shows no client-contact row) is superseded here per the project's 'newest spec governs' rule and 03 states its own rule completely without needing 02 amended"
+  },
+  "findings": []
+}

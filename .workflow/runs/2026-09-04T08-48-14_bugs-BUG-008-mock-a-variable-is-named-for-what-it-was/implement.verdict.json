@@ -1,0 +1,21 @@
+{
+  "status": "pass",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/dangling-reference",
+      "file": "specs/bugs/BUG-008-mock-a-variable-is-named-for-what-it-was.md",
+      "symbol": "Fix Approach",
+      "line": 40,
+      "claim": "the document defers its subject to an input that carries it in neither the prompt nor a handoff",
+      "witness": {
+        "kind": "rule",
+        "detail": "The document says \"Rename the binding the prompt names. Touch nothing else.\" (specs/bugs/BUG-008-mock-a-variable-is-named-for-what-it-was.md, Fix Approach). The implement prompt at .workflow/runs/2026-09-04T08-48-14_bugs-BUG-008-mock-a-variable-is-named-for-what-it-was/stages/implement.attempt-1.prompt.md names a run id, a run directory, a spec path, a branch and a diff base, and no binding and no file; the bug track compiles no plan and no handoff.json exists in the run directory. So the named subject is unresolvable. It is a note rather than a blocker because the document's Blast Radius (\"one file, one local binding, no exported symbol\") and Acceptance Criteria (\"the binding is renamed, the type check passes, and no other file changed\") bound the change completely, and the document forbids observable behaviour by construction, so no two readings produce different observable code. Reported so the fixture is corrected before it is used as a model.",
+        "source": "specs/bugs/BUG-008-mock-a-variable-is-named-for-what-it-was.md:40"
+      },
+      "suggestedFix": "name the file and the binding in the document itself, as a real report of this weight would"
+    }
+  ]
+}

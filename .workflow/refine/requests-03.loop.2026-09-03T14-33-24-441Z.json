@@ -1,0 +1,29 @@
+{
+  "spec": "specs/requests/03-client-participants.md",
+  "stem": "requests-03",
+  "startedAt": "2026-09-03T14:33:24.441Z",
+  "rounds": [
+    {
+      "round": 1,
+      "startedAt": "2026-09-04T07:12:56.193Z",
+      "head": "16078c96f20db857773b0107a8268defca07cd03",
+      "status": "running",
+      "lint": 0,
+      "judge": {
+        "status": "judge-error",
+        "agent": "spec-review",
+        "ranOn": "claude-opus-5"
+      }
+    }
+  ],
+  "status": "error",
+  "profile": "sharded",
+  "judgeAgent": "spec-review",
+  "fixerAgent": "spec-fixer-minimal",
+  "request": "client contacts can be invited to an organization, raise and receive requests, and see nothing else",
+  "outcome": {
+    "reason": "judge-error",
+    "detail": "profile sharded dispatches spec-review-shard, and the verdict records no shard. The judge read the bundle itself; re-run, or use --profile solo deliberately.",
+    "at": "2026-09-04T07:31:41.964Z"
+  }
+}

@@ -9,6 +9,7 @@ import {
 import {
   HOLIDAY_MESSAGES,
   can,
+  resolveMemberHolidayCountry,
   validateHolidayCountryCode,
   validateHolidayDate,
   validateHolidayName,
@@ -18,12 +19,15 @@ import {
 import { Prisma } from '@prisma/client';
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
+import { HolidaySourcingService, type SourcingBlock } from './holiday-sourcing.service';
 
 interface CallerMembership {
   id: string;
   role: Role;
   organizationId: string;
   accountId: string;
+  /** Time off spec 01 REQ-01-026 — the first link of the holiday-country chain. */
+  countryCode: string | null;
 }
 
 /** One row of the holidays list (spec org/03 GET .../holidays 200 contract). */
@@ -35,6 +39,11 @@ export interface HolidaySummary {
   /** A JSON number, not the Prisma `Decimal`, which would serialize as a string. */
   paidHours: number;
   countryCode: string | null;
+  /**
+   * Time off spec 02 §Data Model — `manual` or `imported`, which is what the
+   * `holidays-row-{id}-source` column reads and what no other route exposes.
+   */
+  source: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -67,22 +76,26 @@ export interface HolidayListQuery {
 export class HolidaysService {
   private readonly logger = new Logger(HolidaysService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sourcing: HolidaySourcingService,
+  ) {}
 
   /**
    * `GET /organizations/:orgId/holidays`.
    *
    * `scope=mine` is the Time Tracking calendar's read and needs no capability — a
    * `user` and a `viewer` must see the markers on their own calendar. It ignores
-   * `country` and resolves the caller's own (requirement 14: `Account.phoneCountryCode`
-   * if present, else null), returning rows scoped to that country plus every global
-   * row. `scope=all` (the default) requires `view-holidays` and applies `country`,
-   * which still includes global rows (TC-03-INT-13).
+   * `country` and resolves the caller's own through the chain time off spec 01
+   * REQ-01-026 states — `Membership.countryCode`, else `Organization.countryCode`, else
+   * none — returning rows scoped to that country plus every global row. `scope=all` (the
+   * default) requires `view-holidays` and applies `country`, which still includes global
+   * rows (TC-03-INT-13).
    */
   async listHolidays(
     session: SessionPayload,
     query: HolidayListQuery,
-  ): Promise<{ holidays: HolidaySummary[] }> {
+  ): Promise<{ holidays: HolidaySummary[]; sourcing?: SourcingBlock }> {
     const scope = query.scope === 'mine' ? 'mine' : 'all';
     // `scope=mine` is open to every authenticated member; anything else is gated.
     const caller =
@@ -96,11 +109,10 @@ export class HolidaysService {
 
     let countryFilter: Prisma.HolidayWhereInput = {};
     if (scope === 'mine') {
-      const account = await this.prisma.account.findUnique({
-        where: { id: caller.accountId },
-        select: { phoneCountryCode: true },
-      });
-      const mine = this.normalizeResolvedCountry(account?.phoneCountryCode);
+      // PATCH-012 — the caller's own stated country. A caller who states none sees the
+      // global rows only, rather than the ones the organization's country would have
+      // lent them.
+      const mine = resolveMemberHolidayCountry(caller.countryCode);
       countryFilter = mine
         ? { OR: [{ countryCode: mine }, { countryCode: null }] }
         : { countryCode: null };
@@ -112,7 +124,7 @@ export class HolidaysService {
       }
     }
 
-    const rows = await this.prisma.holiday.findMany({
+    const holidays = await this.prisma.holiday.findMany({
       where: {
         organizationId: caller.organizationId,
         date: { gte: start, lt: end },
@@ -121,7 +133,19 @@ export class HolidaysService {
       orderBy: { date: 'asc' },
     });
 
-    return { holidays: rows.map((row) => this.toSummary(row)) };
+    const body: { holidays: HolidaySummary[]; sourcing?: SourcingBlock } = {
+      holidays: holidays.map((row) => this.toSummary(row)),
+    };
+
+    /* Time off spec 02 REQ-02-025 — the `sourcing` block travels with `view-holidays`,
+       which `scope=all` has already required above. A `scope=mine` read — the Time
+       Tracking calendar's and the vacation modal's, open to every active member — carries
+       NO `sourcing` key at all: the block is the list of every country the staff are in,
+       and an unconditional one would hand a `user` a roster of where they work. */
+    if (scope === 'all') {
+      body.sourcing = await this.sourcing.sourcingBlock(caller.organizationId, year);
+    }
+    return body;
   }
 
   /**
@@ -234,6 +258,7 @@ export class HolidaysService {
       role: caller.role as Role,
       organizationId: caller.organizationId,
       accountId: caller.accountId,
+      countryCode: caller.countryCode,
     };
   }
 
@@ -373,22 +398,13 @@ export class HolidaysService {
     return new Date().getUTCFullYear();
   }
 
-  /**
-   * `Account.phoneCountryCode` is validated elsewhere and may hold a legacy or blank
-   * value; only a clean alpha-2 resolves a member's country (requirement 14), and
-   * anything else means "no country" — global holidays only.
-   */
-  private normalizeResolvedCountry(value: string | null | undefined): string | null {
-    const result = validateHolidayCountryCode(value ?? null);
-    return result.valid ? result.value : null;
-  }
-
   private toSummary(row: {
     id: string;
     date: Date;
     name: string;
     paidHours: Prisma.Decimal;
     countryCode: string | null;
+    source: string;
     createdAt: Date;
     updatedAt: Date;
   }): HolidaySummary {
@@ -398,8 +414,11 @@ export class HolidaysService {
       // day and stops any timezone from shifting it (requirement 6).
       date: row.date.toISOString().slice(0, 10),
       name: row.name,
+      // A JSON number, not the Prisma Decimal — both `scope=mine` readers parse it as
+      // one, and this route gains `source` and nothing else.
       paidHours: row.paidHours.toNumber(),
       countryCode: row.countryCode,
+      source: row.source,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

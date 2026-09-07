@@ -140,6 +140,27 @@ Raise it also when nothing is ambiguous and the spec still cannot be satisfied:
 These are worth more than an ambiguity, because an ambiguity gets noticed downstream and these
 get implemented.
 
+**A `spec` finding blocks only under one of these rules**, and `rule` is one of them verbatim:
+
+| `rule` | Means |
+|---|---|
+| `spec/contradiction` | Two clear statements, no implementation satisfies both |
+| `spec/stale-statement` | A claim about this repository the code refutes |
+| `spec/incomplete-decision` | A rule the implementer needs is a pointer to another document rather than a statement here |
+| `spec/untestable-case` | A case that cannot run, or an acceptance criterion no observation settles |
+| `spec/ambiguous-requirement` | Two readings, materially different implementations |
+| `spec/missing-artefact` | The spec obliges itself to contain something it does not |
+| `spec/scope-gap` | The request asked for something the spec does not cover |
+
+Anything else is a note, whatever its witness. Do not invent rules.
+
+**Refining is not growing.** A finding whose repair is another route, another writer, a lock,
+a column, a screen or a concurrency case is not a `spec` blocker: the spec is plannable
+without it, and whether the product wants it is a person's question. File it as a note, and
+plan the spec as written. A concurrency the spec is silent on is planned with the lock the
+repository already uses for that row and recorded in the task's `concurrency`; it is a
+blocker only when two rules of the spec cannot both hold under it.
+
 Every finding needs a witness (see below). Format:
 
 ```json

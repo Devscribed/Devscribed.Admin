@@ -18,10 +18,14 @@
     "spec": "node scripts/claude-cmd.mjs spec",
     "refine": "node scripts/claude-cmd.mjs refine",
     "bug": "node scripts/claude-cmd.mjs bug",
+    "patch": "node scripts/claude-cmd.mjs patch",
     "ship": "node scripts/claude-cmd.mjs ship",
     "ship:run": "node scripts/ship.mjs",
     "board": "node scripts/run-watch.mjs --open",
     "watch": "node scripts/run-watch.mjs",
+    "specs": "node scripts/spec-index.mjs",
+    "config": "node scripts/ship-config.mjs",
+    "pipeline": "node scripts/pipeline-check.mjs",
     "wf": "node scripts/wf.mjs",
     "wf:status": "node scripts/wf.mjs status",
     "wf:log": "node scripts/wf.mjs log",
@@ -29,9 +33,15 @@
     "reap": "node scripts/reap-stale-servers.mjs",
     "reap:dry": "node scripts/reap-stale-servers.mjs --dry-run",
     "coverage": "node scripts/handoff-coverage.mjs",
+    "spec:lint": "node scripts/spec-lint.mjs",
+    "spec:slice": "node scripts/spec-slice.mjs",
+    "refine:loop": "node scripts/refine-loop.mjs",
     "ds:equiv": "node scripts/ds-equiv.js",
     "ds:tokens": "node scripts/ds-token-resolve.js",
-    "ds:check": "node scripts/ds-adherence.js"
+    "ds:check": "node scripts/ds-adherence.js",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:teams": "node scripts/seed-teams.mjs",
+    "seed:db": "node scripts/seed-db.mjs"
   },
   "devDependencies": {
     "release-it": "21.0.2"

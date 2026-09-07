@@ -1,0 +1,90 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "n/a",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok"
+  },
+  "compiledNotes": {
+    "H-01": "50 numbered requirements, every one named in a task's `requirements`; verified mechanically against the spec's `#### REQ-01-0xx` headings (nothing unassigned, nothing invented).",
+    "H-02": "41 live cases (4 unit, 29 integration, 8 E2E), all claimed in `testCases`; none is marked Retired.",
+    "H-03": "All 8 `##` sections of the behaviour file have an entry — Out of Scope and Known Gaps carry the reason they need no task.",
+    "H-04": "Every path cited resolves, apart from the nine this run creates, which are listed in `buildFromZero`. Checked by script.",
+    "H-05": "`reuse` names 20 shipped mechanisms with file and line; `buildFromZero` names the nine things that do not exist, including the absent `apps/web/app/org/[orgId]/time-off` route folder.",
+    "H-06": "The one 'every X' requirement is REQ-01-026's adoption ('No call site keeps a phone-country read'). All four sites are in T6's `allCallSites` with what each does with the new answer; the grep that establishes there is no fifth is recorded in `premises`.",
+    "H-07": "Two new columns, one new capability (in two unions) and one new constant field. Thirteen `shippingSurfaces` rows, each naming the already-shipping path and the requirement that governs it — including the four rows where the answer is 'no code', which is the claim a reviewer has to be able to check. No path was found that this change makes reachable and the spec is silent about.",
+    "H-08": "Two tasks write rows. T5 rides the member update's existing $transaction and its `SELECT ... FOR UPDATE` on the organization row and adds no lock; T4 takes none, by REQ-01-033's last-write-wins decision, and its row's other writers and their locks are named.",
+    "H-09": "Fourteen Error Messages rows: eleven new `TIME_OFF_CALENDAR_MESSAGES` exports (T2) and three that already ship. Every row names its module and the route that emits it, or says no route does.",
+    "H-10": "Five Verification Plan rows are marked as not existing today — the shared `createHolidayViaApi` (private to e2e/tests/reports-time-off.spec.ts:38), a stated member country, an organization country, and the two helpers this spec owes. All are T9, and the cases that depend on them (TC-01-INT-12, INT-14, INT-15, INT-25, E2E-08) depend on T9's helpers through their tasks' `dependsOn`.",
+    "H-11": "One migration, T1, additive: two nullable CHAR(2) columns, no default, no backfill, no index, nothing altered or dropped. The deploy order is read from infra/deploy.sh:27 and :175-192 rather than restated from CLAUDE.md.",
+    "H-12": "T3 and T7 are the authorization tasks and both name normalizeRole(): the service gate is `can(normalizeRole(role), 'view-time-off-calendar')` and the sidebar is `hasCapability(role, 'ViewTimeOffCalendar')`, which normalizes internally. Both stored values are covered — 'member' normalizes to 'user' and holds the capability, 'admin' holds it, and the target set admin|manager|user|viewer is written into both tables in full, viewer false.",
+    "H-13": "The contracts file has no External Contracts table — this feature calls no third-party system, needs no key and adds no MCP server (cases.md, 'Access this needs').",
+    "H-14": "No double to plan, for the same reason.",
+    "H-15": "Three DS gaps, matching the spec's own table: the absence-band colours, the pinned-column width, and the missing step below --space-1. Each says what ships in its place and what closes it.",
+    "H-16": "Ten tasks, each with files, requirements and dependsOn. The file sets are disjoint except apps/api/src/app.module.ts, which T3 and T4 both register a controller in — named in both tasks with the order to take it in.",
+    "H-17": "node scripts/handoff-coverage.mjs — pass, sections 8/8."
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/README.md",
+      "symbol": "Backward Compatibility 3",
+      "claim": "the README says the reports and holidays E2E suites are ones \"this area does not touch and which must stay green\"; the holidays E2E suite pins the very rule REQ-01-026 drops and cannot stay green untouched",
+      "witness": {
+        "kind": "scenario",
+        "detail": "e2e/tests/holidays.spec.ts:296-338 (TC-03-E2E-04) seeds a holiday with countryCode 'BY', calls setOwnCountryViaApi(request, 'BY') at :309 — which writes Account.phoneCountryCode — and then asserts `time-cell-{day}-holiday-marker` is visible on the weekly calendar. Under REQ-01-026 that member has no Membership.countryCode and the organization has none either, so the chain resolves null, GET /holidays?scope=mine returns global rows only, and the marker is not drawn. Three integration cases are in the same position: apps/api/test/holidays.spec.ts:381 (fixture at :402), apps/api/test/reports-amounts-owed.spec.ts:573 and :607, and apps/api/test/reports-time-off.spec.ts:404.",
+        "source": "specs/time-off/README.md, Backward Compatibility 3"
+      },
+      "suggestedFix": "the sentence should say the four cases move their fixture from the phone to the stated column while every assertion stands — filed as a note rather than a blocker because the product rule is stated completely (the contracts' call-site table: 'No call site keeps a phone-country read') and the repair is mechanical; it is planned as T10, a task of its own so the edits read as deliberate"
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-036",
+      "claim": "whether a two-letter code that is not an assigned ISO country ('XX') is accepted by the two country writes has two readings",
+      "witness": {
+        "kind": "scenario",
+        "detail": "PUT /api/organizations/{orgId}/settings/country with { \"countryCode\": \"XX\" }. REQ-01-036 refuses anything \"neither empty nor a valid alpha-2 value\", and Edge case 10 defines \"XX\" as a value that does not normalize to a valid alpha-2 value — so 422. The contracts' Validation Rule 9 states the constraint as \"Empty, or exactly 2 uppercase letters\" and the note under the table says the rule is the one \"the holiday rows' country validator already does\", which is validateHolidayCountryCode (packages/validation/src/holidays.ts:93, test /^[A-Z]{2}$/) — so 200. No case exercises it.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md, Validation Rules row 9"
+      },
+      "suggestedFix": "one clause saying whether the write checks membership of the ISO list or only the two-uppercase-letters shape. Planned as the Validation Rules table states it (validateHolidayCountryCode on both writes), since that table is the normative statement of what each write refuses and the read side skips a stored 'XX' regardless (REQ-01-027)"
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-27",
+      "claim": "the case says a user and a viewer \"receive the identical body\" from the member detail read, and the shipped projection carries caller-dependent fields, so a literal reading of that clause cannot pass",
+      "witness": {
+        "kind": "scenario",
+        "detail": "MembersService.getDetail returns callerRole, canEditRole and availableRoles (apps/api/src/members/members.service.ts:352-374); callerRole is 'user' for one caller and 'viewer' for the other, so a deep-equality assertion between the two bodies fails on a field this spec does not touch. The rest of the sentence says what is meant — \"field included: the read is gated by no capability and the field is not conditional on one\".",
+        "source": "specs/time-off/01-vacation-calendar.cases.md, TC-01-INT-27"
+      },
+      "suggestedFix": "narrow the clause to the field the case is about. Planned as: countryCode present and equal for both callers, alongside the target-derived fields; no product code differs between the two readings"
+    }
+  ]
+}

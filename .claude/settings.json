@@ -49,7 +49,7 @@
     ],
     "SubagentStart": [
       {
-        "matcher": "pre-implementer|implementer|code-reviewer|qa|review-shard|review-root|qa-lab",
+        "matcher": "pre-implementer|implementer|code-reviewer|spec-reviewer|spec-fixer|qa",
         "hooks": [
           {
             "type": "command",
@@ -61,7 +61,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "pre-implementer|implementer|code-reviewer|qa|review-shard|review-root|qa-lab",
+        "matcher": "pre-implementer|implementer|code-reviewer|spec-reviewer|spec-fixer|qa",
         "hooks": [
           {
             "type": "command",

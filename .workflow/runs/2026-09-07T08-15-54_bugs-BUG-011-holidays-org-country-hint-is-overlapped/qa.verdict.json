@@ -1,0 +1,47 @@
+{
+  "verdict": "pass",
+  "summary": "Unit suite (1430 tests) and targeted E2E (time-off-calendar.spec.ts + regressions.spec.ts, 19 tests) all pass, including the new TC-01-E2E-10 regression test. The fix raises the organization-country row's marginBottom from --space-6 (16px) to --space-8 (24px), clearing the hinted dropdown Select's 20px out-of-flow message slot plus a 4px gap, resolving the overlap without touching packages/ds.",
+  "checks": [
+    {
+      "name": "unit",
+      "result": "pass",
+      "detail": "npm run test:unit — 35 files, 1430 tests passed"
+    },
+    {
+      "name": "integration",
+      "result": "n/a",
+      "detail": "Diff touches only apps/web/app/org/[orgId]/settings/holidays/page.tsx and e2e/tests/time-off-calendar.spec.ts; no apps/api files changed, so no integration suite is implicated"
+    },
+    {
+      "name": "e2e",
+      "result": "pass",
+      "detail": "CI=1 npx playwright test tests/time-off-calendar.spec.ts tests/regressions.spec.ts — 19 passed, including new TC-01-E2E-10 which asserts hint bottom edge <= filter top edge"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "criterion": "The whole hint line is visible, descenders included, on Settings › Holidays",
+      "result": "pass"
+    },
+    {
+      "id": 2,
+      "criterion": "The hint and the country filter do not overlap at any viewport the screen supports",
+      "result": "pass"
+    },
+    {
+      "id": 3,
+      "criterion": "The hint still carries TIME_OFF_CALENDAR_MESSAGES.orgCountryHint and still describes org-country-select",
+      "result": "pass"
+    },
+    {
+      "id": 4,
+      "criterion": "No file under packages/ds is changed",
+      "result": "pass"
+    }
+  ],
+  "notes": [
+    "The fix is a single inline-style token change (marginBottom: var(--space-6) -> var(--space-8)) on the organization-country row in apps/web/app/org/[orgId]/settings/holidays/page.tsx, plus the added TC-01-E2E-10 test in e2e/tests/time-off-calendar.spec.ts.",
+    "The known left-edge misalignment (hint vs label inset) is left unresolved as documented in the spec's Known Gaps, and is out of scope for this bug."
+  ]
+}

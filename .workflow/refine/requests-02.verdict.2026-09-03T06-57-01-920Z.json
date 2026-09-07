@@ -1,0 +1,241 @@
+{
+  "status": "blocked",
+  "mode": "full",
+  "spec": "specs/requests/02-request-topics.md",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "read": {
+    "specs": [
+      "specs/requests/02-request-topics.md",
+      "specs/requests/02-request-topics.contracts.md",
+      "specs/requests/02-request-topics.cases.md",
+      "specs/requests/README.md"
+    ],
+    "files": [
+      "apps/api/src/requests/requests.controller.ts",
+      "apps/api/src/requests/requests.service.ts",
+      "apps/api/src/requests/requests.dto.ts",
+      "apps/api/src/auth/capability.guard.ts",
+      "apps/api/src/auth/org-scope.guard.ts",
+      "apps/api/src/signup/signup.service.ts",
+      "apps/api/src/members/me.controller.ts",
+      "apps/api/prisma/schema.prisma",
+      "packages/validation/src/requests.ts",
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/index.ts",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "apps/web/src/ds.ts",
+      "1_DS for dev/components/navigation/Toggle.jsx",
+      "1_DS for dev/components/navigation/Toggle.d.ts",
+      "e2e/tests/helpers.ts",
+      ".claude/skills/spec/references/checklist.md"
+    ]
+  },
+  "sweeps": {
+    "currency": 46,
+    "contradiction": 41,
+    "selfSufficiency": 44,
+    "testability": 43,
+    "selfDescription": 12,
+    "obligations": 38,
+    "scope": 7
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — Seed Data",
+      "line": 231,
+      "claim": "The seed set does not cover the access kind `saas`, so the claim that nothing classifiable before becomes unclassifiable is false.",
+      "witness": {
+        "kind": "command",
+        "detail": "Seed Data (contracts:231): 'The staff set covers what the retired `accessKind` vocabulary covered, plus the two the request named, so nothing an organization could classify before becomes unclassifiable.' The seeded staff rows (contracts:219-227) are VPN, Claude, Repository, Environment, Server, Admin panel, Documentation, Question, Other. `grep -n \"ACCESS_KINDS\" -A 10 packages/validation/src/requests.ts` returns eight values: repository, environment, server, vpn, saas, admin_panel, documentation, other. `saas` — 'a seat on a paid tool', the case the contracts' own POST example has to invent a topic for ('Figma seat', contracts:53) — has no seeded topic, and `Other` is seeded as `question` rather than `access`, so the old `other` access is not expressible either.",
+        "source": "specs/requests/02-request-topics.contracts.md:231 against packages/validation/src/requests.ts:34-43"
+      },
+      "suggestedFix": "Either seed a staff `access` topic for the SaaS case and decide the `type` of `Other` deliberately, or delete the coverage claim and say instead which retired kinds are intentionally dropped."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — DS gaps, row 2",
+      "line": 370,
+      "claim": "The design system does export a segmented control, so the stated gap does not exist and the workaround it justifies is unwarranted.",
+      "witness": {
+        "kind": "command",
+        "detail": "DS gaps (contracts:370): 'No segmented-control primitive | The Staff / Client audience switch | Two `Button`s with an aria-pressed state … | A `SegmentedControl` in `@ds`, adopted by this screen and the requests scope toggle together'. `grep -n Toggle apps/web/src/ds.ts` shows `Toggle` re-exported from `@ds`; `1_DS for dev/components/navigation/Toggle.d.ts:10` reads '/** Pill-shaped segmented control — the day/week/month + light/dark pattern. */' and `Toggle.prompt.md:3` 'Segmented pill toggle.' The requests scope toggle the row proposes to convert already uses the DS `Tabs` primitive (apps/web/app/org/[orgId]/requests/page.tsx:321-329).",
+        "source": "specs/requests/02-request-topics.contracts.md:370 against 1_DS for dev/components/navigation/Toggle.d.ts:10 and apps/web/src/ds.ts:12-33"
+      },
+      "suggestedFix": "Drop the row and draw the audience switch with the existing `Toggle` (or `Tabs`). If the real gap is that `Toggle` forwards no `data-testid` and sets no `aria-pressed`, which is what `request-topics-audience-staff`/`-client` need, state that gap instead — it is a different gap with a different fix."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — Screens against DS gaps",
+      "line": 305,
+      "claim": "The catalogue screen is specified twice with two different ordering controls.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Screens (contracts:305-309) draws a drag handle on every row: '│  ⠿  VPN               access                        [ Rename ] [ Archive ]   │', repeated for all five rows. DS gaps (contracts:369) says the opposite ships: 'No drag-handle or reorder list primitive | The catalogue's ordering control | Up and down controls on each row, each issuing one `PATCH` — keyboard-reachable, and no pointer-only interaction'. No implementation draws both, and no case or `data-testid` decides which one a screen must show.",
+        "source": "specs/requests/02-request-topics.contracts.md:305 against :369"
+      },
+      "suggestedFix": "One control, in both places. If the up/down controls are the decision, redraw the mock with them and add their `data-testid`s to the Required list."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — topic row shape",
+      "line": 36,
+      "claim": "Four integration cases assert audit fields on 'the row' that the declared response shape does not carry, leaving the contract of five routes undecided.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The topic row shape (contracts:34-47) is `id`, `audience`, `type`, `name`, `sortOrder`, `status`, `createdAt`, `updatedAt` — and every write route returns it ('`201` with `{ \"topic\": { … } }`, the row shape above', contracts:56; 'No body. `200` with `{ \"topic\": { … } }`', contracts:67). TC-02-INT-08 (cases:256-259) expects 'the row carries `archivedAt` and `archivedByAccountId` … After the restore both audit fields are null'; TC-02-INT-01 (cases:156-159) expects 'each with `createdByAccountId` null' from a catalogue read, and 'The seed rows and the `Organization` row share a creation timestamp'; TC-02-INT-09 (cases:273) and TC-02-INT-16 (cases:362-364) assert `archivedAt` too. Two readings, materially different: the routes return three more fields, as the sibling `Client` route does (apps/api/test/clients.spec.ts:171-172 asserts `client.createdByAccountId` and `client.archivedAt` on the response body), or the cases bypass the API and read the table. `Organization.createdAt` is returned by no route at all.",
+        "source": "specs/requests/02-request-topics.contracts.md:36 against specs/requests/02-request-topics.cases.md:256"
+      },
+      "suggestedFix": "Decide the response shape once: either add `createdByAccountId`, `archivedAt` and `archivedByAccountId` to the topic row and keep the assertions as body assertions, or say in each case that the audit fields and the creation timestamps are read from the table."
+    },
+    {
+      "id": "R5",
+      "severity": "blocker",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-019",
+      "line": 186,
+      "claim": "A `topicId` that names no row is a state the requirements never answer, and the two answers in play are 400 and 404.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-02-019 (:186) names two conditions only: 'IF `topicId` names a topic that is archived or belongs to another organization, THEN THE SYSTEM SHALL answer `400` with `REQUEST_MESSAGES.topicUnavailable`.' TC-02-INT-13 (cases:320-323) adds a third and demands the same answer: 'Then raise one whose `topicId` is a well-formed id that names no row. … All three answer `400` with the same message and the same body.' The Routes table for that route (contracts:20) declares `404` among its errors, and the route's own code answers 404 for exactly this shape of input on its sibling fields: `if (!assignee || assignee.organizationId !== organizationId) throw new NotFoundException();` (apps/api/src/requests/requests.service.ts:329) and the same line for the project (:344). An implementer following the requirement and the code's convention returns 404 and fails the case.",
+        "source": "specs/requests/02-request-topics.md:186 against specs/requests/02-request-topics.cases.md:320 and apps/api/src/requests/requests.service.ts:329"
+      },
+      "suggestedFix": "State the rule in REQ-02-019: an id that names no row is answered the same way as an archived one, 400 with `REQUEST_MESSAGES.topicUnavailable` — and say so in the Security section beside the sentence that already covers archived-or-elsewhere."
+    },
+    {
+      "id": "R6",
+      "severity": "blocker",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "TC-02-E2E-04",
+      "line": 250,
+      "claim": "The history half of REQ-02-028 is asserted by a case that names no selector able to observe it, and the Required list carries none.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-02-028 (:248-250) requires the label map to be read by 'the list, the detail screen, its history entries and the filter control'. TC-02-E2E-04's expected result (cases:483) is 'the history entry for the change reads Closed rather than the stored value', and its Selectors line (cases:484) is 'requests-status-filter, request-row-{id}-status, request-detail-status' — none of which reaches the history panel. The Required data-testid table (contracts:259-287) carries no history id either, so the only way to write the assertion is with `request-detail-history`, which the screen already draws (apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx:48) and which this spec does not name. Today that panel renders the raw value — `${actor} marked it ${event.newValue}` (RequestHistory.tsx:27) — so the clause is a real change with no observer.",
+        "source": "specs/requests/02-request-topics.cases.md:484 against specs/requests/02-request-topics.contracts.md:259-287"
+      },
+      "suggestedFix": "Add `request-detail-history` to the Required list and to TC-02-E2E-04's Selectors, or drop the history clause from REQ-02-028."
+    },
+    {
+      "id": "R7",
+      "severity": "blocker",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — Edge case 8",
+      "line": 383,
+      "claim": "The fallback every request that exists today depends on is stated and never observed.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Edge case 8 (contracts:383): 'A request raised before this spec is listed | `topic` is `null`; the row shows the stored `type` as its About value and nothing breaks.' Known Gaps (:306) rests the whole no-backfill decision on it. No case asserts it: TC-02-INT-02 (cases:170-172) asserts columns on the table — 'The request raised earlier still has its `type`, its `topicLabel` and no `topicId`' — not the `topic` member of the response, and no E2E case lists a pre-spec row. Every request now in the database takes this path, and `request-row-{id}-topic` is specified as 'present when the request carries a topic' (contracts:279) with nothing saying what the cell shows when it does not.",
+        "source": "specs/requests/02-request-topics.contracts.md:383 against specs/requests/02-request-topics.cases.md:170"
+      },
+      "suggestedFix": "Extend TC-02-INT-02, or add one case, to list a request with no `topicId` and assert `topic` is `null` in the response and that the row renders the stored `type` as its About value."
+    },
+    {
+      "id": "N1",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — sortOrder",
+      "line": 56,
+      "claim": "`sortOrder` has two stated defaults and no value for the first topic of an empty audience.",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts:56-58: '`sortOrder` is optional and defaults to the highest stored value in that audience plus ten'. The Data Model (contracts:168) gives the column `Int @default(0)`. An audience holding no rows has no highest stored value, and TC-02-INT-03 (cases:180-183) only exercises the seeded case.",
+        "source": "specs/requests/02-request-topics.contracts.md:56 against :168"
+      },
+      "suggestedFix": "Say what the first topic of an empty audience gets, and note that the column default is never the value a route writes."
+    },
+    {
+      "id": "N2",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — the list mock",
+      "line": 335,
+      "claim": "The list mock draws a Closed row under a Pending filter.",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts:335 draws the control as 'Status [ Pending ▾ ]' and contracts:340-341 draws '#9 Which invoice template? … Closed · cancelled' beneath it. REQ-02-028 (:248) maps Pending to `open` only, so that row cannot be in a list filtered to Pending.",
+        "source": "specs/requests/02-request-topics.contracts.md:335 against :341"
+      },
+      "suggestedFix": "Draw the control as 'Any status' in the mock."
+    },
+    {
+      "id": "N3",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "TC-02-E2E-02",
+      "line": 454,
+      "claim": "An absence the case asserts has no id to assert it with.",
+      "witness": {
+        "kind": "rule",
+        "detail": "TC-02-E2E-02's expected result (cases:454-455): 'no control for a request kind or an access kind is drawn anywhere in the modal', with Selectors (cases:456-458) naming neither `request-new-type` nor `request-new-access-kind`. The Required list says of those two ids (contracts:292-293) that they 'are **removed** from the new-request modal by REQ-02-022 and appear in no case here'. Both ids exist today (apps/web/app/org/[orgId]/requests/NewRequestModal.tsx), so the assertion is writable — but only by naming ids the spec says no case names, and every other absence in this spec is written as an id marked '(absent)' (cases:495-496, 507-508).",
+        "source": "specs/requests/02-request-topics.cases.md:454 against specs/requests/02-request-topics.contracts.md:292"
+      },
+      "suggestedFix": "List them in TC-02-E2E-02's Selectors as '(absent)' and reword the Required-list sentence, or drop the clause from the expected result."
+    },
+    {
+      "id": "N4",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "State Machine — the reorder event",
+      "line": 274,
+      "claim": "Reordering is specified at four places and observed at none.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The state machine declares 'active | reorder | `sortOrder` is written; `updatedAt` moves' (:274) and 'archived | reorder | `sortOrder` is written' (:278); the PATCH contract accepts `sortOrder` (contracts:62); DS gaps ships up and down controls for it (contracts:369). No case sends `sortOrder` on a PATCH — TC-02-INT-06 renames only — and the Required data-testid list holds no reorder control.",
+        "source": "specs/requests/02-request-topics.md:274 against specs/requests/02-request-topics.cases.md:213-224"
+      },
+      "suggestedFix": "One integration case that PATCHes `sortOrder` and re-reads the order, and a `data-testid` for the control if it stays in the mock."
+    },
+    {
+      "id": "N5",
+      "severity": "note",
+      "rule": "spec/divergence",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-022",
+      "line": 210,
+      "claim": "Requests spec 01 makes `accessKind` required whenever `type` is `access`; from this spec every new `access` request stores `accessKind` null, so that invariant holds only for rows raised before it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-02-022 (:210) refuses `accessKind` on the way in and REQ-02-021 (:206) writes `type` from the topic, so a topic of type `access` produces a row with `type = 'access'` and `accessKind = null`. The rule it changes is enforced today in `validateRequestKind` (packages/validation/src/requests.ts:147-152) and documented on the column itself: 'Required when `type = 'access'`, absent otherwise' (apps/api/prisma/schema.prisma:1134).",
+        "source": "specs/requests/02-request-topics.md:210"
+      },
+      "suggestedFix": "None required — recorded so a person confirms the change was meant."
+    },
+    {
+      "id": "N6",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "02-request-topics.contracts.md — the `topic` member",
+      "line": 97,
+      "claim": "A request with a `topicLabel` and no `topicId` has two possible serializations.",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts:97-100: '`topic` is `null` on a request raised before this spec … `topic.status` is read from the catalogue row … and is `null` when the row is gone.' A row that is gone leaves `topicId` null by SetNull (contracts:185) while `topicLabel` stays, which is precisely the state TC-02-INT-02 creates (cases:166-172), and the spec does not say whether `topic` is then `null` (topicId is absent) or an object with a null `id` and `status` (topicLabel is present).",
+        "source": "specs/requests/02-request-topics.contracts.md:97 against specs/requests/02-request-topics.cases.md:166"
+      },
+      "suggestedFix": "Name the discriminator once: `topic` is present whenever `topicLabel` is, or whenever `topicId` is."
+    }
+  ]
+}

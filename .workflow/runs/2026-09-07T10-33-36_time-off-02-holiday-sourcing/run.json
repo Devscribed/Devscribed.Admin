@@ -1,0 +1,790 @@
+{
+  "runId": "2026-09-07T10-33-36_time-off-02-holiday-sourcing",
+  "spec": "specs/time-off/02-holiday-sourcing.md",
+  "specSha": "7aaee48d10ed3c57b2b5095973b06ac7f81c4c361ea3f023e142d9cc07be104e",
+  "task": "time-off-02-holiday-sourcing",
+  "branch": "spec/holiday-sourcing",
+  "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
+  "headAtInit": "c837454a282c4385229ada45deee16d6af841794",
+  "status": "ready",
+  "track": "spec",
+  "shapes": {
+    "pre_implement": "strict",
+    "implement": "single",
+    "static_gate": "script",
+    "review": "lead-open",
+    "qa": "targeted"
+  },
+  "unrefined": {
+    "reason": "the user chose to skip refine and to escalate only on a blocker; the previous run's pre-implement found one contradiction and five gaps, all settled in commit 9ad9fd8 with the rejected alternatives recorded in the area README; spec-lint clean at 25 requirements, 22 cases, 8 routes, 19 testids",
+    "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
+  },
+  "createdAt": "2026-09-07T10:33:36.868Z",
+  "updatedAt": "2026-09-07T12:45:49.896Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 2,
+      "startedAt": "2026-09-07T11:43:16.160Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-07T11:50:20.061Z"
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 4,
+      "startedAt": "2026-09-07T12:10:41.530Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-07T12:26:24.286Z"
+    },
+    "static_gate": {
+      "status": "passed",
+      "attempts": 4,
+      "startedAt": "2026-09-07T12:26:24.526Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-07T12:26:33.386Z"
+    },
+    "review": {
+      "status": "passed",
+      "attempts": 2,
+      "startedAt": "2026-09-07T12:26:33.645Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-07T12:41:20.184Z"
+    },
+    "qa": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T12:41:20.415Z",
+      "endedAt": "2026-09-07T12:45:49.844Z",
+      "lastVerdict": "pass"
+    }
+  },
+  "budget": {
+    "codeAttempts": 1,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {
+    "spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`": 1,
+    "spec/contradiction — specs/time-off/02-holiday-sourcing.contracts.md:221 vs specs/time-off/02-holiday-sourcing.md REQ-02-023@specs/time-off/02-holiday-sourcing.contracts.md#Required data-testid Attributes / holiday-sourcing-uncovered": 1,
+    "sweep 8 — a test cannot fail@e2e/tests/holidays.spec.ts#the checkbox changes the country set, and the change survives a reload": 1
+  },
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [
+    {
+      "key": "spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`",
+      "reason": "The gate's probe is not a message. scripts/static-gate.mjs:295-311 takes the cell under the Message header and searches packages/validation for it; for this row that cell reads '(shipped, unchanged)' — a note about the export, 20 characters, just over the 12-character floor at which the gate stops skipping. The string the row refers to ships and is unchanged by this diff: packages/validation/src/holiday-messages.ts:29 is toastServerError: 'Something went wrong. Please try again.', re-exported from packages/validation/src/index.ts:2340 and emitted eight times from apps/web/app/org/[orgId]/settings/holidays/page.tsx. The row's New column says 'no', and git diff 9ad9fd8d...HEAD touches neither holiday-messages.ts nor that constant. There is nothing to implement: adding the literal '(shipped, unchanged)' to packages/validation would be writing text to satisfy a grep, which pre-implement note P1 raised this row to prevent. The document fix — putting the shipped text in the Message cell, as every other carried-over row does — is a spec edit, and the implementer may not make it.",
+      "at": "2026-09-07T11:34:03.691Z"
+    }
+  ],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Error Messages — HOLIDAY_MESSAGES.toastServerError",
+      "claim": "the last Error Messages row's Message cell carries a note, '(shipped, unchanged)', rather than the message, and this repository's static gate reads that cell as a message and will report it as implemented nowhere",
+      "witness": {
+        "kind": "command",
+        "detail": "scripts/static-gate.mjs:294-329 takes each Error Messages row, picks the cell under the `Message` header, and blocks when the text is absent from packages/validation. Running its own parser over this bundle prints, for the last row: `\"`HOLIDAY_MESSAGES.toastServerError`\" -> \"(shipped, unchanged)\"` — a 20-character probe, above the 12-character floor at which the gate stops skipping. `git grep -lF -- \"(shipped, unchanged)\" -- packages/validation` returns nothing. The string the row actually refers to, 'Something went wrong. Please try again.', ships at packages/validation/src/holiday-messages.ts:29.",
+        "source": "scripts/static-gate.mjs"
+      },
+      "suggestedFix": "Nothing to implement. When the static gate raises spec/message-not-implemented on this row, contest it with the counter-witness above rather than adding text to packages/validation to satisfy a grep. A spec change, if one is ever wanted, is to put the shipped text in the Message cell and the word 'no' in the New column, which is what every other carried-over row does."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Data Model — HolidayImport.provider / Holiday.externalKey",
+      "claim": "the Data Model calls `provider` 'the driver that answered' and composes `externalKey` from it, while TC-02-INT-01 runs against the double and expects `nager:DE:{date}` — so either the double names itself after the provider it doubles, or the case cannot pass",
+      "witness": {
+        "kind": "scenario",
+        "detail": "TC-02-INT-01 seeds a member stating DE, points the fake driver at Germany's shape, syncs, and expects each written row to carry 'an `externalKey` of `nager:DE:{date}`'. The contracts file's Holiday column table defines externalKey as '{provider}:{countryCode}:{date}' and the HolidayImport table defines `provider` as 'The driver that answered, e.g. `nager`'. Under the reading where {provider} is the driver, the fake driver writes 'fake:DE:{date}' and the case fails as written; under the reading where it is the service being doubled, it writes 'nager:DE:{date}' and every case passes. No case observes HolidayImport.provider itself.",
+        "source": "specs/time-off/02-holiday-sourcing.cases.md TC-02-INT-01"
+      },
+      "suggestedFix": "Planned as the second reading — the port carries one provider name, 'nager', on both drivers, because the double is a double of that provider and HOLIDAY_PROVIDER selects the driver rather than the identity. It is the only reading under which a case passes. A spec sentence saying so would close it."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/holidays — the example body",
+      "claim": "the example row shows `\"paidHours\": \"8.00\"`, a string, where the shipped route sends a JSON number and two shipped screens parse it as one",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/src/holidays/holidays.service.ts#toSummary returns `paidHours: row.paidHours.toNumber()`. apps/web/app/org/[orgId]/settings/holidays/types.ts:13 and apps/web/app/org/[orgId]/time-tracking/types.ts:61 both declare `paidHours: number`, and the holidays list renders it as `${row.paidHours}h`. An implementer following the example would send '8.00' and the Time Tracking calendar would read '8.00h'. The same example omits createdAt and updatedAt, which the route certainly still sends, and the prose above it says the route keeps what it ships with and gains exactly two things — so the example is abbreviated rather than normative, which is how the plan reads it.",
+        "source": "apps/api/src/holidays/holidays.service.ts"
+      },
+      "suggestedFix": "Keep paidHours a JSON number and add only `source` to the row. Recorded in the handoff's risks so the reviewer sees the reasoning rather than the choice."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/02-holiday-sourcing.md",
+      "symbol": "REQ-02-004",
+      "claim": "REQ-02-004 lists what an imported holiday carries and does not name `createdByAccountId`, which is NOT NULL behind a foreign key",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/prisma/schema.prisma:932-935 — `createdByAccountId String` with `createdBy Account @relation(..., onDelete: Restrict)`. An insert omitting it fails. REQ-02-004 names the name, the date, the country, paidHours, source and the external key, and nothing else; the schema has no system account and the migration is additive, so the column cannot be made nullable here.",
+        "source": "apps/api/prisma/schema.prisma"
+      },
+      "suggestedFix": "Planned as the account that triggered the sync — the only account in the transaction, and one that necessarily holds manage-holidays. Not a blocker: the repository's own shape leaves exactly one implementation, and no requirement or case observes the column."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Boundary values — Identity / TC-02-INT-01",
+      "claim": "the amendment reverses the reading attempt 1 planned and this branch implements: `{provider}` is now the answering driver's own name, so the double must write `fake:DE:{date}` and `HolidayImport.provider` reads 'fake' locally, while the branch writes 'nager' from both drivers",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The contracts file now reads \"`{provider}` is the name of the driver that answered — `nager` in a deployed environment, `fake` under the local double\" and TC-02-INT-01 requires `fake:DE:{date}`, \"never `nager`, which is the deployed driver's name\". apps/api/src/holidays/provider/fake-holiday.provider.ts:29 currently declares `readonly name = 'nager'`, apps/api/test/holiday-sourcing.spec.ts:303 asserts `nager:DE:${date}` and :318 asserts `provider: 'nager'`. Under the amended spec those three lines are wrong and nothing else is: `git grep \"'nager'\" -- apps/api/src packages e2e` returns only the two drivers, the config's driver union and its two guards, and packages/validation/src/holiday-sourcing.test.ts:197, which passes the provider name in as an argument and is unaffected.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md"
+      },
+      "suggestedFix": "Not a blocker — the spec is unambiguous now and the plan carries the change: handoff T2 changes the driver's name, T8 changes the two assertions, and handoff.replan.codeThatMustChange lists all three lines. Recorded so the reviewer reads the reversal as deliberate rather than as a regression."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Data Model — HolidayImport.provider",
+      "claim": "the HolidayImport.provider row still reads 'The driver that answered, e.g. `nager`', which agrees with the amended Boundary values row but names only the deployed value",
+      "witness": {
+        "kind": "scenario",
+        "detail": "With the fake driver named 'fake', a HolidayImport row written locally or under the integration suite carries provider 'fake' and one written in a deployed environment carries 'nager'. The column's description gives only the deployed value as its example. No shipping path reads the column and only the integration suite observes it, so nothing is ambiguous about what to write — only about what a reader of that table expects to see locally.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md"
+      },
+      "suggestedFix": "Nothing to implement. The plan writes the answering driver's own name into the column, which is what the row says. Recorded because the same sentence in a later spec should name both values, as the Boundary values row now does."
+    },
+    {
+      "stage": "review",
+      "id": "S1-N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "CLAUDE.md — Role values are in transition",
+      "file": "apps/api/src/holidays/holidays.service.ts",
+      "symbol": "requireViewCapability",
+      "line": 269,
+      "claim": "role normalization is applied at the two new services' gates and not at the shipped holiday gates on the same resource, so the two answer differently for a stored role value that is not exactly lowercase",
+      "witness": {
+        "kind": "scenario",
+        "detail": "HolidaySourcingService.requireCapability (apps/api/src/holidays/holiday-sourcing.service.ts:445) calls can(normalizeRole(caller.role), capability); HolidaysService.requireViewCapability (holidays.service.ts:269) and requireManageCapability (holidays.service.ts:278) call can(caller.role, ...) on the raw column with a `role as Role` cast. normalizeRole trims and lower-cases, while CAPABILITY_MATRIX is a plain keyed lookup falling through to false. A Membership row whose role column reads 'Admin' rather than 'admin' can therefore POST /api/organizations/{orgId}/holidays/sync and receive 200, but receives 404 from GET /api/organizations/{orgId}/holidays?scope=all — one screen, two authorization answers. Not reachable with the two values the schema says the column holds today ('admin' / 'member'), which is why this is a note. The new code is on the correct side of the transition; the mechanism is simply not applied at every gate on this resource.",
+        "source": "apps/api/src/holidays/holiday-sourcing.service.ts:445"
+      },
+      "suggestedFix": "route the shipped holiday gates through normalizeRole too, so one mechanism covers every capability check on this resource"
+    },
+    {
+      "stage": "review",
+      "id": "S1-N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "contracts §GET .../holidays/summary — byCurrency absence",
+      "file": "apps/api/src/holidays/holiday-summary.service.ts",
+      "symbol": "buildSummary",
+      "line": 270,
+      "claim": "byCurrency is omitted from a member row whenever no amount accrued, not only when the member has no financial settings, so absence no longer identifies REQ-02-018",
+      "witness": {
+        "kind": "rule",
+        "detail": "The contracts state byCurrency 'is **absent** — not empty, not null — on a member with no financial settings (REQ-02-018)', which makes absence the signal for that one condition. The guard written is `if (options.includeAmounts && byCurrency.size > 0)`, and byCurrency stays empty for any member no holiday reaches. Under Edge case 23 — the sourced country set is empty, every member at zero days — a member who does hold MemberFinancials comes back with no byCurrency key, the same body REQ-02-018 reserves for a member who holds none. TC-02-INT-12 cannot catch this: it asserts only that the member without settings has no byCurrency key, which the current code satisfies for the wrong reason. The document does not say what a member with settings and no holidays should carry, so this is a note rather than a contradiction.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md — §GET .../holidays/summary"
+      },
+      "suggestedFix": "decide presence on whether the member resolved any currency at all (live row or snapshot), not on whether the accumulated map is non-empty"
+    },
+    {
+      "stage": "review",
+      "id": "S1-N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-19",
+      "rule": "reviewer — correctness patterns",
+      "file": "apps/api/src/holidays/holiday-sourcing.service.ts",
+      "symbol": "sync",
+      "line": 207,
+      "claim": "the Holiday rows and the HolidayImport record that together make a country `sourced` are written in two unrelated statements with no transaction, so a failure between them leaves rows written and the country still reported unsourced",
+      "witness": {
+        "kind": "scenario",
+        "detail": "sync() calls writeEntries (line 207), which issues one prisma.holiday.create per accepted entry, and only then calls recordImport (line 218). A connection drop or a non-P2002 database error after the fifth of ten inserts propagates out of sync() as a 500 with five Holiday rows committed and no HolidayImport row. The country then reads `unsourced` from sourcingBlock, REQ-02-012 makes the screen issue a fresh sync on the next load, and that sync re-fetches. The state does converge — REQ-02-006 skips the five already-written dates and REQ-02-021 records the offered count — so no row is duplicated and nothing is double-paid. Recorded as a note because the recovery is named by the spec and the spec states no transaction requirement for the import, explicitly taking no lock (Edge case 12).",
+        "source": "apps/api/src/holidays/holiday-sourcing.service.ts:218"
+      },
+      "suggestedFix": "none required against the document; if it is wanted, wrap one country's writes and its import record in a single prisma.$transaction — the provider call is already outside it, so nothing awaits the network inside"
+    },
+    {
+      "stage": "review",
+      "id": "S1-N4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "contracts §GET .../holidays vs §GET .../holidays/summary",
+      "file": "apps/api/src/holidays/holiday-sourcing.service.ts",
+      "symbol": "sourcingBlock",
+      "line": 134,
+      "claim": "`holidayCount` names two different quantities on two routes of one screen, and the document defines it for only one of them",
+      "witness": {
+        "kind": "rule",
+        "detail": "In the sourcing block the code returns the import record's stored value (`holidayCount: record?.holidayCount ?? 0`), which the Data Model defines as what the provider OFFERED — 'not how many rows were written (REQ-02-021)'. In the summary the same field name counts stored Holiday rows: 'the number of holidays stored whose countryCode is that code' (REQ-02-013). The two are equal in the contracts' examples (PL 13 in both), so the examples cannot distinguish the readings, and no sentence defines the sourcing block's field. After Edge case 8 — an admin deletes one imported PL holiday — the same screen shows PL as 13 in the sourcing block and 12 in the summary. The implementation's reading is defensible; what is missing is a sentence saying which it is.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md — §Data Model, HolidayImport.holidayCount"
+      },
+      "suggestedFix": "state in the contracts what sourcing.countries[].holidayCount counts, or give the two fields different names"
+    },
+    {
+      "stage": "review",
+      "id": "S2-N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-24",
+      "rule": "cases §TC-02-INT-14 — '200 within the bound plus a small margin'",
+      "file": "apps/api/test/holiday-sourcing.spec.ts",
+      "symbol": "TC-02-INT-14",
+      "line": 785,
+      "claim": "the call-bound assertion allows a margin sixteen times the bound, so it does not observe that the call was abandoned at the bound",
+      "witness": {
+        "kind": "test",
+        "test": "TC-02-INT-14",
+        "detail": "The case sets provider.callBoundMs = 300 (line 777) and then asserts expect(elapsed).toBeLessThan(provider.callBoundMs + 5000) (line 785), i.e. under 5300ms. An implementation that ignored the configured value and raced against a hardcoded 4000ms deadline would satisfy this assertion while violating REQ-02-011, and this case is the only observation of that requirement. The assertion is not unfalsifiable — apps/api/jest.config.js sets testTimeout 30000 and the double's `never` behaviour waits ten minutes, so a bound ignored entirely still fails — but the margin is not the 'small' one the case names.",
+        "source": "specs/time-off/02-holiday-sourcing.cases.md — TC-02-INT-14 Expected Result"
+      },
+      "suggestedFix": "assert against a margin proportionate to the bound the case sets, e.g. elapsed < provider.callBoundMs * 4, or a fixed 1000ms"
+    },
+    {
+      "stage": "review",
+      "id": "S2-N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "reviewer — blast radius: the driver a deployed environment runs is unexercised",
+      "file": "apps/api/src/holidays/provider/nager-holiday.provider.ts",
+      "symbol": "NagerHolidayProvider.holidays",
+      "line": 26,
+      "claim": "no test at any level exercises NagerHolidayProvider or resolveHolidayProviderConfig, so the only driver production selects and the boot-time refusal it depends on are never run",
+      "witness": {
+        "kind": "test",
+        "test": "none",
+        "detail": "apps/api/test/holiday-sourcing.spec.ts replaces the port wholesale (overrideProvider(HolidayProvider).useValue(provider), lines 240-241) with StubHolidayProvider, which extends FakeHolidayProvider. Grepping the repository finds no other reference to NagerHolidayProvider, resolveHolidayProviderConfig or HolidayProviderConfigError outside holiday.provider.ts. So the non-2xx branch (nager-holiday.provider.ts:41-43), the non-array branch (45-47), the abort wiring (33-34) and the config resolver's refusal of an unknown HOLIDAY_PROVIDER and of a non-positive HOLIDAY_PROVIDER_TIMEOUT_MS are all unrun code. The cases file names no test id for them, so this is a gap the spec left open rather than a missing spec-named case — worth a person's decision.",
+        "source": "apps/api/test/holiday-sourcing.spec.ts:240"
+      },
+      "suggestedFix": "a cheap unit test over resolveHolidayProviderConfig (defaults and the two throws) and a driver test over an injected fetch double covering non-2xx, non-array and abort"
+    },
+    {
+      "stage": "review",
+      "id": "S2-N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "reviewer — resource handling on the failure path",
+      "file": "apps/api/src/holidays/provider/nager-holiday.provider.ts",
+      "symbol": "NagerHolidayProvider.holidays",
+      "line": 41,
+      "claim": "on a non-2xx answer the response body is neither read nor cancelled, so the socket is held until garbage collection",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The provider answers 503 for 2026/IN. Line 41 throws without touching response.body, and the finally at line 60 clears the abort timer, so nothing ever aborts the request either. Under undici a response whose body is not consumed or cancelled keeps its connection out of the pool until the object is collected. REQ-02-009's observable behaviour is unaffected — the country is reported unsourced and the request answers 200 — so this is a resource note, not a rule violation.",
+        "source": "apps/api/src/holidays/provider/nager-holiday.provider.ts:41"
+      },
+      "suggestedFix": "await response.body?.cancel() (or void response.text()) before throwing on a non-2xx"
+    },
+    {
+      "stage": "review",
+      "id": "S3-3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "REQ-02-012",
+      "rule": "REQ-02-012 — the screen syncs without being asked",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "auto-sync effect",
+      "line": 405,
+      "claim": "a year whose auto-sync was abandoned by a tab switch is marked synced and is never synced again for the life of the page",
+      "witness": {
+        "kind": "scenario",
+        "detail": "autoSynced.current.add(year) (line 405) runs BEFORE runSyncRef.current(...), and the effect's cleanup aborts that request when year changes. An admin opens 2026 with both countries unsourced, the sync is issued, and within the provider's call bound they click the 2027 tab: the cleanup aborts controller A and runSync catches AbortError and returns. Clicking back to 2026 re-reads the list; if the aborted request did not reach the server or its writes did not land, sourcing still reports the countries unsourced and needsSync is true again — but autoSynced.current.has(2026) short-circuits the effect at line 404. The year then sits behind the uncovered banner with no sync issued until Refresh is pressed or the page is reloaded, which is the click REQ-02-012 says must not be needed. In practice the server usually completes the handler after a client abort, which masks it — hence a note rather than a claim of certain breakage.",
+        "source": "specs/time-off/02-holiday-sourcing.md — REQ-02-012"
+      },
+      "suggestedFix": "record the year in autoSynced when the sync answers rather than when it is issued, and delete the entry on abort"
+    },
+    {
+      "stage": "review",
+      "id": "S3-4",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-27",
+      "rule": "CLAUDE.md — Testing; the ids are named in the specs",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/HolidaySummary.tsx",
+      "symbol": "countryKey",
+      "line": 203,
+      "claim": "the global summary row is tagged holiday-summary-country-all and -all-days, ids no document in the bundle names",
+      "witness": {
+        "kind": "rule",
+        "detail": "The contracts' testid roster names only holiday-summary-country-{countryCode} and holiday-summary-country-{countryCode}-days, and the summary sample shows the global row's countryCode as JSON null. countryKey (HolidaySummary.tsx:203) substitutes the string 'all', a spelling chosen here rather than in any document — so TC-02-INT-08's 'row keyed null' has no named selector on the screen and the next test to want it will invent a second spelling. No E2E case currently selects it, which is why this is a note.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md — Required data-testid Attributes"
+      },
+      "suggestedFix": "name the global row's id in the bundle's testid roster, or key it on the value the API sends"
+    },
+    {
+      "stage": "review",
+      "id": "S3-5",
+      "target": "code",
+      "severity": "note",
+      "criterion": "REQ-02-014",
+      "rule": "REQ-02-014 — days by person",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/HolidaySummary.tsx",
+      "symbol": "memberColumns / countryCode",
+      "line": 99,
+      "claim": "a member who resolves to no country is shown 'All' in the Country column, which reads as the opposite of the truth",
+      "witness": {
+        "kind": "scenario",
+        "detail": "render: (row) => row.countryCode ?? holidayCountryLabel(null), and holidayCountryLabel(null) returns the literal 'All' (apps/web/app/org/[orgId]/settings/holidays/country-options.ts:26). Under Edge case 3 — no member has a country and the organization has none — the summary reports every member with a null resolved country and zero days; their row then reads 'Sam Reed  All  0 days', which says the member gets every country's holidays when they resolve to none. 'All' is the right word for the country TABLE's null row but not for a person. No document specifies this cell, which is why it is a note.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md — Edge case 3"
+      },
+      "suggestedFix": "render an em dash, or a word the bundle names, for a member with no resolved country"
+    },
+    {
+      "stage": "review",
+      "id": "S3-6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-16",
+      "rule": "sweep 4 — an untrusted value that should have been discarded is stored instead",
+      "file": "packages/validation/src/holiday-sourcing.ts",
+      "symbol": "acceptProviderEntries",
+      "line": 229,
+      "claim": "the date filter accepts a day of 1-31 in any month, so an impossible date is accepted rather than discarded and is written on a different day from the one the provider sent",
+      "witness": {
+        "kind": "command",
+        "detail": "The month/day guard is `if (month < 1 || month > 12 || day < 1 || day > 31)`, so '2026-02-30' and '2026-04-31' pass Rule 4 and are pushed into accepted. The consumer is asUtcDate in apps/api/src/holidays/holiday-sourcing.service.ts:470 — new Date(`${date}T00:00:00.000Z`) — and its value goes straight to prisma.holiday.create at line 357. I ran `node -e \"console.log(new Date('2026-02-30T00:00:00.000Z').toString())\"` and it printed 'Mon Mar 02 2026 03:00:00 GMT+0300', so the date does not become an Invalid Date that throws: it silently rolls over and a paid holiday is stored on 2 March. That is a stored row claiming a day the provider never offered, where Validation Rules 4-6 promise 'A provider entry that fails any of them is discarded and counted in `discarded`'. Neither shipped driver produces such a date and the double's malformedShape exercises a long name and a wrong year but not an impossible day, which is why this is a note. (Shard 3 raised this with a witness saying the value becomes an Invalid Date; that mechanism is wrong and the corrected one is above.)",
+        "source": "packages/validation/src/holiday-sourcing.ts:229"
+      },
+      "suggestedFix": "reject a day the month does not have — a round-trip check that the parsed date re-serializes to the same string — and add an impossible-date entry to the double's malformed shape"
+    },
+    {
+      "stage": "review",
+      "id": "S3-7",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "sweep 9 — a pair that must agree across a file boundary",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/types.ts",
+      "symbol": "HolidaySourcingSettings",
+      "line": 91,
+      "claim": "the type declared for the sourcing settings route is imported nowhere; both call sites re-declare its shape inline",
+      "witness": {
+        "kind": "rule",
+        "detail": "types.ts exports HolidaySourcingSettings { includeOrgCountry: boolean }, and page.tsx casts the same body inline twice — line 329 `as { includeOrgCountry: boolean }` on the GET and line 429 on the PUT. The file's own docstring says these interfaces 'mirror what the API returns', so a second, unlinked copy of the shape is exactly the drift the file exists to prevent: a change to the route updates the type nobody reads and leaves both casts as they were.",
+        "source": "apps/web/app/org/[orgId]/settings/holidays/types.ts:1"
+      },
+      "suggestedFix": "import and use HolidaySourcingSettings at both call sites, or delete it"
+    },
+    {
+      "stage": "review",
+      "id": "S3-8",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "sweep 9 — the summary and the year it is labelled with",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/HolidaySummary.tsx",
+      "symbol": "HolidaySummary",
+      "line": 27,
+      "claim": "the component takes year and summary as independent props and never checks that summary.year === year, so a year change paints the new year's heading over the old year's figures for one commit",
+      "witness": {
+        "kind": "scenario",
+        "detail": "setYear (page.tsx:616) commits a render before the effect that runs loadSummary, which is what sets summaryLoading. In that render year is 2027 and summary still holds 2026's body, so the band reads 'Paid public days, 2027' above 2026's country and member rows, and both table aria-labels say 2027 too. The sibling path is guarded exactly this way — `sourcing.year === year` at page.tsx:392 — so the screen holds one convention in one place and not the other. It resolves on the next commit, which is why it is a note.",
+        "source": "apps/web/app/org/[orgId]/settings/holidays/page.tsx:392"
+      },
+      "suggestedFix": "treat a summary whose year differs from the prop as absent, the way needsSync already does for the sourcing block"
+    },
+    {
+      "stage": "review",
+      "id": "S3-9",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "sweep 5 — the empty-state branch under a country filter",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "HolidaysPage render",
+      "line": 583,
+      "claim": "with a country filter applied and any country in the set unsourced, the list area renders nothing at all — neither the filtered empty state nor a table",
+      "witness": {
+        "kind": "scenario",
+        "detail": "isEmpty = noHolidays && !hasUnsourced (line 583), and hasUnsourced is computed over the whole sourced set, ignoring the filter. An organization with PL sourced and IN unsourced, filtered to US via holidays-country-filter: the read returns no rows, noHolidays is true, hasUnsourced is true, so both EmptyState branches are skipped and the list area renders null. The admin sees the summary, the uncovered banner about India, and an empty gap where the answer to 'are there any US holidays' belongs — HOLIDAY_MESSAGES.emptyStateCountry exists for exactly that question. The contracts scope the suppression to the claim 'no holidays', which the filtered message does not make.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md — §UI Description, Empty"
+      },
+      "suggestedFix": "let the country-filtered empty state draw whenever the filter is on, gating only the unfiltered 'this year has no holidays' claim on hasUnsourced"
+    },
+    {
+      "stage": "review",
+      "id": "L1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "contracts §Validation Rules — 'The client re-runs rules 1 to 3 before spending a request'",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "handleToggleIncludeOrgCountry",
+      "line": 422,
+      "claim": "the client half of Validation Rules 1 to 3 is implemented nowhere — no web file imports a validator for year, includeOrgCountry or refresh",
+      "witness": {
+        "kind": "command",
+        "detail": "`grep -rn 'validateSyncYear|validateIncludeOrgCountry|validateRefreshFlag' apps/web` returns nothing; the only validator the holidays screen imports is validateHolidayName, in HolidayModal.tsx. The contracts' Validation Rules table marks rules 1 to 3 `Server-only: no` and the prose states 'The client re-runs rules 1 to 3 before spending a request. The server re-validates all seven.' The server half is present and correct (validateSyncYear at holiday-sourcing.service.ts:152 and holiday-summary.service.ts:84, validateRefreshFlag at 163, validateIncludeOrgCountry at holiday-sourcing-settings.service.ts:67), so CR-08 does not fire and no message is written inline — the 422 field message is rendered from the server's response at page.tsx:439. Reported as a note rather than a blocker because no path through the screen can produce an invalid value: year comes from generated tabs and includeOrgCountry from a checkbox, so the two 422 messages are unreachable from the UI, no numbered requirement states the client half, and no test case asserts it.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md — §Validation Rules"
+      },
+      "suggestedFix": "either run the two validators before the fetch in page.tsx, or amend the contracts to mark rules 1 to 3 as server-checked with no client copy"
+    },
+    {
+      "stage": "review",
+      "id": "L0a",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-02-023",
+      "rule": "prior blocker S3-1 — closed for the `empty` half, open for the `unsourced` half",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Required data-testid Attributes / holiday-sourcing-uncovered",
+      "line": 222,
+      "claim": "S3-1 is closed as it was written: `empty` is no longer worded as 'does not cover this country'. The second half of that finding's witness — a country the screen calls uncovered while its provider call is still in flight — was not settled and is restated here as a note.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Closed: contracts.md:288 now reads 'each line carrying the message its own state names: `countryNotCovered` for `unsourced`, `countryNoHolidays` for `empty`', Edge case 5a (contracts.md:303) says the `empty` line must never carry `countryNotCovered`, the roster row (:223) reads 'present per country in either state, carrying the message its own state names', and the screen implements exactly that split (page.tsx:917-921, dispatched at :728 over entries filtered `state !== 'sourced'` at :585). The state is really produced — holiday-sourcing.service.ts:225 records the offered count and stateOf maps 0 to `empty` — and TC-02-E2E-03 asserts VA carries the new sentence and not the old one (e2e/tests/holidays.spec.ts:578-582). I grepped both spec files for `countryNotCovered`: no statement still attaches it to `empty`. Still open: contracts.md:222 keeps the banner 'present when at least one country is `unsourced` or `empty`', and a country with no import record reads `unsourced` from the first list read onward. So on a fresh year the screen draws 'Poland: The holiday service does not cover this country. Add its holidays by hand.' for the whole of the sync REQ-02-012 issues — up to the 8000ms call bound of HOLIDAY_PROVIDER_TIMEOUT_MS — about a country the provider is answering for at that moment. Nothing in the bundle forbids it (§UI Description's Syncing row speaks only of the status line, the tabs, the list and the summary), which is why this is a note and not the contradiction it was half of.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md:222"
+      },
+      "suggestedFix": "say in §UI Description whether a country that has not been asked yet carries a line at all — an `unsourced` country during the sync REQ-02-012 issues has not been refused, it has not been asked"
+    },
+    {
+      "stage": "review",
+      "id": "L0b",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "prior blocker S3-2 — closed",
+      "file": "e2e/tests/holidays.spec.ts",
+      "symbol": "the checkbox changes the country set, and the change survives a reload",
+      "line": 519,
+      "claim": "S3-2 is closed. The refresh half of TC-02-E2E-02 now carries two assertions that fail if Refresh does nothing, and the case's Expected Result — that the status APPEARS — is the one being made.",
+      "witness": {
+        "kind": "test",
+        "test": "TC-02-E2E-02",
+        "detail": "e2e/tests/holidays.spec.ts:527-543. `page.waitForResponse` is armed before the click and matches only a POST to /holidays/sync whose `postDataJSON().refresh === true`, so a click that sends nothing hangs it to the test timeout; then `expect(status).toBeVisible()` and `toContainText(syncing)` are asserted before `toHaveCount(0)`, the shape TC-02-E2E-01 uses at :445-448. `holiday-sourcing-status` is rendered only while `syncing` (HolidaySourcingPanel.tsx:69), which runSync sets synchronously before its fetch (page.tsx:346), so the assertion observes the click's own effect rather than a race. The preceding `toHaveCount(0)` at :526 lets REQ-02-012's automatic sync finish first, and the flag match keeps that sync from satisfying the wait. The implementer records having verified it by breaking the code — with `onRefresh` a no-op the case fails at the visibility assertion (stages/implement.attempt-4.md, 'Commands run'), which is the check this finding asked for.",
+        "source": "e2e/tests/holidays.spec.ts:519"
+      },
+      "suggestedFix": "none — recorded as closed"
+    },
+    {
+      "stage": "review",
+      "id": "L1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "an abandoned read leaves the summary claiming it is still loading",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "loadSummary",
+      "line": 283,
+      "claim": "`loadSummary` sets `summaryLoading` true and returns on an abort without ever clearing it, and the auto-sync effect aborts that signal at the moment its own success flips `needsSync` false — so a successful automatic sync can leave the summary block on its preloader until the year tab moves. `runSync` guards exactly this with a run counter in `finally`; the two reads it drives do not.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An admin opens Settings › Holidays on a year whose countries are all unsourced. The effect at page.tsx:404-411 issues runSync with `controller.signal` and returns `() => controller.abort()`. runSync awaits `Promise.all([load(signal), loadSummary(signal)])` (:371). `load` resolves first and calls setSourcing with a block in which every country is now `sourced` (:211), so `needsSync` (:397-400) flips to false; React commits that render and runs the previous effect's cleanup, which aborts the signal `loadSummary` is still waiting on. In loadSummary, `setSummaryLoading(true)` ran at :283, the fetch rejects with AbortError, the catch at :302 returns before `setSummaryLoading(false)` at :306, and the trailing `if (signal?.aborted) return` guards it too. Nothing re-runs loadSummary for the same year — the read effect's deps are `load`/`loadSummary`, whose identities depend only on orgId/year/country — so HolidaySummary keeps rendering the Preloader branch (HolidaySummary.tsx:46) with the figures sitting on the server. I verified each line and the effect ordering rather than taking the shard's word. Kept as a note, not raised to a blocker, for two reasons: the window is the few milliseconds between `load`'s commit and the summary response, and the paths that reach it — TC-02-E2E-01 and TC-02-E2E-04, both of which sync a set that ends fully `sourced` — are recorded green in stages/implement.attempt-4.md ('20 passed'), so the race does not reproduce in the reference environment; and CR-18's 'class of call sites' is a reading of one unhandled path rather than a mechanism plainly missing at several. A slower summary read than list read is what makes it fire, which is a loaded database.",
+        "source": "apps/web/app/org/[orgId]/settings/holidays/page.tsx:302"
+      },
+      "suggestedFix": "clear `summaryLoading` (and `loading`) in a `finally` guarded by a run counter, the way runSync guards `setSyncing` at page.tsx:381 — its own comment states the rule: 'a run that was abandoned must not leave one up forever'"
+    },
+    {
+      "stage": "review",
+      "id": "L2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "the year guard is applied to the summary and not to the warning beside it",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "uncovered",
+      "line": 584,
+      "claim": "This pass added `summary.year !== year` to HolidaySummary so the block never labels one year's figures with another year's heading, and `needsSync` already asks `sourcing.year === year` — but `uncovered` and `hasUnsourced` read `sourcing` with no such check, so after a year-tab change the warning keeps naming the previous year's uncovered countries for the whole of the new year's list read.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A member resolves to IN, which the provider refuses. Under the current year the banner carries `holiday-sourcing-uncovered-IN` with `countryNotCovered`. The admin clicks the tab for year+1, for which IN was recorded `empty` by an earlier sync: `load(signal)` for the new year is in flight and `sourcing` still holds the old year's block, so page.tsx:584-585 keeps drawing the IN line with `countryNotCovered` under a year whose state is `empty` — the very sentence Edge case 5a says that state must never carry. The summary beside it now correctly waits (HolidaySummary.tsx:46), which is what makes the two disagree on screen at the same instant. `isEmpty` at :583 reads the same stale `hasUnsourced`.",
+        "source": "apps/web/app/org/[orgId]/settings/holidays/page.tsx:584"
+      },
+      "suggestedFix": "derive both from `sourcing?.year === year ? sourcing.countries : []`, the question needsSync already asks at :399"
+    },
+    {
+      "stage": "review",
+      "id": "L3",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "contracts §Validation Rules row 4 vs the filter that now ships",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Validation Rules / 4",
+      "line": 195,
+      "claim": "The code now discards a provider date that names a day its month does not have; the document's Rule 4 still states the constraint as the format and the year only, so the two disagree about what a conforming entry is and the document is the weaker statement.",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts.md:195 — '| 4 | A provider entry's `date` | `YYYY-MM-DD` and inside the requested year | discarded silently, counted | yes |'. Against it, packages/validation/src/holiday-sourcing.ts:190-196 adds isRealCalendarDay, which round-trips the value through a UTC Date and requires the same string back, and :239 discards when it fails; holiday-sourcing.test.ts:210-219 pins that `2026-02-31` is discarded. Under the document as written that entry passes Rule 4 and the §Decision table's first row then creates a Holiday for it. The code's reading is the better one — asUtcDate (holiday-sourcing.service.ts:470) rolls `2026-02-31` to 3 March, so the document's reading stores a paid day the provider never offered — which is why this is addressed to the document rather than to the code, and why it is a note: an implementation satisfying the document literally exists, it is just the wrong one.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md:195"
+      },
+      "suggestedFix": "state Rule 4 as '`YYYY-MM-DD`, a day that exists, and inside the requested year'"
+    },
+    {
+      "stage": "review",
+      "id": "L4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "the prose under a table counts its rows",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Error Messages",
+      "line": 150,
+      "claim": "The §Error Messages table gained `countryNoHolidays` this pass and now carries five rows marked `—`, while the sentence under it still says four. The same count is stale in the code that mirrors the table and in the unit suite that pins it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts.md:150 — 'The four `—` rows are screen text, emitted by no route.' The table above it (:139-147) marks `—` on syncFailedSome, countryNotCovered, countryNoHolidays, syncing and summaryUnavailable: five. packages/validation/src/holiday-sourcing.ts:20 repeats 'The four rows the table marks `—`', and packages/validation/src/holiday-sourcing.test.ts:105 names its suite '§Error Messages — the six rows, verbatim' while asserting seven at :106-124. The assertions themselves are complete against the table; it is the counts a reader uses to tell whether a row went unasserted that are one behind.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md:150"
+      },
+      "suggestedFix": "name the set rather than its size in all three places — 'the rows the table marks `—`', 'every HOLIDAY_SOURCING_MESSAGES row, verbatim'"
+    },
+    {
+      "stage": "review",
+      "id": "L5",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-02-018",
+      "rule": "the document is silent where the code now decides",
+      "file": "apps/api/src/holidays/holiday-summary.service.ts",
+      "symbol": "buildSummary",
+      "line": 270,
+      "claim": "Keying `byCurrency` on financial settings rather than on the accumulated map is the better reading and closes pass 1's S1-N2, but it produces a body shape the bundle names nowhere — a member who holds settings and whom no holiday reached now carries `byCurrency: []` — and that rule now lives only in the code and in an integration test with no case id.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-02-018 ('IF a member has no financial settings, THEN THE SYSTEM SHALL omit their amounts entirely') and contracts.md:125 ('It is **absent** — not empty, not null — on a member with no financial settings') both speak only of the member without settings, so neither forbids the empty list; holiday-summary.service.ts:270 now sends it, pinned by apps/api/test/holiday-sourcing.spec.ts:762-766 under no numbered case. The condition is exactly 'has settings': a snapshot is only ever written in the same transaction that upserts the live row (vacation.service.ts:329-339), which I checked, so `history.length > 0 && live === null` is unreachable. Under Edge case 23 — an empty sourced set — every member with settings now carries `byCurrency: []` where they previously carried no key, which is a response-shape change no document records.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md:125"
+      },
+      "suggestedFix": "add the row beside Edge case 16 — 'A member with settings whom no holiday reached: `byCurrency` present and empty' — and give the new integration case an id"
+    },
+    {
+      "stage": "review",
+      "id": "L6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "a bound proportional to the call bound also has to cover the writes in the same request",
+      "file": "apps/api/test/holiday-sourcing.spec.ts",
+      "symbol": "TC-02-INT-14",
+      "line": 814,
+      "claim": "The tightened margin is right in intent — a fixed +5000ms passed against a service that ignored the configured bound — but `callBoundMs * 4` is 1200ms measured around the whole HTTP request, which also signs in, resolves the country set, writes 14 Polish holidays one create at a time and records two imports. Roughly three quarters of the budget belongs to work the bound says nothing about, so a loaded database and a timing regression now fail the same way.",
+      "witness": {
+        "kind": "test",
+        "test": "TC-02-INT-14",
+        "detail": "apps/api/test/holiday-sourcing.spec.ts:806 sets provider.callBoundMs = 300; :814 asserts elapsed < callBoundMs * 4 over `sync(...)`, which performs the PL import (14 rows through writeEntries' per-date existence check) and the IN abandonment in one request. The previous assertion was callBoundMs + 5000.",
+        "source": "apps/api/test/holiday-sourcing.spec.ts:814"
+      },
+      "suggestedFix": "time the mechanism rather than the request — a sync whose only country is `neverAnswers` has no writes to pay for, and `callBoundMs * 4` over that is a bound on the deadline itself"
+    },
+    {
+      "stage": "review",
+      "id": "L7",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-16",
+      "rule": "the comment names a different mechanism from the one the line performs",
+      "file": "apps/api/src/holidays/provider/nager-holiday.provider.ts",
+      "symbol": "NagerHolidayProvider.holidays",
+      "line": 42,
+      "claim": "The comment says 'Read the body to completion before abandoning it'; the line cancels the body, which is the correct way to release the socket and is not what the sentence describes. The behaviour is right — this closes pass 1's S2-N3 — and only the comment is wrong, on the line a reader consults before changing it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "apps/api/src/holidays/provider/nager-holiday.provider.ts:42-45 — the comment above `await response.body?.cancel().catch(() => undefined);`. Optional chaining short-circuits the whole call chain when `response.body` is null, so the null case is safe, the `.catch` swallows a cancel racing the abort, and the throw still reaches REQ-02-009's unsourced path. The non-array branch below needs no equivalent because `response.json()` has already drained the body.",
+        "source": "apps/api/src/holidays/provider/nager-holiday.provider.ts:42"
+      },
+      "suggestedFix": "'Release the body before abandoning the response' — a cancel is a release, not a read"
+    },
+    {
+      "stage": "review",
+      "id": "L8",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "one file applies two conventions for asserting a message",
+      "file": "e2e/tests/holidays.spec.ts",
+      "symbol": "TC-02-E2E-02",
+      "line": 536,
+      "claim": "TC-02-E2E-03 was changed this pass to assert the two country sentences as literal document text, on the stated grounds that asserting the imported constant certifies whatever the code says — while the status assertion in the test above still reads `HOLIDAY_SOURCING_MESSAGES.syncing`. Not a hole, since the unit suite pins all seven rows verbatim; two halves of one file applying opposite conventions.",
+      "witness": {
+        "kind": "rule",
+        "detail": "e2e/tests/holidays.spec.ts:536 `await expect(status).toContainText(HOLIDAY_SOURCING_MESSAGES.syncing);` against :571-573, 'The document's own wording, not the constant the screen imports — asserting the constant would certify whatever the screen happens to say', immediately above two literal assertions.",
+        "source": "e2e/tests/holidays.spec.ts:571"
+      },
+      "suggestedFix": "pick one and say why — either assert 'Fetching public holidays…' literally beside the others, or record that the verbatim duty is discharged at unit level and the E2E may use the constant"
+    },
+    {
+      "stage": "review",
+      "id": "L9",
+      "target": "handoff",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "a tool read without its run id answers about a different run",
+      "file": "scripts/review-slice.mjs",
+      "symbol": "review-slice",
+      "line": 1,
+      "claim": "The shard reported that `review-slice.mjs` printed a 13-file slice at base 384d8c6 against the 11 files at base 22ac051 the prompt named, and cleared the difference by diffing the two extra files. I restate it: run with no run id the script does not describe this run at all — it prints 'pass 1' for a different run directory — so the two outputs were never about the same change, and the run's own accounting is unaffected.",
+      "witness": {
+        "kind": "command",
+        "detail": "`node scripts/review-slice.mjs 2026-09-07T10-33-36_time-off-02-holiday-sourcing --shape lead-open` prints '# Review slice — pass 2 / # 22ac051..98177a4 — what review 1 judged / the whole change is 31 files; this slice is 11'. `node scripts/review-slice.mjs` with no arguments prints '# Review slice — pass 1 / # 384d8c6..98177a4 — the run base — this is the first pass / the whole change is 13 files; this slice is 13' — a different run base and a different scope. The shard's own check still holds and is worth keeping: `git diff 22ac051..HEAD -- apps/api/src/holidays/provider/holiday-provider.ts apps/api/test/stub-holiday.provider.ts` is empty, so nothing outside the 11 moved since the last judgement.",
+        "source": "scripts/review-slice.mjs"
+      },
+      "suggestedFix": "none for this run; if the script can tell that it was run inside a run directory, defaulting to that run would stop the next reader reviewing a slice from somewhere else"
+    },
+    {
+      "stage": "review",
+      "id": "L10",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "carry-forward — pass 1 notes left open on purpose",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "HolidaysPage",
+      "line": 583,
+      "claim": "Nine of pass 1's fifteen notes were closed by this attempt and I confirmed each against the code. Six remain open and none of them is a blocker; they are listed here so a person reads them in one place, with their witnesses in stages/review.attempt-1.json.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Closed and verified: S3-6 (impossible dates discarded, holiday-sourcing.ts:190/239), S1-N2 (byCurrency on settings, holiday-summary.service.ts:270 — see L5), S2-N3 (body cancelled, nager-holiday.provider.ts:42 — see L7), S2-N1 (margin now callBoundMs * 4 — see L6), S3-4 (global row keyed on the API's own value, HolidaySummary.tsx:210; the roster still names no id for it and no test selects it), S3-5 (a member with no country renders '—', HolidaySummary.tsx:103), S3-8 (summary year guard, HolidaySummary.tsx:47), S3-3 (autoSynced.current.delete(year) on abort and on a non-200, page.tsx:361 and :376 — I checked the effect cannot loop: a non-200 changes no dependency, so nothing re-issues), S3-7 (HolidaySourcingSettings used at both call sites, page.tsx:331 and :436). Still open: S1-N1 (the shipped holiday gates do not run normalizeRole while the new ones do — holidays.service.ts:269,278; no new authorization code was added there, so CR-04 does not fire), S1-N3 (holiday rows and the import record are written in two statements with no transaction, holiday-sourcing.service.ts:207/218), S1-N4 (`holidayCount` names the offered count in the sourcing block and a row count in the summary, and no sentence defines the first), S2-N2 (nothing at any level exercises NagerHolidayProvider or resolveHolidayProviderConfig — the only driver a deployed environment selects), S3-9 (with a country filter applied and any country unsourced, the list area renders neither empty state — page.tsx:583, `isEmpty = noHolidays && !hasUnsourced`, with `isCountryFiltered` only reached through isEmpty), and pass 1's L1 (no web file re-runs Validation Rules 1 to 3 before spending a request, which the contracts say the client does; the server half is present and correct, so CR-08 does not fire).",
+        "source": ".workflow/runs/2026-09-07T10-33-36_time-off-02-holiday-sourcing/stages/review.attempt-1.json"
+      },
+      "suggestedFix": "none required to proceed; S2-N2 and pass 1's L1 are the two a person should rule on, because one leaves the production driver unrun and the other leaves a sentence in the contracts that nothing implements"
+    }
+  ],
+  "preflight": {
+    "at": "2026-09-07T10:33:36.999Z",
+    "checks": [
+      {
+        "name": "config-valid",
+        "ok": true,
+        "detail": ".claude/ai-workflow.config.json parses and every track resolves"
+      },
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/holiday-sourcing\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-available",
+        "ok": true,
+        "detail": "the suite would take 3000/4000"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "31 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260825130709_hiring_vacancies_candidates_applications",
+      "20260826094500_application_cv_size",
+      "20260826121829_add_invitations_and_job_title",
+      "20260826150000_hiring_categories",
+      "20260826170000_hiring_criteria",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_manage_booking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260828170000_application_cv",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_candidate_soft_delete",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants",
+      "20260904120000_time_off_01_vacation_calendar"
+    ]
+  },
+  "resumes": [
+    {
+      "at": "2026-09-07T11:43:11.592Z",
+      "stage": "pre_implement",
+      "from": "contested",
+      "detail": "1 finding(s) contested by the implementer: spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`",
+      "reason": null,
+      "headAtInit": {
+        "from": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
+        "to": "384d8c604e528f5edbe852b8999816a9ca0d8b05"
+      },
+      "specEdits": [
+        "specs/time-off/02-holiday-sourcing.cases.md",
+        "specs/time-off/02-holiday-sourcing.contracts.md",
+        "specs/time-off/02-holiday-sourcing.md"
+      ],
+      "specSha": {
+        "from": "e252bfbad0bbdee03cb5cfe416943d38392c567d49cd8701dacc3efe336887ba",
+        "pendingUntilReplan": "7aaee48d10ed3c57b2b5095973b06ac7f81c4c361ea3f023e142d9cc07be104e"
+      }
+    },
+    {
+      "at": "2026-09-07T12:10:32.164Z",
+      "stage": "implement",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: spec/contradiction — specs/time-off/02-holiday-sourcing.contracts.md:221 vs specs/time-off/02-holiday-sourcing.md REQ-02-023 (specs/time-off/02-holiday-sourcing.contracts.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "384d8c604e528f5edbe852b8999816a9ca0d8b05",
+        "to": "c837454a282c4385229ada45deee16d6af841794"
+      },
+      "specEdits": [
+        "specs/time-off/02-holiday-sourcing.cases.md",
+        "specs/time-off/02-holiday-sourcing.contracts.md"
+      ]
+    }
+  ]
+}

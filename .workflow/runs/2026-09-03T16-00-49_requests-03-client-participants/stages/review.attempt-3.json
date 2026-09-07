@@ -1,0 +1,288 @@
+{
+  "status": "pass",
+  "reviewedUpTo": "e0ddf9f8cbf112fe33f3ffa2d0c66e66124bf247",
+  "covered": {
+    "slice": 5,
+    "read": [
+      "scripts/usage-recover.mjs",
+      "scripts/run-report.mjs",
+      "scripts/ship.mjs",
+      "scripts/spec-lint.mjs",
+      "scripts/refine-read.mjs"
+    ],
+    "unreached": []
+  },
+  "shards": [],
+  "sweep5": {
+    "requirements": 43,
+    "artefacts": 76,
+    "missing": [],
+    "detail": "spec-lint on the bundle is clean at HEAD with the reverted linter — 43 requirements, 43 cases, 18 routes, 27 messages, 32 testids. I re-ran the artefact existence checks myself rather than trusting it: all 31 data-testids named in the contracts' Required data-testid Attributes section resolve to a literal in apps/web, apps/api or e2e; all 27 MESSAGES.* exports named in the contracts resolve to a key in packages/validation/src; the 18 routes in the Routes table each have a controller method, including the new GET /api/organizations/{orgId}/request-contacts (requests.controller.ts:73) and the five client-contacts routes."
+  },
+  "sweep9": {
+    "pairs": 6,
+    "disagreeing": [],
+    "detail": "The pairs that could have been broken by this pass's change, which is a revert of five machinery scripts: (1) scripts/refine-read.mjs parseAgentLog against scripts/refine-tail.mjs money() — agree again, both at base; (2) parseAgentLog against scripts/run-report.mjs — both at base; (3) scripts/spec-lint.mjs parseContracts against its own checks — the reverted `guards`/`matrix` parsers had no consumer, so no assertion changed and the bundle still lints clean; (4) scripts/ship.mjs against scripts/wf.mjs — commitRecord was additive and its removal restores the base contract; (5) the removed scripts/usage-recover.mjs against its importers — grep across scripts/, package.json, .claude/ and docs/ finds no reference outside the aside worktree; (6) the contracts' Routes/messages/testids tables against the code, as in sweep 5."
+  },
+  "priorFindings": [
+    {
+      "id": "review-2 F1",
+      "criterion": "CR-31",
+      "status": "closed",
+      "detail": "Closed by removal, which is the right shape of fix. `git diff de9c5f9..HEAD -- scripts/` is now empty — all five machinery files are byte-identical to the run base, so parseAgentLog is back to `costUsd: +(result?.total_cost_usd ?? 0).toFixed(2)` (refine-read.mjs:109) and can no longer hand `null` to refine-tail.mjs:32's `money`. I checked the work was preserved rather than thrown away: branch build/board-and-records carries all five files plus the paired fix the blocker asked for — refine-tail.mjs's `money = (n) => (n == null ? '$—' : ...)` — so the cause and its guard now land together, off the run branch. That also closes review-2 N10 (machinery on the run branch) and makes review-2 N9, N11 and N15 moot for this diff, since ship.mjs, run-report.mjs and spec-lint.mjs no longer appear in it; those three remain live against build/board-and-records and should be judged when that branch merges."
+    },
+    {
+      "id": "review-1 F1",
+      "criterion": "CR-32",
+      "status": "closed",
+      "detail": "Re-verified at HEAD, not inherited. requests.service.ts:1042 refuses a locked row whose assigneeKind is not 'member' with 409 REQUEST_MESSAGES.invalidTransition before validateRequestAssignee runs, and [requestId]/page.tsx:212 computes showReassign as `!terminal && canViewAll && request.assignee.kind !== 'client'`. Carried forward as notes N1, N7 and N8 — the refusal is in code and in a test and in no requirement."
+    },
+    {
+      "id": "review-1 F2",
+      "criterion": "CR-29",
+      "status": "closed",
+      "detail": "Re-verified at HEAD. The route exists with SessionGuard + OrgScopeGuard and deliberately no @AllowClientPrincipal (requests.controller.ts:73, with the reason in its doc comment), and the capability is decided in the service. The contracts give it a Routes row with the create-request guard."
+    },
+    {
+      "id": "review-1 F3",
+      "criterion": "CR-26",
+      "status": "closed",
+      "detail": "Re-verified at HEAD. e2e/tests/client-participants.spec.ts:325 and :327 both pass `{ baseURL: WEB_ORIGIN }`, and e2e/environment.ts:46 derives WEB_ORIGIN from the port the suite claimed — no port is pinned."
+    },
+    {
+      "id": "review-1 F4",
+      "criterion": "CR-18",
+      "status": "closed",
+      "detail": "Re-verified at HEAD. apps/web/app/org/[orgId]/layout.tsx calls notFound() for a ready session whose principal is 'client' on any path outside /org/{orgId}/requests, before AppShell renders and before the loading branch returns — so the refusal is central and a screen added later is refused by default."
+    },
+    {
+      "id": "review-1 F5",
+      "criterion": "CR-25",
+      "status": "closed",
+      "detail": "Re-verified at HEAD. packages/validation/src/roles.test.ts:454-456 asserts hasCapability(null,'ViewOwnRequests') === true against can(null,…) === false and can(undefined,…) === false — the same absent role on both sides, so the case fails if `can` starts granting it."
+    }
+  ],
+  "findings": [
+    {
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": "specs/requests/01-requests.md requirement 35 and specs/requests/03-client-participants.md Known Gaps",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "reassignRequest",
+      "line": 1042,
+      "claim": "Carried unchanged from review 2. Reassign on a client-addressed row is refused with 409 invalidTransition and the control is withheld on the detail screen — a defensible reading of spec 03's Known Gaps row and edge case 5, but a refusal no requirement states. Spec 03's Routes table does not list the reassign route at all. Not blocked: the previous pass raised the opposite direction under CR-32 and it was addressed, and re-blocking in reverse is what the closed register exists to prevent. A person should decide whether the refusal stays and, if so, write it into spec 03 with its status and message.",
+      "witness": {
+        "kind": "rule",
+        "detail": "invalidTransition is scoped to \"every transition route\" in spec 01's error table; reassign has a section of its own documenting 200 and body validation only, and spec 03 amends no reassign behaviour in its own text.",
+        "source": "specs/requests/01-requests.md:687 and :605-608"
+      },
+      "suggestedFix": "Add a requirement and a Routes row to spec 03 naming the status and message for a reassign of a client-addressed request, and number the integration test that already asserts it."
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "specs/requests/03-client-participants.contracts.md — Security: \"It is visible on the contacts list, to holders of `view-clients`, and nowhere else: no request response carries it\"",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequestContacts",
+      "line": 420,
+      "claim": "Carried unchanged from review 2. `displayName: displayNameOf(row.account) || row.account.email` would put a contact's email into a response guarded by create-request, which a `user` holds while holding view-clients nowhere. No input reaches the fallback — both accept paths validate first and last name — so it is dead code that contradicts a written statement rather than a live leak.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The contracts fix the response as { id, displayName, clientId, clientName } and confine the address to view-clients holders; requests.dto.ts:21 states \"The contact's email address is never carried here\".",
+        "source": "specs/requests/03-client-participants.contracts.md:96 and :597"
+      },
+      "suggestedFix": "Drop the `|| row.account.email` fallback, or amend the PII bullet to name the one place an address can surface without view-clients."
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "contacts effect",
+      "line": 245,
+      "claim": "Carried unchanged from review 2. `contacts` is reset neither by the open-cycle re-seed that clears every other field nor on a failed read, so a stale contact can still be offered after it was removed elsewhere. The server decides, so this is stale convenience rather than a leak.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Open the modal, choose Client, contacts load; close; an admin removes that contact; reopen and choose Client while /request-contacts is failing — the previous list is still in state and offered, and creation then answers assigneeInactive.",
+        "source": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:159-194, 237-265"
+      },
+      "suggestedFix": "setContacts([]) in the open-cycle reset and on a non-ok response, the way topicsByAudience resets to { member: null, client: null }."
+    },
+    {
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Testing: \"Selectors are `data-testid` only, and the ids are named in the specs.\"",
+      "file": "e2e/tests/client-participants.spec.ts",
+      "symbol": "TC-03-E2E-04",
+      "line": 424,
+      "claim": "Carried unchanged from review 2. The navigation step selects the list row by rendered text rather than by request-row-{id}. Not blocked under CR-27: the id is unavailable because the request was created through the UI, and the file follows an established pattern.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-03-E2E-04, e2e/tests/client-participants.spec.ts:424",
+        "source": "e2e/tests/client-participants.spec.ts:424"
+      },
+      "suggestedFix": "Resolve the created request's id and click request-row-{id}, if a testid selector is wanted here."
+    },
+    {
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "e2e/tests/client-participants.spec.ts",
+      "symbol": "TC-03-E2E-05",
+      "line": 502,
+      "claim": "Carried unchanged from review 2. The `toHaveCount(0)` on request-detail-reassign-btn in TC-03-E2E-05 is asserted as the addressee contact, for whom showReassign already required canViewAll before this diff, so it cannot fail for the reason its comment gives. The equivalent assertion in TC-03-E2E-04 at line 427, made as an admin, is the one that observes the new rule.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-03-E2E-05 at e2e/tests/client-participants.spec.ts:502; the guard it probes is canViewAll, false for every client principal.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:212"
+      },
+      "suggestedFix": "Drop it, or relabel it as the contact-side restatement of a control already withheld by capability."
+    },
+    {
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": "specs/requests/03-client-participants.md REQ-03-043: \"the active client contacts of every client owning a project that member is assigned to, and no other\"",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequestContacts",
+      "line": 401,
+      "claim": "Carried unchanged from review 2. The query adds `status: 'active'` on the project, which the requirement's sentence does not state. The divergence is unobservable through creation, which refuses the same projects for other reasons, so this is recorded as a read of the spec rather than an unnoticed invention.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Client B owns exactly one project, archived, and the requester holds a ProjectMember row on it. REQ-03-043's text returns B's active contacts; the implementation returns none.",
+        "source": "specs/requests/03-client-participants.md:221-227 against apps/api/src/requests/requests.service.ts:401"
+      },
+      "suggestedFix": "State the active-project boundary in REQ-03-043's own sentence, or drop the filter."
+    },
+    {
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Testing: \"Test cases are numbered in the specs (TC-01-E2E-03) and the code references those ids.\"",
+      "file": "apps/api/test/client-participants.spec.ts",
+      "symbol": "refuses to reassign a request addressed to a client contact",
+      "line": 1398,
+      "claim": "Carried unchanged from review 2. The integration test covering the reassign refusal carries no TC id, because the behaviour it covers is numbered nowhere in the spec. Same root as N1.",
+      "witness": {
+        "kind": "test",
+        "detail": "apps/api/test/client-participants.spec.ts:1398 has no TC-03-INT-nn marker, unlike every other `it` in the file.",
+        "source": "apps/api/test/client-participants.spec.ts:1395-1398"
+      },
+      "suggestedFix": "Number the case in the spec when the reassign rule is written there, and reference the id here."
+    },
+    {
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "reassignRequest",
+      "line": 1042,
+      "claim": "Carried unchanged from review 2, and re-read at HEAD. The addressee-kind check runs before validateRequestAssignee, so a malformed reassign body against a client-addressed request answers 409 invalidTransition where spec 01 gives a malformed addressee 400 assigneeInvalid. Only reachable on the row the route refuses either way.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST /requests/{clientAddressedId}/reassign with `{}` as an admin gives 409 conflict/invalidTransition; the same body on a member-addressed request gives 400 validation_error/assigneeInvalid.",
+        "source": "apps/api/src/requests/requests.service.ts:1042-1055"
+      },
+      "suggestedFix": "If the refusal stays, validate the body first so the two answers keep the order spec 01 documents, or state the ordering alongside the refusal."
+    },
+    {
+      "id": "N9",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "front matter api:",
+      "line": 8,
+      "claim": "Carried from review 2 (its N12) and re-checked at HEAD — still open. The front matter lists six api entries and none is GET /api/organizations/{orgId}/request-contacts, while the contracts Routes table gives it a row. Nothing compares the two, so no gate catches it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/03-client-participants.md:8-14 lists six api entries, none of them the request-contacts route; the contracts Routes table has a row for it.",
+        "source": "specs/requests/03-client-participants.md:8 against specs/requests/03-client-participants.contracts.md:42"
+      },
+      "suggestedFix": "Add \"GET /api/organizations/{orgId}/request-contacts\" to the api: list."
+    },
+    {
+      "id": "N10",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "Acceptance Criteria",
+      "line": 419,
+      "claim": "Carried from review 2 (its N13) and re-checked at HEAD — still open. The AC table ends at AC-17 and the cases file's observer table ends at AC-17, so REQ-03-043 — the rule that a `user` can actually fill the client addressee kind, which is what review 1's F2 was about — is in no acceptance set.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-03-INT-36 exists in the cases file but appears in neither the AC table (specs/requests/03-client-participants.md:419-420 is its last pair) nor the observer table.",
+        "source": "specs/requests/03-client-participants.md:419"
+      },
+      "suggestedFix": "Add AC-18 — a requester is offered exactly the client contacts of the projects they are assigned to, and the picker's route answers on create-request — observed by TC-03-INT-36."
+    },
+    {
+      "id": "N11",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Record what you learn: \"Never delete a superseded record\"",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "Known Gaps",
+      "line": 394,
+      "claim": "Carried from review 2 (its N14) and re-checked at HEAD — still open. `grep -rn \"client shell\" specs/` returns nothing, so the deleted Known Gaps row about the client shell is recorded nowhere in the spec tree. Content leaving a spec under line-budget pressure is invisible to every gate.",
+      "witness": {
+        "kind": "rule",
+        "detail": "grep -rn \"client shell\" specs/ returns no match at HEAD; git show 30401b4 -- specs/requests/03-client-participants.md removes the row.",
+        "source": "specs/requests/03-client-participants.md:394"
+      },
+      "suggestedFix": "Restore the gap row; if the budget refuses it, raise the budget rather than the deletion, and make spec-lint name the section it is forcing out."
+    },
+    {
+      "id": "N12",
+      "target": "spec",
+      "severity": "note",
+      "criterion": null,
+      "rule": null,
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "role migration paragraph",
+      "line": 1,
+      "claim": "Carried from review 2 (its N16). The paragraph justifying that no role migration is needed argues from the capability helper answering false for a role its matrix has no row for, but the helper is never handed the raw value — requests.service.ts normalizes `member` to `user` first. The conclusion (no migration needed) holds; the reason given for it does not describe the code.",
+      "witness": {
+        "kind": "rule",
+        "detail": "requestCaller normalizes the role before `can` is called, so `member` is never the argument the paragraph reasons about.",
+        "source": "specs/requests/03-client-participants.contracts.md — the role-migration paragraph, against apps/api/src/requests/requests.service.ts requestCaller"
+      },
+      "suggestedFix": "Restate the reason as the normalization that actually runs, so a reader checking the claim against the code finds it."
+    },
+    {
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "criterion": null,
+      "rule": "CLAUDE.md — Implementing specs: \"Merge the `build/*` branch when the run is over.\"",
+      "file": "scripts/usage-recover.mjs",
+      "symbol": "(the aside)",
+      "line": 1,
+      "claim": "The five machinery files are off the run branch and onto build/board-and-records, which is the correct fix and closes review-2 F1 and N10. Two consequences to hold on to. First, the working tree is clean for scripts/ rather than carrying the change uncommitted, so the rest of this run — QA, and the run report — executes base machinery; that is the tested machinery, so nothing is at risk, but this run's report will not recover what the fuse-killed implement attempt spent. Second, review-2's N9 (ship.mjs commitRecord attempt number off by one), N11 (run-report tokPerSec mixing populations, and `unaccounted` double-counting recovered steps) and N15 (spec-lint's unused `guards`/`matrix` parsers, where a conditional cell parses as granted to nobody) are no longer findings against this diff but are still true of build/board-and-records. They should be judged before that branch merges, not dropped with the aside.",
+      "witness": {
+        "kind": "rule",
+        "detail": "git diff de9c5f9..HEAD -- scripts/ is empty; git diff de9c5f9..build/board-and-records -- scripts/ shows the six files, so the work exists only on the build branch and has not been reviewed under any criterion.",
+        "source": "CLAUDE.md — Implementing specs"
+      },
+      "suggestedFix": "Merge build/board-and-records when this run is over, and carry N9/N11/N15 to whatever reviews it."
+    }
+  ]
+}

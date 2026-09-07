@@ -1,0 +1,36 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1098,
+      "failed": 0,
+      "ms": 1100
+    },
+    "int": {
+      "passed": 30,
+      "failed": 0,
+      "ms": 11647,
+      "files": [
+        "test/clients.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 16,
+      "failed": 0,
+      "ms": 47300,
+      "files": [
+        "tests/clients.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "findings": [],
+  "notes": [
+    "Diff is exactly the one local variable renamed in apps/api/src/clients/clients.service.ts: `q` -> `searchTerm`, inside the single function that reads query.q. The `?q=` querystring parameter name (the API contract) is untouched, no data-testid or user-facing message changed, and no other file changed.",
+    "Integration suite test/clients.spec.ts (30/30) includes 'list ?q=ac returns case-insensitive substring matches', which directly exercises the renamed binding.",
+    "E2E tests/clients.spec.ts + tests/regressions.spec.ts (16/16) pass, including the clients-search UI flow driving the same code path.",
+    "Manual walkthrough (tests/qa-look.spec.ts, deleted after the pass): signed in as an org admin, opened /org/{id}/clients, typed 'ac' into clients-search and confirmed 'Acme Corp' stayed visible, typed a non-matching string and confirmed it disappeared, cleared the field and confirmed it reappeared. Screenshots at e2e/.qa-look/clients-before-search.png, clients-after-search-ac.png, clients-after-search-no-match.png. No console error, uncaught exception or failed request (tests/fixtures.ts guard).",
+    "Acceptance criteria from specs/patches/PATCH-001-mock-rename-a-variable.md: exactly one local variable renamed in one file (met), no behaviour/route/message change (met, verified by passing suites and manual walk), no data-testid or user-facing message added/removed/altered (met, diff touches only the local binding name). Cases: none declared, none retired to check."
+  ]
+}

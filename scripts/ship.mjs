@@ -28,32 +28,54 @@
  *   --resume           continue the active run instead of starting a new one
  *   --skip <stages>    comma-separated stages to skip (e.g. --skip qa)
  *   --permission-mode  passed to claude; default acceptEdits
+ *   --track <name>     spec | bug | patch — which stages this document earns, and what each
+ *                      one is. Read off the document's path when omitted, so the flag is only
+ *                      for overriding that.
+ *   --plan-shape <name>      run one stage in a shape other than the one its `use` names.
+ *   --implement-shape <name> `npm run config` lists every shape each track offers, and the
+ *   --review-shape <name>    choice is recorded in run.json.
+ *   --accept-unrefined <reason>  start even though the spec's refine ledger is not a pass
  *   --dry-run          print what each stage would run, change nothing
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { loadConfig, stageFor, timeoutFor, trackFor, STAGES } from './ship-config.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, 'scripts', 'wf.mjs');
 
 const argv = process.argv.slice(2);
-const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry']);
+const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry',
+  'implement-shape', 'review-shape', 'plan-shape', 'accept-unrefined', 'track']);
 
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
 
-/** The first bare argument, skipping the values that belong to value-taking flags. */
-const specArg = (() => {
+/**
+ * The bare arguments, skipping the values that belong to value-taking flags.
+ *
+ * `/ship patch <note>` and `/ship bug <report>` are how a person names the weight of what they
+ * are shipping, and the skill and the README both write the command that way. Taking the word
+ * as the track rather than refusing it as a document path is the difference between the command
+ * a person typed working and a message about a track that does not match.
+ */
+const bare = (() => {
+  const out = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) { if (VALUE_FLAGS.has(a.slice(2))) i++; continue; }
-    return a;
+    out.push(a);
   }
-  return undefined;
+  return out;
 })();
+
+const TRACK_WORDS = new Set(['spec', 'bug', 'patch']);
+const bareTrack = bare.length > 1 && TRACK_WORDS.has(bare[0]) ? bare[0] : null;
+const specArg = bareTrack ? bare[1] : bare[0];
 
 const skip = new Set((opt('skip', '') || '').split(',').filter(Boolean));
 const dryRun = flag('dry-run');
@@ -67,7 +89,13 @@ const dryRun = flag('dry-run');
  */
 const permissionMode = opt('permission-mode', 'bypassPermissions');
 
-const cfg = JSON.parse(readFileSync(join(ROOT, '.claude/ai-workflow.config.json'), 'utf8'));
+/* Validated here, before a run directory, a lock or a branch exists. A configuration error
+   found by the stage that trips over it is found after the run has already spent the stages
+   before it. */
+const cfg = (() => {
+  try { return loadConfig(ROOT); }
+  catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
+})();
 
 /* ── output ──────────────────────────────────────────────────────────────── */
 
@@ -91,6 +119,37 @@ function runState() {
   const id = readFileSync(cur, 'utf8').trim();
   const p = join(ROOT, '.workflow/runs', id, 'run.json');
   return existsSync(p) ? { id, dir: join(ROOT, '.workflow/runs', id), ...JSON.parse(readFileSync(p, 'utf8')) } : null;
+}
+
+/**
+ * The track, and the shape each stage runs in.
+ *
+ * The track comes first: it decides which stages a document of this weight earns and what each
+ * of them is. A `--*-shape` flag then names one stage's shape. Both are resolved once,
+ * printed at the start and written into run.json, so a result is attributable to the shape that
+ * produced it rather than to whatever the config says the next time somebody looks.
+ */
+const TRACK = (() => {
+  const active = runState();
+  const doc = specArg ?? active?.spec;
+  /* No document at all is the usage error in main(), not an unmatched track. */
+  if (!doc) return {};
+  /* A resumed run keeps the track it was started with, including one that came from `--track`
+     and disagrees with the path. Re-deriving it would resume a different pipeline. */
+  try {
+    return trackFor(cfg, doc,
+      opt('track', null) ?? bareTrack ?? (specArg ? null : active?.track ?? null), ROOT);
+  }
+  catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
+})();
+
+const SHAPE_FLAG = { pre_implement: 'plan-shape', implement: 'implement-shape', review: 'review-shape' };
+const STAGE = {};
+if (TRACK.name) {
+  for (const stage of STAGES) {
+    try { STAGE[stage] = stageFor(cfg, TRACK.name, stage, opt(SHAPE_FLAG[stage] ?? '', null)); }
+    catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
+  }
 }
 
 /** HEAD when an attempt starts, so a report can tell what each attempt actually changed. */
@@ -145,22 +204,44 @@ function promptFor(stage, run, verdictPath) {
     case 'pre_implement':
       return `${head}\nCompile the spec into \`.workflow/runs/${run.id}/handoff.json\` and write your reasoning to `
         + `\`.workflow/runs/${run.id}/stages/pre_implement.md\`.${back}`;
-    case 'implement':
-      return `${head}\nImplement \`.workflow/runs/${run.id}/handoff.json\`. Write your stage report to `
-        + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${back}`;
+    case 'implement': {
+      /* The shape reaches the lead as configuration, not as a choice: two runs of one handoff
+         must split it the same way, or a comparison between them measures the split. How to
+         split is in the lead's own definition; only the numbers belong here. */
+      const p = STAGE.implement ?? {};
+      const shards = p.shardAgent
+        ? `\n\n## Your shape\n\nDispatch subagent_type "${p.shardAgent}"${p.shardModel ? ` on ${p.shardModel}` : ''}, at most `
+          + `${p.maxShards ?? 4} at once. From shipConfig.${run.track ?? 'spec'}.stages.implement; not yours to choose.\n`
+        : '';
+      /* A track with no plan stage leaves no handoff.json. The document is then the plan, and
+         saying so is the whole difference — an implementer sent to a path that does not exist
+         invents one. */
+      const plan = existsSync(join(ROOT, '.workflow/runs', run.id, 'handoff.json'))
+        ? `\`.workflow/runs/${run.id}/handoff.json\``
+        : `\`${run.spec}\` — this track compiles no plan, so the document is the plan`;
+      return `${head}\nImplement ${plan}. Write your stage report to `
+        + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${shards}${back}`;
+    }
     case 'review': {
       const done = run.stages.review.attempts ?? 0;
-      const ledger = `\n\n## Your worklist\n\nRun \`node scripts/review-slice.mjs\` first. It splits the diff into what must be read this `
+      /* Naming a plan that was never compiled sends the reviewer to an absent file, and a
+         reviewer that cannot find its inputs judges the diff against its own assumptions. */
+      const against = existsSync(join(ROOT, '.workflow/runs', run.id, 'handoff.json'))
+        ? 'the spec and the handoff' : 'the spec';
+      /* Name the run. Without it the slice falls back to the newest directory under
+         .workflow/runs, which is this run only until somebody starts another one. */
+      const slice = `node scripts/review-slice.mjs ${run.id} --shape ${STAGE.review?.shape}`;
+      const ledger = `\n\n## Your worklist\n\nRun \`${slice}\` first. It splits the diff into what must be read this `
         + `pass and what an earlier pass settled, and it decides the second by comparing each file against the commit that pass `
         + `actually saw. You may not write a verdict while the worklist is non-empty; if the fuse runs out first, report the `
         + `remainder in \`covered.unreached\` and do not call it a pass.\n`;
       if (!done) {
-        return `${head}\nReview \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff.${ledger}${back}`;
+        return `${head}\nReview \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against ${against}.${ledger}${back}`;
       }
       const priors = Array.from({ length: done }, (_, i) =>
         `  - \`.workflow/runs/${run.id}/stages/review.attempt-${i + 1}.json\``).join('\n');
       return `${head}
-Review \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff. **This diff has been reviewed ${done} time(s) before.**
+Review \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against ${against}. **This diff has been reviewed ${done} time(s) before.**
 
 ## What earlier passes concluded
 
@@ -172,7 +253,7 @@ They are claims to check, not conclusions to trust. If you disagree with an earl
 
 ## What has and has not been looked at
 
-Run \`node scripts/review-slice.mjs\`. It is derived from the commit each earlier verdict names as judged and the files it reported unreached. It is the plan for this pass:
+Run \`${slice}\`. It is derived from the commit each earlier verdict names as judged and the files it reported unreached. It is the plan for this pass:
 
 1. **Confirm each earlier blocker is closed** by checking its witness against the code. Say so per finding.
 2. **Then work the worklist**, largest first. A previous pass is not proof of absence — on the first run of this spec, four passes named 55, 46, 50 and 44 files of a diff that grew to 84, and nine files were never opened by any of them.
@@ -180,9 +261,23 @@ Run \`node scripts/review-slice.mjs\`. It is derived from the commit each earlie
 
 You may not write a verdict while the worklist is non-empty. A review that only re-checks the fix and reports clean has not reviewed this diff.${back}`;
     }
-    case 'qa':
-      return `${head}\nRun unit in full, then the integration and E2E suites the diff touches — never either one whole; `
-        + `both already run on the deploy gate. Run E2E with \`CI=1\`, targeted. Then check the spec's acceptance criteria.${back}`;
+    case 'qa': {
+      /* The levels are the track's, not this sentence's. Writing them out here made
+         `shipConfig.<track>.stages.qa.levels` a setting a person could change with no effect. */
+      const levels = STAGE.qa?.levels ?? ['unit', 'int', 'e2e'];
+      const how = {
+        unit: 'unit in full',
+        int: 'the integration suites the diff touches',
+        e2e: 'the E2E suites the diff touches, with `CI=1`',
+      };
+      const order = levels.map((l) => how[l] ?? l).join(', then ');
+      const cheapFirst = STAGE.qa?.skipE2eIfLowerFailed && levels.includes('e2e') && levels.length > 1
+        ? ' If a cheaper level fails, stop there and report it — an E2E run buys nothing on a change that already failed below it.'
+        : '';
+      return `${head}\nRun ${order} — never a whole suite; both already run on the deploy gate.${cheapFirst} `
+        + `Then walk every area of functionality the change touches, from every side that can reach it. `
+        + `Then check the spec's acceptance criteria.${back}`;
+    }
     default:
       throw new Error(`no prompt for stage ${stage}`);
   }
@@ -221,8 +316,6 @@ function blockersAreCarried(run) {
 
 /* ── stage runners ───────────────────────────────────────────────────────── */
 
-const AGENT_STAGES = { pre_implement: 'pre-implementer', implement: 'implementer', review: 'code-reviewer', qa: 'qa' };
-
 /**
  * A parent Claude session refuses to spawn a nested `claude` CLI with
  * `--permission-mode bypassPermissions`: Anthropic's classifier kills the child before
@@ -236,9 +329,9 @@ const AGENT_STAGES = { pre_implement: 'pre-implementer', implement: 'implementer
 const nested = process.env.CLAUDECODE === '1' || !!process.env.CLAUDE_CODE_ENTRYPOINT;
 
 async function runAgentStage(stage, run) {
-  const agent = AGENT_STAGES[stage];
-  const model = cfg.stages[stage]?.model;
-  const timeoutMin = cfg.breakers.stageTimeoutMin?.[stage] ?? 45;
+  const agent = STAGE[stage].agent;
+  const model = STAGE[stage]?.model;
+  const timeoutMin = timeoutFor(cfg, run.track ?? 'spec', stage);
   const verdictPath = `.workflow/runs/${run.id}/${stage}.verdict.json`;
   /* Remove any verdict left by the previous attempt: a stale file read as this attempt's
      answer would be the worst possible failure — a verdict about code that is no longer there. */
@@ -318,7 +411,17 @@ async function runAgentStage(stage, run) {
   }
 
   note(`verdict written after ${secs}s`);
-  return readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
+  const verdict = readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
+
+  /* Whether to delegate is the lead's call, so working alone is a legitimate answer. What is
+     not optional is saying which way it went: a stage that split and one that did not are
+     different stages, and a run whose record cannot tell them apart cannot be compared with
+     the run before it. The same check guards the refine judge. */
+  if (STAGE[stage]?.shardAgent && !(verdict.shards ?? []).length && !verdict.shardDecision) {
+    note(`${agent} reported no split — neither "shards" nor "shardDecision" is in the verdict, `
+      + 'so what this stage actually ran is only in its prose report');
+  }
+  return verdict;
 }
 
 function runViaCLI({ stage, agent, model, prompt, resume, timeoutMin, stem }) {
@@ -438,6 +541,55 @@ function runGateStage(run) {
 
 /* ── the loop ────────────────────────────────────────────────────────────── */
 
+/**
+ * What the run has spent, from the agents' own reports on disk.
+ *
+ * Read from the stage logs rather than kept in memory, so a `--resume` inherits the spend of
+ * the invocation before it: the fuses are about the run, not about this process.
+ */
+function spentSoFar(run) {
+  let tokens = 0;
+  let usd = 0;
+  const dir = join(run.dir, 'stages');
+  if (!existsSync(dir)) return { tokens, usd };
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.log')) continue;
+    const lines = readFileSync(join(dir, f), 'utf8').trim().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let v;
+      try { v = JSON.parse(lines[i]); } catch { continue; }
+      if (v?.type !== 'result') continue;
+      const u = v.usage ?? {};
+      tokens += (u.input_tokens ?? 0) + (u.output_tokens ?? 0)
+        + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+      usd += v.total_cost_usd ?? 0;
+      break;
+    }
+  }
+  return { tokens, usd };
+}
+
+/** The breaker this run has tripped, as the sentence a person would want, or null. */
+function breakerBlown(run) {
+  const b = cfg.breakers ?? {};
+  const startedAt = run.createdAt ? Date.parse(run.createdAt) : null;
+  if (b.runTimeoutMin && startedAt) {
+    const min = Math.round((Date.now() - startedAt) / 60_000);
+    if (min > b.runTimeoutMin) {
+      return `the run has been going ${min} minutes, past the ${b.runTimeoutMin}-minute breaker `
+        + '(breakers.runTimeoutMin)';
+    }
+  }
+  if (b.runTokenCap) {
+    const { tokens, usd } = spentSoFar(run);
+    if (tokens > b.runTokenCap) {
+      return `the run has spent ${(tokens / 1e6).toFixed(1)}M tokens ($${usd.toFixed(2)}), past the `
+        + `${(b.runTokenCap / 1e6).toFixed(0)}M breaker (breakers.runTokenCap)`;
+    }
+  }
+  return null;
+}
+
 async function main() {
   const branch = opt('branch');
   if (branch) {
@@ -447,15 +599,44 @@ async function main() {
 
   if (!flag('resume')) {
     if (!specArg) {
-      say('usage: node scripts/ship.mjs <spec path> [--branch <name>] [--from <ref>] [--carry <runId>|--no-carry] [--skip qa] [--resume]');
+      say('usage: node scripts/ship.mjs <document path> [--track spec|bug|patch] [--branch <name>] [--from <ref>] [--carry <runId>|--no-carry] [--skip qa] [--resume]');
       process.exit(1);
     }
+    /* A dry run prints and writes nothing. It used to guard only the agent calls and the static
+       gate, and drive the state machine for real — so it created a run directory, took the
+       lock, marched every stage to `ready` on fabricated verdicts forty milliseconds apart, and
+       left that behind. The board and `wf:status` then showed a green run of a spec nobody had
+       implemented, and the next real run was refused by the lock the rehearsal was holding. */
+    if (dryRun) {
+      step(`dry run ${specArg}`);
+      note(`track ${TRACK.name}, branch prefix ${TRACK.branchPrefix ?? 'spec/'}, refine ${TRACK.requiresRefine ? 'required' : 'not required'}`);
+      note('nothing is written: no run directory, no lock, no verdicts, no branch');
+      for (const stage of STAGES) {
+        const p = STAGE[stage] ?? {};
+        const state = skip.has(stage) ? 'skipped' : p.enabled === false ? 'disabled' : 'would run';
+        const how = p.script ? `node ${p.script}`
+          : p.agent ? `claude -p --agent ${p.agent}${p.model ? ` --model ${p.model}` : ''}`
+            + (p.shape ? `  (shape ${p.shape})` : '')
+            + (p.shardAgent ? `  shards ${p.shardAgent} on ${p.shardModel}` : '')
+            : 'a preflight script';
+        note(`${stage.padEnd(14)} ${state}${state === 'would run' ? `  ${how}` : ''}`);
+      }
+      return;
+    }
+
     step(`init ${specArg}`);
+    const off = STAGES.filter((s) => STAGE[s]?.enabled === false);
+    note(`track ${TRACK.name}${off.length ? ` — does not run ${off.join(', ')}` : ''}`);
     const from = opt('from');
     const carry = opt('carry');
-    if (wf('init', '--spec', specArg,
+    const unrefined = opt('accept-unrefined');
+    if (wf('init', '--spec', specArg, '--track', TRACK.name,
       ...(from ? ['--from', from] : []),
       ...(carry ? ['--carry', carry] : []),
+      ...(unrefined ? ['--accept-unrefined', unrefined] : []),
+      ...Object.entries(STAGE)
+        .filter(([, p]) => p?.shape)
+        .flatMap(([stage, p]) => ['--shape', `${stage}=${p.shape}`]),
       ...(flag('no-carry') ? ['--no-carry'] : [])) !== 0) process.exit(1);
     step('preflight');
     if (wf('preflight') !== 0) process.exit(2);
@@ -464,6 +645,18 @@ async function main() {
   for (let guard = 0; guard < 40; guard++) {
     const run = runState();
     if (!run) { say('no active run'); process.exit(1); }
+
+    /* The whole-run fuses, checked before a stage is dispatched rather than after — the point
+       of a breaker is the agent that does not start. Both are read from `breakers`, and both
+       were configuration nothing consulted until now. */
+    const blown = breakerBlown(run);
+    if (blown) {
+      step(`halted — breaker`);
+      note(blown);
+      wf('abort', '--reason', blown);
+      wf('status');
+      process.exit(2);
+    }
 
     if (run.status === 'ready') {
       step('ready');
@@ -479,7 +672,7 @@ async function main() {
     }
 
     const stage = run.status;
-    if (skip.has(stage) || cfg.stages[stage]?.enabled === false) {
+    if (skip.has(stage) || STAGE[stage]?.enabled === false) {
       step(`${stage} — skipped`);
       wf('stage', stage, '--start');
       wf('verdict', stage, '--file', writeSkip(run, stage));
@@ -500,6 +693,8 @@ async function main() {
        refusing the call itself — a contract error between these two scripts. Ignoring it
        leaves the status unchanged, so the loop re-runs the same stage forever, and each lap
        is a full agent. Stop instead. */
+    commitRecord(run, stage, verdict);
+
     if (code === 1) {
       say(`\n\x1b[1m${t()}  stopped — wf refused the verdict for "${stage}"\x1b[0m`);
       note('This is a defect in the pipeline, not in the code under review. Nothing was routed.');
@@ -509,6 +704,40 @@ async function main() {
 
   say('\nstopped: 40 stage transitions without settling. Something is wrong with the loop itself.');
   process.exit(3);
+}
+
+/**
+ * Every attempt of every stage is a commit of its own record.
+ *
+ * A run used to write its verdicts, reports and `run.json` and leave them all uncommitted
+ * until somebody swept them up at the end — so a run halted mid-way left dozens of untracked
+ * files with no order to them, and a stage that was retried overwrote the record of the
+ * attempt before it with nothing to say it had. The refine loop commits per gate for the same
+ * reason; this is that rule for the pipeline.
+ *
+ * Only `.workflow/runs/<id>` is staged, by pathspec on both the check and the commit. The
+ * code the implementer wrote is committed by the static gate and is not touched here, and a
+ * person editing in the same tree while a stage runs for half an hour does not end up inside
+ * this commit. What `.gitignore` excludes — the event journal, the blobs, the per-stage logs
+ * and prompts — stays excluded; what is committed is the record a reader wants in the pull
+ * request: which stage ran, on which attempt, and what it decided.
+ */
+function commitRecord(run, stage, verdict) {
+  const pathspec = `.workflow/runs/${run.id}`;
+  const attempt = run.stages[stage]?.attempts ?? 0;
+  const outcome = verdict?.status ?? 'done';
+  const blockers = (verdict?.findings ?? []).filter((f) => f.severity === 'blocker').length;
+  const notes = (verdict?.findings ?? []).length - blockers;
+  try {
+    execFileSync('git', ['add', '--', pathspec], { cwd: ROOT, stdio: 'ignore' });
+    const staged = execFileSync('git', ['diff', '--cached', '--name-only', '--', pathspec],
+      { cwd: ROOT, encoding: 'utf8' }).trim();
+    if (!staged) return;
+    const summary = `${outcome}${blockers || notes ? ` — ${blockers} blocker(s), ${notes} note(s)` : ''}`;
+    execFileSync('git', ['commit', '-q', '-m',
+      `run(${run.id}): ${stage} attempt ${attempt} — ${summary}`, '--', pathspec],
+    { cwd: ROOT, stdio: 'ignore' });
+  } catch { /* the record is a convenience; a run is not stopped by failing to write it */ }
 }
 
 function writeSkip(run, stage) {

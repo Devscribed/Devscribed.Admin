@@ -19,6 +19,7 @@ import { usePendingRequests } from './requests-badge-context';
 
 /** Only what the navigation asks of the session. */
 interface NavSession {
+  principal: 'member' | 'client';
   role: string;
   isInterviewer: boolean;
   features: SessionFeatures;
@@ -48,17 +49,39 @@ interface NavSession {
  * all, so `viewer` never meets a `Documents` heading that opens onto nothing.
  *
  * Every row is gated on what the caller may actually do, and each is **omitted** rather than
- * drawn-and-disabled. Two gates are not roles:
+ * drawn-and-disabled. Three gates are not roles:
  *
  *  - **Candidates** is role *or* assignment (hiring 03 §06.31), which is what lets an
  *    engineer interview without becoming an org admin.
+ *  - **Requests** is no gate at all (requests spec 01 requirement 38): the page behind it
+ *    is everyone's inbox, so the "no dead links" rule is satisfied by the destination
+ *    rather than by hiding the row.
  *  - **Outbox** needs an environment that simulates mail as well as a role allowed to see
  *    signing links.
  */
-function navigation(orgId: string, session: NavSession, pendingCount: number): SidebarItem[] {
-  const { role, features } = session;
+function navigation(orgId: string, session: NavSession, badgeCount: number): SidebarItem[] {
+  const { principal, role, features } = session;
   const items: SidebarItem[] = [];
   const at = (path: string): string => `/org/${orgId}${path}`;
+
+  /** §76 — the shared pending count, and it disappears at zero rather than reading `0`. */
+  const requestsRow: SidebarSubItem = {
+    label: 'Requests',
+    href: at('/requests'),
+    testId: 'sidebar-requests-link',
+    badge: badgeCount || undefined,
+    badgeTestId: 'sidebar-requests-badge',
+  };
+
+  // Requests spec 03 REQ-03-018 — for a client contact the requests destination is the
+  // only organization navigation entry there is. The kind is asked before any role-keyed
+  // helper below (REQ-03-017), which would answer a principal with no role the viewer
+  // set; and every other destination answers them 404, so drawing one would be a dead
+  // link. A group of one rather than a top-level link, because only a sub-item carries
+  // the badge the count needs.
+  if (principal === 'client') {
+    return [{ type: 'submenu', title: 'People', Icon: PeopleIcon, subs: [requestsRow] }];
+  }
 
   // The system draws Timesheets as a top-level link, and it is right to: the daily-driver
   // surface is one destination, and a group of one is a click in front of a page.
@@ -128,6 +151,15 @@ function navigation(orgId: string, session: NavSession, pendingCount: number): S
   }
 
   const timeOff: SidebarSubItem[] = [];
+  // Time off spec 01 REQ-01-003 — above Holidays, and omitted rather than disabled for a
+  // role that cannot open it (REQ-01-004): the route answers them 404.
+  if (hasCapability(role, 'ViewTimeOffCalendar')) {
+    timeOff.push({
+      label: 'Calendar',
+      href: at('/time-off/calendar'),
+      testId: 'nav-time-off-calendar',
+    });
+  }
   if (hasCapability(role, 'ViewHolidays')) {
     timeOff.push({
       label: 'Holidays',
@@ -135,16 +167,9 @@ function navigation(orgId: string, session: NavSession, pendingCount: number): S
       testId: 'settings-tab-holidays',
     });
   }
-  if (can(role as Role, 'view-requests')) {
-    timeOff.push({
-      label: 'Requests',
-      href: at('/requests'),
-      testId: 'sidebar-requests-link',
-      // §76 — the shared pending count, and it disappears at zero rather than reading `0`.
-      badge: pendingCount || undefined,
-      badgeTestId: 'sidebar-requests-badge',
-    });
-  }
+  // Unconditional since requests spec 01: every role has an inbox of its own, so the row
+  // is drawn for every member and the group is never empty on its account alone.
+  timeOff.push(requestsRow);
   if (timeOff.length > 0) {
     items.push({ type: 'submenu', title: 'Time off', Icon: TimeOffIcon, subs: timeOff });
   }
@@ -202,6 +227,18 @@ function navigation(orgId: string, session: NavSession, pendingCount: number): S
   if (hasCapability(role, 'ViewSigningSettings')) {
     organization.push({ label: 'Signing', href: at('/settings/signing'), testId: 'nav-settings' });
   }
+  // Requests spec 02 requirement 30 — the catalogue every request is filed under, gated on
+  // `manage-request-topics`, so a `user` or `viewer` never sees a destination whose every
+  // control is missing and whose write routes answer 403. `hasCapability` rather than
+  // `can`, as the row above it: it normalizes the raw `Membership.role` internally, so the
+  // legacy `member` value maps to `user`.
+  if (hasCapability(role, 'ManageRequestTopics')) {
+    organization.push({
+      label: 'Request topics',
+      href: at('/settings/request-topics'),
+      testId: 'settings-tab-request-topics',
+    });
+  }
   if (organization.length > 0) {
     items.push({ type: 'submenu', title: 'Organization', Icon: OrgIcon, subs: organization });
   }
@@ -212,10 +249,17 @@ function navigation(orgId: string, session: NavSession, pendingCount: number): S
 export function Sidebar({ orgId, onClose }: { orgId: string; onClose: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { role, isInterviewer, features } = useSession();
-  const { pendingCount } = usePendingRequests();
+  const { principal, role, isInterviewer, features } = useSession();
+  const { badgeCount } = usePendingRequests();
 
-  const items = navigation(orgId, { role, isInterviewer, features }, pendingCount);
+  // `role` is `null` for a client contact, who holds none (REQ-03-016). The empty string
+  // is the value every role-keyed helper below already answers from the viewer set — and
+  // `navigation` asks the principal kind before it reaches one of them.
+  const items = navigation(
+    orgId,
+    { principal, role: role ?? '', isInterviewer, features },
+    badgeCount,
+  );
 
   /**
    * `/documents` is a prefix of `/documents/templates` and `/reports` of every report, so a

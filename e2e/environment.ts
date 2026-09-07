@@ -82,8 +82,41 @@ function FALLBACK_DATABASE_URL(): string {
 }
 
 function databaseFromDotEnv(): string | null {
+  for (const root of checkouts()) {
+    const url = databaseIn(join(root, 'apps', 'api', '.env'));
+    if (url) return url;
+  }
+  return null;
+}
+
+/**
+ * This checkout first, then the one it was branched from.
+ *
+ * `apps/api/.env` is untracked, so a git worktree has none: an agent working in
+ * `.claude/worktrees/<name>` would fall through to the port below and meet `P1000` against a
+ * server that is not the one this machine runs. The main checkout answers the same question
+ * about the same machine, so it is read rather than guessed.
+ */
+function checkouts(): string[] {
+  const here = join(__dirname, '..');
   try {
-    const envPath = join(__dirname, '..', 'apps', 'api', '.env');
+    const common = spawnSync(
+      'git',
+      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { cwd: here, encoding: 'utf8', timeout: 10_000 },
+    );
+    const gitDir = (common.stdout ?? '').trim();
+    if (!gitDir) return [here];
+    const main = join(gitDir, '..');
+    return main === here ? [here] : [here, main];
+  } catch {
+    return [here];
+  }
+}
+
+/** The E2E database on whichever server that `.env` names, or null if it names none. */
+function databaseIn(envPath: string): string | null {
+  try {
     if (!existsSync(envPath)) return null;
     const line = readFileSync(envPath, 'utf8')
       .split(/\r?\n/)

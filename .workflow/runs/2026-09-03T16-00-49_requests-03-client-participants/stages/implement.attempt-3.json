@@ -1,0 +1,20 @@
+{
+  "status": "blocked",
+  "findings": [
+    {
+      "id": "I1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "Roles & Permission Matrix",
+      "claim": "the permission matrix grants `user` the right to raise a request to a client contact, and the Routes table guards the only route that lists contacts with `view-clients`, which `user` does not hold — no implementation satisfies both",
+      "witness": {
+        "kind": "test",
+        "test": "TC-03-E2E-04",
+        "detail": "contracts.md:11 reads 'Raise a request, to a colleague or to a client contact | admin ✅ | manager ✅ | user ✅ | viewer ❌'. contracts.md:41 gives GET /api/organizations/{orgId}/clients/{clientId}/contacts the guard `view-clients`, and it is the only route in the bundle that lists contacts. The `user` row of CAPABILITY_MATRIX (packages/validation/src/index.ts) holds 'create-request': true and 'view-clients': false, so a `user` assigned to the client's project — exactly the caller REQ-03-023 requires — is offered the client addressee kind and is answered 404 by the only read that could fill the picker. The same body posted by hand is accepted by the server, so the two statements also disagree about what the product does. Resolving it means widening `view-clients` to `user`, adding a contacts route the Routes table does not have, or withdrawing the client addressee kind from `user` and correcting the matrix — three different products, and a person's decision rather than an implementer's. TC-03-E2E-04 does not catch it because it runs as an admin.",
+        "source": "specs/requests/03-client-participants.contracts.md"
+      }
+    }
+  ]
+}

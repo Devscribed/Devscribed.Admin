@@ -1,0 +1,127 @@
+{
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "verdict": ".workflow/refine/time-off-01.verdict.json",
+  "fixed": [
+    {
+      "id": "R2",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "change": "the bundle now carries the `## DS gaps` section the mock says it does: one row for the three absence-band colour names and one for the sticky member column's width, each with where it bites, what ships instead and what closes it. The Screens paragraph that states the 264px column now points at that row instead of leaving the number unexplained. The palette claim is narrowed to the tokens I opened — violet is used by none of `--status-success`, `--status-warning`, `--status-error`, `--status-info`, `--color-holiday`",
+      "verifiedBy": "grep -rn \"timeoff-band|name-col\" packages/ds/src apps/web/app/globals.css (no match) and sed -n 12,70p packages/ds/src/tokens/colors.css"
+    },
+    {
+      "id": "R4",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/time-off/01-vacation-calendar.cases.md"],
+      "change": "TC-01-INT-19 no longer names an instant no test can arrange. It reads the same window three times at one instant of the run — `Pacific/Kiritimati`, `Pacific/Niue`, and an invited member whose timezone is still empty — and asserts each `range.today` is that zone's calendar date for that instant, computed by the case. The two zones are 25 hours apart, so their answers never agree whichever hour the suite runs at, which is what makes the case fail against a server that ignores the caller's timezone. No clock fixture was added and none is named",
+      "verifiedBy": "apps/api/src/test-support/fixture-gate.ts and apps/api/src/test-support/envelope-expiry.controller.ts — no clock control exists; the Verification Plan's own row that an invited member's timezone is \"\""
+    },
+    {
+      "id": "R5",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "change": "the exemplar for a service-level check that answers 404 is now `HolidaysService.requireViewCapability` and `requireManageCapability`, each throwing a bare `NotFoundException`. `deleteHoliday`, which answers 403, is out of the sentence",
+      "verifiedBy": "grep -n \"requireViewCapability|requireManageCapability|deleteForbidden\" apps/api/src/holidays/holidays.service.ts"
+    },
+    {
+      "id": "R9",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "change": "the range navigation is a requirement now — REQ-01-049, beside REQ-01-019: moving the range back, forward or to today moves it to the range that control names (one whole window earlier, one whole window later, or the window holding the caller's today) and names the new range in the range label. TC-01-E2E-03 covers it and observes it rather than defining it",
+      "verifiedBy": "node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md"
+    },
+    {
+      "id": "R10",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/time-off/01-vacation-calendar.cases.md"],
+      "change": "both Verification Plan commands lost their port numbers: `CI=1 npx playwright test tests/<probe>.spec.ts --workers=1 --retries=0`, with the note that the harness claims its own pair. The observation cells are unchanged — they already said the servers answered on the pair the harness claimed",
+      "verifiedBy": "no claim written; the change removes two literals"
+    },
+    {
+      "id": "R11",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.contracts.md"
+      ],
+      "change": "`meta.memberCount` is stated as the number of rows in `members[]` and nothing else, with the note that a refused read carries no body to count. REQ-01-018 now says today falls back to UTC whenever the timezone is absent, empty or not one the server recognizes, and edge case 18 lists all three states with the note that an invited member's is `\"\"` until they set one",
+      "verifiedBy": "the bundle's own Verification Plan row for `updateAccountSettingsViaApi`; `Account.timezone` is `String?` in apps/api/prisma/schema.prisma"
+    }
+  ],
+  "decided": [
+    {
+      "id": "R1",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/README.md"
+      ],
+      "question": "does this spec add `ViewTimeOffCalendar` to `Capability` alone, or to both unions with a lowercase-dashed twin, and which helper does the calendar's gate call",
+      "chose": "both unions ship — `ViewTimeOffCalendar` in `Capability`/`ROLE_CAPABILITIES` and `view-time-off-calendar` in `MemberCapability`/`CAPABILITY_MATRIX`, granted to admin, manager and user in each and `false` for viewer in the matrix — and the calendar's own gate reads the twin through `can(role, 'view-time-off-calendar')`",
+      "rejected": "adding it to `Capability` alone and checking it with `hasCapability`",
+      "why": "rule 2 — the shipped gate beside it in the same nav group is `can(caller.role, 'view-holidays')` in `HolidaysService`, and every capability the surrounding specs added for a service check ships in both spellings; `Capability` alone would spell this one gate differently from its neighbour. The Shared code table now names the right file for each spelling (`MemberCapability` and `CAPABILITY_MATRIX` are in `packages/validation/src/index.ts`, not `roles.ts`), and the false claim 'matching every capability that came before it' is gone",
+      "recordedAt": "specs/time-off/01-vacation-calendar.md §Roles & Permission Matrix, the Decided paragraph under the opening prose; carried into the contracts' Routes table, its Shared code rows, and README's Blast Radius and Backward Compatibility 4"
+    },
+    {
+      "id": "R3",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.contracts.md"
+      ],
+      "question": "is REQ-01-007's `none` sentinel reachable from the screen, or is the unassigned bucket API-only",
+      "chose": "the screen reaches it: `calendar-teams-picker` lists an **Unassigned** entry above the projects which submits `projectIds=none`, it ticks and unticks like a project, and it may be the only entry ticked",
+      "rejected": "declaring the bucket API-only and rewriting edge case 6's 'ticks' into a query string",
+      "why": "rule 1 — the spec already answers this twice in its own text: TC-01-INT-04's first read is `projectIds=none` alone and expects `200` with one row, and edge case 6 has a reader ticking it. API-only would have had to delete both. No new testid: the entry lives inside the picker the id table already declares",
+      "recordedAt": "contracts §Screens, the paragraph under the calendar's structure diagram; and REQ-01-009's Decided in the behaviour file, which states that `none` alone is a selection and is answered rather than refused"
+    },
+    {
+      "id": "R6",
+      "rule": "spec/ambiguous-requirement",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "question": "is `days[].weekday` ISO 1–7 or JavaScript 0–6",
+      "chose": "the field is dropped from the payload",
+      "rejected": "pinning it to ISO 1–7, Monday 1",
+      "why": "rule 1 of repair by subtraction — no requirement, case or edge case reads `weekday`; `date` and `isWeekend` carry every rule the spec states, and the weekend rule is REQ-01-032's. Deleting the field is the repair that cannot be got wrong; pinning it would have kept a value nothing asserts",
+      "recordedAt": "the `days[]` sample under §GET /api/organizations/{orgId}/time-off/calendar — the field is absent, so neither reading is expressible"
+    },
+    {
+      "id": "R7",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "question": "which status does `PUT .../members/{memberId}` answer for an invalid `countryCode`, when its own fields answer 400 and the spec asked for 422",
+      "chose": "`400` carrying `HOLIDAY_MESSAGES.countryCodeInvalid` on the member write (REQ-01-051), and `422` carrying the same message on the organization country write (REQ-01-036)",
+      "rejected": "`422` on both, which the routes table and REQ-01-036 previously said",
+      "why": "rule 1 — the shipped route refuses an invalid role and an invalid job title with `BadRequestException`, and the contracts' own note says one route does not get two refusal shapes because a field was added to it. One form refusing one of its fields in a second status is a client branching per field; the message a caller reads is identical either way",
+      "recordedAt": "REQ-01-036 and the new REQ-01-051 with their shared Decided; the Routes table row, the refusal-shape paragraph under it, and the note under the Validation Rules table; observed by TC-01-INT-25, which now submits `pl` and expects the 400"
+    },
+    {
+      "id": "R8",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "question": "does a restored membership keep the country stated on it, or lose it the way it loses its job title",
+      "chose": "it keeps it — REQ-01-048: when a `removed` membership becomes `active` again, `Membership.countryCode` is left at the value stored on it",
+      "rejected": "clearing it with the job title",
+      "why": "rule 3 — clearing it pays a returning member global holidays only until somebody notices, which is a silent change to what Amounts Owed pays; keeping it changes nothing about the member and is visible on the detail screen. A country is a payroll fact about the person, not about the posting they left",
+      "recordedAt": "REQ-01-048 and its Decided, in §The countries, and who states them; observed by the new TC-01-INT-28"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/time-off/01-vacation-calendar.md",
+    "specs/time-off/01-vacation-calendar.contracts.md",
+    "specs/time-off/01-vacation-calendar.cases.md",
+    "specs/time-off/README.md"
+  ]
+}

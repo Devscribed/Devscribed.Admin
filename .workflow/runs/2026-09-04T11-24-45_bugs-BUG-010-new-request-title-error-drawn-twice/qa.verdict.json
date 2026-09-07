@@ -1,0 +1,35 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1098,
+      "failed": 0,
+      "ms": 1080
+    },
+    "int": {
+      "skipped": true,
+      "reason": "diff touches no apps/api file"
+    },
+    "e2e": {
+      "passed": 22,
+      "failed": 0,
+      "files": [
+        "e2e/tests/requests.spec.ts",
+        "e2e/tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "findings": [],
+  "notes": [
+    "Diff: apps/web/app/org/[orgId]/requests/NewRequestModal.tsx now passes fieldErrors.title into Input's error prop as errorNodeById('request-new-error-title', ...) and drops the sibling FieldError for title only, matching the spec's Fix Approach verbatim.",
+    "apps/web/src/field-error.tsx gained one new export, errorNodeById, additive only; errorNode, hintNode, focusByTestId unchanged, so no other caller is affected.",
+    "e2e/tests/requests.spec.ts TC-01-E2E-02 ('an invalid new-request form shows every error and focuses the first field') was extended with the exact assertion the spec's Regression Test section specifies (toHaveCount(1) on 'Enter a title' inside request-new-modal) and passed in the targeted run.",
+    "Code walkthrough confirms AC5: Topic (Select) still renders through FieldError (field=\"topicId\"), Description (native textarea) still renders through FieldError (field=\"description\") — neither was touched, matching the spec's Blast Radius row.",
+    "AC4 (error state: border/label/focus glow still var(--error-500)) is preserved because error={...} is still passed to Input (now a node instead of a raw string) rather than removed, matching the rejected-alternative analysis in the spec.",
+    "AC6 (focus on Title) is unaffected: the wrapping <div ref={titleRef}> that focusFirstInvalid reads was not touched.",
+    "No apps/api files are in the diff, so no integration suite is touched; int is correctly skipped rather than run in full.",
+    "Ran full targeted e2e (requests.spec.ts + regressions.spec.ts, CI=1, ports 3100/4100) rather than only qa-look, since the spec's regression test IS the walkthrough needed here (a rendered-DOM duplication, exactly what E2E is for) and the touched suite already covers every role/state around New request in this file; no additional qa-look.spec.ts walk was judged necessary beyond what TC-01-E2E-02 and the full requests.spec.ts run already exercise (topic/assignee Select errors, submit-never-disabled, focus order) — all 13 requests.spec.ts cases and all 9 regressions.spec.ts cases passed.",
+    "Acceptance criteria 1-3 and 7 verified directly by the passing extended TC-01-E2E-02 assertion; criteria 4-6 verified by code inspection as above."
+  ]
+}

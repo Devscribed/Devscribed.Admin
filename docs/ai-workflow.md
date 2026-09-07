@@ -31,16 +31,57 @@ npm run wf:log -- --tail 40
 node scripts/wf.mjs release   # drop the lock when the run is done or abandoned
 ```
 
+## Tracks: three weights of document
+
+Not every change earns every stage. A track is a block in `.claude/ai-workflow.config.json`
+under `shipConfig`, resolved from the document's path by its `match`, so nothing has to be
+passed; `--track <name>` overrides it, and `wf` records the choice in `run.json`.
+
+| Track | Document | Does not run | Refine | Branch |
+|---|---|---|---|---|
+| `spec` | `specs/<area>/NN-name.md` + bundle | — | required | `spec/` |
+| `bug` | `specs/bugs/BUG-NNN-*.md` | `pre_implement` | not required | `fix/` |
+| `patch` | `specs/patches/PATCH-NNN-*.md` | `pre_implement`; cheap review | not required | `fix/` |
+
+`npm run config` prints what each track resolves to — the agent, model, shard shape, timeout
+and budget of every stage — and refuses an invalid file. Read it rather than inferring the
+answer from the JSON.
+
+Two consequences worth knowing:
+
+- **No plan means no `handoff.json`.** The implement and review prompts name the document
+  instead, and a review finding addressed to `handoff` routes to `implement` rather than to a
+  stage this track does not run — otherwise the run marches through a skipped stage and spends
+  the replan budget on a finding nobody can act on.
+- **The static gate and QA are on every track.** What a lighter document buys is the stages
+  that read intent, never the ones that check the result. The validator refuses a config that
+  disables either on any track; `--skip` on the command line is how a person opts out for one
+  run, deliberately and visibly.
+- **Budgets belong to the track.** `patch` allows three code attempts, `bug` six, `spec`
+  eight. A patch that needs more was misfiled, and the halt is the signal; raising the number
+  only hides it.
+
+The entry condition for a patch is closed and lives in `.claude/skills/patch/SKILL.md`. It is
+the part of this that decays if it is left to judgement: a track is only cheaper than a spec
+for as long as the things routed to it are actually small.
+
 ## The stages
 
 | Stage | Who | Produces |
 |---|---|---|
-| `preflight` | script | environment checks; refuses to start on `main` or with the lock held |
-| `pre_implement` | `pre-implementer` | `handoff.json` — the plan, compiled from the spec |
-| `implement` | `implementer` | code and tests |
+| `preflight` | script | environment checks; refuses to start on `main`, with the lock held, or on a spec no refine loop admitted |
+| `pre_implement` | `pre-implementer-strict`, shape `strict` (`classic`: `pre-implementer`) | `handoff.json` — the plan, compiled from the spec, with every compile question answered by id |
+| `implement` | `implementer`, shape `single` (`orchestrated`: `implementer-lead` dispatching `implementer`) | code and tests |
 | `static_gate` | `scripts/static-gate.mjs` | two rules; see below |
-| `review` | `code-reviewer` | verdict against `checklist.md` and `CLAUDE.md` |
+| `review` | `code-reviewer-lead` dispatching `code-reviewer-open` or `-sweeps`, shapes `lead-open` / `lead-sweeps` (`solo-*`: the core alone) | verdict against the closed register in `.claude/skills/code-review/references/blocking-criteria.md` |
 | `qa` | `qa` | unit in full, integration and E2E targeted, plus the spec's acceptance criteria |
+
+Which agent a stage runs is written out under its track, at
+`shipConfig.<track>.stages.<stage>`. Every way that stage can run is a named entry in its
+`shapes`, written out in full, and the block's `use` names the one that runs. A run can name a
+different one with `--plan-shape`, `--implement-shape` or `--review-shape`, and any shape not
+named by `use` is written into `run.json`. `.claude/agents/VARIANTS.md` lists the agents and
+says what each replaced.
 
 The run ends at **`ready`**, not `merged`: a green branch, and a human opens the PR. `main`
 deploys itself, so a pipeline that merges is a pipeline that deploys.
@@ -66,6 +107,13 @@ it never read, QA cannot judge a plan it never saw.
 scenario, or a quoted rule with its source. Without one it is demoted to a note, collected for
 the human at the end, and the run carries on. A false positive almost always fails to produce
 a witness; that is what makes it false.
+
+**A review finding blocks only if it also names a criterion** — an id from
+`.claude/skills/code-review/references/blocking-criteria.md`, or a numbered requirement of the
+spec under review. The witness makes a finding checkable; the criterion makes the blocking
+surface the same on the next pass, so an implementer who fixed what was named does not meet a
+fresh objection over the same lines. Anything the register does not carry is still reported —
+as a note, which is also where a criterion the register is missing gets proposed.
 
 **The implementer may contest one finding** with a counter-witness, and a contested finding is
 never retried — the run halts. Contesting cannot produce a pass, so there is nothing to win by
@@ -115,11 +163,48 @@ lose it.
 
 ## Configuration
 
-`.claude/ai-workflow.config.json`. Each stage has an `enabled` flag; skipping `qa` on a
-one-line change is reasonable, skipping `static_gate` is not.
+Everything is in `.claude/ai-workflow.config.json`, and `scripts/ship-config.mjs` is the only
+thing that reads it. The shape is track first:
 
-Limits worth knowing: five code attempts, one replan, two infrastructure retries, and a finding
-auto-contested after surviving two attempts.
+```
+shipConfig.<track>                        match, branchPrefix, requiresRefine
+shipConfig.<track>.stages.<stage>         enabled, use, shapes
+shipConfig.<track>.stages.<stage>.shapes.<name>   one complete way to run it: agent, model,
+                                          shard*, and the stage's own keys
+shipConfig.<track>.convergence            maxCodeAttempts, maxHandoffReplans, infraRetries,
+                                          autoContestAfter
+shipConfig.<track>.timeoutMin             per stage, in minutes
+breakers, isolation, protectedBranches    shared by every track
+refine                                    use + shapes, the same idiom, for the pre-pipeline gate
+```
+
+Nothing is inherited — not between tracks, and not between a shape and the block above it.
+What you read under a shape is exactly what that shape runs: there is no merge to do in your
+head and no `null` that means "delete a key". The cost is repetition when an agent is renamed,
+and that is what the validator exists to catch.
+
+**Validate before you run.** `npm run config` parses the file, checks it, and prints what each
+track resolves to; `--track <name>` narrows it and `--json` gives the resolved blocks. It is
+also run automatically at the top of `ship`, by every `wf` command, and as the first row of
+preflight, so a bad edit stops the run before a lock, a branch or a stage exists.
+
+It checks the things that are silent at the point of failure: an unknown key anywhere
+(`shardsize` for `shardSize`), a stage missing from a track or one that is not a stage, an
+`agent` or `shardAgent` with no definition under `.claude/agents/`, a model outside
+opus/sonnet/haiku/fable, a `script` that does not exist, a QA level that is not
+unit/int/e2e, `static_gate` or `qa` disabled, a replan budget on a track with no plan stage, a
+timeout for a stage the track does not run, two tracks claiming one path, and a `match` that is
+not a valid regular expression.
+
+**And the question after that one.** `npm run pipeline` checks the parts that name each other:
+an agent whose `name:` and filename disagree, a lead dispatching a `subagent_type` nobody
+defines, the `SubagentStart`/`SubagentStop` matchers in `settings.json`, a contract in
+`.claude/agents/references/` an agent bound by it no longer reads, the E2E port ladder that
+`scripts/ports.mjs` and `e2e/environment.ts` each keep, **and any setting the config accepts
+that no script reads**. The last is the one worth the script: a dead key is printed back by
+`npm run config`, so a person who sets it believes it took effect. `effort` and `shardEffort`
+were dead for the life of the config, and the printer reported a reasoning effort the SDK was
+never given.
 
 ## One run at a time
 

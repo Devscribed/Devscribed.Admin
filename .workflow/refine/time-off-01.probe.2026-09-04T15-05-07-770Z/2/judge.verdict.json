@@ -1,0 +1,226 @@
+{
+  "status": "blocked",
+  "admitted": false,
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "request": "A vacation calendar based on holidays and vacation requests, viewable for the whole organization, for several teams, or for specific people, drawn as a horizontal timeline where each row is a member and each column is a day. Holidays follow a country a manager states on the member, falling back to a country stated on the organization; the phone country code is not a source.",
+  "shardDecision": "Read in full by the judge, no shard dispatched. `spec-slice --since df2e3aa` reported the bundle unchanged and offered that as the finding, which is wrong and is why nothing was delegated: df2e3aa *is* the repair commit, so `df2e3aa..HEAD` excludes the very diff this pass exists to judge. The change under judgement is therefore `git show df2e3aa` — 155 changed lines across the three bundle files, plus an uncommitted repair to specs/time-off/README.md — a slice small enough that splitting it would have cost three readers the same re-establishment of the same five facts (the two capability unions and their two helpers, the holidays gates' status shapes, the member route's refusal statuses, the four absent DS tokens, the timezone column's nullability). Both blockers below are also invisible to a per-member split: each is a disagreement between the repaired line in one file and a line the repair did not touch in another.",
+  "shards": [],
+  "read": {
+    "specs": [
+      "specs/time-off/01-vacation-calendar.md",
+      "specs/time-off/01-vacation-calendar.contracts.md",
+      "specs/time-off/01-vacation-calendar.cases.md",
+      "specs/time-off/01-vacation-calendar.mock.html",
+      "specs/time-off/README.md",
+      ".workflow/refine/time-off-01.probe/1/judge.verdict.json",
+      ".workflow/refine/time-off-01.probe/1/fix.verdict.json",
+      ".claude/skills/spec-review/references/admission-criteria.md",
+      "CLAUDE.md"
+    ],
+    "files": [
+      "packages/validation/src/index.ts",
+      "packages/validation/src/roles.ts",
+      "apps/api/src/holidays/holidays.service.ts",
+      "apps/api/src/members/members.service.ts",
+      "apps/api/src/invitations/invitations.service.ts",
+      "apps/api/src/account/account.service.ts",
+      "apps/api/src/reports/reports.service.ts",
+      "apps/api/src/clients/clients.service.ts",
+      "apps/api/src/projects/projects.service.ts",
+      "apps/api/src/accrual/accrual.service.ts",
+      "apps/api/src/kanban/kanban.shared.ts",
+      "apps/api/prisma/schema.prisma",
+      "apps/web/src/layout/Sidebar.tsx",
+      "packages/ds/src/index.ts",
+      "packages/ds/src/tokens/colors.css",
+      "e2e/tests/helpers.ts"
+    ]
+  },
+  "sweeps": {
+    "repairClaims": 11,
+    "currency": 14,
+    "contradiction": 9,
+    "consequence": 6,
+    "scope": 5
+  },
+  "repairAudit": {
+    "carried": ["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11"],
+    "carriedWithNewConsequence": ["R1"],
+    "notCarried": [],
+    "unrecordedEdits": "five passages the fix verdict does not mention were deleted in the same commit — the Decided under REQ-01-013, REQ-01-016, REQ-01-021 and REQ-01-023, and the Amounts Owed sentence in the Summary. None carried a rule and README.md carries the Amounts Owed consequence in full, so nothing implementable was lost; the omission from the record is noted below."
+  },
+  "criteria": {
+    "S-01": "clear",
+    "S-02": "clear",
+    "S-03": "clear",
+    "S-04": "clear",
+    "S-05": "note",
+    "S-06": "clear",
+    "S-07": "clear",
+    "S-08": "clear",
+    "S-09": "clear",
+    "S-10": "clear",
+    "S-11": "clear",
+    "S-12": "note",
+    "S-13": "clear",
+    "S-14": "clear",
+    "S-15": "clear",
+    "S-16": "clear",
+    "S-17": "blocked",
+    "S-18": "clear",
+    "S-19": "clear",
+    "S-20": "clear",
+    "S-21": "clear",
+    "S-22": "clear",
+    "S-23": "clear",
+    "S-24": "clear",
+    "S-25": "clear",
+    "S-26": "blocked",
+    "S-27": "clear",
+    "S-28": "clear",
+    "S-29": "clear",
+    "S-30": "clear",
+    "S-31": "clear",
+    "S-32": "clear",
+    "S-33": "clear",
+    "S-34": "clear",
+    "S-35": "n/a",
+    "S-36": "clear",
+    "S-37": "clear",
+    "S-38": "clear",
+    "S-39": "clear",
+    "S-40": "clear",
+    "S-41": "clear",
+    "S-42": "clear",
+    "S-43": "clear",
+    "S-44": "note",
+    "S-45": "clear",
+    "S-46": "note",
+    "S-47": "clear",
+    "S-48": "clear",
+    "S-49": "clear",
+    "S-50": "clear",
+    "S-51": "clear",
+    "S-52": "n/a",
+    "S-53": "clear",
+    "S-54": "n/a",
+    "S-55": "clear",
+    "S-56": "clear",
+    "S-57": "clear",
+    "S-58": "clear"
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "severity": "blocker",
+      "criterion": "S-26",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "Roles & Permission Matrix — the Decided that settled R1, against REQ-01-003 and the matrix",
+      "line": 77,
+      "claim": "R1's repair moved the calendar's gate to `can(role, 'view-time-off-calendar')`, and `can()` does not normalize the role while `hasCapability()` does — so a membership storing the legacy `member` value is refused the calendar with 404 while the sidebar draws its Calendar row, which is the dead navigation CLAUDE.md forbids. The spec never says what the gate does with the stored `member` value; the one sentence that speaks to it now claims something untrue of the helper the repair chose.",
+      "witness": {
+        "kind": "code",
+        "detail": "`can(role: Role, capability: MemberCapability)` is `return CAPABILITY_MATRIX[role]?.[capability] ?? false;` (packages/validation/src/index.ts:842-844) — no normalization, and `CAPABILITY_MATRIX` is keyed by the four target roles only (`admin` 661, `manager` 705, `user` 750, `viewer` 795), so a stored `member` misses every row and falls to `false`. `hasCapability` is `ROLE_CAPABILITIES[normalizeRole(role)].includes(capability)` (packages/validation/src/roles.ts), and `LEGACY_ALIASES` maps `member` to `user` (roles.ts:27-29). Every shipped `can()` call site in the API passes the raw stored role: `holidays.service.ts:243,252`, `members.service.ts:147,258,399`, `clients.service.ts:366,375`, `projects.service.ts:145,749`, `accrual.service.ts:56`, `kanban.shared.ts:68`, `reports.service.ts:335,412,488` — normalization happens only on the `RequireCapability` path (apps/api/src/auth/capability.guard.ts). The spec's own sentence (01-vacation-calendar.md:72) says 'Capability checks run against `normalizeRole()` … so they work on today's `admin` / `member` column and survive the role-enum migration untouched', which is true of `hasCapability` and false of the `can()` gate the Decided at :77-79 and the contracts' Routes row (contracts:10) now name. The consequence is new with this repair and is specific to this capability: the sidebar gates Holidays with `hasCapability(role, 'ViewHolidays')` (apps/web/src/layout/Sidebar.tsx:154) and the matrix denies `user` `ViewHolidays`, so a stored `member` sees no Holidays row and the mismatch never shows. This spec grants the calendar to `user` (matrix at 01-vacation-calendar.md:84), so a stored `member` normalizes to `user`, `hasCapability` draws the row REQ-01-003 requires, and `can()` answers REQ-01-002's 404 behind it. REQ-01-004 ('IF the caller does not hold `ViewTimeOffCalendar`, THEN THE SYSTEM SHALL render no `Calendar` row') is then unsatisfiable for that member under any single implementation that follows the document as written.",
+        "source": "specs/time-off/01-vacation-calendar.md:72,77-79,84 and REQ-01-002/003/004 against packages/validation/src/index.ts:842 and packages/validation/src/roles.ts:27-29, with apps/web/src/layout/Sidebar.tsx:154 as the shipped nav pattern"
+      },
+      "suggestedFix": "Say in the Decided what the gate is handed, not only which helper it calls: `can(normalizeRole(caller.role), 'view-time-off-calendar')`, and correct the Routes row to the same expression — a stored `member` normalizes to `user` and holds the capability, so the nav row and the page agree. State the same for the nav gate, since REQ-01-003 and REQ-01-004 must answer identically for that value. If instead the raw role is to be passed, then the matrix must say a stored `member` is refused and REQ-01-003 must say no row is drawn for it, and the sentence at :72 has to go."
+    },
+    {
+      "id": "P2",
+      "severity": "blocker",
+      "criterion": "S-17",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-049 — moving the window",
+      "line": 207,
+      "claim": "R9's repair promoted the range navigation into a requirement whose 'one whole window earlier' has two readings that agree on `Week` and `2 weeks` and disagree on `Month`, which is the one preset the spec elsewhere singles out as not a fixed number of days. Nothing in the bundle settles it and no case observes it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-01-049: 'THE SYSTEM SHALL move it to the range that control names — one whole window earlier, one whole window later, or the window holding the caller's today'. REQ-01-019 immediately above it carves `Month` out precisely because it is not a span computed from a day count: 'except `Month`, which runs from the first to the last day of the displayed calendar month'. Reading A — shift the anchor by the window's own day count — takes 1–31 March back 31 days to 29 January … 28 February, a range that is neither a calendar month nor a range the `Month` preset can produce, so the label then names a window the preset cannot restore. Reading B — the previous calendar month — gives 1–28 February. The two agree for every fixed-length preset, which is why the only case that exercises the controls does not separate them: TC-01-E2E-03 (cases.md:465-479) presses `calendar-next`, `calendar-prev` and `calendar-today` under `calendar-window-2weeks` only, and its expected result is written in fortnights. No edge case, no contracts row and no other case mentions prev or next under `Month`; the Required data-testid table (contracts.md:254-256) declares the three ids and states no behaviour.",
+        "source": "specs/time-off/01-vacation-calendar.md:207-212 against REQ-01-019 (:201-205) and specs/time-off/01-vacation-calendar.cases.md TC-01-E2E-03"
+      },
+      "suggestedFix": "Add the `Month` clause to REQ-01-049 in the same breath as the other two — under `Month`, back and forward move to the previous and next calendar month, first day to last, so the range stays one the preset can produce; under `Week` and `2 weeks` they move by the window's own length from the caller's `firstDayOfWeek`. Then extend TC-01-E2E-03, or the existing month case, with one press of `calendar-prev` under `calendar-window-month` so the reading is observed rather than assumed."
+    },
+    {
+      "id": "P3",
+      "severity": "note",
+      "criterion": null,
+      "rule": "spec/divergence",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "the repair commit against fix.verdict.json",
+      "line": 53,
+      "claim": "the repair deleted five passages that no finding named and that the fix verdict does not record.",
+      "witness": {
+        "kind": "rule",
+        "detail": "`git show df2e3aa` removes the Summary sentence 'It moves what Amounts Owed pays in both directions, and pays fewer holidays than today until somebody states a country — see Blast Radius', and the whole **Decided** paragraph under REQ-01-013 ('a cap, not pagination'), REQ-01-016 ('a quarter — the widest window…'), REQ-01-021 ('a rejected request is not an absence') and REQ-01-023 ('breaking the band at a weekend would read as two absences'). fix.verdict.json lists eleven repairs and names none of these; `left` is empty. Nothing implementable was lost — each removed passage is rationale for a rule that still stands, and specs/time-off/README.md:116-135 carries the Amounts Owed consequence in more detail than the deleted sentence did — so this is filed as a note rather than under a criterion. It is recorded because the record and the text disagree about what the repair did, and the next reader of the ledger will not find these edits in it.",
+        "source": "git show df2e3aa -- specs/time-off/01-vacation-calendar.md against .workflow/refine/time-off-01.probe/1/fix.verdict.json"
+      },
+      "suggestedFix": "Nothing is required of the bundle. If the four decisions are wanted back, they are recoverable from the commit before df2e3aa."
+    },
+    {
+      "id": "P4",
+      "severity": "note",
+      "criterion": "S-44",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "the Unassigned entry in `calendar-teams-picker`",
+      "line": 294,
+      "claim": "R3's repair gave the `none` sentinel a control, and no case presses it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The repaired paragraph states three things about the control — the entry sits above the projects, it submits `projectIds=none`, and it may be the only entry ticked. TC-01-INT-04 still reaches the bucket through the query string, TC-01-E2E-02 ticks projects, and edge case 6 describes a reader ticking `none` and a project without a case behind it. A picker built without the entry, or one that refuses it as an empty selection, passes every case in the bundle. The repair is complete as a rule; it is the observation that is missing.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:294-296 and REQ-01-009's Decided against specs/time-off/01-vacation-calendar.cases.md TC-01-INT-04, TC-01-E2E-02"
+      },
+      "suggestedFix": "One step on TC-01-E2E-02: open `calendar-teams-picker`, tick **Unassigned** alone, and expect the rows of members on no non-archived project — which also observes REQ-01-009's new Decided that `none` alone is a selection."
+    },
+    {
+      "id": "P5",
+      "severity": "note",
+      "criterion": null,
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-19 — the third caller",
+      "line": 385,
+      "claim": "'an invited member whose timezone is still empty' names a membership status under which the read it asserts cannot answer 200, and the stored value in that state is `null` rather than empty.",
+      "witness": {
+        "kind": "code",
+        "detail": "Read strictly, an `invited` membership is not `active`, and the calendar's own precondition is an active member; the shipped analogue `HolidaysService.requireCaller` refuses any caller whose membership is not `active` (apps/api/src/holidays/holidays.service.ts), so such a caller could not reach the `200` the case asserts. The state the case actually wants is a member created through `inviteAndAcceptViaApi` who never set a timezone, which is what the Verification Plan means by 'An invited member's `timezone` is `\"\"`' — and that phrasing is itself the API projection, not the column: invitation acceptance stores `null` when no timezone is submitted (apps/api/src/invitations/invitations.service.ts:286-287, 444-445), and `\"\"` is what the account read substitutes (apps/api/src/account/account.service.ts:74) and what the e2e helper reports (e2e/tests/helpers.ts:1331). `Account.timezone` is `String?` (apps/api/prisma/schema.prisma:37). The case still passes either way, because the repaired REQ-01-018 covers absent, empty and unrecognized alike — which is why this is a note and not a finding against S-36.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:385 and the Verification Plan's `updateAccountSettingsViaApi` row against apps/api/src/invitations/invitations.service.ts:286 and apps/api/src/account/account.service.ts:74"
+      },
+      "suggestedFix": "Write the third caller as 'an accepted member who has never set a timezone, whose column is therefore `null`', and let the Verification Plan keep its `\"\"` as the observation of the account read."
+    },
+    {
+      "id": "P6",
+      "severity": "note",
+      "criterion": null,
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.mock.html",
+      "symbol": "the `:root` comment above the band tokens",
+      "line": 14,
+      "claim": "the new DS gaps table records four names the mock declares while the mock's own comment above them still says two.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The mock's block comment opens 'The two tokens this spec asks the design system for' and the `:root` beneath it declares four names — `--surface-timeoff-band`, `--border-timeoff-band`, `--text-timeoff-band` and `--name-col`. The DS gaps table the repair added (contracts.md, `## DS gaps`) now enumerates all four across its two rows and says 'The mock declares each name below in its own `:root`', which is exact; the mock's count is the half that is stale. Everything else the repair claims about them checks out: none of the four is defined anywhere in `packages/ds/src`, `apps/web/app/globals.css` or `apps/web/src`, and the palette claim holds — `--color-holiday` is `#FFD02B` (packages/ds/src/tokens/colors.css:21) and `--status-success|warning|error|info` alias the success/warning/error/info pigments (colors.css:103-106), none of them violet. The mock is outside the three-file bundle and outside the judged range, so this is reported rather than filed.",
+        "source": "specs/time-off/01-vacation-calendar.mock.html:14-22 against specs/time-off/01-vacation-calendar.contracts.md `## DS gaps`"
+      },
+      "suggestedFix": "Change 'The two tokens' to 'The three colour tokens and the one width'."
+    },
+    {
+      "id": "P7",
+      "severity": "note",
+      "criterion": null,
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/README.md",
+      "symbol": "the R1 repair to Blast Radius and Backward Compatibility 4",
+      "line": 98,
+      "claim": "the half of R1's repair that lives in the area README is on disk but is not in the repair commit.",
+      "witness": {
+        "kind": "rule",
+        "detail": "fix.verdict.json lists specs/time-off/README.md under `filesTouched` and under R1's `edited`, and the file on disk carries the repair — `packages/validation/src/index.ts` gains the twin, `MemberCapability` typed against `CAPABILITY_MATRIX`, and Backward Compatibility 4 rewritten to 'Both capability unions only gain members'. `git show --stat df2e3aa` lists the three bundle files and no README, and `git status` shows it still as an unstaged modification. Both of those statements are true of the code (packages/validation/src/index.ts:528, 660) so the text is right; it is only uncommitted. Judged on the text, which is what ships, R1's carrying into README is present.",
+        "source": ".workflow/refine/time-off-01.probe/1/fix.verdict.json `filesTouched` against `git show --stat df2e3aa` and `git status --porcelain`"
+      },
+      "suggestedFix": "Commit specs/time-off/README.md with the next repair, so the ledger's range covers it."
+    }
+  ]
+}

@@ -40,13 +40,40 @@ const VALIDATORS = { email: validateEmail, password: validatePasswordPresent };
  *
  * Read from `window` at submit time rather than through `useSearchParams`, which would
  * opt this route out of the static shell for a value only ever needed on the client.
+ *
+ * A usable `?next` is answered without asking `/api/me` which screen the principal
+ * lands on: the deep link is the answer, and the request would be spent on a value
+ * nothing then reads.
  */
-function destination(organizationId: string): string {
-  const home = `/org/${organizationId}/members`;
-  if (typeof window === 'undefined') return home;
+async function destination(organizationId: string): Promise<string> {
+  if (typeof window !== 'undefined') {
+    const next = new URLSearchParams(window.location.search).get('next');
+    if (next?.startsWith(`/org/${organizationId}/`)) return next;
+  }
 
-  const next = new URLSearchParams(window.location.search).get('next');
-  return next?.startsWith(`/org/${organizationId}/`) ? next : home;
+  return `/org/${organizationId}/${await landingFor(organizationId)}`;
+}
+
+/**
+ * Which screen the signed-in principal lands on. A client contact is refused the members
+ * destination (REQ-03-019), so the kind decides — read from `/api/me`, the endpoint that
+ * answers it, exactly as the shell and the accept screen already resolve it. The sign-in
+ * response body is not amended for this.
+ */
+async function landingFor(organizationId: string): Promise<string> {
+  try {
+    const response = await fetch('/api/me', { credentials: 'same-origin' });
+    if (response.ok) {
+      const session = await response.json().catch(() => null);
+      if (session?.organization?.id === organizationId && session?.principal === 'client') {
+        return 'requests';
+      }
+    }
+  } catch {
+    // The members destination is what every principal but a contact lands on, and the
+    // shell resolves the identity again on arrival.
+  }
+  return 'members';
 }
 
 export function LoginForm() {
@@ -101,7 +128,7 @@ export function LoginForm() {
         // The session cookie is httpOnly, so the organization has to come back in the
         // body for the client to know which /org/{id}/… route to land on.
         const { organizationId } = await response.json();
-        router.push(destination(organizationId));
+        router.push(await destination(organizationId));
         router.refresh();
         return;
       }

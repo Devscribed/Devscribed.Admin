@@ -329,6 +329,28 @@ export function isValidRole(input: string): input is Role {
 }
 
 /**
+ * Requests spec 03 — the value an invitation to a client contact carries in
+ * `Invitation.role`. It is deliberately NOT a member of `Role`: `isValidRole` governs
+ * the staff-facing set that `POST /api/invitations` accepts in its body, so `client`
+ * can never be assigned through the staff invite form, and no `Membership.role` can
+ * ever hold it.
+ */
+export const CLIENT_INVITATION_ROLE = 'client';
+
+/** The values `Invitation.role` may hold: the four staff roles, plus `client`. */
+export type InvitationRole = Role | typeof CLIENT_INVITATION_ROLE;
+
+export const INVITATION_ROLE_VALUES: readonly InvitationRole[] = [
+  ...ROLE_VALUES,
+  CLIENT_INVITATION_ROLE,
+];
+
+/** True for a stored invitation written for a client contact (REQ-03-009). */
+export function isClientInvitationRole(role: string | null | undefined): boolean {
+  return role === CLIENT_INVITATION_ROLE;
+}
+
+/**
  * Whole-request outcome messages for spec 03 — self-invitation, role authority,
  * already-a-member, token validity, and accept-time password check. Field-level
  * messages (email, role, name, password) live in `MESSAGES`, following the
@@ -599,6 +621,26 @@ export type MemberCapability =
    */
   | 'edit-others-billable'
   /**
+   * Requests spec 01 additions — requests between members of the organization.
+   * `create-request`: raise a request (admin, manager, user — being asked something is
+   * not a privilege, but asking is).
+   * `view-own-requests`: see requests I raised or that are addressed to me (all four
+   * roles; it is what makes the Requests page everyone's inbox).
+   * `view-all-requests`: the All scope — every request in the organization
+   * (admin, manager). Distinct from `view-requests`, which keeps its spec-10 meaning
+   * and its grants and now gates only the vacation section inside the page.
+   */
+  | 'create-request'
+  | 'view-own-requests'
+  | 'view-all-requests'
+  /**
+   * Requests spec 02 addition — the organization's catalogue of request topics.
+   * `manage-request-topics`: create, rename, reorder, archive and restore a topic
+   * (admin, manager). Reading the catalogue needs no capability at all — every active
+   * member reads it to fill the picker (REQ-02-008).
+   */
+  | 'manage-request-topics'
+  /**
    * Spec reports/01 additions — the nine reporting capabilities. Duplicated in
    * `Capability` (PascalCase, packages/validation/src/roles.ts) so
    * `RequireCapability` decorators and `can(role, ...)` call sites can both
@@ -615,7 +657,15 @@ export type MemberCapability =
   | 'view-my-time-off'
   | 'view-time-and-activity-billed'
   | 'view-time-and-activity-spent'
-  | 'export-reports';
+  | 'export-reports'
+  /**
+   * Time off spec 01 addition — the vacation calendar (REQ-01-001). Duplicated as
+   * `ViewTimeOffCalendar` in `Capability` (PascalCase, packages/validation/src/roles.ts):
+   * this spelling is what the endpoint's service gate and the page's gate read through
+   * `can(normalizeRole(role), ...)`, the other is what the sidebar row reads. Admin,
+   * manager and user; a viewer is refused both the route and the row.
+   */
+  | 'view-time-off-calendar';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -655,6 +705,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': true,
     'delete-holidays': true,
     'edit-others-billable': true,
+    'create-request': true,
+    'view-own-requests': true,
+    'view-all-requests': true,
+    'manage-request-topics': true,
     'view-amounts-owed': true,
     'view-my-amounts-owed': true,
     'view-time-and-activity': true,
@@ -664,6 +718,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': true,
     'view-time-and-activity-spent': true,
     'export-reports': true,
+    'view-time-off-calendar': true,
   },
   manager: {
     'view-list': true,
@@ -695,6 +750,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': true,
     'delete-holidays': false,
     'edit-others-billable': true,
+    'create-request': true,
+    'view-own-requests': true,
+    'view-all-requests': true,
+    'manage-request-topics': true,
     'view-amounts-owed': true,
     'view-my-amounts-owed': true,
     'view-time-and-activity': true,
@@ -705,6 +764,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': true,
     'view-time-and-activity-spent': false,
     'export-reports': true,
+    'view-time-off-calendar': true,
   },
   user: {
     'view-list': true,
@@ -736,6 +796,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': false,
     'delete-holidays': false,
     'edit-others-billable': false,
+    'create-request': true,
+    'view-own-requests': true,
+    'view-all-requests': false,
+    'manage-request-topics': false,
     // A regular user gets the three My variants and PDF export of their own.
     'view-amounts-owed': false,
     'view-my-amounts-owed': true,
@@ -746,6 +810,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': false,
     'view-time-and-activity-spent': false,
     'export-reports': true,
+    'view-time-off-calendar': true,
   },
   viewer: {
     'view-list': true,
@@ -777,6 +842,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': false,
     'delete-holidays': false,
     'edit-others-billable': false,
+    'create-request': false,
+    'view-own-requests': true,
+    'view-all-requests': false,
+    'manage-request-topics': false,
     // A viewer sees only their own time-off calendar; no export.
     'view-amounts-owed': false,
     'view-my-amounts-owed': false,
@@ -787,6 +856,8 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': false,
     'view-time-and-activity-spent': false,
     'export-reports': false,
+    // Time off spec 01 REQ-01-002 — refused the calendar, and REQ-01-004 draws them no row.
+    'view-time-off-calendar': false,
   },
 };
 
@@ -1869,7 +1940,123 @@ export const REQUEST_MESSAGES = {
   toastCancelledPending: 'Request cancelled',
   toastCancelledApproved: 'Request cancelled and reserve refunded',
   genericError: 'Something went wrong. Please try again.',
+
+  /* ---------------------------------------------------------------- *
+   * Requests spec 01 — requests between members. Extended in place rather than
+   * exported a second time: web and API read one object, so they cannot disagree, and
+   * none of the keys below collides with a vacation key above (`cancelForbidden` and
+   * `reviewForbidden` are spec 09's and are distinct from `notYoursToCancel` and
+   * `editForbidden`).
+   * ---------------------------------------------------------------- */
+  createForbidden: 'You do not have permission to create requests',
+  scopeForbidden: "You do not have permission to view other people's requests",
+  typeUnknown: 'Choose a request type',
+  titleRequired: 'Enter a title',
+  titleTooShort: 'Title must be at least 3 characters',
+  titleTooLong: 'Title must be 200 characters or fewer',
+  descriptionTooLong: 'Description must be 5000 characters or fewer',
+  accessKindRequired: 'Choose what kind of access this is',
+  accessKindNotAllowed: 'A question does not have an access kind',
+  accessKindUnknown: 'Choose a valid access kind',
+  priorityUnknown: 'Choose a valid priority',
+  neededByInvalid: 'Enter a valid date',
+  neededByPast: 'The date needed cannot be in the past',
+  assigneeInvalid: 'Choose who this request is for',
+  assigneeInactive: 'That person is no longer active in this organization',
+  projectUnavailable: 'That project is not available',
+  messageRequired: 'Write a message',
+  messageTooLong: 'Message must be 5000 characters or fewer',
+  threadClosed: 'This request is closed',
+  alreadyTerminal: 'This request has already been closed',
+  invalidTransition: 'This request cannot move to that state',
+  notYoursToAnswer: 'Only the person this is addressed to can answer it',
+  notYoursToGrant: 'Only the person who asked can confirm this',
+  notYoursToDecline: 'Only the person this is addressed to can decline it',
+  notYoursToCancel: 'Only the person who asked can cancel this',
+  editForbidden: 'You do not have permission to edit this request',
+  fieldImmutable: 'That field cannot be changed after the request is created',
+  declineReasonRequired: 'Say why you cannot provide this',
+  declineReasonTooLong: 'Reason must be 1000 characters or fewer',
+  emptyMine: 'Nothing is waiting on you.',
+  emptyFiltered: 'No requests match these filters.',
+
+  /* ---------------------------------------------------------------- *
+   * Requests spec 02 — the topic is the only classifier a caller supplies.
+   * Extended in place exactly as spec 01 extended the vacation keys above; none of
+   * the four collides with a key already here.
+   * ---------------------------------------------------------------- */
+  topicRequired: 'Choose what this request is about',
+  topicUnavailable: 'That topic is not available',
+  topicAudienceMismatch: 'That topic cannot be used for this addressee',
+  classifierNotAccepted: 'The request kind is set by the topic and cannot be sent',
+
+  /* ---------------------------------------------------------------- *
+   * Requests spec 03 — a request addressed to a client contact. Three more keys on the
+   * same const, extended in place exactly as specs 01 and 02 extended it; none of the
+   * three collides with a key already here.
+   * ---------------------------------------------------------------- */
+  clientProjectRequired: 'Choose the project this request belongs to',
+  clientProjectMismatch: 'That project does not belong to this client',
+  notOnProject: 'You can only ask a client about a project you are assigned to',
+
+  /* ---------------------------------------------------------------- *
+   * PATCH-002 — a needed-by date more than five years out is refused, on creation and
+   * on edit alike. Extended in place exactly as every spec above it.
+   * ---------------------------------------------------------------- */
+  neededByTooFar: 'The date needed cannot be more than five years away',
 } as const;
+
+/**
+ * Requests spec 02 — the curated catalogue of request topics.
+ *
+ * A new export rather than more keys on `REQUEST_MESSAGES`: these belong to the topics
+ * routes and to the Settings screen that curates them, and `pickerEmpty` is screen copy
+ * that no route emits at all.
+ */
+export const REQUEST_TOPIC_MESSAGES = {
+  audienceUnknown: 'Choose a valid audience',
+  statusUnknown: 'Choose a valid status',
+  audienceImmutable: 'A topic cannot change audience after it is created',
+  typeUnknown: 'Choose whether this topic is an access or a question',
+  typeImmutable: 'A topic cannot change kind after it is created',
+  nameRequired: 'Enter a topic name',
+  nameTooLong: 'Topic name must be 60 characters or fewer',
+  nameDuplicate: 'A topic with this name already exists for this audience',
+  sortOrderInvalid: 'Enter a whole number for the order',
+  manageForbidden: 'You do not have permission to manage request topics',
+  statusUnchanged: 'This topic is already in that state',
+  /** Screen copy for REQ-02-017; no endpoint emits it. */
+  pickerEmpty: 'No request topics are available. An admin or manager can add one in Settings.',
+} as const;
+
+// Type-only, so it is erased at compile time and adds no runtime edge to the
+// `./requests` <-> `./index` cycle that `REQUEST_MESSAGES` already forms.
+import type { RequestStatus } from './requests';
+
+/**
+ * Requests spec 02 "Status Labels" — the four words the screens use for where a request
+ * stands, over the five statuses that stay in the database exactly as they are.
+ *
+ * Display copy, not a validation message, kept beside the messages so web and API cannot
+ * disagree about the word a status shows as. Read by the list rows, the detail header,
+ * the detail history entries and the filter control (REQ-02-028), and by nothing else:
+ * a vacation card keeps its own stored word (Pending / Approved / Rejected / Cancelled),
+ * which is why this map has an entry for every stored `Request` status and for no
+ * vacation status.
+ *
+ * `closure` is the reason a closed request closed (REQ-02-029) and is `null` wherever
+ * there is nothing to say.
+ */
+export const REQUEST_STATUS_LABELS: Record<
+  RequestStatus,
+  { label: string; closure: string | null }
+> = {
+  open: { label: 'Pending', closure: null },
+  answered: { label: 'In progress', closure: null },
+  granted: { label: 'Completed', closure: null },
+  declined: { label: 'Closed', closure: 'declined' },
+  cancelled: { label: 'Closed', closure: 'cancelled' },
+};
 
 /** Max length of an optional reviewer comment (spec 09 Validation Rule 6). */
 export const REVIEWER_COMMENT_MAX = 500;
@@ -2170,6 +2357,36 @@ export const CLIENT_MESSAGES = {
     `Archive ${name}? ${n} active project(s) will keep this client on their records, ` +
     `but you won't be able to select this client on new projects until it is restored.`,
 } as const;
+
+/**
+ * Requests spec 03 — the client contact as a signed-in principal.
+ *
+ * A new export rather than more keys on `CLIENT_MESSAGES`: these belong to the contacts
+ * routes, to invitation acceptance and to the create route's refusal of a contact, none
+ * of which is about managing the client record itself.
+ *
+ * `principalConflict` names no address and no organization, so it tells a stranger
+ * holding a valid token nothing about who else uses the address beyond the fact that the
+ * accept did not proceed.
+ */
+export const CLIENT_USER_MESSAGES = {
+  emailInvalid: 'Enter a valid email address',
+  alreadyLinked: 'This person is already a contact of a client in this workspace',
+  alreadyRemoved: 'This contact has already been removed',
+  principalConflict: 'This email address already belongs to somebody in a workspace',
+  clientCannotCreate: 'Client contacts cannot raise requests',
+} as const;
+
+/**
+ * Requests spec 03 validation rule 1 — the invited contact's address: required, a valid
+ * address, normalized to lowercase. One message covers absent and malformed alike, so
+ * the form says the same thing however the field is wrong. The pattern and the length
+ * cap are the ones every other address in the product is held to.
+ */
+export function validateClientContactEmail(input: unknown): FieldResult {
+  const result = validateEmail(typeof input === 'string' ? input : '');
+  return result.valid ? result : fail(CLIENT_USER_MESSAGES.emailInvalid);
+}
 
 /** Max length of a client name in Unicode codepoints (spec organization/01 Rule 2). */
 export const CLIENT_NAME_MAX = 120;
@@ -3550,6 +3767,13 @@ export * from './holiday-messages';
 export * from './holidays';
 
 /* ------------------------------------------------------------------ *
+ * Requests area — specs/requests
+ * ------------------------------------------------------------------ */
+
+export * from './requests';
+export * from './request-topics';
+
+/* ------------------------------------------------------------------ *
  * Reports area — specs/reports
  *
  * `reports.ts` imports `zonedWallClockToUtc` from this file, so the
@@ -3560,6 +3784,18 @@ export * from './holidays';
 
 export * from './reports-messages';
 export * from './reports';
+
+/* ------------------------------------------------------------------ *
+ * Time off area — specs/time-off
+ * ------------------------------------------------------------------ */
+
+export * from './time-off-calendar';
+/**
+ * Time off spec 02 — holiday sourcing. Exported after `./holidays` and `./reports`,
+ * which it reads: the country chain, the holiday-name rule and the country list are all
+ * theirs, and this module states only what sourcing adds on top of them.
+ */
+export * from './holiday-sourcing';
 
 /* ------------------------------------------------------------------ *
  * Hiring — specs 01 (vacancies), 02 (booking page), 03 (candidate database),

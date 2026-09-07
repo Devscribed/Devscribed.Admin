@@ -1,0 +1,84 @@
+{
+  "status": "pass",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "n/a",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok"
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Screens — /org/{orgId}/settings/holidays",
+      "claim": "with the organization picker's options pinned to COUNTRY_OPTIONS, no control on any screen can clear the organization country once one is set, and no export holds a label for an option that would",
+      "witness": {
+        "kind": "scenario",
+        "detail": "contracts.md:344 states the picker's options are COUNTRY_OPTIONS from @devscribed/validation — the 249 assigned codes of COUNTRY_NAMES (autofill.ts:970), none of which is an empty value. The member picker beside it names its extra first option explicitly (contracts.md:359-361, TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption), which is how the document states one when it wants one, so the organization picker's list is 249 options and nothing above them. REQ-01-034 and Edge case 19 both describe an admin clearing the organization country; after this change that write is reachable only through the API, and every case for it (TC-01-INT-12, TC-01-INT-21, TC-01-INT-24) already goes that way. A label invented on the screen would be a user-facing string in no packages/validation export and in no row of the closed Error Messages table, so the plan does not invent one.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:344"
+      },
+      "suggestedFix": "either one clause in §Screens giving the organization picker a first option that means 'no country stated', with a TIME_OFF_CALENDAR_MESSAGES row for its label, or one line saying clearing is an API rule and the screen offers no control for it. Planned as the document states it: 249 options, a stored null painting the Select's placeholder"
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "DS gaps",
+      "claim": "the organization-country control this spec adds ships with a control width no token names, and the DS gaps table — which the spec says is where anything @ds lacks is recorded — has no row for it",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The control is drawn inside style={{ minWidth: 220 }} (apps/web/app/org/[orgId]/settings/holidays/page.tsx:363), the same literal the country filter directly below it carries at :391 and the same order of magnitude as MultiFilter's own 200. The DS gaps table (contracts.md:370-374) records --name-col and the three sub---space-1 literals and nothing else, while its own preamble says '@ds carries none of what the rows below name. Each row says what ships in its place'. So the screen carries a fourth measurement the table does not answer for. A note and not a blocker: the literal already ships on the neighbouring control in the same file, so matching it invents nothing, and the plan changes neither.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:370"
+      },
+      "suggestedFix": "one DS-gaps row for a control width — what ships in its place and what closes it — covering both selects in that column; or a width token in @devscribed/ds, which the reports filters would take as well"
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/README.md",
+      "symbol": "Backward Compatibility 3",
+      "claim": "the README calls the holidays and reports suites ones 'this area does not touch and which must stay green'; four of their cases pin the very source REQ-01-026 drops and cannot stay green untouched",
+      "witness": {
+        "kind": "scenario",
+        "detail": "e2e/tests/holidays.spec.ts:296-338 (TC-03-E2E-04) seeds a holiday with countryCode 'BY', calls setOwnCountryViaApi(request, 'BY') at :309 — which writes Account.phoneCountryCode — and asserts the weekly calendar's holiday marker. Under REQ-01-026 that member has no Membership.countryCode and the organization has none, so the chain resolves null and the marker is not drawn. Three integration cases are in the same position: apps/api/test/holidays.spec.ts:381, apps/api/test/reports-amounts-owed.spec.ts:573 and :607, apps/api/test/reports-time-off.spec.ts:404. Carried from round 1 unchanged: the product rule is stated completely (the contracts' call-site table, 'No call site keeps a phone-country read') and the repair is mechanical, which is why it is a note.",
+        "source": "specs/time-off/README.md, Backward Compatibility 3"
+      },
+      "suggestedFix": "the sentence should say those four cases move their fixture from the phone column to the stated one while every assertion stands. Planned as T10, a task of its own so the edits read as deliberate, and now also requiring each moved fixture to be able to fail"
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-27",
+      "claim": "the case says a user and a viewer 'receive the identical body' from the member detail read, and the shipped projection carries caller-dependent fields, so a literal reading cannot pass",
+      "witness": {
+        "kind": "scenario",
+        "detail": "MembersService.getDetail returns callerRole, canEditRole and availableRoles (apps/api/src/members/members.service.ts:352-374); callerRole is 'user' for one caller and 'viewer' for the other, so a deep-equality assertion between the two bodies fails on fields this spec does not touch. The rest of the sentence says what is meant — 'field included: the read is gated by no capability and the field is not conditional on one'. Carried from round 1 unchanged.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md, TC-01-INT-27"
+      },
+      "suggestedFix": "narrow the clause to the field the case is about. Planned as: countryCode present and equal for both callers, alongside the target-derived fields; no product code differs between the two readings"
+    }
+  ]
+}

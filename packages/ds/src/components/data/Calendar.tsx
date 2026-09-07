@@ -36,6 +36,16 @@ export interface CalendarProps extends Omit<React.HTMLAttributes<HTMLDivElement>
   /** Bounds for month navigation — the previous/next controls disable at them. */
   minDate?: CalendarDate;
   maxDate?: CalendarDate;
+  /**
+   * PATCH-023 — the header's title becomes a control, and the grid a stack of three levels:
+   * days, the twelve months of a year, and a block of twelve years. Pressing the title goes
+   * up a level and picking a cell comes back down, so a date two years away is three clicks
+   * rather than twenty-four presses of the next-month arrow.
+   *
+   * Off by default: a grid with a title nobody can press is what every consumer has today,
+   * and a picker that gains a second and third view gains them deliberately.
+   */
+  zoomable?: boolean;
   /** Today in whatever zone the page is reckoning in; marked, never assumed. */
   today?: CalendarDate | null;
   /** Dims the grid and blocks interaction while a month is in flight. */
@@ -151,11 +161,21 @@ export function Calendar({
   onMonthChange,
   minDate,
   maxDate,
+  zoomable = false,
   today = null,
   loading = false,
   style,
   ...rest
 }: CalendarProps) {
+  /* PATCH-023 — which of the three grids is drawn. It is view state and not a value: the
+     month on display is still the consumer's `month`, and every level reports its choice
+     through `onMonthChange` like the arrows do. */
+  const [level, setLevel] = React.useState<'days' | 'months' | 'years'>('days');
+  const year = Number(month.slice(0, 4));
+  /* The twelve-year block the current year sits in, aligned so a block always starts on a
+     multiple of twelve — a block that moved with the year would renumber itself under the
+     reader every time they paged. */
+  const blockStart = Math.floor(year / 12) * 12;
   const available = React.useMemo(() => new Set<CalendarDate | null>(availableDates), [availableDates]);
   const ordered = React.useMemo(
     () => weeks.flat().filter((date) => date && available.has(date)),
@@ -179,8 +199,18 @@ export function Calendar({
   const within = (date: CalendarDate | null) =>
     !!date && !!rangeStart && (rangeEnd ? date >= rangeStart && date <= rangeEnd : date === rangeStart);
 
-  const canPrev = !loading && (!minDate || month > minDate.slice(0, 7));
-  const canNext = !loading && (!maxDate || month < maxDate.slice(0, 7));
+  /* PATCH-023 — a step is a month, a year or a block of twelve, whichever level is drawn,
+     and the bound is asked the same question at each: is there anything on the other side. */
+  const step = level === 'days' ? 1 : level === 'months' ? 12 : 144;
+  const canPrev = !loading && (!minDate || shift(month, -step) >= minDate.slice(0, 7) || month > minDate.slice(0, 7));
+  const canNext = !loading && (!maxDate || shift(month, step) <= maxDate.slice(0, 7) || month < maxDate.slice(0, 7));
+  /* Whether a whole month, or a whole year, is outside the bounds — what greys a cell in the
+     two upper grids. A month is offered while ANY of its days is, which is the same test the
+     day grid makes one cell at a time. */
+  const monthOffered = (value: CalendarMonth) =>
+    (!minDate || value >= minDate.slice(0, 7)) && (!maxDate || value <= maxDate.slice(0, 7));
+  const yearOffered = (value: number) =>
+    (!minDate || value >= Number(minDate.slice(0, 4))) && (!maxDate || value <= Number(maxDate.slice(0, 4)));
 
   const moveTo = (date: CalendarDate | null) => {
     if (!date) return;
@@ -262,40 +292,68 @@ export function Calendar({
         }}
       >
         <IconButton
-          label="Previous month"
+          label={level === 'days' ? 'Previous month' : level === 'months' ? 'Previous year' : 'Previous years'}
           size={32}
           disabled={!canPrev}
           data-testid="calendar-prev-month"
-          onClick={() => onMonthChange && onMonthChange(shift(month, -1))}
+          onClick={() => onMonthChange && onMonthChange(shift(month, -step))}
           style={{ position: 'absolute', top: 2, left: 2 }}
         >
           <Chevron back />
         </IconButton>
 
-        <div
-          data-testid="calendar-month-label"
-          style={{
-            color: 'var(--text-primary)', fontWeight: 'var(--font-weight-medium)',
-            fontSize: '0.944rem',
-          }}
-        >
-          {monthLabel(month)}
-        </div>
+        {/* PATCH-023 — the title is the way up. It is a `<button>` only where the consumer
+            asked for the levels; everywhere else it is the text it has always been, so no
+            existing grid grows a control that does nothing. */}
+        {zoomable ? (
+          <button
+            type="button"
+            data-testid="calendar-month-label"
+            aria-label={
+              level === 'days' ? `${monthLabel(month)} — choose a month`
+                : level === 'months' ? `${year} — choose a year`
+                : `${blockStart} to ${blockStart + 11}`
+            }
+            disabled={level === 'years'}
+            onClick={() => setLevel(level === 'days' ? 'months' : 'years')}
+            style={{
+              border: 0, background: 'transparent', padding: '0 var(--space-3)',
+              borderRadius: 'var(--radius-s)',
+              fontFamily: 'inherit', fontSize: '0.944rem',
+              fontWeight: 'var(--font-weight-medium)', color: 'var(--text-primary)',
+              cursor: level === 'years' ? 'default' : 'pointer',
+            }}
+          >
+            {level === 'days' ? monthLabel(month) : level === 'months' ? year : `${blockStart} – ${blockStart + 11}`}
+          </button>
+        ) : (
+          <div
+            data-testid="calendar-month-label"
+            style={{
+              color: 'var(--text-primary)', fontWeight: 'var(--font-weight-medium)',
+              fontSize: '0.944rem',
+            }}
+          >
+            {monthLabel(month)}
+          </div>
+        )}
 
         <IconButton
-          label="Next month"
+          label={level === 'days' ? 'Next month' : level === 'months' ? 'Next year' : 'Next years'}
           size={32}
           disabled={!canNext}
           data-testid="calendar-next-month"
-          onClick={() => onMonthChange && onMonthChange(shift(month, 1))}
+          onClick={() => onMonthChange && onMonthChange(shift(month, step))}
           style={{ position: 'absolute', top: 2, right: 2 }}
         >
           <Chevron />
         </IconButton>
 
         {/* The same class the week rows take, so a label and the column under it cannot
-            disagree — including below `sm`, where the gutter between the columns closes. */}
-        <div className="ds-calendar-row" style={{ marginTop: 'var(--space-1)' }}>
+            disagree — including below `sm`, where the gutter between the columns closes.
+            `visibility` rather than a mount, so the seven letters keep their height while the
+            upper grids are open and the panel does not change size between levels (PATCH-023). */}
+        <div className="ds-calendar-row" style={{ marginTop: 'var(--space-1)', visibility: level === 'days' ? undefined : 'hidden' }}>
           {WEEKDAYS.map((initial, index) => (
             <span
               key={index}
@@ -328,7 +386,7 @@ export function Calendar({
             transition: 'opacity var(--duration-fast) var(--ease-standard)',
           }}
         >
-          {weeks.map((week, index) => (
+          {level === 'days' && weeks.map((week, index) => (
             <div key={index} role="row" className="ds-calendar-row">
               {week.map((date, column) => (
                 <Day
@@ -345,6 +403,40 @@ export function Calendar({
               ))}
             </div>
           ))}
+
+          {/* PATCH-023 — the two upper grids. Three columns rather than the day grid's seven,
+              because twelve things read as four rows of three and as nothing at all in a
+              seven-wide row that leaves five cells empty. Picking comes back down one level;
+              the month a choice lands on is reported through `onMonthChange`, the same way
+              the arrows report theirs, so the consumer holds the month at every level. */}
+          {level !== 'days' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.332rem' }}>
+              {(level === 'months'
+                ? MONTHS.map((name, index) => ({
+                  key: `${year}-${String(index + 1).padStart(2, '0')}`,
+                  label: name.slice(0, 3),
+                  current: Number(month.slice(5, 7)) === index + 1,
+                  offered: monthOffered(`${year}-${String(index + 1).padStart(2, '0')}`),
+                  go: () => {
+                    setLevel('days');
+                    if (onMonthChange) onMonthChange(`${year}-${String(index + 1).padStart(2, '0')}`);
+                  },
+                }))
+                : Array.from({ length: 12 }, (_, index) => blockStart + index).map((value) => ({
+                  key: String(value),
+                  label: String(value),
+                  current: value === year,
+                  offered: yearOffered(value),
+                  go: () => {
+                    setLevel('months');
+                    if (onMonthChange) onMonthChange(`${value}-${month.slice(5, 7)}`);
+                  },
+                }))
+              ).map((cell) => (
+                <ZoomCell {...cell} key={cell.key} testId={`calendar-zoom-${cell.key}`} />
+              ))}
+            </div>
+          )}
         </div>
 
         {loading && (
@@ -455,5 +547,51 @@ function Day({ date, selectable, selected, inRange, today, tabStop, onSelect, on
         {day}
       </button>
     </span>
+  );
+}
+
+/**
+ * PATCH-023 — one cell of the month or year grid.
+ *
+ * It borrows the day cell's states rather than inventing a second vocabulary: the current
+ * month (or year) takes the selection's solid `--color-blue`, an offered one tints on hover,
+ * and one outside the bounds carries a real `disabled` so the keyboard walks past it.
+ */
+function ZoomCell({
+  label, current, offered, go, testId,
+}: {
+  label: string;
+  current: boolean;
+  offered: boolean;
+  go: () => void;
+  testId: string;
+}) {
+  const [hover, setHover] = React.useState(false);
+  const [focus, setFocus] = React.useState(false);
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      disabled={!offered}
+      aria-current={current || undefined}
+      onClick={go}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={(event) => setFocus(isKeyboardFocus(event.currentTarget))}
+      onBlur={() => setFocus(false)}
+      style={{
+        /* @literal 2.2rem — four rows of it stand as tall as the five weeks a month usually
+           draws, so the panel does not change height when a level does. The rem scale is the
+           grid this component is built on; see its note. */
+        height: '2.2rem', width: '100%', border: 0, borderRadius: 'var(--radius-s)',
+        fontFamily: 'inherit', fontSize: 'inherit',
+        cursor: offered ? 'pointer' : 'default',
+        backgroundColor: current ? 'var(--color-blue)' : hover && offered ? 'var(--surface-row-hover)' : 'transparent',
+        color: current ? 'var(--text-on-accent)' : offered ? 'var(--text-primary)' : 'var(--text-tertiary)',
+        boxShadow: focus ? 'var(--shadow-focus-input)' : 'none',
+      }}
+    >
+      {label}
+    </button>
   );
 }

@@ -1,0 +1,44 @@
+{
+  "verdict": "pass",
+  "summary": "Fixed by reserving a fixed inline size (--range-col: 26ch, inline-block, nowrap) on .time-off-calendar-range, so calendar-prev/today/next no longer shift when the range label's width changes. Unit suite (1430 tests) passes; no integration suite touches this CSS-only change; e2e/tests/time-off-calendar.spec.ts and e2e/tests/regressions.spec.ts (20 tests) pass under CI=1 on dedicated ports 3100/4100, including the new TC-01-E2E-12 which asserts calendar-today's x position is identical across 11 clicks of calendar-next spanning both the shortest and longest month labels.",
+  "levels_run": {
+    "unit": "full — 35 files, 1430 passed",
+    "integration": "none touched by diff (CSS + e2e spec only)",
+    "e2e": "tests/time-off-calendar.spec.ts + tests/regressions.spec.ts — 20 passed, CI=1, ports 3100/4100"
+  },
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "criterion": "calendar-prev/today/next hold one position across every window a preset can reach",
+      "result": "pass",
+      "evidence": "TC-01-E2E-12 passed: calendar-today.x identical across 11 clicks of calendar-next, labels varied (>=4 distinct values) including March 2027 and September 2026"
+    },
+    {
+      "id": 2,
+      "criterion": "range label still shows the same text it shows today, for all three presets",
+      "result": "pass",
+      "evidence": "rangeLabel() logic untouched; only CSS box model changed (display/width/white-space)"
+    },
+    {
+      "id": 3,
+      "criterion": "reserved width declared as a custom property in .time-off-calendar block, recorded in spec's DS gaps comment",
+      "result": "pass",
+      "evidence": "apps/web/app/globals.css: --range-col: 26ch declared in .time-off-calendar, comment block updated to record it as the fourth DS gap"
+    },
+    {
+      "id": 4,
+      "criterion": "no file under packages/ds and no shared layout file changed",
+      "result": "pass",
+      "evidence": "git diff --stat against packages/ds and apps/web/src/layout is empty"
+    }
+  ],
+  "functional_walkthrough": [
+    "Reviewed the CSS diff: .time-off-calendar-range gains display: inline-block, width: var(--range-col), white-space: nowrap — label box is now fixed-width so gaining/losing characters no longer shifts the sibling controls in the space-between row.",
+    "Confirmed PageHeader.tsx and packages/ds are untouched, so no other screen using PageHeader is affected (grep for time-off-calendar-range returns only the CSS rule and the one JSX usage).",
+    "Ran the full time-off-calendar e2e file plus regressions.spec.ts to confirm no adjacent calendar behaviour (window switching, filters, overlap checks near the header) regressed.",
+    "Verified 26ch (~ the width of the widest label the three presets can produce, e.g. '28 Dec 2026 – 10 Jan 2027' at 25 chars) is wide enough in practice — the e2e assertion measures real rendered boxes under the actual font and passed.",
+    "Confirmed review and static_gate stages already passed with no findings, and this QA pass found none additional."
+  ],
+  "issues": [],
+  "notes": "The spec's proposed edge-case text for specs/time-off/01-vacation-calendar.md was not added to the spec by this change, and none of the four acceptance criteria require it — consistent with specs being frozen and edited only deliberately, not as a side effect of a bug fix."
+}

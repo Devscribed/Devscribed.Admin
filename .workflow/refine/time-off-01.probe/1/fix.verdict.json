@@ -1,0 +1,118 @@
+{
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "verdict": ".workflow/refine/time-off-01.verdict.json",
+  "fixed": [
+    {
+      "id": "N1",
+      "rule": "spec/stale-statement",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "change": "Edge case 18 said an invited member's timezone is \"\"; the stored column is null and the account-settings read is what projects \"\". Both the edge case and the Verification Plan cell that repeated it now say that, so the three cases REQ-01-018 names stay explained without a false one among them.",
+      "verifiedBy": "grep -n 'timezone' apps/api/src/invitations/invitations.service.ts apps/api/src/account/account.service.ts; grep -n 'timezone' apps/api/prisma/schema.prisma — the invitation accept coerces a blank timezone to null before account.create, the schema column is String?, and account.service projects `account.timezone ?? ''`"
+    },
+    {
+      "id": "N2",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "change": "The calendar response example carried \"memberCount\": 8 above one row in members[]; it now reads 1, which is what the sentence below it defines the field as.",
+      "verifiedBy": "the example itself — one object in members[], and the sentence 'meta.memberCount is the number of rows in members[] and nothing else'"
+    },
+    {
+      "id": "N5",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "change": "The three UI Description rows with no observer now carry one: Loading and Narrow viewport say why nothing can observe them, Keyboard names ToggleButton for the two groups and TC-01-E2E-01 for the band's accessible name. The money and PII bullets are now asserted — TC-01-INT-01's expected result adds that the body carries no financial field and no MemberProfile field, and both bullets name it.",
+      "verifiedBy": "packages/ds/src/components/core/ToggleButton.tsx — a role=radiogroup of role=radio segments with one tab stop and arrow keys that move and select; TC-01-E2E-01 already asserts the working-day count in each band's accessible name"
+    },
+    {
+      "id": "N6",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/time-off/01-vacation-calendar.md"],
+      "change": "REQ-01-042's Decided block now states the member country's concurrency answer, which REQ-01-033 states for the organization's: it is written inside the member update's existing transaction and organization-row lock and adds no lock of its own, so the two writes stop reading as symmetric.",
+      "verifiedBy": "apps/api/src/members/members.service.ts — MembersService.updateDetail opens this.prisma.$transaction and takes SELECT id FROM \"Organization\" ... FOR UPDATE as its first statement"
+    },
+    {
+      "id": "N7",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "change": "The member picker's first option had a meaning and no text. It gains a row in the Error Messages table — TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption, 'Use the organization's country' — the About-tab Screens paragraph labels the option from it, and TC-01-E2E-08 asserts the picker sits on that option before the save, which is what a stored null renders as.",
+      "verifiedBy": "the Error Messages table, which already declares orgCountryHint with no route for the organization picker's hint; spec-lint reports 14 messages and no unused id"
+    }
+  ],
+  "decided": [
+    {
+      "id": "R1",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/time-off/01-vacation-calendar.cases.md"],
+      "question": "how can one response show both the organization fallback and the null branch, when two members with nothing stated must resolve alike",
+      "chose": "two reads in the one case: the first with the organization country at PL observing US, PL, PL, PL, the second after clearing it observing US, PL, null, null — and member D now carries the unusable XX rather than nothing, so the first read also observes REQ-01-027's skip",
+      "rejected": "one read and one tuple, which asked identical inputs for two different answers; and moving the null branch wholly to TC-01-UNIT-01, which would have left acceptance criterion 8 with no integration observer for it",
+      "why": "rule 1 — the requirement reads one organization column once per response, so the only way to see both answers is to read twice; the second read is also what makes 'clearing the organization country strips everybody relying on it' observable",
+      "recordedAt": "TC-01-INT-12, whose Steps now take a first and a second read and whose Expected Result answers each; its Covers gains REQ-01-027 and REQ-01-040, and acceptance criterion 8 keeps TC-01-UNIT-01 and TC-01-INT-12 as its observers"
+    },
+    {
+      "id": "R2",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.mock.html"
+      ],
+      "question": "the DS gaps table records four names and claims no colour literal, while the acceptance target carries band, swatch and segment literals and hand-rolls a control @ds ships — which statement is wrong",
+      "chose": "the table was wrong. The Screens section now names ToggleButton as what draws the three calendar-scope-* and the three calendar-window-* segments, with its own --radius-pill track, --shadow-toggle-active and a data-testid per segment; the band's height takes --space-10 and the legend swatch's corner --radius-s; and a third DS-gaps row records the only measures with no name — the 3px band margin and the 3px stripe of the pending hatch — as @literal with the reason the design-system rule asks for. The first row's exhaustive 'no component file carries a colour literal' is narrowed to the colours this screen actually draws. The mock follows: the segment shadow is the token, the swatch radius --radius-s, the band height --space-10, the 3px margin marked @literal, and its own paragraph no longer claims everything else is a token.",
+      "rejected": "a segmented control drawn on the calendar page, which would put a second shadow colour beside the package's and a second keyboard beside its roving tab stop; and leaving the geometry as literals with a gaps row each, which records as a gap what a token already carries",
+      "why": "rule 1 — @ds already ships ToggleButton, --space-10 and --radius-s, and the spec had taken no contrary position; only what the package genuinely lacks stays a gap",
+      "recordedAt": "the Screens filter-bar paragraph, the DS gaps intro, its third row, and the Decided paragraph under that table; Edge case 16 now says what covers the 3px margin instead of naming a case that does not assert it"
+    },
+    {
+      "id": "N3",
+      "rule": "spec/ambiguous-requirement",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "question": "which refusal answers a request that breaks two rules, and does holidays[] carry the window's holidays or the organization's",
+      "chose": "the Validation Rules are evaluated in the order the table numbers them and the first failure is the whole answer — an inverted range scoped everyone is rangeInverted and nothing else; and holidays[] carries every holiday dated inside the window and no other, whatever country it names",
+      "rejected": "collecting every failure into one body, which the calendar's banner draws one message from regardless; and returning the organization's whole holiday set, which would need appliesToAllInView answered for days the grid draws no column for",
+      "why": "rule 3 — one refusal and the narrower payload are the answers that say less; the numbering the table already carries is the order a reader would assume, so it is made normative rather than replaced",
+      "recordedAt": "the Decided paragraph under the Validation Rules table, and the holidays[] paragraph under the calendar response example"
+    },
+    {
+      "id": "N4",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/time-off/01-vacation-calendar.cases.md"],
+      "question": "keep the per-cell marker assertion in TC-01-E2E-07 and TC-01-E2E-08, or cut each down to the save and the toast",
+      "chose": "keep both assertions and say in each case that the redundancy is deliberate, naming TC-01-INT-14 and TC-01-INT-25 as what settles the server half",
+      "rejected": "cutting the marker assertion out of both, which is the cheaper case and buys nothing: neither case's runtime changes and the journey the case exists for ends at the grid",
+      "why": "rule 4 — a case narrowed now is reversed only by rewriting it, and each case's own reason (the control is drawn, reachable and saveable, and one save carries through to the grid) needs the end of the journey to be observed",
+      "recordedAt": "the Expected Result of TC-01-E2E-07 and of TC-01-E2E-08, each naming the integration case that already pins the resolution"
+    },
+    {
+      "id": "N8",
+      "rule": "spec/divergence",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md",
+        "specs/time-off/01-vacation-calendar.md"
+      ],
+      "question": "is the adoption of the country chain at the shipped call sites pinned by a case of this spec, or watched by suites that never exercised the new chain",
+      "chose": "pin it at the cheapest of the four sites. The Routes table gains a row for the shipped GET /api/organizations/{orgId}/holidays — unchanged in path, guards, body and status — and TC-01-INT-29 reads scope=mine for a member whose country is stated on their membership, then on the organization, with a phone country that must reach neither. The front-matter api list gains the same route.",
+      "rejected": "leaving the four adopted sites to the reports and holidays suites, which stay green whether or not the chain replaced the phone country, and so prove nothing about the change that moves what Amounts Owed pays",
+      "why": "rule 3 — the failing-safe answer is the one that refuses to ship a money-moving change on a green suite that cannot see it; the case adds no route and no requirement, only an observer for the adoption the contracts already require",
+      "recordedAt": "the paragraph under the Routes table saying why the shipped list read is listed, and TC-01-INT-29"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/time-off/01-vacation-calendar.md",
+    "specs/time-off/01-vacation-calendar.contracts.md",
+    "specs/time-off/01-vacation-calendar.cases.md",
+    "specs/time-off/01-vacation-calendar.mock.html"
+  ],
+  "lint": "node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md — clean; 50 requirements, 41 cases, 6 routes, 14 messages, 26 testids",
+  "subtraction": "the behaviour file stayed inside its budget by paying for the REQ-01-042 clause and the front-matter route out of three second copies: the Summary's restatement of REQ-01-025's Decided, its restatement of the capability note the contracts' shared-code table carries, and REQ-01-045's restatement of the Security section's PII bullet"
+}

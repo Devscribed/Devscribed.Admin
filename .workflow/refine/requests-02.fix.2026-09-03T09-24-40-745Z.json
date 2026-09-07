@@ -1,0 +1,88 @@
+{
+  "spec": "specs/requests/02-request-topics.md",
+  "verdict": ".workflow/refine/requests-02.verdict.json",
+  "fixed": [
+    {
+      "id": "R1",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/02-request-topics.cases.md"],
+      "change": "the Proven cell for the viewer/manager state cited a file that neither calls the helper nor drives the members PUT; it now names the two files that reach those roles through setMembershipRole — holidays.spec.ts for manager, requests.spec.ts for viewer — and keeps the admission that this spec's use of it is not exercised",
+      "verifiedBy": "grep -rn setMembershipRole e2e --include=*.ts  ->  field-autofill.spec.ts, helpers.ts, holidays.spec.ts:190 ('manager'), requests.spec.ts:297,537 ('viewer'); members-list.spec.ts absent"
+    },
+    {
+      "id": "N3",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-request-topics.cases.md"],
+      "change": "the two edge cases the contracts already describe now have observers in the cases that already reach their state: TC-02-INT-16 fires two renames to one name concurrently and asserts one 200 and one 409 REQUEST_TOPIC_MESSAGES.nameDuplicate with the loser's name unchanged (edge 1, Covers gains REQ-02-006), and TC-02-INT-02 writes a request row with topicId and topicLabel both null and asserts it reads back with topic null and its stored type intact (edge 8), which the case's labelled row could not observe",
+      "verifiedBy": "specs/requests/02-request-topics.contracts.md, the response contract for the topic member: 'topic is null exactly when the request carries no topicLabel'; the PATCH request-topics route row already answers 409 nameDuplicate"
+    },
+    {
+      "id": "N6",
+      "rule": "spec/divergence",
+      "edited": [],
+      "change": "no edit: the divergence the note records is already stated in full by this spec — REQ-02-021 writes accessKind null 'including under a topic whose type is access' and forbids validating either classifier as a body field, the Data Model paragraph says accessKind is written on no new row and is read for display on rows that carry one, and Out of Scope keeps the column and its stored values. Nothing in the bundle claims the column is still required",
+      "verifiedBy": "grep -n accessKind packages/validation/src/requests.ts (ACCESS_KINDS and validateNewRequest, the behaviour REQ-02-021 replaces) and grep -n accessKind specs/requests/02-request-topics*.md"
+    }
+  ],
+  "decided": [
+    {
+      "id": "N1",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/02-request-topics.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "does an archived topic keep a rename control on screen, or is the archived rename a route allowance only",
+      "chose": "the archived row draws no rename control; the route still renames an archived topic, for a caller holding its id, and a curator who wants the name changed on screen restores it, renames it and archives it again",
+      "rejected": "drawing a rename control on the archived row, and the justification that correcting a spelling must not require restoring the topic — which the screens made false",
+      "why": "rule 3 — the narrower screen refuses more and adds no control, and the contracts and TC-02-E2E-01 already draw the archived row with restore alone",
+      "recordedAt": "the 'archived | rename' row of the State Machine table in specs/requests/02-request-topics.md, which now carries the decision and the rejected alternative; the transition's observer is TC-02-INT-22, which renames the topic it archives and asserts the new name is written and survives the restore"
+    },
+    {
+      "id": "N2",
+      "rule": "spec/scope-gap",
+      "edited": ["specs/requests/02-request-topics.contracts.md"],
+      "question": "does the staff seed carry the four topics the request named, or the nine that also cover the retired access kinds",
+      "chose": "the nine-row staff seed stands",
+      "rejected": "trimming to VPN, Claude, Question and Other and leaving the rest to a curator",
+      "why": "rule 4 — the wider seed is the cheaper mistake: a seeded row an organization does not want is archived from its row in Settings, while a word the seed omits has to be typed there before anybody can raise a request under it",
+      "recordedAt": "the Decided under the Seed Data table in specs/requests/02-request-topics.contracts.md, which now names the reversal cost on both sides beside the rationale and the rejected alternative"
+    },
+    {
+      "id": "N4",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/requests/02-request-topics.md",
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "which catalogue read fills the requests list's topic filter, now that REQ-02-011 removes an archived topic from the active read",
+      "chose": "the filter is filled from GET .../request-topics?status=all with each archived entry marked archived, while the new-request picker reads status=active",
+      "rejected": "filling both controls from one read, which hides the requests raised under an archived topic from the control that finds them",
+      "why": "rule 1 and rule 2 — TC-02-E2E-03 already asserts the filter offers the archived topic and returns its request, and REQ-02-011 already scopes the removal to the active read; the rule was stated nowhere but inside that case",
+      "recordedAt": "REQ-02-031 in specs/requests/02-request-topics.md with its Decided; carried into the requests-topic-filter testid row and a new UI Description row in the contracts, and into TC-02-E2E-03, whose Covers now names REQ-02-031"
+    },
+    {
+      "id": "N5",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/requests/02-request-topics.md",
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "which message answers a topicId that is both archived and of the wrong audience",
+      "chose": "REQUEST_MESSAGES.topicUnavailable — the audience is compared only on a topic REQ-02-019 has already found active, so an archived topic answers topicUnavailable whatever its audience",
+      "rejected": "comparing the audience on any row the id names, which leaves one body answerable either way",
+      "why": "rule 3 — the refusal that scopes more narrowly is the one that never discloses the audience of a topic the caller may not use, and REQ-02-019 already answers one message for every unusable topic",
+      "recordedAt": "REQ-02-020's rule sentence and its Decided in specs/requests/02-request-topics.md, and validation rule 9 in the contracts, which now reads 'compared only on a topic rule 8 has found active'. The same shape on the sibling route is settled in the same pass: the contracts now say a topic write answers the audience or kind immutability violation before the name-uniqueness one, and TC-02-INT-06 sends a changed audience together with a duplicate name and asserts the 400 rather than the 409"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/requests/02-request-topics.md",
+    "specs/requests/02-request-topics.contracts.md",
+    "specs/requests/02-request-topics.cases.md"
+  ],
+  "lint": "node scripts/spec-lint.mjs specs/requests/02-request-topics.md — clean (31 requirements, 34 cases, 8 routes, 20 messages, 31 testids)",
+  "paidFor": "the added rule and decisions were paid for out of the behaviour file: the guard sentence duplicated by the contracts' Routes preamble, REQ-02-014's reasoning line, and the reasoning tails of the REQ-02-004, REQ-02-017 and Summary paragraphs were cut to keep the size budget"
+}

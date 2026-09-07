@@ -1,0 +1,377 @@
+/**
+ * spec-index — every spec, and everything that has been run against it.
+ *
+ *   node scripts/spec-index.mjs [--json]
+ *
+ * The board opens on this. A run id is a fact about the pipeline, not about the work: a spec
+ * that took eleven runs is eleven rows of an undifferentiated list, and the question a person
+ * actually arrives with — "where is spec 02" — is the one such a list answers worst. So the
+ * unit here is the spec, and the runs hang under it: the ship runs from `.workflow/runs`, and
+ * the refine loop from `.workflow/refine`, which until now the board could not see at all.
+ *
+ * Cheap on purpose. It is rebuilt on every filesystem change while somebody watches, so it
+ * reads `run.json` and the tail of what it must, and never the transcripts — those are read
+ * once, for the one entry a reader has open.
+ */
+
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { agentSummary, readLoop, refineStems } from './refine-read.mjs';
+
+const jsonIf = (p) => {
+  try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
+};
+const statIf = (p) => { try { return statSync(p); } catch { return null; } };
+
+/* A stage log is read for one number and rewritten while a run is in flight, so it is cached
+   against what would have changed it. Without this the index re-parses megabytes on every
+   keystroke-sized event in the runs directory. */
+const costCache = new Map();
+function logCost(path) {
+  const st = statIf(path);
+  if (!st) return 0;
+  const key = `${path}|${st.mtimeMs}|${st.size}`;
+  if (costCache.has(key)) return costCache.get(key);
+  const v = +(agentSummary(path)?.total_cost_usd ?? 0);
+  costCache.set(key, v);
+  return v;
+}
+
+/* ── the specs themselves ─────────────────────────────────────────────────── */
+
+/**
+ * When each document under `specs/` was last written, from git rather than from the filesystem.
+ *
+ * An mtime is the moment a file last appeared in *this working tree*, not the moment somebody
+ * wrote it. A checkout, a branch switch or a merge stamps one instant on everything it touches,
+ * so a cluster of documents ends up sharing a timestamp and their order on the board becomes
+ * whatever the tie-break happens to say — three specs written a week apart all read
+ * `2026-09-02 14:50:05` and sorted by path. A commit time is the writing time, and it survives
+ * a clone.
+ *
+ * One `git log` walk, newest first, taking the first commit that names each path. A file that
+ * is dirty or untracked has no committed version worth trusting and keeps its mtime, which for
+ * those is genuinely when it was written.
+ */
+function writtenTimes(root) {
+  const git = (...args) => {
+    try { return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }); }
+    catch { return ''; }
+  };
+  const out = new Map();
+  let at = 0;
+  for (const line of git('log', '--format=%ct', '--name-only', '--', 'specs').split('\n')) {
+    const l = line.trim();
+    if (/^\d+$/.test(l)) { at = Number(l) * 1000; continue; }
+    if (l && !out.has(l)) out.set(l, at);
+  }
+  /* `R  old -> new` for a rename; the new path is the one on disk. */
+  for (const line of git('status', '--porcelain', '--', 'specs').split('\n')) {
+    const f = line.slice(3).trim();
+    if (!f) continue;
+    out.delete(f.includes(' -> ') ? f.split(' -> ')[1].trim() : f);
+  }
+  return out;
+}
+
+/**
+ * `specs/requests/02-request-topics.md` — the head of a bundle, not its members — and the
+ * lighter documents beside it, `specs/bugs/BUG-NNN-*.md` and `specs/patches/PATCH-NNN-*.md`.
+ *
+ * The lighter two are named by prefix rather than by a leading number, and a bundle-shaped
+ * pattern alone left every bug and patch run filed under "no document" on the board.
+ */
+const DOC_NAME = /^(?:(\d+)|(?:BUG|PATCH)-(\d+))-.+\.md$/;
+
+function specFiles(root) {
+  const base = join(root, 'specs');
+  if (!existsSync(base)) return [];
+  const written = writtenTimes(root);
+  const out = [];
+  for (const area of readdirSync(base)) {
+    const dir = join(base, area);
+    if (!statIf(dir)?.isDirectory()) continue;
+    for (const f of readdirSync(dir)) {
+      const m = f.match(DOC_NAME);
+      if (!m) continue;
+      if (/\.(contracts|cases|design)\.md$/.test(f)) continue;
+      /* When the document itself was last written. A document nobody has run has no other
+         clock, and "the newest one" is what somebody who just wrote one is looking for. */
+      const rel = `specs/${area}/${f}`;
+      out.push({
+        area, file: f, path: rel, num: m[1] ?? m[2],
+        writtenAt: written.get(rel) ?? statIf(join(dir, f))?.mtimeMs ?? 0,
+      });
+    }
+  }
+  return out;
+}
+
+/** Title and dependencies, from the frontmatter the spec skill writes. Read by line rather
+ *  than parsed as YAML: the block is fixed in shape and a parser is a dependency to install. */
+function frontmatter(root, path) {
+  const text = readFileSync(join(root, path), 'utf8');
+  const end = text.indexOf('\n---', 4);
+  const head = text.startsWith('---') && end > 0 ? text.slice(4, end) : '';
+  const title = head.match(/^title:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, '')
+    ?? text.match(/^#\s+(.+)$/m)?.[1]?.trim()
+    ?? null;
+  const inline = head.match(/^depends-on:\s*\[(.*)\]/m)?.[1];
+  const dependsOn = inline
+    ? inline.split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+    : (head.match(/^depends-on:\s*\n((?:\s+-\s+.+\n?)+)/m)?.[1] ?? '')
+      .split('\n').map((l) => l.replace(/^\s*-\s*/, '').trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+  /* Which spec this lighter document hangs off: `owning-spec` on a bug report, `supersedes` on
+     a patch note. Both are written as `area/NN`, which is the key a spec is indexed under, and
+     both are legitimately `null` — a bug nobody has traced to a document yet, a patch that
+     changes a rule no spec stated. `null` is the absence, never the string. */
+  const rel = (k) => {
+    const v = head.match(new RegExp(`^${k}:\\s*(.+)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '');
+    return v && v !== 'null' ? v : null;
+  };
+  return { title, dependsOn, relatesTo: rel('owning-spec') ?? rel('supersedes') };
+}
+
+/* ── entries ──────────────────────────────────────────────────────────────── */
+
+const isBlocker = (f) => f?.severity && f.severity !== 'note' && f.severity !== 'info';
+
+/**
+ * How long a run may go without writing anything before it is not running any more.
+ *
+ * Taken from the config rather than picked: it is the longest stage fuse any track declares,
+ * plus a margin for the orchestrator to write the verdict the blown fuse produces. A number
+ * chosen here instead would drift away from the fuses the moment one of them changed.
+ */
+function staleAfter(root) {
+  /* Margin over the fuse, because `updatedAt` is written when a stage starts and not while it
+     runs: a stage may legitimately be quiet for its whole fuse. */
+  const MARGIN_MS = 15 * 60_000;
+  const cfg = jsonIf(join(root, '.claude', 'ai-workflow.config.json'));
+  const fuses = Object.values(cfg?.shipConfig ?? {})
+    .flatMap((t) => Object.entries(t?.timeoutMin ?? {}).filter(([k]) => !k.startsWith('$')).map(([, v]) => Number(v)))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return (fuses.length ? Math.max(...fuses) : 45) * 60_000 + MARGIN_MS;
+}
+
+function shipEntries(root) {
+  const base = join(root, '.workflow', 'runs');
+  if (!existsSync(base)) return [];
+  const staleAfterMs = staleAfter(root);
+  const out = [];
+  for (const id of readdirSync(base)) {
+    const dir = join(base, id);
+    if (!statIf(dir)?.isDirectory()) continue;
+    const run = jsonIf(join(dir, 'run.json'));
+
+    let costUsd = 0;
+    const stages = join(dir, 'stages');
+    if (existsSync(stages)) for (const f of readdirSync(stages)) if (f.endsWith('.log')) costUsd += logCost(join(stages, f));
+
+    const findings = run?.notes?.filter((n) => n.rule) ?? [];
+    const stageRunning = Object.entries(run?.stages ?? {}).find(([, s]) => s.status === 'running')?.[0] ?? null;
+    const startedAt = run?.createdAt ? Date.parse(run.createdAt) : statIf(dir)?.birthtimeMs ?? null;
+
+    /* When something last wrote to this run, from the artefacts rather than from what the run
+       says about itself. `events.jsonl` is appended on every tool call an agent makes, so it is
+       the finest-grained clock there is; `stages/` moves once per attempt; `updatedAt` is only
+       as fresh as the last thing the orchestrator managed to write. */
+    /* `updatedAt` is content the orchestrator wrote, and content is the only clock a checkout
+       cannot move: restoring a run directory from git resets every mtime under it, and a run
+       that died in August would then read as a minute old. Mtimes stand in only for a run whose
+       run.json never got one. */
+    const updatedAt = run?.updatedAt
+      ? Date.parse(run.updatedAt)
+      : Math.max(
+        statIf(join(dir, 'events.jsonl'))?.mtimeMs ?? 0,
+        ...(existsSync(stages) ? readdirSync(stages).map((f) => statIf(join(stages, f))?.mtimeMs ?? 0) : [0]),
+      ) || statIf(dir)?.mtimeMs || null;
+    const idleMs = updatedAt ? Date.now() - updatedAt : null;
+
+    out.push({
+      kind: 'ship',
+      id,
+      spec: run?.spec ?? null,
+      /* Which pipeline the document earned. A run started before tracks existed carries none,
+         and `spec` is what it ran. */
+      track: run?.track ?? (run ? 'spec' : null),
+      label: id.replace(/_.*$/, '').replace('T', ' ').replace(/-(\d\d)-(\d\d)$/, ':$1:$2'),
+      status: run?.status ?? 'half-created',
+      /* A run that never wrote `run.json` is a preflight that died. It is listed rather than
+         hidden, because a directory nobody can account for is worse than a row saying so — and
+         so is a run that stopped without saying so, which is why the idle one says how long. */
+      detail: run
+        ? (run.halt?.reason
+          ?? (idleMs !== null && idleMs >= staleAfterMs && !['ready', 'halted', 'aborted', 'failed'].includes(run.status)
+            ? `брошен на ${stageRunning ?? run.status} — не двигается ${Math.round(idleMs / 60_000)} мин`
+            : stageRunning))
+        : 'init не завершился',
+      branch: run?.branch ?? null,
+      startedAt,
+      updatedAt,
+      wallSec: startedAt && updatedAt ? Math.round((updatedAt - startedAt) / 1000) : 0,
+      costUsd: +costUsd.toFixed(2),
+      blockers: findings.filter(isBlocker).length,
+      notes: findings.filter((f) => !isBlocker(f)).length,
+      /* Whether anything is actually working on this run.
+       *
+       * Neither of the two things that look authoritative is. The **stage** stays `running`
+       * forever in a run whose process was killed. The **status** is no better: the
+       * orchestrator writes a terminal one on its way out, so a run that died mid-stage keeps
+       * the stage name as its status and reads as live for as long as the directory exists —
+       * one sat at `pre_implement` for twenty hours and the board opened on it every time.
+       * The lock is not evidence either: the pid it records belongs to `wf init`, which has
+       * already exited by the time the first stage runs.
+       *
+       * The clock is evidence. Nothing legitimately goes a whole stage fuse without writing —
+       * the fuse blows, ship writes an error verdict, and the run moves — so a run whose
+       * newest artefact is older than the longest fuse any track declares is not running,
+       * whatever it says about itself. */
+      running: !!run
+        && !['ready', 'halted', 'aborted', 'failed'].includes(run.status)
+        && idleMs !== null && idleMs < staleAfterMs,
+      idleMs,
+      stale: !!run
+        && !['ready', 'halted', 'aborted', 'failed'].includes(run.status)
+        && (idleMs === null || idleMs >= staleAfterMs),
+    });
+  }
+  return out;
+}
+
+function refineEntries(root) {
+  return refineStems(root).map((stem) => {
+    const l = readLoop(root, stem);
+    const last = l.rounds[l.rounds.length - 1];
+    const gate = last?.gates.find((g) => g.log?.running) ?? [...(last?.gates ?? [])].reverse()[0] ?? null;
+    const judged = l.rounds.map((r) => r.judge).filter(Boolean).slice(-1)[0] ?? null;
+    return {
+      kind: 'refine',
+      id: `refine:${stem}`,
+      spec: l.spec,
+      label: `refine · ${l.rounds.length} раунд(ов)`,
+      status: l.status,
+      detail: l.running
+        ? `раунд ${last?.round ?? 1} · ${gate?.label ?? '—'}`
+        : l.outcome?.reason ?? null,
+      branch: null,
+      startedAt: l.startedAt,
+      updatedAt: l.updatedAt,
+      wallSec: l.startedAt && l.updatedAt ? Math.round((l.updatedAt - l.startedAt) / 1000) : 0,
+      costUsd: +l.rounds.reduce((a, r) => a + r.gates.reduce((b, g) => b + (g.log?.costUsd ?? 0), 0), 0).toFixed(2),
+      blockers: judged?.blockers ?? l.rounds.reduce((a, r) => a + (r.plan?.specBlockers ?? 0), 0),
+      notes: judged?.notes ?? 0,
+      running: l.running,
+    };
+  });
+}
+
+/* ── the index ────────────────────────────────────────────────────────────── */
+
+export function buildIndex(root) {
+  const entries = [...refineEntries(root), ...shipEntries(root)];
+  const specs = new Map();
+
+  for (const s of specFiles(root)) {
+    const fm = frontmatter(root, s.path);
+    specs.set(s.path, {
+      key: `${s.area}/${s.num}`,
+      path: s.path,
+      area: s.area,
+      /* The weight of the document, which is also the track a run against it takes. */
+      weight: s.area === 'bugs' ? 'bug' : s.area === 'patches' ? 'patch' : 'spec',
+      num: s.num,
+      writtenAt: s.writtenAt,
+      title: fm.title,
+      dependsOn: fm.dependsOn,
+      /* The spec this document hangs off, resolved below. A spec hangs off nothing. */
+      relatesTo: fm.relatesTo,
+      entries: [],
+    });
+  }
+
+  /* ── the lineage: a feature, its specs, and the lighter documents under each ──
+   *
+   * `specs/bugs` and `specs/patches` are where the lighter documents *live*, not what they are
+   * about: BUG-011 lives under `bugs` and belongs to `time-off`. Grouping by the directory puts
+   * every bug in the product under one heading and answers no question anybody arrives with.
+   * So the feature is the area of the spec a document names — its own, for a spec — and a
+   * document naming none has no feature rather than a wrong one. */
+  const byKey = new Map([...specs.values()].map((s) => [s.key, s]));
+  for (const s of specs.values()) {
+    const owner = s.relatesTo ? byKey.get(s.relatesTo) ?? null : null;
+    s.relatesToPath = owner?.path ?? null;
+    s.relatesToTitle = owner?.title ?? null;
+    /* A relation naming a spec that is not there is kept and shown as written: it is either a
+       renamed document or a typo, and both are worth seeing rather than silently dropping. */
+    s.relatesToKnown = !s.relatesTo || !!owner;
+    s.feature = s.weight === 'spec' ? s.area : owner?.area ?? null;
+  }
+
+  /* A run whose spec is gone — renamed, renumbered, deleted — still happened, and the hours it
+     spent are still an answer to "where did the week go". It gets a group of its own rather
+     than being dropped or filed under whatever spec now holds its number. */
+  const orphans = [];
+  for (const e of entries) {
+    const group = e.spec && specs.get(e.spec);
+    if (group) group.entries.push(e); else orphans.push(e);
+  }
+
+  /* The same order the documents take, for the same reason: what moved last is what somebody
+     is looking for. A run that started first and finished a week ago is not the one. */
+  const finish = (list) => {
+    list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || (b.startedAt ?? 0) - (a.startedAt ?? 0));
+    return list;
+  };
+
+  const out = [...specs.values()].map((s) => {
+    finish(s.entries);
+    return {
+      ...s,
+      running: s.entries.some((e) => e.running),
+      /* The last time anything happened to this document — a run, or the writing of the
+         document itself. Sorting on a run's clock alone buried a document written a minute
+         ago under thirty that nobody had touched in a month. */
+      lastAt: Math.max(0, s.writtenAt ?? 0, ...s.entries.map((e) => e.updatedAt ?? 0)) || null,
+      totals: {
+        ship: s.entries.filter((e) => e.kind === 'ship').length,
+        refine: s.entries.filter((e) => e.kind === 'refine').length,
+        costUsd: +s.entries.reduce((a, e) => a + e.costUsd, 0).toFixed(2),
+        wallSec: s.entries.reduce((a, e) => a + e.wallSec, 0),
+        blockers: s.entries.reduce((a, e) => a + e.blockers, 0),
+      },
+    };
+  });
+
+  /* One order, everywhere: the newest thing to have happened, whether that was a run or
+     somebody writing the document. A running run writes as it goes, so it arrives at the top
+     on its own clock and needs no rule of its own — and a rule of its own is what pinned a run
+     abandoned three days ago above a document written this morning. */
+  out.sort((a, b) => (b.lastAt ?? 0) - (a.lastAt ?? 0) || b.path.localeCompare(a.path));
+
+  return { generatedAt: Date.now(), specs: out, orphans: finish(orphans) };
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const index = buildIndex(root);
+  if (process.argv.includes('--json')) {
+    console.log(JSON.stringify(index, null, 2));
+  } else {
+    for (const s of index.specs) {
+      if (!s.entries.length) continue;
+      console.log(`\n${s.path}  ${s.title ?? ''}`);
+      for (const e of s.entries) {
+        const kind = e.kind === 'ship' && e.track && e.track !== 'spec' ? `ship:${e.track}` : e.kind;
+        console.log(`  ${e.running ? '●' : '○'} ${kind.padEnd(10)} ${e.id.padEnd(46)} ${String(e.status).padEnd(12)} ${e.detail ?? ''}`);
+      }
+    }
+    if (index.orphans.length) {
+      console.log('\nбез спеки:');
+      for (const e of index.orphans) console.log(`  ${e.kind} ${e.id} ${e.status}`);
+    }
+  }
+}

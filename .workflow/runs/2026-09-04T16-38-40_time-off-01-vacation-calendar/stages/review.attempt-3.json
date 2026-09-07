@@ -1,0 +1,204 @@
+{
+  "status": "blocked",
+  "reviewedUpTo": "7531641ed2b04b67e24a50ede96b7306d48f1159",
+  "covered": {
+    "scope": 10,
+    "read": [
+      "packages/validation/src/time-off-calendar.ts",
+      "packages/validation/src/time-off-calendar.test.ts",
+      "specs/time-off/01-vacation-calendar.md",
+      "apps/api/src/time-off/time-off-calendar.service.ts",
+      "specs/time-off/01-vacation-calendar.contracts.md",
+      "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+      "apps/web/src/stated-country-options.ts",
+      "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "apps/web/app/org/[orgId]/members/[memberId]/MemberDetailScreen.tsx",
+      "apps/web/app/globals.css"
+    ],
+    "unreached": []
+  },
+  "earlierBlockers": [
+    {
+      "id": "review-1 F1 / review-2 L1",
+      "state": "closed",
+      "checkedAgainst": "The contradiction the two passes named is settled in the document and the code follows it. specs/time-off/01-vacation-calendar.contracts.md:344 now pins the organization picker to `COUNTRY_OPTIONS` from `@devscribed/validation` and :358 pins the member's to the same list; apps/web/src/stated-country-options.ts maps that list once and both pickers import it (page.tsx:375-376, MemberDetailScreen.tsx:45-47). `AC`, `TA` and `XK` are gone from both pickers, and packages/validation/src/time-off-calendar.test.ts:180-192 asserts in both directions — every `COUNTRY_OPTIONS` code passes `validateStatedCountryCode`, and the three phone-list codes are in neither the list nor the rule. The holiday form and the holiday list filter keep `HOLIDAY_COUNTRY_OPTIONS`, which the spec's blast-radius table now records (01-vacation-calendar.md:444)."
+    },
+    {
+      "id": "review-1 F2",
+      "state": "closed",
+      "checkedAgainst": "CalendarScreen.tsx:136 — `const today = (): string => todayInTimeZone(session.account.timezone)`, used for the initial anchor (:142) and for `calendar-today` (:307). The endpoint reads the same helper (time-off-calendar.service.ts:199), so the anchor and `range.today` are one computation. No `new Date()` remains in the anchor path."
+    },
+    {
+      "id": "review-1 F3",
+      "state": "closed",
+      "checkedAgainst": "CalendarScreen.tsx:245 — the transport-failure catch now sets `HOLIDAY_MESSAGES.toastServerError`, not `emptyStateBody`. `emptyStateBody` is drawn only in the `data && !hasRows` branch (:400). contracts.md:372 adds the 'Failed for any other reason' row for it."
+    },
+    {
+      "id": "review-2 S1-2",
+      "state": "closed",
+      "checkedAgainst": "CalendarScreen.tsx:238 — `setError(fields ? Object.values(fields)[0] : HOLIDAY_MESSAGES.toastServerError)`. The `body?.message` term is gone, so Nest's 'Not Found' / 'Internal server error' cannot reach the banner. The same chain was applied to the organization country save (settings/holidays/page.tsx:181-184)."
+    },
+    {
+      "id": "review-2 S1-1",
+      "state": "closed",
+      "checkedAgainst": "apps/web/app/globals.css:1125 — `max-width: 60%` replaces `max-width: 160px`. A fraction of the track it sits in is not a new pixel measurement, the DS gaps table's set of three literals is untouched (contracts.md:374), and `max-width: 100%` / `width: 100%` are already the file's own idiom (globals.css:49, :80, :100)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "REQ-01-034",
+      "rule": "REQ-01-034 — 'a body with no `countryCode` key changes nothing, as the member write beside it does' (specs/time-off/01-vacation-calendar.md:359)",
+      "file": "apps/api/src/organizations/organization-country.service.ts",
+      "symbol": "update",
+      "line": 76,
+      "claim": "the organization country PUT clears the stored country when the body carries no `countryCode` key, which is the rule the document settled against this pass — and the code's own comment states the opposite rule as a decision",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An organization has `PL` stored. An admin holding ManageHolidays sends PUT /api/organizations/{orgId}/settings/country with `{}` — or with a mistyped key such as `{\"country\":\"PL\"}`. organization-country.service.ts:76 evaluates `validateStatedCountryCode((input ?? {}).countryCode)`; `undefined` normalizes to `{ valid: true, value: null }` (packages/validation/src/time-off-calendar.ts:250), and :84 writes `countryCode: null`. The answer is 200 `{\"countryCode\":null}` and every member relying on the organization link (REQ-01-026's second hop) drops to global holidays only on the next calendar read. The document, amended in this run at a83e79f, requires the opposite in two places: specs/time-off/01-vacation-calendar.md:359 — '**Decided:** a body with no `countryCode` key changes nothing, as the member write beside it does: clearing on an absent key lets a mistyped key drop the country the fallback depends on'; and specs/time-off/01-vacation-calendar.contracts.md:133-134 — 'A body with no `countryCode` key changes nothing and answers the stored value unchanged.' The member write already implements the settled rule — members.service.ts:454 `const wantsCountry = input !== null && typeof input === 'object' && 'countryCode' in input`, and :500 spreads the column only `...(wantsCountry ? { countryCode } : {})`. The service comment at organization-country.service.ts:72-75 argues the discarded reading in full ('An absent `countryCode` key clears the column, which is the opposite of the member update beside it, and deliberately'), so the file now documents a decision the spec reversed. No test covers the absent-key body: apps/api/test/time-off-calendar.spec.ts:849 (TC-01-INT-20) sends `{ countryCode: '' }`, which is the clearing branch and stays 200/null either way. Reviews 1 and 2 raised this as a note (N1, S2-N1) while the document was silent; the document is no longer silent, and the file has not moved since.",
+        "source": "specs/time-off/01-vacation-calendar.md:359"
+      },
+      "suggestedFix": "Gate the write on the key's presence the way members.service.ts:454 does — `const wantsCountry = input !== null && typeof input === 'object' && 'countryCode' in input`; when it is absent, read the stored value and answer it unchanged, writing nothing. Replace the comment at :72-75 with the settled rule, and add the absent-key body to TC-01-INT-20's steps so the two writes are pinned to the same answer."
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-29",
+      "rule": "sweep 5 / CR-29 — something the spec requires exists nowhere, or only somewhere the spec did not put it; contracts §Shared code is the table of what this spec adds and where",
+      "file": "packages/validation/src/time-off-calendar.ts",
+      "symbol": "timeOffCalendarToday",
+      "line": 255,
+      "claim": "§Shared code names three exports this spec adds beside `TIME_OFF_CALENDAR_MESSAGES`; two of them exist nowhere, and the zone-fallback rule one of them carries has instead been restated as a private method of the API service — a second implementation of one rule, which is what the shared export was named to prevent",
+      "witness": {
+        "kind": "rule",
+        "detail": "The document, amended in this run at a83e79f, states: specs/time-off/01-vacation-calendar.contracts.md:212 — '| `timeOffCalendarToday(timezone, instant)` | beside `TIME_OFF_CALENDAR_MESSAGES` | REQ-01-018's today, and the single definition of it. The endpoint marks `range.today` with it and the screen's `Today` control lands with it…'; and :213 — '| `resolveTimeOffCalendarTimezone(timezone)` | beside `TIME_OFF_CALENDAR_MESSAGES` | The fallback REQ-01-018 states: the caller's zone when `Account.timezone` names a real one, UTC when it is absent, empty or unrecognized.' Against that, `git grep -n 'timeOffCalendarToday\\|resolveTimeOffCalendarTimezone' -- specs apps packages e2e` returns those two document lines and nothing else: commit c75a6bb deleted both functions from packages/validation/src/time-off-calendar.ts (the file now ends at :257 with `validateStatedCountryCode`). The plan had already reconciled the two halves and forbade exactly the shape that was written — handoff.json T2, 'REPLAN, round 3 - THE THREE HELPERS THE SETTLED CONTRACT NAMES … all three are exports of packages/validation/src/time-off-calendar.ts and the endpoint and the screen both read them - one definition of REQ-01-018's today, not one per surface. timeOffCalendarToday FORMATS THROUGH todayInTimeZone (packages/validation/src/requests.ts:639) … resolveTimeOffCalendarTimezone answers which zone … Do not restate the en-CA formatting a second time - two implementations of one fallback is where the rule drifts.' What shipped instead is the restatement: apps/api/src/time-off/time-off-calendar.service.ts:410-419, `private reportedTimezone(timezone: string | null)`, which re-implements 'empty or unreadable by Intl → UTC, else the stated zone' inside the API, where the screen cannot reach it and where packages/validation's suite does not run. The two copies agree today, which is why this is a rule witness and not a scenario — and it is the state CLAUDE.md's 'two files stating one rule is how the rules drifted' names. A reader of §Shared code cannot find either helper, and a second consequence is already visible in the tests: the deleted unit block was the only assertion anywhere for the third limb of REQ-01-018's fallback (an unrecognized zone, 'Mars/Olympus'); packages/validation/src/requests.test.ts:236-241 covers `null` and `''` only, so edge case 18's 'a string the server does not recognize' (contracts.md:417) is now asserted nowhere.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:212"
+      },
+      "suggestedFix": "Restore both exports in packages/validation/src/time-off-calendar.ts as the plan describes them — `resolveTimeOffCalendarTimezone` answering which zone, `timeOffCalendarToday` formatting through the shipped `todayInTimeZone` rather than restating `en-CA` — and have the service's `range.timezone` call `resolveTimeOffCalendarTimezone` instead of the private `reportedTimezone`, which then goes. Bring the deleted unit assertions back inside TC-01-UNIT-02, including the unrecognized-zone limb. If the intended answer is instead that this spec adds no today helper, that is a §Shared code edit and a person's decision, not one this run may make."
+    },
+    {
+      "id": "F3",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "REQ-01-034",
+      "rule": "REQ-01-034 vs contracts §Screens — the document requires the organization country to be clearable and, as amended this pass, gives the only control that writes it no option that clears",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Screens — /org/{orgId}/settings/holidays",
+      "line": 344,
+      "claim": "once an organization country is stored, nothing in the product can unset it: the picker's option list no longer contains an empty value, and the document neither offers one nor says what it would be called",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An admin opens Settings › Holidays for an organization storing `PL`, decides the organization should have no country (the state REQ-01-034 exists for, and the one TC-01-INT-12's second read and edge case 19 both describe), and looks for a way to clear it. There is none. `org-country-select` is drawn from `STATED_COUNTRY_OPTIONS` (settings/holidays/page.tsx:375-376), which is `COUNTRY_OPTIONS.map(({code,name}) => ({value: code, label: name}))` (apps/web/src/stated-country-options.ts:22) — 249 assigned codes and no empty-valued option; before this pass the control drew `HOLIDAY_COUNTRY_OPTIONS`, whose head is `{ value: ALL_COUNTRIES /* '' */, label: 'All countries' }` (settings/holidays/country-options.ts:17-18), so an empty value was selectable. The design system's `Select` has no clear affordance to fall back on — `SelectProps` (packages/ds/src/components/forms/Select.tsx:23-63) carries no `isClearable`. `handleSaveCountry` still sends `{\"countryCode\": null}` when `orgCountry` is empty (page.tsx:166), but `orgCountry` can only be empty before a successful read, never after one. The member picker kept its empty option — `MEMBER_COUNTRY_OPTIONS = [{ value: '', label: TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption }, ...STATED_COUNTRY_OPTIONS]` (MemberDetailScreen.tsx:45-47) — so the two halves of the same feature now differ on whether 'no country' is reachable. The document is what has to settle it and does not: contracts.md:344-348 says only 'Its options are `COUNTRY_OPTIONS` from `@devscribed/validation`', says nothing about what the control shows for a stored `null`, and §Required data-testid (:288) asserts only that `org-country-select` is present. The code states the gap as its own justification — page.tsx:369-371, 'the spec gives this picker no option meaning \"no country\", and no export holds a label for one' — and it is right that no export holds one: `memberCountryDefaultOption` means the organization's country, and `holidayCountryLabel(null)` is 'All'. Choosing the label is a product decision and inventing it inline is forbidden (CLAUDE.md — Validation), so neither the implementer nor this review can settle it.",
+        "source": "specs/time-off/01-vacation-calendar.md:357"
+      },
+      "suggestedFix": "A person decides, in the document: either §Screens gives `org-country-select` a first option meaning 'no country' with a message text named in §Error Messages and exported from `packages/validation` (and REQ-01-034 gains an E2E or the case list says which case clears it), or the spec states in its own text that the organization country is set-only from the screen and cleared through the API alone, and records what a stored `null` paints on first paint."
+    },
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-16",
+      "rule": "sweep 4 — a failure is swallowed and leaves stored state claiming something that did not happen",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "useEffect — the organization country read",
+      "line": 149,
+      "claim": "a failed `GET .../settings/country` is discarded with no message and leaves the picker holding the empty sentinel, so the next press of Save country writes `null` over a country the reader never saw",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`orgCountry` initialises to `ALL_COUNTRIES` (`''`, page.tsx:99). The read effect at :146-152 does `if (!response.ok || cancelled) return;` — a 500, a dropped connection or an unparseable body sets nothing, shows nothing and logs nothing, and with the new option list `''` matches no option so the control paints the `Select`'s bare placeholder rather than a wrong-but-visible 'All countries'. An admin who then presses `org-country-save` for any reason sends `{\"countryCode\": null}` (:166) and the stored `PL` is gone, answered 200. It stays a note because it needs a press on a control the reader did not change, and because the effect is unchanged since review 1 judged the file — but it is the only path by which the organization country can be cleared from the product at all, which F3 is the other half of.",
+        "source": "apps/web/app/org/[orgId]/settings/holidays/page.tsx:149"
+      },
+      "suggestedFix": "Keep the picker out of the savable state until the read has answered — track the read's outcome and either draw the page's existing error treatment or leave `org-country-save` on its genuine in-flight guard until a value has arrived."
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — a test that fails for a reason other than the rule it guards; handoff round-3 (ii) states the repair",
+      "file": "e2e/tests/time-off-calendar.spec.ts",
+      "symbol": "picking four people holds through every window preset and step",
+      "line": 279,
+      "claim": "the week-start assertion and the month-step assertion both compute their expected dates from the runner's clock while the screen computes its anchor in the account's zone — the browser-clock/account-zone split these cases guard, reintroduced inside the assertions",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`signupOrg` seeds the account with `timezone: 'Europe/Berlin'` (e2e/tests/helpers.ts:138) and the screen anchors on `todayInTimeZone('Europe/Berlin')` (CalendarScreen.tsx:136). The test takes `new Date()` at :279, reduces it to the runner's UTC calendar date and steps back to that date's Monday (:280-287); on a Sunday between 22:00 and 23:59 UTC under CEST the account is already on Monday while the runner is still on Sunday, so the screen renders the week beginning that Monday and the assertion demands `calendar-day-header-<the previous Monday>` — a failure against correct code. The month block below it has the same shape: :293-299 build the expected month from `now.getFullYear()/getMonth()` on the runner, while the screen's anchor month is Berlin's, which differ for the last 22:00-23:59 UTC of any month. handoff.json T11 names the repair verbatim — 'REPLAN, round 3 … (ii) ANY assertion about which day a window opens on computes the expected date IN THE ACCOUNT'S ZONE, the way the screen does' — and this file was not touched in the attempt that plan governed. Review 2 raised it as S1-N2; it is unchanged.",
+        "source": "e2e/tests/helpers.ts:138"
+      },
+      "suggestedFix": "Derive both expected dates from the account's zone the same way the screen does, or assert the first header's weekday label rather than its date."
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "contracts §Required data-testid — the Asserted column says what each id is asserted to be; handoff round-3 (i) states the repair",
+      "file": "e2e/tests/time-off-calendar.spec.ts",
+      "symbol": "calendar-scope-all",
+      "line": 1,
+      "claim": "`calendar-scope-all` is still the one id in the contracts' table that no test asserts",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-E2E-02 / TC-01-E2E-03 — no case references `calendar-scope-all`",
+        "detail": "`grep -n calendar-scope-all e2e/tests/time-off-calendar.spec.ts` returns nothing at HEAD; the id is rendered (CalendarScreen.tsx:52) and listed in contracts.md:265 as 'present'. handoff.json T11 round-3 (i) asked for it — 'calendar-scope-all is in the contracts' testid table and no E2E case asserts it; assert it in the case that returns to the All scope' — and the e2e suite was not touched in the attempt that plan governed. Review 2 raised it as L2; unchanged.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:265"
+      },
+      "suggestedFix": "Assert `calendar-scope-all` in the case that returns to the All scope."
+    },
+    {
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing: test cases are numbered in the specs and the code references those ids; handoff round-3 (iii) states the repair",
+      "file": "packages/validation/src/time-off-calendar.test.ts",
+      "symbol": "the option list the pickers draw is the list the write accepts",
+      "line": 179,
+      "claim": "two of the file's three describe blocks carry no TC id, and the block that was folded away took an assertion with it rather than into a case",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-UNIT-01 / TC-01-UNIT-02",
+        "detail": "The file's blocks are 'TC-01-UNIT-02: the range rules and the window presets' (:16), 'validateStatedCountryCode — Validation Rule 9' (:152) and 'the option list the pickers draw is the list the write accepts' (:179); the last two name a rule and a property rather than a case. handoff.json T11 round-3 (iii) asked for exactly this — 'every describe block in packages/validation/src/time-off-calendar.test.ts carries the TC id it serves; a block that serves no numbered case is folded into the case whose rule it exercises - rule 9's country tests into TC-01-UNIT-01, the today helper into TC-01-UNIT-02'. The today-helper block was deleted outright instead of folded, which is where the unrecognized-zone assertion named in F2 went. Both new blocks are real checks that can fail, so this is a naming and a coverage gap, not a dead test.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:441"
+      },
+      "suggestedFix": "Name both blocks for the case they serve — rule 9's country tests and the picker-list property under TC-01-UNIT-01 — and restore the today-helper assertions under TC-01-UNIT-02 when F2's exports come back."
+    },
+    {
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": "REQ-01-009",
+      "rule": "REQ-01-009 — an empty selection is a refusal, not everyone",
+      "file": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+      "symbol": "MultiFilter",
+      "line": 336,
+      "claim": "the Teams and People pickers still inherit `MultiFilter`'s 'All' placeholder, so each reads 'All' in exactly the state the screen refuses",
+      "witness": {
+        "kind": "rule",
+        "detail": "apps/web/src/reports/ReportFilters.tsx sets `placeholder=\"All\"` on the Select `MultiFilter` draws, and CalendarScreen.tsx:336 and :349 pass no override. On the reports screens an unticked filter does mean every row; here it is refused with `teamsRequired` / `peopleRequired` (CalendarScreen.tsx:198-207 and time-off-calendar.service.ts:118-123), so the control states the opposite of the banner beside it. Raised in review 1 as N9; the implementer's report records it as knowingly left, because widening `MultiFilter`'s API touches three shipped report screens whose own specs should see the change. Recorded again so the decision reaches a person rather than lapsing.",
+        "source": "specs/time-off/01-vacation-calendar.md:144"
+      },
+      "suggestedFix": "Give the two calendar pickers a placeholder naming the required choice, through a `placeholder` prop on `MultiFilter` — a change the reports specs should be told about."
+    },
+    {
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-11",
+      "rule": "CLAUDE.md — Design system: no hardcoded sizes; a gap is recorded in the spec's DS gaps table, not argued in place",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "HolidaysPage",
+      "line": 368,
+      "claim": "`style={{ minWidth: 220 }}` on the organization-country control is still a size literal answered by a comment rather than by a token or a DS-gaps row",
+      "witness": {
+        "kind": "rule",
+        "detail": "page.tsx:368 — `<div style={{ minWidth: 220 }}>`, unchanged this pass; the comment above it at :365-367 argues the literal ('No token names a control width — `MultiFilter`'s own 200 is the same literal'). The DS gaps table (contracts.md:370-374) records `--name-col` and the three sub-`--space-1` literals and no control width. It stays a note for the third pass for the reason review 1 gave: the identical literal already ships in this file at :398 for the sibling filter, so the new control matches its neighbour rather than inventing a measurement.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:370"
+      },
+      "suggestedFix": "Record a control-width DS gap once, or take the width from a token — not a comment beside each occurrence."
+    }
+  ]
+}

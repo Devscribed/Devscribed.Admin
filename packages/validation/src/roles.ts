@@ -85,6 +85,21 @@ export type Capability =
   // both shapes so `RequireCapability` decorators and `can(role, ...)` call sites can
   // both name it, matching the pattern used by clients and holidays above.
   | 'EditOthersBillable'
+  // Requests spec 01 — requests between members. Duplicates of `create-request` /
+  // `view-own-requests` / `view-all-requests` in the lowercase-dashed
+  // `MemberCapability` union for the same reason the client capabilities are
+  // duplicated: this set is what `@RequireCapability` decorators consume, the other is
+  // what `can(role, ...)` reads, and the spec requires both.
+  | 'CreateRequest'
+  | 'ViewOwnRequests'
+  | 'ViewAllRequests'
+  // Requests spec 02 — the request-topic catalogue. Duplicates
+  // `manage-request-topics` in the lowercase-dashed `MemberCapability` union for the
+  // same reason every capability above is duplicated: this set is what
+  // `@RequireCapability` decorators name, the other is what `can(role, ...)` reads.
+  // The refusal itself is raised in the topics service, because it must carry
+  // `REQUEST_TOPIC_MESSAGES.manageForbidden` and `CapabilityGuard`'s message is fixed.
+  | 'ManageRequestTopics'
   // Spec reports/01 — the nine reporting capabilities. Each report has a paired
   // (All, My) capability so the report screen can be gated per owner-scope, plus
   // two column-permission capabilities that shape the Time & Activity projection,
@@ -99,7 +114,13 @@ export type Capability =
   | 'ViewMyTimeOff'
   | 'ViewTimeAndActivityBilled'
   | 'ViewTimeAndActivitySpent'
-  | 'ExportReports';
+  | 'ExportReports'
+  // Time off spec 01 — the vacation calendar. Duplicated as `view-time-off-calendar` in
+  // the lowercase-dashed `MemberCapability` union: this set is what the sidebar row reads
+  // through `hasCapability(role, ...)`, the other is what the page's gate and the
+  // endpoint's read through `can(normalizeRole(role), ...)`, and both must answer alike
+  // or the rail draws a row onto a 404.
+  | 'ViewTimeOffCalendar';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -133,6 +154,10 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ManageHolidays',
     'DeleteHolidays',
     'EditOthersBillable',
+    'CreateRequest',
+    'ViewOwnRequests',
+    'ViewAllRequests',
+    'ManageRequestTopics',
     // Reports (spec reports/01). Admin sees everything, including the Spent column
     // (pay-rate × hours), which manager does not.
     'ViewAmountsOwed',
@@ -144,6 +169,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewTimeAndActivityBilled',
     'ViewTimeAndActivitySpent',
     'ExportReports',
+    // Time off spec 01's matrix — the calendar is admin, manager and user; a viewer is
+    // refused it, because reports/01 already settles what a viewer sees of time off.
+    'ViewTimeOffCalendar',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -170,6 +198,15 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // Spec user-management/16's matrix: a manager may toggle billable on any
     // member's entry, same as an admin.
     'EditOthersBillable',
+    // Requests spec 01's matrix gives a manager the same request rights as an admin
+    // everywhere except the transitions, which are decided by identity rather than by
+    // capability (see `canReadRequest` below).
+    'CreateRequest',
+    'ViewOwnRequests',
+    'ViewAllRequests',
+    // Requests spec 02's matrix gives a manager the same curating rights as an admin:
+    // the catalogue is the vocabulary of the day-to-day work the role exists for.
+    'ManageRequestTopics',
     // Spec reports/01's matrix: a manager sees every All-variant report and can
     // export PDFs, but is denied the Spent column — pay rate is admin-only.
     'ViewAmountsOwed',
@@ -180,20 +217,84 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewMyTimeOff',
     'ViewTimeAndActivityBilled',
     'ExportReports',
+    // Time off spec 01's matrix — same row as admin.
+    'ViewTimeOffCalendar',
   ],
-  // `user` is empty on the profile/documents matrices, but reports/01 grants a
-  // regular user the three "My" variants so they can see their own payable,
-  // hours, and time-off, plus `ExportReports` so they can PDF their own report.
+  // Requests spec 01 is the first spec to put anything in these two rows. A member
+  // reading and editing *their own* contract details is still authorized below by
+  // `canReadProfile` and friends rather than from this table — see the note above those
+  // helpers for why "self" must never become a row here. Reports/01 adds the three "My"
+  // variants plus `ExportReports`, so a regular user can see and PDF their own payable,
+  // hours and time off.
   user: [
+    'CreateRequest',
+    'ViewOwnRequests',
     'ViewMyAmountsOwed',
     'ViewMyTimeAndActivity',
     'ViewMyTimeOff',
     'ExportReports',
+    // Time off spec 01's matrix — a user opens the calendar and sees every member it is
+    // scoped to; who is away is not a privileged fact inside one organization.
+    'ViewTimeOffCalendar',
   ],
-  // Spec reports/01's matrix: a viewer sees only "My Time Off" — the calendar of
-  // holidays and vacation days that affects their own schedule. No export.
-  viewer: ['ViewMyTimeOff'],
+  // Being asked something is not a privilege: a `viewer` sees the requests they raised
+  // or that are addressed to them, and may not raise one. Reports/01 adds "My Time Off"
+  // — the calendar that affects their own schedule — and no export.
+  viewer: ['ViewOwnRequests', 'ViewMyTimeOff'],
 };
+
+/* ------------------------------------------------------------------ *
+ * Requests spec 03 — the client contact, whose rights come from the principal kind and
+ * from no role at all (REQ-03-016, REQ-03-017).
+ *
+ * A union of its own, and a flat list rather than a table: a value added to a staff
+ * union is one every staff role must then be refused, for a right no role can hold. So
+ * `Capability` gains nothing, `ROLE_CAPABILITIES` gains no row, `MemberCapability` gains
+ * nothing and `CAPABILITY_MATRIX` gains no column.
+ * ------------------------------------------------------------------ */
+
+export type ClientCapability =
+  | 'read-own-requests'
+  | 'answer-request'
+  | 'decline-request'
+  | 'post-request-message';
+
+/** Every right a client principal holds, and nothing else. */
+export const CLIENT_CAPABILITIES: readonly ClientCapability[] = [
+  'read-own-requests',
+  'answer-request',
+  'decline-request',
+  'post-request-message',
+];
+
+/** Which kind of principal a session resolves to. Read from the database per request. */
+export type PrincipalKind = 'member' | 'client';
+
+/**
+ * The caller, as an authorization question. `role` is the raw `Membership.role` column
+ * for a member and is `null` for a client contact, who holds no role at all.
+ */
+export interface Principal {
+  kind: PrincipalKind;
+  role: string | null;
+}
+
+/**
+ * REQ-03-017 — the principal kind is asked FIRST, and a client principal never reaches a
+ * role-keyed helper.
+ *
+ * That ordering is the whole rule. `normalizeRole` maps an unrecognised value — `null`
+ * included — to `viewer`, so `hasCapability` would answer a client principal with the
+ * viewer set, which holds `ViewOwnRequests`: a grant, not a refusal. This function is
+ * where the two questions are kept apart, so no call site has to remember to ask them in
+ * the right order.
+ */
+export function capabilitiesForPrincipal(
+  principal: Principal,
+): readonly Capability[] | readonly ClientCapability[] {
+  if (principal.kind === 'client') return CLIENT_CAPABILITIES;
+  return ROLE_CAPABILITIES[normalizeRole(principal.role)];
+}
 
 /** Accepts the raw role string so call sites cannot forget to normalize first. */
 export function hasCapability(role: string | null | undefined, capability: Capability): boolean {
@@ -249,4 +350,23 @@ export function canReadProfilePii(role: string | null | undefined, isSelf: boole
 /** The matrix row `EditMemberProfile`: admin, or the member editing their own details. */
 export function canEditProfile(role: string | null | undefined, isSelf: boolean): boolean {
   return isSelf || hasCapability(role, 'EditMemberProfile');
+}
+
+/* ------------------------------------------------------------------ *
+ * Requests spec 01 — "party to a request", where role is again only half the answer
+ *
+ * The same composition `canReadProfile` uses, for the same reason: "may this role see
+ * every request in the organization" is a property of the role, while "am I the person
+ * who asked, or the person being asked" is a property of the request. A fifth role
+ * called `party` would be a value `Membership.role` can never hold.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Requests spec 01, "Party to a request": the requester, the addressee, or a holder of
+ * `ViewAllRequests`. `isParty` is the identity half and is computed by the caller from
+ * the request row; a caller who is neither is answered 404, never 403, so request
+ * existence is not enumerable.
+ */
+export function canReadRequest(role: string | null | undefined, isParty: boolean): boolean {
+  return isParty || hasCapability(role, 'ViewAllRequests');
 }

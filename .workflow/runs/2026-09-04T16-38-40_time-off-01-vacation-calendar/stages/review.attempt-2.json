@@ -1,0 +1,321 @@
+{
+  "status": "blocked",
+  "reviewedUpTo": "0c93ae19628e0a266a793848f837160ce66ccf3d",
+  "covered": {
+    "scope": 16,
+    "read": [
+      "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+      "packages/validation/src/time-off-calendar.ts",
+      "packages/validation/src/time-off-calendar.test.ts",
+      "apps/api/test/time-off-calendar.spec.ts",
+      "specs/time-off/01-vacation-calendar.md",
+      "apps/api/src/time-off/time-off-calendar.service.ts",
+      "specs/time-off/01-vacation-calendar.contracts.md",
+      "specs/time-off/01-vacation-calendar.cases.md",
+      "e2e/tests/time-off-calendar.spec.ts",
+      "apps/web/app/globals.css",
+      "apps/api/src/organizations/organization-country.service.ts",
+      "apps/api/test/holidays.spec.ts",
+      "apps/api/test/reports-amounts-owed.spec.ts",
+      "apps/api/src/members/members.service.ts",
+      "apps/api/test/reports-time-off.spec.ts",
+      "apps/web/app/org/[orgId]/settings/holidays/page.tsx"
+    ],
+    "unreached": []
+  },
+  "shardDecision": "16 files / 508 changed lines, but the files they live in run to 4,400 lines of code plus a 1,500-line spec bundle that itself moved this pass — more than one context should hold if every file is to be read in full. Split two ways along the boundary the change has: shard 1 took the web, validation and e2e side (6 files, 269 changed lines) and shard 2 the API and the spec documents (10 files, 239 changed lines). I held the three a child cannot do — the requirement sweep, the boundary sweep and blast radius — and checked all three of pass 1's blockers against their witnesses myself as well as through the shards.",
+  "shards": [
+    {
+      "shard": 1,
+      "findings": 8,
+      "kept": 8
+    },
+    {
+      "shard": 2,
+      "findings": 2,
+      "kept": 2
+    }
+  ],
+  "priorBlockers": [
+    {
+      "id": "F1",
+      "closed": true,
+      "why": "The contradiction is gone from the documents and the code implements the side they settled on. REQ-01-036 (specs/time-off/01-vacation-calendar.md:370), REQ-01-051 (:380), contracts §Routes rows 12 and 14, the Error Messages table (contracts.md:177) and Validation Rule 9 (contracts.md:238) now all say one thing: empty, or two uppercase letters naming an assigned country, refused with PROFILE_MESSAGES.country.invalid at 422 on the organization write and 400 on the member write. Edge case 10 (contracts.md:395) was amended to agree — XX 'cannot come from the write either'. `git grep countryCodeInvalid -- specs` returns only the two prose lines explaining why it is NOT the message here. The code follows: organization-country.service.ts:76 and the wantsCountry branch at members.service.ts:457 both call validateStatedCountryCode (packages/validation/src/time-off-calendar.ts:248), which runs the /^[A-Z]{2}$/ shape test and then validateCountryCode's membership test of COUNTRY_NAMES, so 'pl' and 'XX' are both refused with 'Enter a valid country'. TC-01-INT-21 and TC-01-INT-25 loop over 'XX' and assert the stored value is unchanged. What the settlement did NOT reach is the picker that feeds both writes — L1 below."
+    },
+    {
+      "id": "F2",
+      "closed": true,
+      "why": "todayISO() is deleted. The initial anchor (CalendarScreen.tsx:138) and the calendar-today control (:300) both call timeOffCalendarToday(session.account.timezone), and the endpoint now calls the same two helpers for range.today instead of its own private copies — the diff at apps/api/src/time-off/time-off-calendar.service.ts deletes resolveTimezone and todayIn and imports resolveTimeOffCalendarTimezone and timeOffCalendarToday. One field, one function, so the Kiritimati scenario in the witness now puts the anchor and the marker on the same day. session.account.timezone is `string | null` on the session context (apps/web/src/layout/session-context.tsx:10), the same field the API reads, and the helper falls back to UTC for null, empty and unrecognized zones, which is REQ-01-018's own fallback. Residue is a note: the helper restates todayInTimeZone, which already ships and which the handoff named (S1-N1)."
+    },
+    {
+      "id": "F3",
+      "closed": true,
+      "why": "The thrown-fetch branch at CalendarScreen.tsx:243 no longer draws TIME_OFF_CALENDAR_MESSAGES.emptyStateBody; it draws HOLIDAY_MESSAGES.toastServerError, a packages/validation export, and emptyStateBody is now reached only from the empty-state block the contracts assign it to. A neighbouring path on the same statement is still wrong, but it is not F3's: a non-ok response whose body carries `message` and no `fields` echoes the framework's own string into the banner (S1-2)."
+    }
+  ],
+  "sweep5": {
+    "requirements": 50,
+    "artefacts": 102,
+    "missing": [],
+    "detail": "Walked from the documents' own lists, not from the diff, and re-derived rather than inherited from pass 1 because the spec bundle itself moved this pass. 50 numbered requirements (REQ-01-001..049 and REQ-01-051; the document numbers no REQ-01-050). 102 artefacts: contracts §Routes 6 routes — `git grep -n 'settings/country|time-off/calendar' -- apps/api/src/*/*.controller.ts` finds @Controller('api/organizations/:orgId/settings/country') and @Get('time-off/calendar'), and the three shipped rows are unchanged. §Data Model 2 columns and 1 migration — 20260904120000_time_off_01_vacation_calendar/migration.sql is two ALTER TABLE ADD COLUMN CHAR(2) statements, nullable, no default, no backfill, which is CR-21 clean and makes the deploy order safe in both directions. §Shared code 5 exports plus its 4 call sites: `git grep resolveMemberHolidayCountry -- apps/api/src` returns holidays.service.ts:107 and reports.service.ts:560, :1062, :1901 — 4 of 4 — and `git grep phoneCountryCode -- apps/api/src` returns only account.service.ts and one explanatory comment, so 'No call site keeps a phone-country read' still holds. §Error Messages 11 TIME_OFF_CALENDAR_MESSAGES keys compared string by string against packages/validation/src/time-off-calendar.ts:21-33: all 11 verbatim, and the row rewritten this pass (PROFILE_MESSAGES.country.invalid, 'Enter a valid country') matches autofill.ts:511. Both capability spellings present: roles.ts:123 with three grants at :174, :221, :238, and index.ts:659 with true/true/true/false across the four CAPABILITY_MATRIX rows. §Required data-testid 26 ids, each searched in apps/web and in e2e: all 26 render in apps/web; 25 are asserted in e2e and `calendar-scope-all` is asserted in none, which is L2. cases.md 41 case ids, every one present in code at the level the document puts it. §DS gaps 4 names, all declared on the calendar page's own root, with the 3px and 2px literals carrying @literal at globals.css:914, :1103 and :1125 — the 2px row added this pass, which closes pass 1's N10. The sections contributing no artefact are §Out of Scope and §Known Gaps, which is what those sections are for."
+  },
+  "sweep9": {
+    "pairs": 14,
+    "disagreeing": [
+      "the two country pickers and the country write they feed: HOLIDAY_COUNTRY_OPTIONS is built from libphonenumber's country list (apps/web/app/org/[orgId]/settings/holidays/country-options.ts:20) and offers AC, TA and XK, which validateStatedCountryCode refuses because COUNTRY_NAMES holds only the 249 assigned codes. This is L1.",
+      "the calendar's error banner and the contracts' Error Messages table: on a non-ok response carrying `message` and no `fields` the banner draws the framework's own string, which the table gives no row and the handoff's T7(b) forbids by name. This is S1-2; the table's silence about what the banner says on a non-422 is S1-N4.",
+      "checked and agreeing: server range.today and the screen's anchor (one helper, one field); TIME_OFF_CALENDAR_MESSAGES and §Error Messages (11/11 verbatim); rule 9's text and validateStatedCountryCode; 422/400 in the routes table and the two exceptions thrown; the 4 resolveMemberHolidayCountry call sites and their table; both capability spellings and their four matrix rows; the migration and schema.prisma; the DS gap names and globals.css; the 26 testids and the screens that render them; the member write's absent-key rule and the organization write's, which now differ deliberately and say so (S2-N1 keeps that a note)."
+    ]
+  },
+  "findings": [
+    {
+      "id": "L1",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "CR-30",
+      "rule": "sweep 9 — a client rule and its server re-check must agree; contracts §Screens pins the option list ('It is the country picker the holiday form already uses', contracts.md:337) while §Validation Rules rule 9 refuses part of what that list offers",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Validation Rules rule 9",
+      "line": 238,
+      "claim": "the settled write rule refuses three codes the picker the same document names still offers, so an admin can select Kosovo (or Ascension Island, or Tristan da Cunha) from either country picker and be refused with 'Enter a valid country' — and a holiday row for the same code can already be created, so the two halves of the holiday feature disagree about which countries exist",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An admin opens Settings > Holidays and picks the option whose value is 'XK' from org-country-select, then presses org-country-save. The screen sends PUT /api/organizations/{orgId}/settings/country with {\"countryCode\":\"XK\"} (page.tsx:166). validateStatedCountryCode passes the shape test and then fails validateCountryCode, because COUNTRY_NAMES holds only officially assigned alpha-2 codes (autofill.ts:686, and its comment: 'All 249 officially assigned codes'), so the API answers 422 {\"fields\":{\"countryCode\":\"Enter a valid country\"}} about a value the product itself offered. The same three options are on member-country-select, which is MEMBER_COUNTRY_OPTIONS = the default option + HOLIDAY_COUNTRY_OPTIONS (MemberDetailScreen.tsx:42-44, drawn at :336), refused there with 400. Command that settles which codes: `node -e \"const {getCountries,getCountryCallingCode}=require('libphonenumber-js'); ...\"` comparing the picker's source list against the COUNTRY_NAMES keys parsed out of autofill.ts prints `COUNTRY_NAMES size 249 / phone list size 245 / in picker but NOT assigned: AC,TA,XK`. HOLIDAY_COUNTRY_OPTIONS takes its codes from COUNTRY_OPTIONS, the phone picker's list (country-options.ts:20; apps/web/src/account-data.ts builds it from libphonenumber's getCountries()), and labels them through countryName(), which returns the bare code for an unknown one — so the three appear as options labelled 'AC', 'TA' and 'XK'. The document requires both halves and they cannot both hold: contracts.md:337 pins the organization picker to the holiday form's picker and :345-347 pins the member's to the same list with one option above it, while rule 9 (:238) and REQ-01-036 / REQ-01-051 refuse anything outside the assigned list. Which side gives is a product decision, not an implementation one: the holiday create route still accepts 'XK' (validateHolidayCountryCode is shape-only, holidays.ts:101), so an organization can hold a holiday row for a country no member and no organization may ever be set to — narrowing the picker strands those rows, and widening the write reinstates exactly the silent discard the settlement was written to stop.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:337"
+      },
+      "suggestedFix": "a person decides and writes it into the document: either the two country pickers draw from the assigned list (and the document says so, and says what happens to a holiday row already carrying an unassigned code), or rule 9 accepts the picker's list and REQ-01-026's read is stated to discard the rest. Not settled by the reviewer and not by the implementer — both readings are written down and each costs something different."
+    },
+    {
+      "id": "S1-2",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-30",
+      "rule": "sweep 9 — a message and its table: contracts §Error Messages is the closed set of what this screen may say, and handoff T7(b) states the rule in full",
+      "file": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+      "symbol": "load",
+      "line": 234,
+      "claim": "on a non-ok response whose body carries `message` but no `fields`, calendar-error-banner draws the server's raw framework string — a message no packages/validation export holds and the contracts' Error Messages table gives no row",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A caller has the calendar open and their capability is revoked, or the API restarts. The next range step issues GET /api/organizations/{orgId}/time-off/calendar and Nest answers 404 {\"message\":\"Not Found\",\"statusCode\":404}; a 500 answers {\"message\":\"Internal server error\",\"statusCode\":500}. Line 234 evaluates `fields ? Object.values(fields)[0] : (body?.message ?? HOLIDAY_MESSAGES.toastServerError)`: fields is undefined and body.message is present, so calendar-error-banner renders 'Not Found' or 'Internal server error' to the reader. Neither string exists in packages/validation and neither is in specs/time-off/01-vacation-calendar.contracts.md §Error Messages (lines 164-179), whose only rows for this route are the seven TIME_OFF_CALENDAR_MESSAGES 422 messages. The plan states the rule verbatim in handoff.json T7 (b): 'Only a 422 carrying fields draws the endpoint's own message (the first value of fields); every other outcome draws the generic one, which also keeps a raw framework string such as \"Internal server error\" off the screen.' The generic branch is already written on the same line, so the fallback chain is one term too long. Verified by reading the file at HEAD; this line changed in this pass's fix commit, which added the toastServerError tail and kept the body.message term ahead of it.",
+        "source": ".workflow/runs/2026-09-04T16-38-40_time-off-01-vacation-calendar/handoff.json"
+      },
+      "suggestedFix": "setError(fields ? Object.values(fields)[0] : HOLIDAY_MESSAGES.toastServerError) — never echo the response's own message"
+    },
+    {
+      "id": "S1-1",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-11",
+      "rule": "CLAUDE.md — Design system: no hardcoded colors or sizes; anything missing goes into the design system and is recorded in that spec's DS gaps table, never improvised per screen",
+      "file": "apps/web/app/globals.css",
+      "symbol": ".time-off-calendar-skeleton .time-off-calendar-who .time-off-calendar-shimmer",
+      "line": 1122,
+      "claim": "the loading skeleton added this pass carries a size literal, max-width: 160px, that no token names, that carries no @literal comment, and that the spec's DS gaps table does not record",
+      "witness": {
+        "kind": "rule",
+        "detail": "globals.css:1122 — `max-width: 160px;`. The spec's DS gaps table closes the set of literals this screen may carry and was itself amended this pass to add the third one: specs/time-off/01-vacation-calendar.contracts.md:374 — 'the 3px margin on each side of a band…, the 3px stripe of the pending hatch…, and the 2px inset that marks today's column | All three stay as literals, each carrying @literal and the reason the design-system rule asks for'. 160px is a fourth literal, it is in none of those three rows, and it is the only length in the whole .time-off-calendar block that is neither a var() nor a 1px hairline nor annotated — the two declarations beside it in the same rule are height: var(--space-4) and border-radius: var(--radius-s) (globals.css:1116-1117), and every sub-scale value in this file is annotated at :914, :1103 and :1125. The only other 160px in the file is .booking-format (:62-63), an unrelated shipped component, so this is a new measurement invented on this screen rather than one copied from its neighbour — which is what kept the 220px control width a note in pass 1 and does not apply here.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:374"
+      },
+      "suggestedFix": "express the placeholder width through the scale or through --name-col, which already sizes the column it sits in; or record it in the DS gaps table with an @literal comment the way the 3px and 2px values are recorded"
+    },
+    {
+      "id": "L2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "contracts §Required data-testid — the Asserted column says what each id is asserted to be",
+      "file": "e2e/tests/time-off-calendar.spec.ts",
+      "symbol": "calendar-scope-all",
+      "line": 1,
+      "claim": "calendar-scope-all is the one id in the table that no test asserts, and pass 1's sweep reported all 26 present in both apps/web and e2e",
+      "witness": {
+        "kind": "command",
+        "detail": "`git grep -c -- calendar-scope-all e2e` returns nothing; the only scope-all hits in e2e are candidates-scope-all in the hiring suites. `git grep -n calendar-scope -- apps/web` returns CalendarScreen.tsx:52-54, so the id is rendered — the other 25 ids in the table are each asserted somewhere in e2e, and calendar-scope-teams and calendar-scope-people are clicked in the scope cases. A note and not a blocker because the id exists at the level the spec puts it (CR-23's bar is 'exists nowhere'), and 'all' is the default scope every other case exercises implicitly. Recorded chiefly because pass 1's sweep5 asserted 'each was searched in apps/web and in e2e and every one is present in both', which is not true of this one.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:265"
+      },
+      "suggestedFix": "assert calendar-scope-all in the case that returns to the All scope, or state in the table that it is rendered rather than asserted"
+    },
+    {
+      "id": "L3",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "contracts §Shared code — the table of what this spec adds to packages/validation",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Shared code",
+      "line": 202,
+      "claim": "the settlement created three new shared exports — validateStatedCountryCode, resolveTimeOffCalendarTimezone and timeOffCalendarToday — and the §Shared code table still lists the original five",
+      "witness": {
+        "kind": "rule",
+        "detail": "packages/validation/src/time-off-calendar.ts:248, :274 and :285 export the three; validateStatedCountryCode is the only implementation of Validation Rule 9 and is called from two services, and timeOffCalendarToday is now the single definition of REQ-01-018's today for both the endpoint and the screen. The table at contracts.md:202-208 names resolveMemberHolidayCountry, isHolidayApplicableToMember, TIME_OFF_CALENDAR_MESSAGES, ViewTimeOffCalendar and view-time-off-calendar and nothing else, and rule 9's Decided note (:251) names only validateCountryCode in autofill.ts, which by itself upcases 'pl' and would not implement the rule as settled. A reader of the document cannot find where rule 9 lives. Note rather than blocker: nothing the spec requires is missing from the code, it is the table that lags.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:202"
+      },
+      "suggestedFix": "add the three exports to §Shared code, and have rule 9's Decided note name the composed validator rather than only the list test inside it"
+    },
+    {
+      "id": "S1-N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "one rule, one definition — the handoff named the shipped helper",
+      "file": "packages/validation/src/time-off-calendar.ts",
+      "symbol": "timeOffCalendarToday",
+      "line": 285,
+      "claim": "timeOffCalendarToday and resolveTimeOffCalendarTimezone are a second definition of todayInTimeZone, which already ships, is exported from the package root, and is what handoff T7(a) named for this job",
+      "witness": {
+        "kind": "rule",
+        "detail": "packages/validation/src/requests.ts:639 — `export function todayInTimeZone(timezone: string | null | undefined, now: Date = new Date()): string` formats en-CA in the given zone, falls back to UTC on a null or empty zone and catches an unrecognized one; index.ts re-exports it and apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:133 already uses it exactly this way. handoff T7 (a): 'The initial anchor and the calendar-today control both come from todayInTimeZone(session.account.timezone)'. The two implementations agree on every input today, so nothing is observably wrong — this is where the fallback rule can drift, not a behaviour claim.",
+        "source": "packages/validation/src/requests.ts:639"
+      },
+      "suggestedFix": "call todayInTimeZone from the calendar module, or re-export it, instead of restating the rule"
+    },
+    {
+      "id": "S1-N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — a test that fails for a reason other than the rule it guards",
+      "file": "e2e/tests/time-off-calendar.spec.ts",
+      "symbol": "picking four people holds through every window preset and step",
+      "line": 279,
+      "claim": "the new week-start assertion computes the expected Monday from the runner's UTC clock while the screen computes its anchor in the account's Europe/Berlin zone — the browser-clock/account-zone split F2 was raised about, reintroduced inside the assertion that guards it",
+      "witness": {
+        "kind": "scenario",
+        "detail": "signupOrg seeds the account with timezone 'Europe/Berlin' (e2e/tests/helpers.ts:138). The screen's anchor is timeOffCalendarToday('Europe/Berlin'); the test takes new Date() at line 279, reduces it to the runner's UTC calendar date and steps back to that date's Monday. On a Sunday between 22:00 and 23:59 UTC under CEST the account is already on Monday while the runner is still on Sunday, so the screen renders the week beginning that Monday and the assertion expects calendar-day-header-<previous Monday>: the case fails against correct code. Nothing else in the case is time-dependent — the day-header counts at 274 and 277 hold in every zone.",
+        "source": "e2e/tests/helpers.ts:138"
+      },
+      "suggestedFix": "derive the expected Monday from the account's zone the way the screen does, or assert the first header's weekday label rather than its date"
+    },
+    {
+      "id": "S1-N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "contracts §UI Description, Loading — 'The grid area holds a skeleton of the header rows plus six member rows'",
+      "file": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+      "symbol": "GridSkeleton",
+      "line": 68,
+      "claim": "the skeleton is not drawn in the grid's own geometry: in the only state that renders it, the column template it is handed declares one day column while it places fourteen",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The skeleton renders only under `loading && !data` (line 385). gridColumns is computed at line 258 from `days = data?.days ?? []`, so with data null it is `var(--name-col) repeat(1, minmax(0, 1fr))`. GridSkeleton then places cells at gridColumn 2 through 15, creating thirteen implicit auto-sized tracks; the placeholders inside them are width: 100% (globals.css:1115), which in an auto track resolves against no definite width. The stated purpose — 'the grid's own geometry so the page does not jump when the answer arrives' — is therefore not achieved on the only paint it has. No case can catch it: contracts.md:355 records 'No case: the skeleton lives between two paints'.",
+        "source": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx:258"
+      },
+      "suggestedFix": "give the skeleton its own template of fourteen columns rather than the data-derived gridColumns"
+    },
+    {
+      "id": "S1-N4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "contracts §Error Messages — the table every message these surfaces draw must appear in",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Error Messages",
+      "line": 162,
+      "claim": "the screen now draws HOLIDAY_MESSAGES.toastServerError on a failed calendar read and the table carries no row for it, so a reader of the document cannot tell what the banner says on anything but a 422",
+      "witness": {
+        "kind": "rule",
+        "detail": "CalendarScreen.tsx:234 and :243 draw HOLIDAY_MESSAGES.toastServerError ('Something went wrong. Please try again.', packages/validation/src/holiday-messages.ts:29) in calendar-error-banner. The table at contracts.md:164-179 assigns every message this spec's surfaces use a route or '—' and has no toastServerError row; §Screens names the banner only for a 422 (contracts.md:358), and §Required data-testid describes calendar-error-banner as 'present on any 422' (:286). The message itself is the right one — it is a packages/validation export and settings/holidays/page.tsx:179 already uses it for a failed read of the same kind — so this is the table lagging the rule the run settled, not the code being wrong.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:174"
+      },
+      "suggestedFix": "add the toastServerError row with its route, and say in §UI Description what the banner draws on an outcome that is not a 422"
+    },
+    {
+      "id": "S1-N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-11",
+      "rule": "CLAUDE.md — Design system: no hardcoded sizes",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "symbol": "HolidaysPage",
+      "line": 363,
+      "claim": "pass 1's note about style={{ minWidth: 220 }} on the organization-country control was answered with a comment justifying the literal rather than with a token or a DS-gaps row",
+      "witness": {
+        "kind": "rule",
+        "detail": "The change at lines 357-363 adds only a comment ('The same 220 the country filter directly below it carries… No token names a control width'). The literal is unchanged and the DS gaps table (contracts.md:370-374) still records only the three sub-space-1 literals and --name-col. Repeated rather than escalated: the identical literal already ships in this file at line 391, so the new control matches its neighbour, which is why this stays a note — and why code arguing its own exception in a comment is worth naming rather than accepting.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:370"
+      },
+      "suggestedFix": "record a control-width DS gap once, or take the width from a token, rather than justifying the literal in place"
+    },
+    {
+      "id": "S1-N6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing: test cases are numbered in the specs and the code references those ids",
+      "file": "packages/validation/src/time-off-calendar.test.ts",
+      "symbol": "validateStatedCountryCode — Validation Rule 9",
+      "line": 153,
+      "claim": "the two describe blocks added this pass carry no TC id, unlike every other block in the file",
+      "witness": {
+        "kind": "test",
+        "test": "validateStatedCountryCode — Validation Rule 9 / timeOffCalendarToday",
+        "detail": "The file's other blocks are named for their case ('TC-01-UNIT-02: the range rules and the window presets', line 26) and the new impossible-date assertion is correctly nested inside that one. The two blocks at 153 and 168 name a rule and a function instead. Both are real checks that can fail — validateStatedCountryCode('XX') passes the shape test and is refused only by the list test, and timeOffCalendarToday('Pacific/Kiritimati', 2026-09-30T23:00Z) is 2026-10-01 only if the zone is honoured — and cases.md names no unit case for either, so these are additions rather than misplacements.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:441"
+      },
+      "suggestedFix": "name the blocks for the requirement they serve, or add the two unit cases to cases.md"
+    },
+    {
+      "id": "S2-N1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-034",
+      "rule": "REQ-01-034 and contracts §PUT /settings/country — the clearing rule is stated for an empty or null value and for nothing else",
+      "file": "apps/api/src/organizations/organization-country.service.ts",
+      "symbol": "update",
+      "line": 76,
+      "claim": "a PUT to the organization country whose body carries no countryCode key at all clears the stored country, while the member write beside it deliberately treats an absent key as no submission; only a code comment states the difference",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An organization has 'PL'. A caller sends PUT /api/organizations/{orgId}/settings/country with {} or with a mistyped key. `(input ?? {}).countryCode` is undefined, validateStatedCountryCode normalizes undefined to null, and the update writes countryCode: null with a 200 — every member on the organization fallback drops to global holidays only. members.service.ts:454 makes the opposite choice by testing `'countryCode' in input`. The document states neither: REQ-01-034 (specs/time-off/01-vacation-calendar.md:357) speaks of a caller who submits an empty country and contracts.md:132 names {\"countryCode\": null} as the clearing body. The only statement of the asymmetry is the comment at organization-country.service.ts:70-74, which is code arguing its own rule. Still a note, as in pass 1: the screen always sends the key, so nothing reachable through the product hits it.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:132"
+      },
+      "suggestedFix": "a person decides whether an absent key clears or is a no-op on the organization write, and it goes into REQ-01-034 or the §PUT contract; the code then follows the document rather than a comment"
+    },
+    {
+      "id": "S2-N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — a fixture that cannot distinguish the rule under test from the behaviour it replaced",
+      "file": "apps/api/test/reports-amounts-owed.spec.ts",
+      "symbol": "a global (countryCode=null) holiday applies to every member",
+      "line": 651,
+      "claim": "pass 1's two fixture notes are closed — the three country-sensitive cases now discriminate — and one leftover seed does not",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-INT-14",
+        "detail": "Closed with evidence: holidays.spec.ts:411-428 now seeds membership BY against phone US with a US holiday in the same year, so a phone read returns Independence Day and the expectation ['Labour Day','Victory Day'] fails. reports-amounts-owed.spec.ts:580-592 seeds membership BY / phone US with a BY holiday, and its mirror at :617-630 seeds membership US / phone BY and asserts groups is exactly [], which a phone read would populate. reports-time-off.spec.ts:415-439 seeds membership BY / phone US with a BY, a US and a global day and fails in both directions. The leftover: reports-amounts-owed.spec.ts:651 and :658 give two members phoneCountryCode 'BY' and 'US' and no stated country in a case whose only holiday is global, so those two seeds now assert nothing.",
+        "source": "apps/api/test/reports-amounts-owed.spec.ts:651"
+      },
+      "suggestedFix": "drop the two phoneCountryCode seeds at reports-amounts-owed.spec.ts:651 and :658, or give that case a country-scoped holiday so they mean something"
+    }
+  ],
+  "dismissed": [
+    {
+      "concern": "the settlement commit 40eedaa edited a frozen spec during a run — CLAUDE.md says a spec is frozen once written and refined",
+      "why": "not a review finding of mine to make: pass 1 raised the contradiction with target `spec`, which halts for a person, and the same section of CLAUDE.md requires the contradiction to be settled in the document rather than upstream of it. What I judge is whether the document now says one thing, which it does (F1), and whether the code follows it, which it does."
+    },
+    {
+      "concern": "the integration cases assert the literal 'Enter a valid country' rather than PROFILE_MESSAGES.country.invalid",
+      "why": "apps/api/test/time-off-calendar.spec.ts:1147 pins the export against the same literal in the same file, so a rename cannot pass silently; asserting the constant everywhere would certify whatever the constant happens to say. The document's own Expected Result names the export and the table names the text, and both are checked."
+    },
+    {
+      "concern": "the new GridSkeleton's aria-label is written inline",
+      "why": "CR-07's source is CLAUDE.md — Validation, which is about user-facing validation messages, and packages/validation holds rules and their messages rather than control labels. The same file already ships label=\"Previous window\" and the 'Today' button text."
+    },
+    {
+      "concern": "validateStatedCountryCode composes validateHolidayCountryCode, the shape-only validator the settlement was written against",
+      "why": "it is composed for the shape alone and the list test runs after it (packages/validation/src/time-off-calendar.ts:250-256); every refusal carries PROFILE_MESSAGES.country.invalid, never HOLIDAY_MESSAGES.countryCodeInvalid, which is what rule 9 as settled requires."
+    },
+    {
+      "concern": "the migration is a second one, or is not additive",
+      "why": "20260904120000_time_off_01_vacation_calendar/migration.sql is the only migration in the diff and is two nullable ADD COLUMNs with no default and no backfill, so previously deployed code serves against the new schema and a rollback needs no database rollback (CR-21 clean)."
+    },
+    {
+      "concern": "what is this change for, and what would make it wrong in a way none of the above catches",
+      "why": "It is a read-only wallchart plus a chain that decides which holidays a member is paid for, and the second half is where money moves. I looked specifically for a way the chain can be right at every call site and still pay the wrong person: the four adoptions are all present and no phone read survives; the read is deliberately forgiving and the write deliberately strict; the fixtures now discriminate between the old source and the new. What I found instead is the one place where strict-write and shipped-picker meet and disagree (L1), and its consequence is exactly of that kind — an admin who cannot state the country their people are paid holidays for, told it is not a valid country."
+    }
+  ]
+}

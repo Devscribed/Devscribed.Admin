@@ -1,0 +1,112 @@
+{
+  "spec": "specs/requests/02-request-topics.md",
+  "verdict": ".workflow/refine/requests-02.verdict.json",
+  "fixed": [
+    {
+      "id": "R5",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/requests/02-request-topics.cases.md"],
+      "change": "TC-02-INT-01 no longer settles REQ-02-015 on a timestamp comparison. The sentence claiming the seed rows and the Organization row share a creation timestamp is gone, and the case now asserts what its own steps observe: the catalogue is whole at the first read after signup, with no read reaching an organization that has none. The rest of the case — the seeded rows, their order, createdByAccountId null and the second organization's isolation — is unchanged.",
+      "verifiedBy": "grep -n 'createdAt' apps/api/prisma/migrations/20260724114549_init/migration.sql — createdAt is TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP, so equal timestamps prove nothing about the transaction and unequal ones fail a correct implementation"
+    },
+    {
+      "id": "R7",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-request-topics.contracts.md"],
+      "change": "Both rows now carry the absent half their cases assert, in the shape the request-new-submit row already used: request-topics-page reads 'present for a caller holding manage-request-topics, and absent for one without it' (TC-02-E2E-05), and request-new-topic reads 'present, and absent when the audience has no active topic' (TC-02-E2E-06).",
+      "verifiedBy": "specs/requests/02-request-topics.cases.md TC-02-E2E-05 Selectors (`request-topics-page` (absent)) and TC-02-E2E-06 Selectors (`request-new-topic` (absent)), read against the amended Required data-testid table"
+    },
+    {
+      "id": "R9",
+      "rule": "spec/divergence",
+      "edited": [],
+      "change": "No repair. The retirement is intended and the spec already states the whole new rule in its own text: REQ-02-021 writes type from the topic and accessKind null and validates neither as a body field, REQ-02-022 refuses a body carrying either with 400 REQUEST_MESSAGES.classifierNotAccepted and records why refusal beats a silent drop, the contracts' POST amendment names the four accessKind messages the route stops answering, and the testid table records request-new-type and request-new-access-kind as removed from the modal. Correcting the spec towards today's code is forbidden, and the change to every existing caller is already carried in the area's blast radius.",
+      "verifiedBy": "grep -n 'accessKind' apps/api/src/requests/requests.service.ts and packages/validation/src/requests.ts (validateRequestKind is called on create today); grep -n 'stops accepting' specs/requests/README.md — the Blast Radius section already names POST …/requests, NewRequestModal.tsx and the existing tests that assert request-new-type"
+    }
+  ],
+  "decided": [
+    {
+      "id": "R1",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/requests/02-request-topics.md",
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "what GET …/request-topics answers for a status outside active | archived | all",
+      "chose": "refuse with 400 REQUEST_TOPIC_MESSAGES.statusUnknown ('Choose a valid status'), an omitted status still meaning active",
+      "rejected": "falling back to the active default, which is the empty-catalogue-from-a-typo outcome TC-02-INT-04 exists to prevent",
+      "why": "rule 2 — the sibling parameter on the same read already refuses, and the requests list read in this same spec refuses an unrecognised status rather than defaulting it",
+      "recordedAt": "REQ-02-002, now 'the audience and the read's status are closed sets', which states both refusals in its rule sentence; the message's row in the Error Messages table and the GET request-topics row of the Routes table; the Query paragraph under that route; and TC-02-INT-04, which reads status=activ and asserts the 400"
+    },
+    {
+      "id": "R2",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.md"
+      ],
+      "question": "whether the ordering control always reorders the list, when its computed value is clamped to 0 and 32767",
+      "chose": "the clamp wins: up sends the row above's sortOrder minus one and down the row below's plus one, and against a neighbour already holding 0 or 32767 the moved row clamps onto the neighbour's own value, the two tie, and the name tiebreak decides — so that one press can leave the list as it was and every other press reorders it",
+      "rejected": "the claim that the list always comes back reordered, which the clamp makes false; sending the neighbour's own value on every press, which ties on every move rather than only at the bound; and a second PATCH renumbering the neighbour, which makes one press into a pair of writes with no lock between them",
+      "why": "rule 3 — the clamp is the rule that refuses to invent a value outside the column's range, and the alternative that would keep the promise needs a second write the spec's one-PATCH-per-move rule forecloses",
+      "recordedAt": "the contracts' Screens section, the paragraph under the Settings mock and the Decided note beside it; the consequence is carried into Known Gaps row 5 of 02-request-topics.md, which now names the bound alongside the closed gap"
+    },
+    {
+      "id": "R3",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "what the Request topics address draws for a member without manage-request-topics",
+      "chose": "no topics page at all: request-topics-page, request-topics-add-btn and every row control absent, nothing drawn in their place, and the browser sent to /org/{orgId}/members, which every role can open; the write routes answer 403 regardless",
+      "rejected": "a read-only catalogue, which GET …/request-topics would serve to a user under REQ-02-008 but which offers a screen whose every control is missing",
+      "why": "rule 1 — the settings screen this repository already ships for a caller without its capability redirects to the members list and draws nothing while it does, and rule 3, since the narrower answer withholds the screen rather than half of it",
+      "recordedAt": "the UI Description row 'Permission-limited (user, viewer)', where the choice and the rejected alternative are written; the request-topics-page row of the Required data-testid table; and TC-02-E2E-05, whose Expected Result now says the direct navigation lands on the members list"
+    },
+    {
+      "id": "R4",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "whether the vacation cards on the requests list adopt Pending / In progress / Completed / Closed",
+      "chose": "they do not: the map covers the stored statuses of a Request and nothing else, and a vacation card goes on reading Pending, Approved, Rejected or Cancelled from its own stored value, so selecting Closed can leave a card reading Rejected beside a request reading Closed",
+      "rejected": "relabelling vacations through the same map, which would call an approved vacation Completed and a rejected one Closed",
+      "why": "rule 4 — the narrower rule, scoped to the entity this spec has requirements about; renaming a vacation decision is a change no requirement here asks for and cannot be taken back once screens read it",
+      "recordedAt": "the contracts' Status Labels section, the paragraph and Decided note under the table; TC-02-UNIT-05 now claims an entry for each stored Request status and none for a vacation's"
+    },
+    {
+      "id": "R6",
+      "rule": "spec/scope-gap",
+      "edited": ["specs/requests/02-request-topics.contracts.md"],
+      "question": "whether the staff seed stays wider than the four topics the request named",
+      "chose": "it stays: beside VPN, Claude, Question and Other the staff seed names the access kinds the retired accessKind dial offered — repository, environment, server, vpn, admin_panel, documentation — so an organization that classified requests by that dial finds the same words in the catalogue",
+      "rejected": "cutting the seed to VPN, Claude, Question and Other and letting a curator add the rest, which hands every organization the same list to re-type and makes the catalogue narrower than the vocabulary the product already had",
+      "why": "rule 1 — the code's own ACCESS_KINDS is the vocabulary being replaced, and the spec never took a contrary position; Known Gaps already reasons about the seed as that set, naming saas and an access Other as the two it omits",
+      "recordedAt": "the contracts' Seed Data section, the Decided note under the table"
+    },
+    {
+      "id": "R8",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "what a sortOrder that is not an integer answers, when an out-of-range integer is clamped",
+      "chose": "refuse with 400 REQUEST_TOPIC_MESSAGES.sortOrderInvalid ('Enter a whole number for the order') on both the create and the rename route, rather than coercing or dropping it",
+      "rejected": "coercing the value or ignoring the field, which leaves a caller with a topic ordered somewhere it did not ask for — the silent drop this spec refuses at REQ-02-004 and REQ-02-022",
+      "why": "rule 2 — this spec's own refusal discipline for a field it cannot honour, and rule 3, the answer that refuses",
+      "recordedAt": "validation rule 6, whose Message cell now states the clamp and the refusal together; the message's row in the Error Messages table and the POST and PATCH topic rows of the Routes table; observed by TC-02-INT-03, which sends sortOrder \"top\" and 1.5 and expects 400 with the named message and no row written"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/requests/02-request-topics.md",
+    "specs/requests/02-request-topics.contracts.md",
+    "specs/requests/02-request-topics.cases.md"
+  ],
+  "lint": "node scripts/spec-lint.mjs specs/requests/02-request-topics.md — clean (30 requirements, 34 cases, 8 routes, 20 messages, 31 testids); the behaviour file is 329 lines against a budget of 330, the two lines REQ-02-002 grew paid for by cutting the capability-placement aside under the permission matrix and the reasoning clause in the Summary"
+}

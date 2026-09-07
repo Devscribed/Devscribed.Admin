@@ -154,7 +154,13 @@ export const Button: React.ForwardRefExoticComponent<
       style={{ ...painted, ...(link ? { textDecoration: 'none' } : null), ...style }}
     >
       {(icon || preloader) && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flexShrink: 0 }}>{icon}</span>}
-      <span className="ds-btn-title" style={{ margin: '0 var(--space-4)' }}>{children}</span>
+      {/* PATCH-019 — the label never wraps. The box above is `height: --control-height`, a
+          fixed 44px, so a label that wraps to two lines is not a taller button: it is a
+          button with its second line hanging outside the paint, which is what
+          `Add selected (1)` did in a 115px slot. A label too long for its slot overflows
+          sideways, which reads as a label that needs more room; one cut in half by the
+          button's own edge reads as a broken control. */}
+      <span className="ds-btn-title" style={{ margin: '0 var(--space-4)', whiteSpace: 'nowrap' }}>{children}</span>
       {(icon || preloader) && (
         <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flexShrink: 0 }}>
           {preloader && (

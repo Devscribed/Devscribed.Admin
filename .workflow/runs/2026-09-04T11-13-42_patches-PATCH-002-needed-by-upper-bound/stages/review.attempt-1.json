@@ -1,0 +1,14 @@
+{
+  "verdict": "pass",
+  "reviewedUpTo": "885fe21",
+  "covered": {
+    "read": [
+      "packages/validation/src/requests.test.ts",
+      "apps/api/test/requests.spec.ts",
+      "packages/validation/src/requests.ts",
+      "packages/validation/src/index.ts"
+    ],
+    "unreached": []
+  },
+  "findings": []
+}

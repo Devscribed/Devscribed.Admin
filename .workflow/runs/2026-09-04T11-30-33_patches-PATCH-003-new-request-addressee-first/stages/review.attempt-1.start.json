@@ -1,0 +1,12 @@
+{
+  "stage": "review",
+  "attempt": 1,
+  "agent": "code-reviewer-sweeps",
+  "model": "sonnet",
+  "resumedSession": null,
+  "fuseMin": 15,
+  "via": "sdk",
+  "startedAt": "2026-09-04T11:40:52.838Z",
+  "baseRef": "00049feefa3a5f514b57fef557e6aa6f892588f1",
+  "head": "626a64903c82bd020a9de6c254f5aec5870bfb7c"
+}

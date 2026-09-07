@@ -137,9 +137,19 @@ export class ProjectsService {
    */
   async listProjects(
     session: SessionPayload,
-    query: { status?: unknown },
+    query: { status?: unknown; membershipId?: unknown },
   ): Promise<{ projects: ProjectListItem[] }> {
     const caller = await this.requireCaller(session);
+
+    /* PATCH-019 — `membershipId` narrows the answer to the projects that member is on. It
+       is a filter over the list this caller may already see, never a widening of it: the
+       manager branch keeps its organization scope, and the `user` branch is left exactly as
+       it was — a user asking about somebody else is answered with nothing, which is spec 11
+       Security 7 restated rather than relaxed. */
+    const membershipId =
+      typeof query.membershipId === 'string' && query.membershipId.trim().length > 0
+        ? query.membershipId.trim()
+        : null;
 
     // viewer has no access to any project features (spec 11 Roles matrix / TC-11-INT-12).
     if (!can(caller.role, 'list-assigned-projects')) {
@@ -160,10 +170,16 @@ export class ProjectsService {
       where = {
         organizationId: caller.organizationId,
         ...(statusFilter === 'all' ? {} : { status: statusFilter }),
+        // The membership is matched inside this organization's own projects, so an id from
+        // another organization matches nothing rather than reaching across.
+        ...(membershipId === null ? {} : { members: { some: { membershipId } } }),
       };
     } else {
       // user: only ACTIVE projects they are assigned to. There is no code path by which a
-      // user can request another member's projects (spec 11 Security 7 / TC-11-INT-11).
+      // user can request another member's projects (spec 11 Security 7 / TC-11-INT-11) —
+      // and asking about one by id is answered with an empty list rather than with the
+      // caller's own, which would be a different member's tab showing their projects.
+      if (membershipId !== null && membershipId !== caller.id) return { projects: [] };
       where = {
         organizationId: caller.organizationId,
         status: 'active',

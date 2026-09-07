@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
-  API,
   VALID,
   clickNav,
+  createHolidayViaApi,
   inviteAndAcceptViaApi,
   login,
   signupOrg,
@@ -33,19 +33,6 @@ async function signInUi(page: Page, email: string, password: string = VALID.pass
   await page.getByTestId('login-password-input').fill(password);
   await page.getByTestId('login-submit-button').click();
   await page.waitForURL('**/members');
-}
-
-async function createHolidayViaApi(
-  request: APIRequestContext,
-  organizationId: string,
-  body: { name: string; date: string; paidHours?: number; countryCode?: string | null },
-): Promise<void> {
-  const res = await request.post(`${API}/api/organizations/${organizationId}/holidays`, {
-    data: { paidHours: 8, countryCode: null, ...body },
-  });
-  if (!res.ok()) {
-    throw new Error(`Precondition failed: could not seed holiday ${body.name} (${res.status()})`);
-  }
 }
 
 async function seedMember(

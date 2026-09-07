@@ -1,0 +1,248 @@
+{
+  "status": "blocked",
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "request": "A vacation calendar based on holidays and vacation requests, viewable for the whole organization, for several teams, or for specific people, drawn as a horizontal timeline where each row is a member and each column is a day. Holidays follow a country a manager states on the member, falling back to a country stated on the organization; the phone country code is not a source.",
+  "mode": "full",
+  "admitted": false,
+  "profile": "sharded",
+  "shardDecision": "read myself, no shards dispatched. The slice offered one shard per member across 1,427 lines, which one pass holds comfortably. More decisively, the criteria that actually bite on this bundle are all cross-file: the country chain is stated in the spec (REQ-01-026/027/040), implemented by a helper named in the contracts, exercised by TC-01-UNIT-01 and TC-01-INT-12, and measured in the area README — the INT-12 defect below is invisible to any reader holding only the cases file. The same is true of the DS finding, which needs the contracts' DS-gaps table, the mock, and packages/ds at once. A per-file split would have handed each shard the half of every question it cannot answer. Code read to settle currency: packages/validation/src/roles.ts, packages/validation/src/index.ts, packages/validation/src/holiday-messages.ts, packages/validation/src/reports.ts, apps/api/prisma/schema.prisma, apps/api/src/members/members.service.ts, apps/api/src/holidays/holidays.service.ts, apps/api/src/reports/reports.service.ts, apps/api/src/invitations/invitations.service.ts, apps/api/src/auth/capability.guard.ts, apps/api/src/organizations/signing-settings.controller.ts, apps/api/src/account/account.service.ts, packages/ds/src/index.ts, packages/ds/src/components/reports/ReportControls.tsx, packages/ds/src/tokens/spacing.css, packages/ds/src/tokens/colors.css, packages/ds/src/tokens/effects.css, packages/ds/README.md, apps/web/app/org/[orgId]/settings/holidays/page.tsx, e2e/tests/helpers.ts.",
+  "shards": [],
+  "read": [
+    "specs/time-off/01-vacation-calendar.md",
+    "specs/time-off/01-vacation-calendar.contracts.md",
+    "specs/time-off/01-vacation-calendar.cases.md",
+    "specs/time-off/01-vacation-calendar.mock.html",
+    "specs/time-off/README.md",
+    ".claude/skills/spec-review/references/admission-criteria.md"
+  ],
+  "sweeps": [
+    "spec-lint ran first and reported clean — 50 requirements, 40 cases, 5 routes, 13 messages, 26 testids — so requirement-to-case coverage, declared statuses and messages, both testid lists, the decision table over its domain, cited paths and line numbers were not re-derived here.",
+    "Currency: every named export, guard, service method, schema column, message text and e2e helper was opened. normalizeRole, ROLE_CAPABILITIES, CAPABILITY_MATRIX, can, hasCapability, ViewHolidays/ManageHolidays/edit-detail grants, HolidaysService.requireViewCapability and requireManageCapability (both bare NotFoundException), CapabilityGuard's fixed 403, MembersService.getDetail's field-by-field projection and its open-to-every-role read, updateDetail's 400 on an invalid role and job title, the settings/signing controller shape, PageHeader action='+ Add holiday', ReportControls' scope prop and clipped fieldset legend, Membership/Organization/Account/Holiday/VacationRequest/Project columns, and all fourteen helper line numbers in e2e/tests/helpers.ts — all confirmed.",
+    "S-43 invariant check: the contracts state 'No call site keeps a phone-country read.' I enumerated every phoneCountryCode read in apps/api and packages. There are exactly four holiday-country resolutions — holidays.service.ts:103, reports.service.ts:552, :1047, :1884 — and the contracts' call-site table names all four. The only survivor is account.service.ts, the phone field itself, which the contracts carve out by name. The invariant holds against its call sites.",
+    "S-58 sweep over shipping writers of Membership: the invitation-accept restore at invitations.service.ts:529-531 updates the existing row and clears jobTitle, leaving other columns alone — REQ-01-048 names that row and says what happens to countryCode on it. The member list read, remove and role change are covered by the README's cross-spec table or by REQ-01-045.",
+    "Contradiction sweep across the three files: the empty-selection refusal (REQ-01-009) against the empty-result success (TC-01-INT-22), the 100-row cap against TC-01-INT-17 and Edge case 8, the 404/403 split between the calendar, the organization country and the member write, and the two capability spellings against the stored-`member` value. All consistent; the 400-versus-422 split is stated and matches the shipped route.",
+    "Arithmetic in the examples: 2026-09-01 is a Tuesday in ISO week 36, 2026-09-05 a Saturday in the same week, 2026-09-14..18 is five working days, 2026-09-11..15 spans a Saturday and a Sunday, Pacific/Kiritimati and Pacific/Niue are 25 hours apart, and TC-01-UNIT-02's Monday and Sunday week anchors both land correctly on 2026-09-17. All check out."
+  ],
+  "criteria": {
+    "S-01": "clear",
+    "S-02": "clear",
+    "S-03": "clear",
+    "S-04": "clear",
+    "S-05": "note",
+    "S-06": "clear",
+    "S-07": "clear",
+    "S-08": "note",
+    "S-09": "clear",
+    "S-10": "clear",
+    "S-11": "clear",
+    "S-12": "clear",
+    "S-13": "clear",
+    "S-14": "clear",
+    "S-15": "clear",
+    "S-16": "clear",
+    "S-17": "note",
+    "S-18": "clear",
+    "S-19": "clear",
+    "S-20": "clear",
+    "S-21": "clear",
+    "S-22": "blocked",
+    "S-23": "clear",
+    "S-24": "clear",
+    "S-25": "clear",
+    "S-26": "clear",
+    "S-27": "clear",
+    "S-28": "note",
+    "S-29": "clear",
+    "S-30": "clear",
+    "S-31": "clear",
+    "S-32": "clear",
+    "S-33": "clear",
+    "S-34": "clear",
+    "S-35": "n/a",
+    "S-36": "clear",
+    "S-37": "blocked",
+    "S-38": "clear",
+    "S-39": "n/a",
+    "S-40": "clear",
+    "S-41": "clear",
+    "S-42": "clear",
+    "S-43": "clear",
+    "S-44": "note",
+    "S-45": "clear",
+    "S-46": "note",
+    "S-47": "clear",
+    "S-48": "clear",
+    "S-49": "clear",
+    "S-50": "clear",
+    "S-51": "clear",
+    "S-52": "n/a",
+    "S-53": "clear",
+    "S-54": "n/a",
+    "S-55": "clear",
+    "S-56": "note",
+    "S-57": "note",
+    "S-58": "clear"
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "criterion": "S-37",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-12",
+      "line": 249,
+      "claim": "TC-01-INT-12's expected result cannot follow from its steps, because it asks one response to show two different answers for two members whose inputs are identical. C and D both have nothing stated on their membership, so under REQ-01-026 they can only resolve to the same value — whatever the organization country is at the moment of the read. The steps set the organization country to `PL` and then clear it; the expected result reads C as `PL` 'by the organization fallback' and D as `null`, and names one body ('Each member's `countryCode` in the response is `US`, `PL`, `PL`, `null` respectively'). If the read happens before the clear, D is `PL`; if after, C is `null` and B is unaffected only because B has a country of their own. A correct implementation fails this case. It is not recoverable by reading it as two reads either: the case asserts one response and states no second one, and the `US`/`PL`/`PL`/`null` tuple is the only expectation offered for either. This is the case acceptance criterion 8 leans on for the `null` branch of the chain, so the branch it exists to pin is the branch it cannot observe.",
+      "witness": {
+        "kind": "case",
+        "detail": "Steps (cases :249-252): 'Four members and three holidays on distinct dates — global, `PL`, `US`. The organization country is `PL`. Member A is stated `US`; B is stated `PL`; C is stated nothing; D is stated nothing and the organization country is then cleared.' Expected Result (cases :253-257): 'B and C both carry the global and the `PL` one, C by the organization fallback. D carries only the global one. Each member's `countryCode` in the response is `US`, `PL`, `PL`, `null` respectively.' The rule that makes the two incompatible is REQ-01-026 (behaviour :255-257): 'THE SYSTEM SHALL resolve a member's holiday country as `Membership.countryCode` when it normalizes to a valid ISO 3166-1 alpha-2 value, and as `Organization.countryCode` otherwise' — one organization column, read the same way for every row of one response. Acceptance criterion 8 (behaviour :457) names TC-01-UNIT-01 and TC-01-INT-12 as what settles 'is `null` when neither is usable'.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:249-257 against specs/time-off/01-vacation-calendar.md:255-257 and :457"
+      },
+      "suggestedFix": "Make the case state the reads it takes and what each one answers. One shape that works: keep the organization country at `PL` for a first read observing A=`US`, B=`PL`, C=`PL`, D=`PL`, then clear it and take a second read observing A=`US`, B=`PL`, C=`null`, D=`null` — which also demonstrates that clearing the organization country strips every member who was relying on it, the direction README.md's Blast Radius calls the one to plan for. Whether the `null` branch is pinned by that second read or moved wholly to TC-01-UNIT-01, which already covers `(null, 'xx')` and `('XX', 'YY')`, is a person's call; either way acceptance criterion 8's observers must name what it lands on."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "criterion": "S-22",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "DS gaps",
+      "line": 338,
+      "claim": "The DS gaps table records two gaps — the three band colours and `--name-col: 264px` — and asserts of the first that the tokens are 'used through `var(…)` everywhere else, so no component file carries a colour literal'. The visual acceptance target the spec binds the implementation to carries colour, size and spacing literals that the table does not account for, and hand-rolls a control `@ds` already ships. The band's own geometry is `height:30px;margin:0 3px` where `--space-10` is 30px and no token is 3px; the pending hatch is a `0 3px, transparent 3px 6px` stripe; the legend swatch is `width:22px;height:12px;border-radius:3px` where `--radius-s` is 4px; and the scope and window segments are a private `.segs`/`.seg` pair carrying `padding:3px` and `box-shadow:0 1px 3px rgba(0,0,0,.12)` — a colour literal — while `@ds` exports `ToggleButton`, which is the segmented control four shipped screens already use and which owns `--radius-pill` and `--shadow-toggle-active`. The 3px band margin is not confined to the mock: the spec states it normatively in Edge case 16 and TC-01-E2E-01 asserts it. The consequence is concrete — an implementer writes those values into style objects with no token, no DS-gaps row and no `@literal <reason>`, which packages/ds/README.md §2 requires for a literal that is deliberately not a token, and builds a second segmented control beside the one in the package.",
+      "witness": {
+        "kind": "artefact",
+        "detail": "Mock (01-vacation-calendar.mock.html:152): '.band{grid-row:1;align-self:center;height:30px;margin:0 3px;border-radius:var(--radius-s);'. Mock :94: 'background:repeating-linear-gradient(135deg,var(--surface-timeoff-band) 0 3px,transparent 3px 6px)'. Mock :91: '.sw{width:22px;height:12px;border-radius:3px;display:inline-block}'. Mock :71 and :74: '.segs{...border-radius:var(--radius-pill);padding:3px}' and '.seg.on{...box-shadow:0 1px 3px rgba(0,0,0,.12)}'. The mock's own `:root` declares only four names (:18-21). The DS gaps table (contracts :338-350) records only those four and claims 'no component file carries a colour literal'. Against the package: packages/ds/src/tokens/spacing.css:16 '--space-10: 30px', :38 '--radius-s: 4px', spacing.css:8 makes `--space-1: 4px` the smallest step so 3px has no token; packages/ds/src/tokens/effects.css:19 '--shadow-toggle-active: 0 2px 4px 0 rgb(0 0 0 / 18%)'; packages/ds/src/index.ts:31 'export { ToggleButton } from './components/core/ToggleButton''; ToggleButton.tsx:166 is the group shape the contracts' Keyboard row (:336) describes as 'one roving-tabindex group each'. The spec's Screens section names `ReportControls` for the bar (contracts :300-301) and the 264px column (:306) but names no component for the six segments. Edge case 16 (contracts :368): 'visually separated by their own 3px margins ... the margin is drawn on every band, which TC-01-E2E-01 asserts'.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:338-350 and :368 against specs/time-off/01-vacation-calendar.mock.html:71,74,91,94,152 and packages/ds/src/index.ts:31, packages/ds/src/tokens/spacing.css:8,16,38, packages/ds/src/tokens/effects.css:19"
+      },
+      "suggestedFix": "Two edits. Name `ToggleButton` in the Screens section as what draws `calendar-scope-*` and `calendar-window-*`, the way `ReportControls` is named for the bar, so the segments take the package's radius and shadow instead of the mock's literals. Then close the geometry: give the band's height `--space-10`, the swatch's radius `--radius-s`, and add one DS-gaps row for what genuinely has no token — the 3px band margin and the 3px/6px hatch stripe — or state them as `@literal` with the reason packages/ds/README.md §2 asks for. Whether those become time-off tokens in `@ds` or stay local is the same product call the table already defers on the three colours."
+    },
+    {
+      "id": "N1",
+      "severity": "note",
+      "criterion": "S-05",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Edge case 18",
+      "line": 370,
+      "claim": "Edge case 18 closes with 'An invited member's timezone is `\"\"` until they set one, so the empty case is the common one', and the Verification Plan repeats it. The column is `null`, not `\"\"`: invitations.service.ts:286-287 and :444-445 coerce a blank submitted timezone to `null` before `account.create`, and `\"\"` is only what account.service.ts:74 projects (`account.timezone ?? ''`) out of the account-settings read the probe happened to use. TC-01-INT-19 has it right — 'an accepted member who has never set a timezone, whose column is therefore `null`'. Nothing behavioural turns on it, because REQ-01-018 falls back to UTC for absent, empty and unrecognized alike, and both values are already in Edge case 18's own situation column; it is the stated reason that is wrong, not the expected result.",
+      "witness": {
+        "kind": "code",
+        "detail": "apps/api/src/invitations/invitations.service.ts:286-287: 'const timezone = typeof dto.timezone === 'string' && dto.timezone.trim() ? dto.timezone.trim() : null;' then :293 'data: { email: record.email, passwordHash, firstName, lastName, timezone }'. apps/api/src/account/account.service.ts:74: 'timezone: account.timezone ?? '','. Schema: 'timezone String?'. Against contracts :370 and cases :37.",
+        "source": "apps/api/src/invitations/invitations.service.ts:286 against specs/time-off/01-vacation-calendar.contracts.md:370"
+      },
+      "suggestedFix": "Say the column is `null` and the account-settings read projects it as `\"\"`, which is why both spellings appear and why REQ-01-018 names three cases rather than two."
+    },
+    {
+      "id": "N2",
+      "severity": "note",
+      "criterion": "S-08",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "GET /time-off/calendar response",
+      "line": 96,
+      "claim": "The example response carries `\"meta\": { \"scope\": \"all\", \"memberCount\": 8 }` above one entry in `members[]`, and the sentence immediately below it says '`meta.memberCount` is the number of rows in `members[]` and nothing else'. The example is plainly abridged and the sentence is unambiguous, so nothing is underdetermined — but the one number in the payload that is defined by counting the payload is the one that does not.",
+      "witness": {
+        "kind": "artefact",
+        "detail": "contracts :96 '\"meta\": { \"scope\": \"all\", \"memberCount\": 8 }' with a single `members[]` entry beginning at :78; contracts :99-100 '`meta.memberCount` is the number of rows in `members[]` and nothing else; a refused read carries no body to count (REQ-01-013).'",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:96 against :99"
+      },
+      "suggestedFix": "Set the example's `memberCount` to 1, or mark the array elided."
+    },
+    {
+      "id": "N3",
+      "severity": "note",
+      "criterion": "S-17",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Validation Rules",
+      "line": 212,
+      "claim": "Two things about the calendar read are left to the implementer and no case probes either. First, precedence among the seven 422s: a request that is both inverted and scoped `everyone` has two named answers and no stated order, and the Validation Rules table's numbering is suggestive rather than normative. Second, what `holidays[]` carries — every requirement speaks of which holidays reach a member 'in the current view', but nothing says the array is the window's holidays rather than the organization's, and an implementation returning every holiday it has would satisfy REQ-01-028 through REQ-01-031 and pass TC-01-INT-13. Neither changes what a reader sees, which is why both are notes.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Validation Rules 1-9 (contracts :212-222) name nine constraints and nine messages; the Routes table (:9) lists all seven calendar 422s as alternatives with no order, and no case sends two invalid inputs at once — TC-01-INT-06, TC-01-INT-08, TC-01-INT-16, TC-01-INT-17 and TC-01-INT-23 each violate exactly one rule. For `holidays[]`: the response block (contracts :62-77) shows two holidays both inside the window, and TC-01-INT-13's expected result (cases :271-275) says 'Both holidays appear once each in `holidays[]`' without excluding any.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:212-222 and :62-77"
+      },
+      "suggestedFix": "One line stating that the rules are evaluated in the table's order and the first failure is the answer, and one clause on the response saying `holidays[]` carries the holidays dated inside the window."
+    },
+    {
+      "id": "N4",
+      "severity": "note",
+      "criterion": "S-28",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-E2E-07, TC-01-E2E-08",
+      "line": 526,
+      "claim": "Three E2E cases assert `calendar-cell-holiday-{membershipId}-{date}`. TC-01-E2E-04 owns the mechanism — a partial holiday marks its own members' cells and nobody else's. TC-01-E2E-07 and TC-01-E2E-08 re-assert it after a country is saved, and that half of each is a server rule TC-01-INT-14 and TC-01-INT-25 already settle at integration. Both cases earn their place on the half that is genuinely out of an API test's reach — that the control is drawn and saveable for a manager, and absent rather than read-only for a `user` — so this is redundancy inside a justified case rather than a case that should not exist, and at roughly eight seconds each it is cheap. Recording it so the choice is visible.",
+      "witness": {
+        "kind": "case",
+        "detail": "TC-01-E2E-07 expected result (cases :522-524): 'The manager's save succeeds — the control is theirs, not drawn read-only — and that member's row then carries the `PL` day's per-cell holiday marker, which it did not before.' TC-01-INT-14 (cases :294-299) already asserts exactly that resolution change across a `PUT .../settings/country`, and TC-01-INT-25 (cases :330-345) does the same for the member write. TC-01-E2E-04 (cases :487-497) is the case the testid table names for REQ-01-031.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:522 against :294 and :487"
+      },
+      "suggestedFix": "Either leave it and say so in a line, or cut the marker assertion from E2E-07 and E2E-08 down to the save and the toast, leaving the resolution to the two integration cases that already pin it."
+    },
+    {
+      "id": "N5",
+      "severity": "note",
+      "criterion": "S-46",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "UI Description, Security",
+      "line": 328,
+      "claim": "Three rows of the UI Description — Loading, Narrow viewport and Keyboard — and the Security section's 'No money leaves this endpoint' and 'No PII is read or emitted' have neither a case nor a line saying they have none and why. Every edge case does have one, and five of them say so explicitly, so the omission is confined to these.",
+      "witness": {
+        "kind": "artefact",
+        "detail": "contracts :330 (Loading), :335 (Narrow viewport), :336 (Keyboard); Security bullets at :382-390. No case in the cases file names a skeleton, a horizontal scroll, a roving tabindex, or the absence of `deductionAmount` / `monthlySalary` from the response. By contrast Edge cases 2, 5, 13, 16 and 17 each carry 'No case of its own:' with a reason.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:328-336 and :382-390"
+      },
+      "suggestedFix": "A clause per row saying what covers it or why nothing does — the money and PII bullets are cheapest as one assertion inside TC-01-INT-01 that the response body carries no financial field."
+    },
+    {
+      "id": "N6",
+      "severity": "note",
+      "criterion": "S-56",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-042",
+      "line": 316,
+      "claim": "REQ-01-033 states the organization country's concurrency answer — 'last-write-wins, with no lock and no version check: one column, no read-modify-write'. The member country gets no such line, and it is the one that does sit inside a lock: it rides `MembersService.updateDetail`, whose whole body after the permission check runs in a transaction opened with `SELECT id FROM \"Organization\" ... FOR UPDATE`. Nothing is wrong with inheriting it, but a reader of this spec cannot tell whether the country write is locked, and the two writes read as symmetric when they are not.",
+      "witness": {
+        "kind": "code",
+        "detail": "apps/api/src/members/members.service.ts:403-404: 'return this.prisma.$transaction(async (tx) => { await tx.$queryRaw`SELECT id FROM \"Organization\" WHERE id = ${caller.organizationId} FOR UPDATE`;'. REQ-01-033's Decided block (behaviour :299) states the answer for the organization column; REQ-01-042 (:314-317) and REQ-01-043 state none.",
+        "source": "apps/api/src/members/members.service.ts:403 against specs/time-off/01-vacation-calendar.md:314-317"
+      },
+      "suggestedFix": "One clause on REQ-01-042 saying the country is written inside the member update's existing organization-row lock and adds no lock of its own."
+    },
+    {
+      "id": "N7",
+      "severity": "note",
+      "criterion": "S-44",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "member-country-select",
+      "line": 320,
+      "claim": "The member picker's first option is described only by what it means — 'an explicit first option meaning *the organization's country*, which is what `null` stores'. Its label has no text and no export, while the organization picker's hint does (`TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`). The implementer invents a string, and Known Gaps already names three country pickers built per screen as the thing to watch.",
+      "witness": {
+        "kind": "artefact",
+        "detail": "contracts :318-321 (the About-tab Select); Error Messages table (:145-160) declares `orgCountryHint` for the organization picker and nothing for the member picker's default option.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:318-321 against :145-160"
+      },
+      "suggestedFix": "Give it a row in the Error Messages table beside `orgCountryHint`, with the text it renders."
+    },
+    {
+      "id": "N8",
+      "severity": "note",
+      "criterion": "S-57",
+      "rule": "spec/divergence",
+      "file": "specs/time-off/README.md",
+      "symbol": "Shared Rules",
+      "line": 1,
+      "claim": "Recording the change for a person to confirm it was meant, which is what this criterion is for, and it is recorded well. Dropping `Account.phoneCountryCode` as a holiday-country source changes four shipping call sites that no case in this bundle covers end to end: the Time Tracking calendar's markers via `GET /holidays?scope=mine`, the Time Off report's `my` group, the member roster shared by Amounts Owed and Time & Activity, and the country union behind Time Off `organization_wide`. The spec's own probe measured the money: one `PL` holiday paid one member `320.00` where the global day paid five `1280.00`. Nothing in this bundle asserts the four adopted call sites still answer correctly after the change — the enforcement named in README.md Backward Compatibility 3 is 'the reports and holidays E2E suites, which this area does not touch and which must stay green', which is a green suite rather than a new assertion. Not a blocker, and the newest spec governs.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Contracts call-site table (:203-208) names apps/api/src/holidays/holidays.service.ts normalizeResolvedCountry and three sites in apps/api/src/reports/reports.service.ts, all four confirmed at holidays.service.ts:103 and reports.service.ts:552, :1047, :1884. README.md Blast Radius records the 320.00 / 1280.00 measurement. Cases cover the calendar's own resolution (TC-01-INT-12, TC-01-INT-14, TC-01-INT-25) and none of the four adopting sites.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:203-208 against specs/time-off/README.md Backward Compatibility 3"
+      },
+      "suggestedFix": "Nothing is required. If a person wants the change pinned rather than watched, one integration case reading `GET /holidays?scope=mine` for a member whose only country is stated on their membership would cover the whole adoption at the cheapest of the four sites."
+    }
+  ]
+}

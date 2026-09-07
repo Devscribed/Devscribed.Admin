@@ -14,6 +14,7 @@ import {
   MailOutlineIcon,
   PageTabs,
   Preloader,
+  Select,
   TextInput,
   TimeOutlineIcon,
 } from '@devscribed/ds';
@@ -21,14 +22,31 @@ import { useToast } from '@/toast';
 import {
   MEMBER_MESSAGES,
   MESSAGES,
+  TIME_OFF_CALENDAR_MESSAGES,
   canReadProfile,
   validateJobTitle,
   type Role,
 } from '@devscribed/validation';
+import { optionFor, valueOf } from '@/select';
+import { STATED_COUNTRY_OPTIONS } from '@/stated-country-options';
 import { useSession } from '@/layout/session-context';
 import { ContractDetails } from '@/members/ContractDetails';
 import { RoleSelect } from './RoleSelect';
 import { VacationPanel } from './VacationPanel';
+import { MemberProjectsPanel } from './MemberProjectsPanel';
+
+/**
+ * The Country picker's list: the default option, then the same `COUNTRY_OPTIONS` the
+ * organization picker draws — the 249 assigned codes Validation Rule 9 accepts, so the list
+ * offered and the list the save accepts are one list (§Screens).
+ *
+ * The empty value is not "everywhere", as it is on the holiday form; it is "use the
+ * organization's country" (REQ-01-043), which is what `null` stores.
+ */
+const MEMBER_COUNTRY_OPTIONS = [
+  { value: '', label: TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption },
+  ...STATED_COUNTRY_OPTIONS,
+];
 
 interface MemberDetail {
   id: string;
@@ -38,6 +56,10 @@ interface MemberDetail {
   status: 'active' | 'removed';
   joinedAt: string;
   jobTitle: string | null;
+  /** Time off spec 01 REQ-01-045 — the country STORED on this membership, `null` when
+   * nobody has stated one, which is what the picker's first option renders. Never the
+   * value they resolve to. */
+  countryCode: string | null;
   /** Nullable — `Account.timezone` is only auto-detected at signup (spec 01) and has
    * no back-fill for older/seeded accounts. */
   timezone: string | null;
@@ -68,8 +90,9 @@ function jobTitleError(value: string): string | null {
 
 /**
  * Built per-render from `detail` — only the Vacation tab is conditionally enabled
- * (spec 07: `disabled: !detail.canViewVacation`, the API decides). The other
- * placeholder tabs stay permanently disabled until their own specs land.
+ * (spec 07: `disabled: !detail.canViewVacation`, the API decides). Roles and Payments are
+ * still placeholders and stay disabled until their own specs land; Projects opened with
+ * PATCH-019, which gave it something to draw.
  *
  * Contract details (documents spec 03) is not drawn at all rather than drawn disabled:
  * the rest of these are placeholders for screens nobody can reach yet, whereas this one
@@ -89,7 +112,10 @@ function buildTabs(canViewVacation: boolean, showContractDetails: boolean) {
           },
         ]
       : []),
-    { value: 'projects', label: 'Projects', disabled: true, testId: 'member-detail-tab-projects' },
+    /* PATCH-019 — Projects opens. It reads the projects list narrowed to this member, so
+       the tab is offered to whoever that route answers for: a caller who may list projects
+       at all. A `viewer` is refused by the route and never reaches this screen anyway. */
+    { value: 'projects', label: 'Projects', testId: 'member-detail-tab-projects' },
     { value: 'roles', label: 'Roles', disabled: true, testId: 'member-detail-tab-roles' },
     { value: 'payments', label: 'Payments', disabled: true, testId: 'member-detail-tab-payments' },
   ];
@@ -119,6 +145,8 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   const [role, setRole] = useState<Role | null>(null);
   const [jobTitle, setJobTitle] = useState('');
+  /** `''` is what a stored `null` renders as, and what stores `null` (REQ-01-043). */
+  const [countryCode, setCountryCode] = useState('');
   const [jobTitleErr, setJobTitleErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -151,6 +179,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
       setState({ kind: 'ready', detail: result.detail });
       setRole(result.detail.role);
       setJobTitle(result.detail.jobTitle ?? '');
+      setCountryCode(result.detail.countryCode ?? '');
       setJobTitleErr(null);
     } else {
       setState({ kind: 'error', message: result.message });
@@ -167,8 +196,11 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
     if (!detail) return false;
     const roleChanged = detail.canEditRole && role !== null && role !== detail.role;
     const jobTitleChanged = detail.canEditJobTitle && jobTitle !== (detail.jobTitle ?? '');
-    return roleChanged || jobTitleChanged;
-  }, [detail, role, jobTitle]);
+    // Without this a country-only change leaves the Save button disabled and the change
+    // unsaveable — the button is an in-flight/no-op guard and never a validation gate.
+    const countryChanged = detail.canEditJobTitle && countryCode !== (detail.countryCode ?? '');
+    return roleChanged || jobTitleChanged || countryChanged;
+  }, [detail, role, jobTitle, countryCode]);
 
   function handleJobTitleChange(value: string) {
     setJobTitle(value);
@@ -183,7 +215,19 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ role: role ?? detail.role, jobTitle }),
+        // One save, one body: the country rides the update this screen already submits
+        // (REQ-01-042) rather than getting a form and a button of its own.
+        //
+        // PATCH-006 — `role` goes only when the caller picked one. Sending back what was
+        // loaded made every save an assignment: on a member whose column still holds the
+        // legacy `member`, the form submitted that value and the route refused it with
+        // `Invalid role`, putting the country and the job title behind a role change
+        // nobody asked for.
+        body: JSON.stringify({
+          ...(role !== null && role !== detail.role ? { role } : {}),
+          jobTitle,
+          countryCode,
+        }),
       });
 
       if (response.ok) {
@@ -196,6 +240,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
           setState({ kind: 'ready', detail: result.detail });
           setRole(result.detail.role);
           setJobTitle(result.detail.jobTitle ?? '');
+          setCountryCode(result.detail.countryCode ?? '');
         }
         setJobTitleErr(null);
         setSaving(false);
@@ -206,6 +251,10 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
       const body = await response.json().catch(() => null);
       if (body?.errors?.jobTitle) {
         setJobTitleErr(body.errors.jobTitle);
+      } else if (body?.errors?.countryCode) {
+        // Only reachable from a hand-made request — the picker cannot produce a value the
+        // server refuses — so it is a toast rather than a field error under the control.
+        showToast('toast-member-save-error', body.errors.countryCode, 'error');
       } else {
         showToast('toast-member-save-error', body?.message ?? MESSAGES.generic, 'error');
       }
@@ -262,11 +311,13 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
           <div style={{ paddingTop: 'var(--space-7)' }}>
             {shownTab === 'vacation' ? (
               <VacationPanel orgId={orgId} memberId={memberId} memberName={detail.fullName} />
+            ) : shownTab === 'projects' ? (
+              <MemberProjectsPanel orgId={orgId} memberId={detail.id} />
             ) : shownTab === 'contract-details' ? (
               <ContractDetails
                 orgId={orgId}
                 memberId={detail.id}
-                role={session.role}
+                role={session.role ?? ''}
                 isSelf={detail.isSelf}
               />
             ) : showForm ? (
@@ -292,6 +343,30 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
                         </InfoBanner>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Time off spec 01 §Screens — drawn only for a caller who may save it
+                    (`canEditJobTitle` is the shipped flag for "active target and the
+                    caller holds edit-detail"), never read-only. The first option means
+                    "use the organization's country", which is what `null` stores. */}
+                {detail.canEditJobTitle && (
+                  /* PATCH-005 — searchable, so `member-country-select` moves onto this
+                     wrapper: §21 puts the control's own attributes, `data-testid` included,
+                     on the inner `<input>` once a `Select` is searchable, and the chosen
+                     value then sits in a sibling span the wrapper still contains. The input
+                     takes its own id. The wrapper stays inside this guard, so the id is as
+                     absent for a caller who may not save as the control was. */
+                  <div data-testid="member-country-select">
+                    <Select
+                      label="Country"
+                      options={MEMBER_COUNTRY_OPTIONS}
+                      value={optionFor(MEMBER_COUNTRY_OPTIONS, countryCode)}
+                      onChange={(option) => setCountryCode(valueOf(option))}
+                      isDisabled={saving}
+                      isSearchable
+                      data-testid="member-country-select-input"
+                    />
                   </div>
                 )}
 

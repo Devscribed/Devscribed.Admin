@@ -38,6 +38,27 @@ more than the diagnosis.
 | [005](BUG-005-recipient-completed-not-signed.md) | A signed recipient reads `completed`, so the turn never closes | blocker | api | `SPEC-DEFECT` | documents/04 | TC-04-INT-28 | fixed |
 | [006](BUG-006-signing-page-csp-blocks-the-product-font.md) | The signing page's CSP refuses the product's own fonts | minor | ui | `SPEC-GAP` | documents/04 | TC-04-E2E-07 | fixed |
 | [007](BUG-007-select-list-scrolls-the-modal-it-opens-in.md) | A select's list scrolls and clips the modal it opens in | major | ui | `SPEC-GAP` | organization/03 | TC-03-E2E-06 | fixed |
+| [007](BUG-007-request-topic-name-error-drawn-twice.md) | The Add topic modal draws the name error twice | minor | ui | `SPEC-GAP` | requests/02 | TC-02-E2E-01 | open |
+| [010](BUG-010-new-request-title-error-drawn-twice.md) | The New request modal draws the title error twice | minor | ui | `SPEC-GAP` | requests/01 | TC-01-E2E-02 | open |
+| [011](BUG-011-holidays-org-country-hint-is-overlapped.md) | The organization country hint is drawn under the filter below it | minor | ui | `SPEC-GAP` | time-off/01 | TC-01-E2E-10 | green on `fix/holidays-org-country-hint`, unmerged |
+| [012](BUG-012-calendar-grid-keeps-the-last-window-that-loaded.md) | The calendar grid keeps the last window that loaded, whatever the header says | major | ui | `CODE-DEFECT` | time-off/01 | TC-01-E2E-11 | green on `fix/calendar-grid-stale-window`, unmerged |
+| [013](BUG-013-calendar-header-shifts-with-the-range-label.md) | The calendar's back, Today and forward controls move every time the range label changes width | minor | ui | `SPEC-GAP` | time-off/01 | TC-01-E2E-12 | green on `fix/calendar-header-shifts`, unmerged |
+
+**011 to 013 were found by hand and fixed by the pipeline.** They came from a person using the
+running product and sending screenshots; each was then traced to `file:line` by reading the code,
+and each was shipped through `/ship` on the `bug` track — static gate, review and QA, every stage
+green on the first attempt and no code budget spent. Their regression cases were written before
+the runs and have now been run.
+
+That order is the interesting part, and it is the opposite of 001–009 below: the diagnosis was
+manual and the fix was not. Each report's Regression Test section still reads as a prediction of
+what the case would report against the broken code, because that is what it was when it was
+written; the run is what turned the prediction into an observation.
+
+**Three reports, one screen each, and they are deliberately not one report.** 011 and 013 are both
+"the layout is wrong" and have nothing else in common: different files, different causes,
+different fixes. A single report would have one Root Cause section describing two defects, and
+the second would be the one that got fixed badly.
 
 ## These were found and fixed by hand
 

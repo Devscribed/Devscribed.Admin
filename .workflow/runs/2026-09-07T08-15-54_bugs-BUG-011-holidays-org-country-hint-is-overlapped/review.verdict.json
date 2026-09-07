@@ -1,0 +1,12 @@
+{
+  "verdict": "pass",
+  "reviewedUpTo": "404eb3efa46bbd81c77c23455f9dfc18925e251f",
+  "covered": {
+    "read": [
+      "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+      "e2e/tests/time-off-calendar.spec.ts"
+    ],
+    "unreached": []
+  },
+  "findings": []
+}

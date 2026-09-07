@@ -1,0 +1,6 @@
+{
+  "stage": "static_gate",
+  "status": "pass",
+  "base": "e659a5baa790c54e7c1e3c3c565385a2359450c6",
+  "findings": []
+}

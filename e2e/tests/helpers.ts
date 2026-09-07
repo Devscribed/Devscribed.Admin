@@ -1174,6 +1174,68 @@ export async function assignProjectMembersViaApi(
   }
 }
 
+/**
+ * One request topic, as `GET .../request-topics` returns it. Requests spec 02 made the
+ * topic the only classifier a caller supplies, so every request a fixture raises needs
+ * one; signup writes the catalogue in the same transaction as the organization, so a
+ * seeded topic is always there to read.
+ */
+export interface SeededTopic {
+  id: string;
+  name: string;
+  audience: string;
+  type: string;
+  status: string;
+}
+
+/** Reads one organization's catalogue. Requires any active member's cookie jar. */
+export async function listRequestTopicsViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  query = '?status=all',
+): Promise<SeededTopic[]> {
+  const response = await request.get(
+    `${API}/api/organizations/${organizationId}/request-topics${query}`,
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not read request topics (${response.status()} ${await response.text()})`,
+    );
+  }
+  return ((await response.json()) as { topics: SeededTopic[] }).topics;
+}
+
+/** The id of one seeded topic by name — the fixture every request create body needs. */
+export async function requestTopicIdViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  name = 'VPN',
+  audience = 'staff',
+): Promise<string> {
+  const topics = await listRequestTopicsViaApi(request, organizationId);
+  const topic = topics.find((t) => t.name === name && t.audience === audience);
+  if (!topic) {
+    throw new Error(`Precondition failed: no ${audience} topic named "${name}"`);
+  }
+  return topic.id;
+}
+
+/** Archives one topic through the product's own route. Requires a curator's jar. */
+export async function archiveRequestTopicViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  topicId: string,
+): Promise<void> {
+  const response = await request.patch(
+    `${API}/api/organizations/${organizationId}/request-topics/${topicId}/archive`,
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not archive topic ${topicId} (${response.status()} ${await response.text()})`,
+    );
+  }
+}
+
 export interface TimeEntryInput {
   /** Target member (admin/manager creating for another). Omitted = caller's own membership. */
   membershipId?: string;
@@ -1273,6 +1335,89 @@ export async function updateAccountSettingsViaApi(
   const response = await request.put(`${API}/api/account/settings`, { data: body });
   if (!response.ok()) {
     throw new Error(`Precondition failed: could not update account settings (${response.status()})`);
+  }
+}
+
+/**
+ * Seeds a holiday straight through the API — a precondition for every suite that draws a
+ * holiday marker. It lived privately inside `reports-time-off.spec.ts`; time off spec 01
+ * needs it in three files, so it is shared rather than copied a third time. Requires
+ * `request`'s cookie jar to be authenticated as an admin or manager.
+ */
+export async function createHolidayViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  body: { name: string; date: string; paidHours?: number; countryCode?: string | null },
+): Promise<{ id: string; date: string; name: string }> {
+  const response = await request.post(`${API}/api/organizations/${organizationId}/holidays`, {
+    data: { paidHours: 8, countryCode: null, ...body },
+  });
+  if (response.status() !== 201) {
+    throw new Error(
+      `Precondition failed: could not seed holiday ${body.name} ` +
+        `(${response.status()} ${await response.text()})`,
+    );
+  }
+  return (await response.json()).holiday;
+}
+
+/**
+ * States a member's holiday country on their MEMBERSHIP — time off spec 01 REQ-01-042,
+ * and the first link of the chain REQ-01-026 resolves. It rides the member update, which
+ * validates the whole body, so the member's current role and job title are read first and
+ * only the country is swapped. Requires an admin/manager cookie jar.
+ */
+export async function setMemberCountryViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  memberId: string,
+  countryCode: string | null,
+): Promise<void> {
+  const current = await request.get(
+    `${API}/api/organizations/${organizationId}/members/${memberId}`,
+  );
+  if (!current.ok()) {
+    throw new Error(
+      `Precondition failed: could not read member ${memberId} (${current.status()})`,
+    );
+  }
+  const detail = await current.json();
+  const response = await request.put(
+    `${API}/api/organizations/${organizationId}/members/${memberId}`,
+    {
+      data: {
+        role: detail.role,
+        jobTitle: detail.jobTitle ?? '',
+        countryCode: countryCode ?? '',
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not set country for member ${memberId} ` +
+        `(${response.status()} ${await response.text()})`,
+    );
+  }
+}
+
+/**
+ * States the organization's holiday country — the chain's second link (REQ-01-033), which
+ * covers every member nobody has stated one for. Requires an admin/manager cookie jar.
+ */
+export async function setOrganizationCountryViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  countryCode: string | null,
+): Promise<void> {
+  const response = await request.put(
+    `${API}/api/organizations/${organizationId}/settings/country`,
+    { data: { countryCode } },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not set the organization country ` +
+        `(${response.status()} ${await response.text()})`,
+    );
   }
 }
 

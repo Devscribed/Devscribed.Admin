@@ -1,0 +1,121 @@
+{
+  "stage": "pre_implement",
+  "status": "blocked",
+  "spec": "specs/requests/02-request-topics.md",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-002",
+      "claim": "REQ-02-002 and REQ-02-004 give two different messages for one input on the rename route, and the contracts tables side against REQ-02-002 by omission.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A curator sends PATCH /api/organizations/{orgId}/request-topics/{topicId} with body {\"audience\": \"partner\"} on a staff topic. REQ-02-002 says: 'IF a create or rename call carries an audience outside staff and client, THEN THE SYSTEM SHALL answer 400 with REQUEST_TOPIC_MESSAGES.audienceUnknown.' REQ-02-004 says: 'IF a rename call carries an audience different from the stored one, THEN THE SYSTEM SHALL answer 400 with REQUEST_TOPIC_MESSAGES.audienceImmutable.' 'partner' satisfies both antecedents. The contracts Routes table lists for that route exactly 400 nameRequired, nameTooLong, audienceImmutable, and the Error Messages table lists audienceUnknown's routes as GET request-topics, POST request-topics and PATCH request-topics/order only. So the requirement text names audienceUnknown and both tables name audienceImmutable. No case in the bundle sends a bad audience to the rename route: TC-02-INT-06 sends only 'staff' and 'client', TC-02-INT-04 only creates and reads. Both implementations pass every case, and a client parsing the message gets a different answer depending on which was written."
+      },
+      "suggestedFix": "decide which message the rename route answers with for an audience outside the closed set, say it in REQ-02-002 or REQ-02-004, align the two contracts tables with it, and add the input to TC-02-INT-06."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-028",
+      "claim": "REQ-02-028's absolute first clause and its enumeration of three reading surfaces disagree about a fourth surface that renders a raw stored status on the detail screen.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx:27 renders the line `${actor} marked it ${event.newValue}`, where newValue is the stored status verbatim. It is drawn on the request detail screen. REQ-02-028's first clause is unqualified — 'THE SYSTEM SHALL render open as Pending, answered as In progress, granted as Completed, and declined and cancelled both as Closed' — while its second clause names only 'the list, the detail screen and the filter control' as readers of the map, and TC-02-UNIT-05 justifies the map with 'so no status can render as a raw column value'. Walk TC-02-E2E-04: it drives a request to cancelled and opens it. Implementation A treats the history panel as part of the detail screen and the header reads 'Closed · cancelled' above a history line reading 'Pat marked it Closed'. Implementation B treats the three named surfaces as the closed list and the same screen reads 'Closed · cancelled' above 'Pat marked it cancelled'. Both satisfy the text; the two screens differ; no case in the bundle asserts the history line, so the choice is never observed by a test."
+      },
+      "suggestedFix": "state in REQ-02-028 whether the history panel reads the label map or keeps the stored value, and add the assertion to TC-02-E2E-04 or to a unit case over the history line's formatter."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/silent-on-concurrency",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-016",
+      "claim": "REQ-02-016 makes GET a writer and prescribes no rule for two concurrent first reads, while every other writer in this spec has one; the functional unique index turns the race into an unspecified failure on a read path.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An organization holds no RequestTopic row — the state REQ-02-016 exists for, and the state TC-02-INT-02 creates. A person opens /org/{orgId}/requests. The page issues two catalogue reads at once: the new-request picker needs status=active and the topic filter needs status=all, a split TC-02-E2E-03 requires ('The picker no longer offers the archived topic. The topic filter still offers it'). Both reads find no row of any status, both satisfy REQ-02-016's antecedent, and both insert the eleven seed rows. The contracts specify a UNIQUE index on (organizationId, audience, LOWER(name)), so the second insert violates it. Implementation A writes ON CONFLICT DO NOTHING, re-reads and answers 200 twice. Implementation B lets the Prisma P2002 escape and answers 500 to a GET. The spec pins the concurrent case for archive (invariant 3, edge case 12, TC-02-INT-16), for reorder (edge case 12a) and for rename (edge case 1), and says nothing here; invariant 5 names the seed as a writer but requires a lock only of 'each writer of an existing row'. AC-2 is observed by TC-02-INT-02, which reads once and then reads again in sequence, so no case fires the race."
+      },
+      "suggestedFix": "state in REQ-02-016 what a losing concurrent seed does — re-read and answer, or take a lock before the existence check — name the status it answers with, and add an integration case that fires two catalogue reads at an empty organization without awaiting the first."
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/unverifiable-case",
+      "file": "specs/requests/02-request-topics.cases.md",
+      "symbol": "TC-02-INT-22",
+      "claim": "TC-02-INT-22's final step names a fault-injection mechanism that does not exist and that the spec's own Verification Plan does not list, and it is the only observer of the atomicity half of AC-17.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The step reads 'Finally send a valid list and force the transaction to fail partway', and the expected result is 'The failed transaction leaves every sortOrder as the last successful reorder set them.' There is no route to it. apps/api/src/test-support/ contains three files — envelope-expiry.controller.ts, signwell-stub.controller.ts and fixture-gate.ts — and none injects a fault; the integration harness boots the real AppModule over Supertest (apps/api/test/holidays.spec.ts:1-10 is the shape) and offers no hook between two writes inside a $transaction. The Verification Plan's 'Reaching the states the cases need' table lists every other state these cases require and whether it exists today, and does not list this one. The only device available, jest.spyOn over PrismaService.$transaction, replaces the transaction with a callback the test controls, so the rollback it asserts is one Postgres never performed and the case would pass against an implementation that opens no transaction at all. AC-17's other observer, TC-02-E2E-01, watches a reorder survive a reload and asserts nothing about partial writes."
+      },
+      "suggestedFix": "either name the mechanism as a Verification Plan row and plan it as a task — a test-support fixture that aborts a reorder mid-transaction, fenced off in production like the mail sink — or drop the step and say in AC-17 that atomicity is guaranteed by the single-transaction rewrite rather than observed."
+    },
+    {
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/underspecified-response-shape",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "POST /api/organizations/{orgId}/requests — the topic member",
+      "claim": "The contracts say what topic.name and topic.status are when the catalogue row is gone, and not what topic.id, topic.audience and topic.type are.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "TC-02-INT-02 deletes every RequestTopic row of an organization that has a request raised under one. Request.topicId is a SetNull FK, so it becomes null while topicLabel keeps 'VPN'. The case asserts 'the response's topic.name is the snapshot and topic.status is null, which is the shape a screen must render'. The declared member is { id, name, audience, type, status }. Nothing says whether id, audience and type are null, absent, or carry a stored value — and only name is snapshotted, so no stored value exists for audience or type. A screen written against one choice breaks against the other, and the case does not discriminate."
+      },
+      "suggestedFix": "give the topic member's three unmentioned fields an explicit value in that state and assert them in TC-02-INT-02."
+    },
+    {
+      "id": "P6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/silent-rule",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/request-topics — status query",
+      "claim": "The topics read refuses an unknown audience and says nothing about an unknown status, for a reason that applies equally to both.",
+      "witness": {
+        "kind": "rule",
+        "detail": "TC-02-INT-04 asserts that GET with audience=partner answers 400 audienceUnknown, and gives the reason: 'The read refuses rather than returning everything, so a typo in a query string cannot look like an empty catalogue.' The same route declares status as active | archived | all with active as the default, and neither the Routes table nor any requirement says what ?status=activ answers. The sibling endpoint on this surface rejects every unrecognised query value with 400 rather than defaulting, deliberately: apps/api/src/requests/requests.service.ts:163-172, 'An unknown value is a 400, never a silent fallback: the closed set is only a contract if breaking it is observable (requirement 42).' A defaulting implementation of the topics read is not refutable from this spec.",
+        "source": "apps/api/src/requests/requests.service.ts:163-172"
+      },
+      "suggestedFix": "say what an unknown status value answers on the topics read, and add it to TC-02-INT-04 beside the audience typo."
+    },
+    {
+      "id": "P7",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/false-rationale",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "Known Gaps — a topic's type cannot be corrected after creation",
+      "claim": "The remedy the Known Gaps row offers cannot be walked without losing the topic's word, because uniqueness spans archived rows.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A curator finds that the seeded staff topic 'Question' should have been type access. The gap row's remedy is 'Archive and re-create is the honest path.' They archive it and POST a staff topic named 'Question' with type access. REQ-02-006 forbids two topics 'of the same organization and audience with names equal ignoring case' with no status qualifier, and the contracts specify an unconditional UNIQUE index on (organizationId, audience, LOWER(name)) — validation rule 6 says 'whatever its status' where the spec means to include archived rows, and rule 5 does not, so uniqueness spans both. The call answers 409 nameDuplicate. The remedy is only walkable under a different word, which is the thing the curator was trying to keep. REQ-02-004's use of the same phrase is sound by contrast: it re-creates in the other audience, where uniqueness does not reach."
+      },
+      "suggestedFix": "say in the Known Gaps row that re-creating requires a different name while the archived row exists, or scope REQ-02-006's uniqueness to active topics and say what that means for the index."
+    },
+    {
+      "id": "P8",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-premise",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "DS gaps — no segmented-control primitive",
+      "claim": "The DS gaps row prescribes a hand-rolled control for a switch the sibling screen already builds from a design-system primitive, against the repository's rule about improvising per screen.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The row says 'No segmented-control primitive | The Staff / Client audience switch | Two Buttons with an aria-pressed state, carrying var(--sp-*) and var(--fs-*) tokens | A SegmentedControl in @ds, adopted by this screen and the requests scope toggle together.' The requests scope toggle is not two Buttons: apps/web/app/org/[orgId]/requests/page.tsx:321-331 renders it with Tabs from @ds, items [{value:'mine',label:'Mine'},{value:'all',label:'All'}], and Tabs carries a per-item testId (1_DS for dev/components/navigation/Tabs.d.ts). CLAUDE.md states the rule the prescription cuts against: 'Anything missing goes *into* the design system and is recorded in that spec's DS gaps table, never improvised per screen.'",
+        "source": "apps/web/app/org/[orgId]/requests/page.tsx:321-331"
+      },
+      "suggestedFix": "either use Tabs as the sibling screen does and drop the row, or keep the gap and say what the two-Button control gives that Tabs does not — and correct the claim that the requests scope toggle is waiting for the same primitive."
+    }
+  ]
+}

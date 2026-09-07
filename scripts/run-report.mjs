@@ -30,23 +30,44 @@
  * and never for "who ran it" — attribution goes through session ids taken from (1) and (2).
  *
  *   node scripts/run-report.mjs [runId] [--out <path>] [--json] [--open]
+ *   node scripts/run-report.mjs --from-json <payload> --out <path>
+ *
+ * The page is the one thing here that is not about a run: `--from-json` renders whatever
+ * payload it is handed, which is how `refine-report.mjs` draws a refine loop without a second
+ * copy of this markup drifting away from it.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { agentSummary, parseAgentLog } from './refine-read.mjs';
+import { priceOf, ratesFromAllRuns, sessionUsage } from './usage-recover.mjs';
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
 
 const argv = process.argv.slice(2);
-const TAKES_VALUE = new Set(['--out']);
+const TAKES_VALUE = new Set(['--out', '--from-json']);
 const flag = (n) => {
   const i = argv.indexOf(n);
   return i === -1 ? null : argv[i + 1];
 };
 const asJson = argv.includes('--json');
 const positional = argv.filter((a, i) => !a.startsWith('--') && !TAKES_VALUE.has(argv[i - 1]));
+
+/* The page is the one thing here that is not about a run: it draws whatever payload it is
+   given, and `refine-report.mjs` produces one for a thing that is not a run at all. Rendering
+   from a file is what lets that exist without a second copy of eight hundred lines of markup
+   drifting away from this one. */
+const fromJson = flag('--from-json');
+if (fromJson) {
+  const given = JSON.parse(readFileSync(fromJson, 'utf8'));
+  const target = flag('--out') ?? join(ROOT, '.workflow', 'report.html');
+  writeFileSync(target, pageHtml(given));
+  console.log(target);
+  process.exit(0);
+}
 
 const runId =
   positional[0] ??
@@ -56,11 +77,33 @@ const runId =
     .pop();
 
 const dir = join(RUNS, runId);
-if (!existsSync(join(dir, 'run.json'))) {
-  console.error(`no run.json under ${dir}`);
+if (!existsSync(dir)) {
+  console.error(`no run directory at ${dir}`);
   process.exit(1);
 }
-const run = JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'));
+
+/**
+ * A run whose `init` died before it wrote `run.json` is the extreme case of the rule this file
+ * already lives by: every source is optional. It is also the case a person is most likely to
+ * click on, because a directory nobody can account for is exactly what invites a click — so it
+ * opens and says what happened, with whatever its journal and stages did manage to record,
+ * rather than taking the board down with it.
+ *
+ * `baseRef` is HEAD so every diff and log this asks git for comes back empty instead of
+ * failing: there is no base to measure from, and pretending otherwise would invent a diff.
+ */
+const run = existsSync(join(dir, 'run.json'))
+  ? JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'))
+  : {
+    runId,
+    spec: null,
+    branch: null,
+    baseRef: 'HEAD',
+    status: 'half-created',
+    halt: { reason: 'init не завершился', detail: 'run.json не был записан — прогон умер до того, как оркестратор его создал' },
+    stages: {},
+    notes: [],
+  };
 
 const git = (...a) => {
   try {
@@ -81,7 +124,7 @@ const jsonIf = (p) => {
 };
 
 const STAGE_ORDER = ['preflight', 'pre_implement', 'implement', 'static_gate', 'review', 'qa'];
-const AGENT_OF = { pre_implement: 'pre-implementer', implement: 'implementer', review: 'code-reviewer', qa: 'qa' };
+const AGENT_OF = { pre_implement: 'pre-implementer', implement: 'implementer', review: 'code-reviewer-lead', qa: 'qa' };
 
 /* ── the journal ──────────────────────────────────────────────────────────── */
 
@@ -139,7 +182,12 @@ function collectSteps() {
 
     const stem = join(stagesDir, `${stage}.attempt-${attempt}`);
     const start = jsonIf(`${stem}.start.json`);
-    const log = jsonIf(`${stem}.log`);
+    const log = agentSummary(`${stem}.log`);
+    /* A stage in flight has no summary — that arrives with its last message. Its stream has
+       everything the board needs to show it is alive, and without this the session id is
+       unknown, so no tool call is attributed to it and a working agent renders as one that has
+       made no calls and spent all its time thinking. Which is what a dead one looks like. */
+    const live = log ? null : parseAgentLog(`${stem}.log`);
     const verdict = jsonIf(`${stem}.json`);
     const prompt = clip(readIf(`${stem}.prompt.md`));
     const report = clip(readIf(`${stem}.md`)) ?? clip(readIf(join(stagesDir, `${stage}.md`)));
@@ -189,8 +237,8 @@ function collectSteps() {
       agent: isScript ? null : (start?.agent ?? AGENT_OF[stage]),
       script: isScript,
       state,
-      model: log ? principalModel(log.modelUsage) : (start?.model ?? null),
-      sessionId: log?.session_id ?? null,
+      model: log ? principalModel(log.modelUsage) : (live?.model ?? start?.model ?? null),
+      sessionId: log?.session_id ?? live?.sessionId ?? null,
       resumedSession: start?.resumedSession ?? null,
       fuseMin: start?.fuseMin ?? null,
       headAtStart: start?.head ?? null,
@@ -198,14 +246,23 @@ function collectSteps() {
       endedAt,
       wallSec,
       apiSec: Math.round((log?.duration_api_ms ?? 0) / 1000),
-      turns: log?.num_turns ?? null,
-      costUsd: +(log?.total_cost_usd ?? 0).toFixed(2),
+      turns: log?.num_turns ?? live?.turns ?? null,
+      calls: live?.calls ?? null,
+      /**
+       * `null` where the closing `result` never arrived — a killed or in-flight stage — and a
+       * number only where one did. Zero would say the stage cost nothing, which is the one
+       * thing it did not do: the implement attempt the fuse killed ran 345 turns and 244 tool
+       * calls and showed on the board as free.
+       */
+      costUsd: log ? +(log.total_cost_usd ?? 0).toFixed(2) : null,
+      tokens: log
+        ? {
+          out: log.usage?.output_tokens ?? 0,
+          cacheRead: log.usage?.cache_read_input_tokens ?? 0,
+          cacheWrite: log.usage?.cache_creation_input_tokens ?? 0,
+        }
+        : null,
       stopReason: log?.stop_reason ?? null,
-      tokens: {
-        out: log?.usage?.output_tokens ?? 0,
-        cacheRead: log?.usage?.cache_read_input_tokens ?? 0,
-        cacheWrite: log?.usage?.cache_creation_input_tokens ?? 0,
-      },
       prompt,
       result: clip(log?.result ?? null),
       report,
@@ -300,7 +357,7 @@ function attachTools() {
     s.calls = s.tools.length;
     s.thinkSec = Math.max(0, s.wallSec - s.toolSec);
     s.thinkPct = s.wallSec ? Math.round((s.thinkSec / s.wallSec) * 100) : 0;
-    s.tokPerSec = s.apiSec ? +(s.tokens.out / s.apiSec).toFixed(1) : null;
+    s.tokPerSec = s.apiSec && s.tokens ? +(s.tokens.out / s.apiSec).toFixed(1) : null;
   }
 }
 attachTools();
@@ -426,7 +483,39 @@ const cov = coverage();
 
 /* ── totals ───────────────────────────────────────────────────────────────── */
 
+/**
+ * What the stages that died never reported, recovered from the session store.
+ *
+ * A resumed stage shares its session with the attempt it continues, so the transcript holds
+ * both and the later attempt's own reported total is subtracted to leave the killed one's.
+ * Cost is priced from rates fitted on this run's completed stages and is marked `estimated`
+ * wherever it is shown; tokens are exact.
+ */
+(function recoverKilled() {
+  const rates = ratesFromAllRuns(RUNS);
+  for (const s of steps) {
+    if (s.script || s.tokens || !s.sessionId) continue;
+    const whole = sessionUsage(ROOT, s.sessionId);
+    if (!whole) continue;
+    const shared = steps.filter((o) => o !== s && o.sessionId === s.sessionId && o.tokens);
+    const t = {
+      out: whole.out - shared.reduce((a, o) => a + o.tokens.out, 0),
+      cacheRead: whole.cacheRead - shared.reduce((a, o) => a + o.tokens.cacheRead, 0),
+      cacheWrite: whole.cacheWrite - shared.reduce((a, o) => a + o.tokens.cacheWrite, 0),
+    };
+    if (t.out <= 0) continue;
+    s.tokens = t;
+    s.tokensRecovered = true;
+    const r = rates[s.model] ?? rates['claude-opus-5'] ?? null;
+    s.costUsd = priceOf(t, r);
+    s.costEstimated = s.costUsd != null;
+    s.costErrPct = r ? Math.round(r.worstErr * 100) : null;
+  }
+})();
+
 const agents = steps.filter((s) => !s.script && s.state === 'done');
+/** Every invocation that spent money, whether or not it lived to report it. */
+const billable = steps.filter((s) => !s.script && s.costUsd != null);
 const t0 = steps.length ? Math.min(...steps.map((s) => s.startedAt)) : Date.now();
 const t1 = steps.length ? Math.max(...steps.map((s) => s.endedAt ?? Date.now())) : Date.now();
 
@@ -434,8 +523,18 @@ const totals = {
   wallSec: Math.round((t1 - t0) / 1000),
   apiSec: agents.reduce((a, s) => a + s.apiSec, 0),
   toolSec: steps.reduce((a, s) => a + s.toolSec, 0),
-  costUsd: +agents.reduce((a, s) => a + s.costUsd, 0).toFixed(2),
-  outTokens: agents.reduce((a, s) => a + s.tokens.out, 0),
+  /* Over everything that spent, not over everything that finished. A killed attempt is billed
+     like any other, and leaving it out is what made this run's headline read $15.62 when the
+     stage the fuse cut short had cost roughly three times the rest of it together. */
+  costUsd: +billable.reduce((a, s) => a + (s.costUsd ?? 0), 0).toFixed(2),
+  outTokens: billable.reduce((a, s) => a + (s.tokens?.out ?? 0), 0),
+  cacheTokens: billable.reduce((a, s) => a + (s.tokens?.cacheRead ?? 0) + (s.tokens?.cacheWrite ?? 0), 0),
+  estimated: billable.filter((s) => s.costEstimated).length,
+  /* Invocations whose closing summary never arrived, counted over every step rather than over
+     `agents` — which is filtered to finished ones, so a killed stage is not in it and counting
+     nulls there always answers zero. Their cost and tokens are in none of the figures above,
+     and the board says how many rather than letting the totals read complete. */
+  unaccounted: steps.filter((s) => !s.script && s.state === 'aborted').length,
   turns: agents.reduce((a, s) => a + (s.turns ?? 0), 0),
   calls: steps.reduce((a, s) => a + s.calls, 0),
   invocations: agents.length,
@@ -454,8 +553,8 @@ for (const s of agents) {
   b.wallSec += s.wallSec;
   b.apiSec += s.apiSec;
   b.toolSec += s.toolSec;
-  b.costUsd = +(b.costUsd + s.costUsd).toFixed(2);
-  b.outTokens += s.tokens.out;
+  b.costUsd = +(b.costUsd + (s.costUsd ?? 0)).toFixed(2);
+  b.outTokens += s.tokens?.out ?? 0;
   b.turns += s.turns ?? 0;
 }
 
@@ -503,12 +602,15 @@ if (asJson) {
 
 /* ── the page ─────────────────────────────────────────────────────────────── */
 
+/* Hoisted deliberately: `--from-json` calls it before this line is reached, which is what
+   makes a page out of a payload this script did not build. */
+function pageHtml(payload) {
 const DATA = JSON.stringify(payload).split('<').join('\\u003c').split('\u2028').join('\\u2028').split('\u2029').join('\\u2029');
 
-const html = `<!doctype html>
+return `<!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Прогон · ${runId}</title>
+<title>Прогон · ${payload.runId}</title>
 <style>
 /* Material 3, light scheme, no network dependencies. */
 :root{
@@ -700,10 +802,53 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 @keyframes actin{from{background:rgba(103,80,164,.16)}to{background:transparent}}
 .stepitem .nm small.live{color:var(--primary);opacity:.9}
 .dot.beat{animation:pulse 1.6s ease-in-out infinite}
-.runpick{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
-.runpick label{font-size:12px;opacity:.75}
-.runpick select{max-width:min(560px,100%);padding:7px 12px;border-radius:12px;font:inherit;font-size:13px;
-  border:1px solid var(--outline,#79747E);background:var(--surface,#fff);color:inherit}
+/* ── the two views above a run ─────────────────────────────────────────────
+   A run id is a fact about the pipeline; the spec is the thing being worked on. So the board
+   opens on the specs, a spec opens on what has been run against it, and a run opens on what
+   it did — each level answering one question instead of one list answering none. */
+/* Every container below sets its own display, which beats the browser's rule for [hidden].
+   Without this a hidden view is hidden and its header, its metrics and its button are not. */
+[hidden]{display:none!important}
+.crumbs{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:12.5px;flex-wrap:wrap}
+.crumbs a{color:var(--primary);cursor:pointer;text-decoration:none}
+.crumbs a:hover{text-decoration:underline}
+.crumbs i{opacity:.4;font-style:normal}
+.board{max-width:1180px;margin:22px auto;padding:0 22px}
+.specrow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;cursor:pointer;
+  border:1px solid transparent;text-align:left;width:100%;background:transparent;color:inherit;font:inherit}
+.specrow:hover{background:var(--surface-2,rgba(0,0,0,.03));border-color:var(--divider,#E7E0EC)}
+.specrow + .specrow{margin-top:2px}
+.specrow .lead{min-width:0;flex:1 1 auto}
+.specrow .nm{display:block;font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.specrow .sub{display:block;font-size:12px;opacity:.62;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.specrow .num{flex:0 0 auto;font-size:12px;opacity:.7;font-variant-numeric:tabular-nums;text-align:right;min-width:74px}
+.specrow .num b{display:block;font-weight:600;font-size:13px;opacity:.95}
+.specdot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:var(--divider,#CAC4D0)}
+.specdot.on{background:var(--primary)}
+.grouphd{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.55;margin:18px 0 6px;padding:0 14px}
+.grouphd:first-child{margin-top:0}
+.grouphd.sub2{text-transform:none;letter-spacing:0;opacity:.4;margin:10px 0 4px}
+/* A group heading you can open. It carries the same weight as the plain one; what it adds is
+   that the thing it names is itself a document with a page. */
+.grouphd button{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;letter-spacing:inherit;text-transform:inherit}
+.grouphd button:hover{text-decoration:underline;opacity:1}
+/* The indent under a grouping is the lineage made visible: a bug sits under the spec it
+   belongs to, and the eye reads the depth before it reads the words. */
+.nest1{padding-left:46px;border-left:2px solid var(--outline-var);border-radius:0 14px 14px 0;margin-left:14px}
+/* Where a row came from — the feature and the spec above it. Each part opens what it names, so
+   a row is three destinations rather than one, and none of them costs a second list. */
+.lin{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;vertical-align:baseline}
+.lin b{font-weight:600;opacity:.85}
+.lin i{opacity:.4;font-style:normal}
+.lin a{color:inherit;text-decoration:none;cursor:pointer;border-bottom:1px dotted currentColor}
+.lin a:hover{opacity:1;border-bottom-style:solid}
+.wchip{flex:0 0 auto;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:7px;
+  background:var(--surface-5,rgba(0,0,0,.06));color:var(--on-surface-var);min-width:44px;text-align:center}
+.wchip.bug{background:#F9DEDC;color:#410E0B}
+.wchip.patch{background:#FFF3D6;color:#4A3B00}
+.kindchip{flex:0 0 auto;font-size:11px;padding:2px 8px;border-radius:8px;background:var(--secondary-container);
+  color:var(--on-secondary-container)}
+.kindchip.refine{background:#EADDFF;color:#21005D}
 .livebadge{position:fixed;left:22px;bottom:22px;z-index:40;padding:8px 14px;border-radius:14px;
   background:var(--secondary-container);color:var(--on-secondary-container);font-size:12px;font-variant-numeric:tabular-nums}
 .livebadge.lost{background:#F9DEDC;color:#410E0B}
@@ -720,26 +865,41 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 </style></head>
 <body>
 <div class="appbar"><div class="appbar-in">
+  <div class="crumbs" id="crumbs" hidden></div>
   <h1><span id="hdTitle"></span> <span id="hdStatus"></span></h1>
-  <div class="runpick" id="runPickWrap" hidden><label for="runPick">Прогон</label><select id="runPick"></select></div>
   <div class="meta" id="hdMeta"></div>
   <div class="metrics" id="hdMetrics"></div>
 </div></div>
 
+<div class="board" id="viewIndex" hidden>
+  <div class="card"><h2>Документы</h2><div class="body">
+    <div class="toolbar" id="groupBar"></div>
+    <div id="specList"></div>
+  </div></div>
+</div>
+
+<div class="board" id="viewSpec" hidden>
+  <div class="card"><h2>Прогоны этого документа</h2><div class="body" id="specRuns"></div></div>
+  <div class="card" id="cardKin" hidden><h2>Баги и патчи по этой спеке</h2><div class="body" id="specKin"></div></div>
+</div>
+
+<div id="viewRun">
 <div class="shell">
   <nav class="rail"><h3>Шаги прогона</h3><div id="rail"></div></nav>
   <div>
     <div class="card"><h2>Хронология</h2><div class="gantt" id="gantt"></div></div>
     <div class="toolbar" id="filters"></div>
     <div id="steps"></div>
-    <div class="card"><h2>Маршрут: каждое решение роутера</h2><div class="body" id="routing"></div></div>
-    <div class="card"><h2>Размышление против инструментов</h2><div class="body" id="split"></div></div>
-    <div class="card"><h2>По стадиям</h2><div class="body" id="stages"></div></div>
-    <div class="card"><h2>Покрытие ревью</h2><div class="body" id="cov"></div></div>
+    <div class="card" id="cardRounds" hidden><h2>Раунды</h2><div class="body" id="rounds"></div></div>
+    <div class="card" id="cardRouting"><h2>Маршрут: каждое решение роутера</h2><div class="body" id="routing"></div></div>
+    <div class="card" id="cardSplit"><h2>Размышление против инструментов</h2><div class="body" id="split"></div></div>
+    <div class="card" id="cardStages"><h2>По стадиям</h2><div class="body" id="stages"></div></div>
+    <div class="card" id="cardCov"><h2>Покрытие ревью</h2><div class="body" id="cov"></div></div>
   </div>
 </div>
+</div>
 
-<div class="fab">
+<div class="fab" id="fab">
   <button class="sec" id="toggleAll">Развернуть всё</button>
 </div>
 
@@ -762,7 +922,8 @@ let viewSpan = 1;
 const openIds = new Set();
 const activeTab = new Map();
 
-const COLOR ={ pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
+const COLOR ={ pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E',
+                lint:'#79747E', judge:'#D4761B', fix:'#3B6FD4' };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* Round once, then split. Flooring the minutes off an unrounded value while rounding the
    seconds prints 0:60 for anything just under a minute — which only shows up once a caller
@@ -771,6 +932,10 @@ const mmss = s => { const t = Math.round(s); return Math.floor(t/60) + ':' + Str
 const hhmm = ms => new Date(ms).toTimeString().slice(0,8);
 const pctOf = (a,b) => b ? Math.round(a/b*100) : 0;
 const nfmt = n => (n ?? 0).toLocaleString('ru-RU');
+/* Cost and tokens live only in the closing summary the SDK sends. A stage killed by its fuse
+   has none, and they cannot be recovered from the stream — its per-message usage is chunk
+   deltas under different accounting. So the board says the figure is missing, never zero. */
+const NO_SUMMARY = 'нет — убит до сводки';
 const isBlocker = f => f.severity !== 'note' && f.severity !== 'info';
 const stateChip = st => ({done:'', running:'<span class="chip c-run">идёт</span>', aborted:'<span class="chip c-block">убит</span>'}[st] ?? '');
 const verdictChip = s => {
@@ -781,21 +946,40 @@ const verdictChip = s => {
 function render() {
 
 /* ── header ─────────────────────────────────────────────────────────── */
-document.title = 'Прогон · ' + D.runId;
+const isRefine = D.kind === 'refine';
+document.title = (isRefine ? 'Рефайн · ' : 'Прогон · ') + D.runId;
 document.getElementById('hdTitle').textContent = D.spec || D.runId;
 document.getElementById('hdStatus').innerHTML =
-  verdictChip(D.status) + (D.totals.running ? ' <span class="chip c-run">прогон идёт</span>' : '') +
-  (D.halt ? ' <span class="chip c-block">halt: ' + esc(D.halt.reason || '') + '</span>' : '');
+  verdictChip(D.status) + (D.totals.running ? ' <span class="chip c-run">' + (isRefine ? 'луп идёт' : 'прогон идёт') + '</span>' : '') +
+  (D.halt ? ' <span class="chip c-block">' + (isRefine ? 'стоп' : 'halt') + ': ' + esc(D.halt.reason || '') + '</span>' : '');
 document.getElementById('hdMeta').innerHTML =
-  hhmm(D.t0) + ' → ' + hhmm(D.t1) + ' · ветка <span class="mono">' + esc(D.branch) + '</span>' +
+  hhmm(D.t0) + ' → ' + hhmm(D.t1) +
+  (D.branch ? ' · ветка <span class="mono">' + esc(D.branch) + '</span>' : '') +
   (D.diff ? ' · ' + esc(D.diff) : '') +
+  (isRefine ? ' · ' + D.rounds.length + ' раунд(ов)' + (D.request ? ' · запрос: ' + esc(D.request) : '') : '') +
   (D.budget ? ' · бюджет: код ' + D.budget.codeAttempts + ', переплан ' + D.budget.handoffReplans + ', среда ' + D.budget.infra : '');
+
+/* A refine loop has no diff and no review, so the two cards that are about those say nothing
+   true about it; a run whose init died has no steps, so none of the four analyses has anything
+   to analyse. Hidden rather than left empty: an empty card reads as a finding of zero — a
+   coverage table saying 0 of 0 is indistinguishable from one saying nothing was reviewed. */
+const bare = !D.steps.length;
+document.getElementById('cardRouting').hidden = isRefine || bare;
+document.getElementById('cardCov').hidden = isRefine || bare || !D.coverage;
+document.getElementById('cardSplit').hidden = bare;
+document.getElementById('cardStages').hidden = bare;
+document.getElementById('cardRounds').hidden = !isRefine;
 
 const T = D.totals;
 document.getElementById('hdMetrics').innerHTML = [
   ['Время', mmss(T.wallSec), T.invocations + ' вызовов' + (T.aborted ? ' + ' + T.aborted + ' убит' : '') + (T.running ? ' + ' + T.running + ' идёт' : '')],
-  ['Стоимость', '$' + T.costUsd, T.turns + ' ходов'],
-  ['Токенов', (T.outTokens/1000).toFixed(0) + 'k', T.tokPerSec + ' ток/с'],
+  ['Стоимость', '$' + T.costUsd, T.turns + ' ходов' + (T.estimated ? ' · ' + T.estimated + ' оценено' : '')
+    + (T.unaccounted ? ' · без ' + T.unaccounted + ' убит.' : '')],
+  /* Output alone is a thousandth of what the run actually moves: every turn re-reads the whole
+     accumulated context, so a long stage is cache reads and almost nothing else. Showing only
+     the output made a 131M-token run read as 79k. */
+  ['Токенов', (T.outTokens/1000).toFixed(0) + 'k вых.',
+    T.cacheTokens ? nfmt(Math.round(T.cacheTokens/1e6)) + 'M кэш' : (T.tokPerSec + ' ток/с')],
   ['Размышление', pctOf(T.apiSec, T.wallSec) + '%', mmss(T.apiSec) + ' в API'],
   ['Инструменты', pctOf(T.toolSec, T.wallSec) + '%', T.calls + ' вызовов'],
   ['Блокеры', String(T.blockers), T.notes + ' заметок'],
@@ -908,7 +1092,9 @@ function paneReceived(s) {
   '</dl>';
   const prompt = s.prompt
     ? '<h4 style="margin:16px 0 8px;font-size:13px">Промпт, который получил агент</h4><pre class="txt">' + esc(s.prompt) + '</pre>'
-    : '<div class="note-callout">Промпт не записан: этот прогон старше, чем захват входных данных в <span class="mono">ship.mjs</span>. У новых прогонов здесь будет ровно то, что видел агент.</div>';
+    : (s.script
+      ? '<div class="note-callout">Скрипт-гейт: ни промпта, ни модели. Только вердикт.</div>'
+      : '<div class="note-callout">Промпт не записан: этот прогон старше, чем захват входных данных. Оба оркестратора — <span class="mono">ship.mjs</span> и <span class="mono">refine-loop.mjs</span> — пишут промпт до того, как дёрнут агента, так что у новых прогонов здесь будет ровно то, что он получил.</div>');
   return routeHtml(s) + meta + prompt;
 }
 
@@ -969,9 +1155,14 @@ function paneMetrics(s) {
     ['В API (размышление и генерация)', s.apiSec ? mmss(s.apiSec) : '—'],
     ['В инструментах', s.toolSec + ' с в ' + s.calls + ' вызовах'],
     ['Ходов', s.turns ?? '—'],
-    ['Выходных токенов', nfmt(s.tokens.out) + (s.tokPerSec ? ' · ' + s.tokPerSec + ' ток/с' : '')],
-    ['Кэш прочитан / записан', nfmt(s.tokens.cacheRead) + ' / ' + nfmt(s.tokens.cacheWrite)],
-    ['Стоимость', s.costUsd ? '$' + s.costUsd : '—'],
+    ['Выходных токенов', s.tokens
+      ? nfmt(s.tokens.out) + (s.tokensRecovered ? ' · из транскрипта сессии' : (s.tokPerSec ? ' · ' + s.tokPerSec + ' ток/с' : ''))
+      : NO_SUMMARY],
+    ['Кэш прочитан / записан', s.tokens ? nfmt(s.tokens.cacheRead) + ' / ' + nfmt(s.tokens.cacheWrite) : NO_SUMMARY],
+    ['Стоимость', s.costUsd == null ? NO_SUMMARY
+      : s.costEstimated
+        ? '≈$' + s.costUsd + ' — оценка по ставкам этого прогона' + (s.costErrPct ? ', ±' + s.costErrPct + '%' : '')
+        : '$' + s.costUsd],
     ['Артефакты', Object.entries(s.has).filter(([,v]) => v).map(([k]) => k).join(', ') || 'нет'],
   ].map(([k,v]) => '<dt>' + k + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>';
 }
@@ -984,13 +1175,22 @@ const TABS = [
   ['Метрики', paneMetrics, () => 0],
 ];
 
-document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
+document.getElementById('steps').innerHTML = (bare
+  ? '<div class="card"><div class="body"><p class="dim" style="margin:0">Ни одного шага. ' +
+    (D.status === 'half-created'
+      ? 'Оркестратор не дописал <span class="mono">run.json</span> — прогон умер на инициализации, и всё, что от него осталось, это имя директории.'
+      : 'Прогон ещё ничего не запустил.') + '</p></div></div>'
+  : '') + D.steps.map((s,i) => {
   const bl = s.findings.filter(isBlocker).length, nt = s.findings.length - bl;
   const color = COLOR[s.stage] || '#79747E';
   const sub = [
     s.model || (s.script ? 'скрипт-гейт' : ''),
     s.script ? null : mmss(s.wallSec) + ' (' + s.thinkPct + '% размышление)',
-    s.costUsd ? '$' + s.costUsd : null,
+    /* A killed stage has no cost, not a cost of nothing. Saying so beside the turns it did
+       run is what keeps the most expensive attempt of a run from reading as the cheapest. */
+    s.script ? null
+      : s.costUsd == null ? 'стоимость неизвестна'
+        : (s.costEstimated ? '≈$' + s.costUsd + ' (оценка)' : '$' + s.costUsd),
     s.turns ? s.turns + ' ходов' : null,
     s.calls ? s.calls + ' вызовов инстр.' : null,
     s.resumedSession ? '↻ продолжает сессию' : null,
@@ -1004,7 +1204,7 @@ document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
   return '<div class="card step" id="' + s.stage + '-' + s.attempt + '" data-idx="' + i + '"' +
     (bl ? ' data-bad="1"' : '') + (s.state !== 'done' ? ' data-odd="1"' : '') + '>' +
     '<button class="step-head"><span class="idx" style="background:' + color + '">' + (s.script ? '·' : s.attempt) + '</span>' +
-      '<span class="hd"><span class="ttl">' + esc(s.stage) + ' ' + s.attempt + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
+      '<span class="hd"><span class="ttl">' + esc(s.label || (s.stage + ' ' + s.attempt)) + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
         (bl ? '<span class="chip c-block">' + bl + ' блок.</span>' : '') +
         (nt ? '<span class="chip c-note">' + nt + ' зам.</span>' : '') +
       '</span><span class="sub">' + esc(sub) + '</span>' + actHtml(s) + '</span>' +
@@ -1121,8 +1321,22 @@ document.getElementById('stages').innerHTML =
     '<td class="n">' + b.costUsd.toFixed(2) + '</td><td class="n">' + pctOf(b.costUsd*100, D.totals.costUsd*100) + '%</td>' +
     '<td class="n">' + pctOf(b.wallSec-b.toolSec, b.wallSec) + '%</td></tr>').join('') + '</table>';
 
+/* ── rounds, on a refine loop ───────────────────────────────────────── */
+if (isRefine) document.getElementById('rounds').innerHTML =
+  '<p class="dim" style="margin-top:0">Каждый раунд — ворота по возрастанию цены: T0 бесплатен, ' +
+  'T1 — те же ворота, на которых останавливается ship, T2 — судья. Раунд заканчивается коммитом, ' +
+  'и следующий судит этот коммит, а не документ заново.</p>' +
+  '<table><tr><th class="n">Раунд</th><th class="n">T0</th><th>T1 план</th><th>T2 судья</th><th>Починка</th><th>Коммит</th></tr>' +
+  D.rounds.map(r => '<tr><td class="n">' + r.round + '</td>' +
+    '<td class="n">' + (r.lint == null ? '—' : r.lint === 0 ? 'чисто' : r.lint) + '</td>' +
+    '<td>' + (r.plan ? esc(r.plan.status) + (r.plan.specBlockers ? ' · ' + r.plan.specBlockers + ' в спеку' : '') : '—') + '</td>' +
+    '<td>' + (r.judge ? r.judge.blockers + ' блок. / ' + r.judge.notes + ' зам. · ' + esc(r.judge.mode || '') : '—') + '</td>' +
+    '<td>' + (r.fix ? 'починено ' + r.fix.fixed + ', решено ' + r.fix.decided + ', человеку ' + r.fix.left : '—') + '</td>' +
+    '<td class="mono">' + (r.commit ? esc(r.commit) : '—') + '</td></tr>').join('') +
+  '</table>';
+
 /* ── coverage ───────────────────────────────────────────────────────── */
-document.getElementById('cov').innerHTML =
+if (D.coverage) document.getElementById('cov').innerHTML =
   D.coverage.perPass.map(p => '<div class="sr"><span>review ' + p.attempt + '</span>' +
     '<div class="sbar"><i class="i-tools" style="width:' + pctOf(p.named, D.coverage.files) + '%"></i></div>' +
     '<span class="n2">' + p.named + ' / ' + D.coverage.files + '</span></div>').join('') +
@@ -1171,6 +1385,296 @@ function tick() {
 
 render();
 
+/* ── the three views ────────────────────────────────────────────────────
+   Specs, then what has been run against one, then one run. The deepest view is the report
+   this page has always been; the two above it exist because a flat list of run ids answers
+   "which run is 14-44-29" and never "where is spec 02", which is the question people arrive
+   with. Only the run view survives on a file:// snapshot — the other two are a live index. */
+let IDX = null;
+let view = 'run';
+let openSpec = null;
+/* The feature the index is narrowed to, or null for all of them. It is a filter on the one
+   list rather than a view of its own: the same rows, the same order, fewer of them. */
+let openFeature = null;
+
+const VIEWS = { index: 'viewIndex', spec: 'viewSpec', run: 'viewRun' };
+const specOf = (p) => (IDX ? IDX.specs.find((s) => s.path === p) ?? null : null);
+const entryOf = (id) => {
+  if (!IDX) return null;
+  for (const s of [...IDX.specs, { entries: IDX.orphans }]) {
+    const e = s.entries.find((x) => x.id === id);
+    if (e) return e;
+  }
+  return null;
+};
+
+function show(v) {
+  view = v;
+  for (const [k, id] of Object.entries(VIEWS)) document.getElementById(id).hidden = k !== v;
+  document.getElementById('fab').hidden = v !== 'run';
+  document.getElementById('crumbs').hidden = !IDX;
+  document.getElementById('hdMetrics').hidden = v !== 'run';
+}
+
+function crumbs() {
+  const el = document.getElementById('crumbs');
+  if (!IDX) { el.hidden = true; return; }
+  /* Taken from the payload on screen rather than from what was clicked to get here: a run
+     opened from a link, or one whose payload arrived after the view switched, would otherwise
+     be filed under whichever spec the reader happened to pass through. */
+  if (view === 'run') {
+    const e = entryOf(D.runId);
+    if (e) openSpec = e.spec ?? null;
+  }
+  const bits = ['<a data-go="#">Документы</a>'];
+  /* The trail is the lineage: feature, then the spec the document belongs to, then the
+     document, then the run. A bug opened from a link therefore says which feature it is a bug
+     in, which is the thing the directory it lives in does not say. */
+  const s = view === 'index' ? null : specOf(openSpec);
+  const feature = view === 'index' ? openFeature : (s ? s.feature : null);
+  if (feature) bits.push('<i>›</i><a data-go="#feature:' + esc(feature) + '">' + esc(feature) + '</a>');
+  if (s) {
+    const owner = s.relatesToPath ? specOf(s.relatesToPath) : null;
+    if (owner) bits.push('<i>›</i><a data-go="#spec:' + esc(owner.path) + '">' + esc(owner.key) + '</a>');
+    bits.push('<i>›</i>' + (view === 'run'
+      ? '<a data-go="#spec:' + esc(s.path) + '">' + esc(s.key) + '</a>'
+      : '<span>' + esc(s.key) + '</span>'));
+  }
+  if (view === 'run') bits.push('<i>›</i><span>' + esc(D.runId) + '</span>');
+  el.innerHTML = bits.join('');
+}
+
+const wallOf = (sec) => (sec >= 3600 ? Math.round(sec / 360) / 10 + ' ч' : Math.round(sec / 60) + ' мин');
+
+/* How the one list is cut up. The list is the same list and the order inside it is the same
+   order in every mode — newest first, by when anything last happened to the document. What a
+   mode changes is only which headings the rows are handed out under, so switching never hides
+   a row and never reorders one. 'none' is the default because "what moved last" is the question
+   the board is opened with; the others answer "and where does it belong". */
+const GROUPINGS = [
+  ['none', 'Без группировки'],
+  ['feature', 'По фиче'],
+  ['spec', 'По спеке'],
+  ['weight', 'По типу'],
+];
+let groupBy = (() => {
+  try { return localStorage.getItem('board.groupBy') || 'none'; } catch { return 'none'; }
+})();
+if (!GROUPINGS.some(([k]) => k === groupBy)) groupBy = 'none';
+
+const WEIGHT_LABEL = { spec: 'Спека', bug: 'Баг', patch: 'Патч' };
+const featureOf = (s) => s.feature || null;
+
+/* The row, and above its title the line it came down: the feature, then the spec, each opening
+   what it names. A spec shows no lineage of its own — it *is* the lineage — and under a
+   grouping that already states one of them, that part is dropped rather than repeated. */
+function lineage(s, omit) {
+  const bits = [];
+  const f = featureOf(s);
+  /* Inside a feature, its name is on the heading of the page and repeating it on every row
+     states nothing. The same for the spec under a grouping that already names it. */
+  const featureStated = omit === 'feature' || openFeature || (omit === 'spec' && s.weight === 'spec');
+  if (f && !featureStated) {
+    bits.push('<a data-go="#feature:' + esc(f) + '">' + esc(f) + '</a>');
+  }
+  if (s.weight !== 'spec' && omit !== 'spec') {
+    bits.push(s.relatesToPath
+      ? '<a data-go="#spec:' + esc(s.relatesToPath) + '">' + esc(s.relatesTo) + '</a>'
+      : '<span class="dim">' + esc(s.relatesTo || 'ничьё') + '</span>');
+  }
+  return bits.length ? '<span class="lin">' + bits.join('<i>›</i>') + '</span><i> · </i>' : '';
+}
+
+function specRow(s, { omit = null, depth = 0 } = {}) {
+  const w = s.weight || 'spec';
+  return '<button class="specrow' + (depth ? ' nest' + depth : '') + '" data-go="#spec:' + esc(s.path) + '">' +
+    '<span class="specdot' + (s.running ? ' on' : '') + '"></span>' +
+    '<span class="wchip ' + w + '">' + esc(WEIGHT_LABEL[w] || w) + '</span>' +
+    '<span class="lead"><span class="nm">' + esc(s.key) + ' · ' + esc(s.title || s.path) + '</span>' +
+    '<span class="sub">' + lineage(s, omit) + (s.entries.length
+      ? s.entries.slice(0, 3).map((x) => esc(x.kind === 'refine' ? 'refine' : 'ship') + ' ' + esc(x.detail || x.status)).join(' · ')
+        + (s.entries.length > 3 ? ' · +' + (s.entries.length - 3) : '')
+      : 'ничего не запускалось') + '</span></span>' +
+    (s.entries.length
+      /* Cost sums; wall clock does not. A run abandoned in August and stamped again in
+         September spans a fortnight of nobody working, and four of those add up to a number
+         that reads as effort and is calendar. */
+      ? '<span class="num"><b>$' + s.totals.costUsd.toFixed(2) + '</b>' + s.entries.length + ' прогон(ов)</span>'
+      : '') + '</button>';
+}
+
+/* A heading and the rows under it. 'at' is the newest thing in the group, which is what orders
+   the groups — so a grouping never buries the feature somebody is working in. */
+const newest = (rows) => Math.max(0, ...rows.map((s) => s.lastAt || 0));
+
+function groupsFor(list) {
+  if (groupBy === 'none') return [{ rows: list }];
+
+  if (groupBy === 'weight') {
+    const LABEL = { spec: 'Спеки', bug: 'Баги', patch: 'Патчи' };
+    return ['spec', 'bug', 'patch']
+      .map((w) => ({ head: LABEL[w], omit: null, rows: list.filter((s) => (s.weight || 'spec') === w) }))
+      .filter((g) => g.rows.length)
+      .sort((a, b) => newest(b.rows) - newest(a.rows));
+  }
+
+  if (groupBy === 'feature') {
+    const by = new Map();
+    for (const s of list) {
+      const f = featureOf(s) ?? ' ';
+      if (!by.has(f)) by.set(f, []);
+      by.get(f).push(s);
+    }
+    return [...by.entries()]
+      .map(([f, rows]) => ({
+        head: f === ' ' ? 'Без фичи' : f,
+        go: f === ' ' ? null : '#feature:' + f,
+        omit: 'feature',
+        rows,
+      }))
+      .sort((a, b) => newest(b.rows) - newest(a.rows));
+  }
+
+  /* By spec: the whole hierarchy in one pass — a spec is a heading, its bugs and patches are
+     the rows under it, and the heading opens the spec itself. A lighter document whose spec is
+     not in view keeps a heading of its own rather than being folded in somewhere it is not. */
+  const kin = new Map();
+  const heads = [];
+  const loose = [];
+  for (const s of list) {
+    if ((s.weight || 'spec') === 'spec') { heads.push(s); kin.set(s.key, []); }
+  }
+  for (const s of list) {
+    if ((s.weight || 'spec') === 'spec') continue;
+    if (s.relatesTo && kin.has(s.relatesTo)) kin.get(s.relatesTo).push(s); else loose.push(s);
+  }
+  const out = heads.map((s) => ({
+    /* The spec is the row right below, so the heading repeats it word for word if it names the
+       title too. It exists to say what the indent under it belongs to, and a spec with nothing
+       indented under it needs no heading at all. */
+    head: kin.get(s.key).length ? s.key : null,
+    go: '#spec:' + s.path,
+    omit: 'spec',
+    lead: s,
+    rows: kin.get(s.key),
+  }));
+  if (loose.length) out.push({ head: 'Без спеки', omit: null, rows: loose });
+  /* A spec with nothing under it still counts as its own newest thing, or an untouched spec
+     would sort as if it were empty. */
+  return out.sort((a, b) => newest([...(b.lead ? [b.lead] : []), ...b.rows]) - newest([...(a.lead ? [a.lead] : []), ...a.rows]));
+}
+
+function renderIndex(feature) {
+  const all = feature ? IDX.specs.filter((s) => featureOf(s) === feature) : IDX.specs;
+  document.title = (feature || 'Документы') + ' · борд';
+  document.getElementById('hdTitle').textContent = feature || 'Документы';
+  document.getElementById('hdStatus').innerHTML =
+    all.some((s) => s.running) ? '<span class="chip c-run">что-то идёт</span>' : '';
+  const touched = all.filter((s) => s.entries.length);
+  document.getElementById('hdMeta').innerHTML =
+    touched.length + ' из ' + all.length + ' документов что-то запускали · $' +
+    touched.reduce((a, s) => a + s.totals.costUsd, 0).toFixed(2) + ' всего · по времени изменения';
+
+  document.getElementById('groupBar').innerHTML = GROUPINGS
+    .map(([k, label]) => '<button class="fbtn' + (k === groupBy ? ' on' : '') + '" data-group="' + k + '">' + label + '</button>')
+    .join('');
+
+  const head = (g) => '<div class="grouphd">' +
+    (g.go ? '<button data-go="' + esc(g.go) + '">' + esc(g.head) + '</button>' : esc(g.head)) +
+    ' · ' + (g.rows.length + (g.lead && !g.head.startsWith(g.lead.key) ? 1 : 0)) + '</div>';
+
+  document.getElementById('specList').innerHTML =
+    groupsFor(all).map((g) => (g.head ? head(g) : '') +
+      (g.lead ? specRow(g.lead, { omit: g.omit }) : '') +
+      g.rows.map((s) => specRow(s, { omit: g.omit, depth: g.lead ? 1 : 0 })).join('')).join('') +
+    (!feature && IDX.orphans.length
+      ? '<div class="grouphd">Прогоны без документа — он переименован или удалён</div>' +
+        IDX.orphans.map((e) => '<button class="specrow" data-go="#' + esc(e.id) + '">' +
+          '<span class="specdot"></span><span class="lead"><span class="nm">' + esc(e.id) + '</span>' +
+          '<span class="sub">' + esc(e.status) + '</span></span></button>').join('')
+      : '');
+}
+
+function renderSpec(path) {
+  const s = specOf(path);
+  if (!s) { location.hash = ''; return; }
+  document.title = s.key + ' · борд';
+  document.getElementById('hdTitle').textContent = s.key + ' · ' + (s.title || '');
+  document.getElementById('hdStatus').innerHTML = s.running ? '<span class="chip c-run">идёт</span>' : '';
+  document.getElementById('hdMeta').innerHTML =
+    '<span class="mono">' + esc(s.path) + '</span>' +
+    (s.dependsOn.length ? ' · зависит от <b>' + esc(s.dependsOn.join(', ')) + '</b>' : '') +
+    ' · ' + s.totals.ship + ' ship, ' + s.totals.refine + ' refine · $' + s.totals.costUsd.toFixed(2) +
+    (s.totals.blockers ? ' · <b>' + s.totals.blockers + '</b> блокеров за всё время' : '');
+
+  document.getElementById('specRuns').innerHTML = s.entries.length
+    ? s.entries.map((e) => '<button class="specrow" data-go="#' + esc(e.id) + '">' +
+        '<span class="specdot' + (e.running ? ' on' : '') + '"></span>' +
+        '<span class="kindchip' + (e.kind === 'refine' ? ' refine' : '') + '">' + (e.kind === 'refine' ? 'refine' : 'ship') + '</span>' +
+        '<span class="lead"><span class="nm">' + esc(e.label) + ' ' + verdictChip(e.status) + '</span>' +
+        '<span class="sub">' + (e.detail ? esc(e.detail) + ' · ' : '') +
+          (e.startedAt ? hhmm(e.startedAt) : '') +
+          (e.blockers ? ' · ' + e.blockers + ' блок.' : '') + (e.notes ? ' · ' + e.notes + ' зам.' : '') +
+          (e.branch ? ' · ' + esc(e.branch) : '') + '</span></span>' +
+        '<span class="num"><b>$' + e.costUsd.toFixed(2) + '</b>' + wallOf(e.wallSec) + '</span></button>').join('')
+    : '<p class="dim">По этому документу ещё ничего не запускали.</p>';
+
+  /* What hangs off this spec. The relation is written on the lighter document, so the spec
+     itself says nothing about it and this is the only place the other direction is readable. */
+  const kin = IDX.specs.filter((x) => x.relatesToPath === s.path);
+  document.getElementById('cardKin').hidden = !kin.length;
+  if (kin.length) document.getElementById('specKin').innerHTML = kin.map((x) => specRow(x, { omit: 'spec' })).join('');
+}
+
+/* The hash is the whole of the navigation state, so a reload lands where the reader was and a
+   link is worth sending to someone. */
+const isListAddress = (h) => !h || h === 'specs' || h.startsWith('spec:') || h.startsWith('feature:');
+
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  /* The two list views are made of the index, and the index arrives on the stream. Until it
+     does there is nothing to draw them from — and falling through to the run branch asked the
+     watcher for a run named 'feature:time-off', which it does not have, so a link to a list
+     opened on whatever run the board happened to start on. The index's arrival routes again. */
+  if (isListAddress(h) && !IDX) return;
+  if (!h || h === 'specs') { openFeature = null; show('index'); renderIndex(); crumbs(); return; }
+  if (h.startsWith('feature:')) {
+    openFeature = h.slice(8);
+    show('index'); renderIndex(openFeature); crumbs(); return;
+  }
+  if (h.startsWith('spec:')) { openSpec = h.slice(5); show('spec'); renderSpec(openSpec); crumbs(); return; }
+  if (h && h !== D.runId) { wanted(h); return; }
+  show('run');
+  /* Drawn, not merely revealed. The header, the title and the metrics belong to whichever view
+     wrote them last, so a run arrived at from a list kept the list's heading over the run's own
+     body, and the page said one thing while showing another. */
+  render();
+  crumbs();
+}
+
+document.addEventListener('click', (e) => {
+  /* The grouping is a way of looking at the list, not a place in it: it survives a reload and
+     it is not in the hash, so a link somebody sends opens on the rows and not on somebody
+     else's idea of how they should be stacked. */
+  const grp = e.target.closest('[data-group]');
+  if (grp) {
+    groupBy = grp.dataset.group;
+    try { localStorage.setItem('board.groupBy', groupBy); } catch { /* a private window still groups */ }
+    renderIndex(openFeature);
+    return;
+  }
+  const go = e.target.closest('[data-go]');
+  if (!go) return;
+  e.preventDefault();
+  location.hash = go.dataset.go.replace(/^#/, '');
+  route();
+});
+addEventListener('hashchange', route);
+
+/* Asking for a run the page is not holding: the payload has to arrive before it can be drawn,
+   so the switch happens when it does. */
+let wanted = () => {};
+
 /* ── live ───────────────────────────────────────────────────────────────
    Served over http by run-watch.mjs, the page follows the run: the watcher pushes a fresh
    payload whenever the run directory changes, and the whole view is drawn again from it.
@@ -1182,10 +1686,16 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
   live.textContent = '● следит';
   document.body.appendChild(live);
 
-  const wrap = document.getElementById('runPickWrap');
-  const pick = document.getElementById('runPick');
   let es = null;
   let shown = D.runId;
+  /* The run a switch is already on its way to.
+   *
+   * Opening a stream pushes the index before it pushes the payload, and the index handler
+   * re-routes — so without this, 'route' asked for the same run again, 'connect' closed the
+   * stream that was about to answer, and the next stream did the same. The hash moved, the page
+   * never did, and a reload worked because by then the server was already watching what the
+   * hash named. */
+  let pending = null;
 
   /* Switching runs keeps nothing: the ids belong to the run that is leaving, so an open step
      or a chosen tab would either miss or, worse, land on an unrelated step that happens to be
@@ -1195,32 +1705,61 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
     activeFilter = 0; allOpen = false; cursor = 0; first = true;
   }
 
-  function connect(runId) {
+  function connect(entry) {
     if (es) es.close();
     live.classList.remove('lost');
     live.textContent = '● следит';
-    es = new EventSource('feed' + (runId ? '?run=' + encodeURIComponent(runId) : ''));
+    es = new EventSource('feed' + (entry ? '?entry=' + encodeURIComponent(entry) : ''));
 
-    es.addEventListener('runs', (ev) => {
-      const list = JSON.parse(ev.data);
-      pick.innerHTML = list.map((r) =>
-        '<option value="' + esc(r.id) + '">' + esc(r.id) +
-        (r.status ? ' · ' + esc(r.status) : '') +
-        (r.spec ? ' · ' + esc(r.spec.split('/').pop()) : '') + '</option>').join('');
-      pick.value = shown;
-      wrap.hidden = list.length < 2;
+    /* The index is pushed to everyone on every change, whichever view they are on: a run that
+       starts while somebody is reading another one has no watcher to attach, and a board that
+       only learns about it on reload is blind exactly when someone is looking. */
+    es.addEventListener('index', (ev) => {
+      IDX = JSON.parse(ev.data);
+      /* Its arrival is when a list address can finally be honoured — including the one the page
+         was opened on and had to defer. A reader already inside a run keeps their place. */
+      if (isListAddress(decodeURIComponent(location.hash.slice(1))) || view !== 'run') route();
+      else crumbs();
     });
 
     es.addEventListener('payload', (ev) => {
       const next = JSON.parse(ev.data);
-      if (next.runId !== shown) { reset(); shown = next.runId; pick.value = shown; }
+      if (next.runId !== shown) { reset(); shown = next.runId; }
       D = next;
-      render();
+      /* Drawn only where it is visible. A payload arriving while the reader is on the index is
+         still kept, so opening the run is instant and never shows the state it had on load. */
+      if (view === 'run') render();
       beat();
     });
 
-    es.onerror = () => { live.textContent = '○ связь потеряна'; live.className = 'livebadge lost'; };
+    /* A switch that will never arrive must not leave the page unable to ask again. */
+    es.onerror = () => { pending = null; live.textContent = '○ связь потеряна'; live.className = 'livebadge lost'; };
   }
+
+  /* A run asked for from a list: already held, so draw it; otherwise the switch waits for the
+     payload the reconnect brings. */
+  wanted = (id) => {
+    if (id === shown) { pending = null; show('run'); render(); crumbs(); return; }
+    if (id === pending) return;
+    pending = id;
+    connect(id);
+    /* The server builds the report before it can send it, which on a long run is seconds. A
+       click with nothing on screen to show for it reads as a click that missed, and the second
+       one lands somewhere else. */
+    live.className = 'livebadge';
+    live.textContent = '● открываю прогон…';
+    const once = (ev) => {
+      if (JSON.parse(ev.data).runId !== id) return;
+      es.removeEventListener('payload', once);
+      pending = null;
+      /* The generic handler set 'D' and returned without drawing, because the view was still
+         the list when it ran. Drawing is this listener's half of the switch. */
+      show('run');
+      render();
+      crumbs();
+    };
+    es.addEventListener('payload', once);
+  };
 
   /* What the badge says is the difference between "thinking" and "stopped", which is the one
      question a page like this has to answer and the one an animation cannot. A run in flight
@@ -1243,20 +1782,21 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
 
   setInterval(beat, 1000);
 
-  pick.addEventListener('change', () => {
-    location.hash = pick.value;
-    connect(pick.value);
-  });
-
-  /* The hash is what makes a reload land back on the run being read, and what makes the link
-     worth sending to someone. */
-  connect(decodeURIComponent(location.hash.slice(1)) || null);
+  const hash = decodeURIComponent(location.hash.slice(1));
+  /* Only a run id names something to watch. The two list views are drawn from the index, which
+     every stream carries, so asking the server to follow 'feature:time-off' would be asking it
+     for a directory that is not there. */
+  const addressesARun = hash && !hash.startsWith('spec:') && !hash.startsWith('feature:') && hash !== 'specs';
+  connect(addressesARun ? hash : null);
 }
+
+route();
 </script>
 </body></html>`;
+}
 
 const out = flag('--out') ?? join(dir, 'report.html');
-writeFileSync(out, html);
+writeFileSync(out, pageHtml(payload));
 console.log(out);
 console.log(
   `  ${mmss(totals.wallSec)} · $${totals.costUsd} · ${totals.invocations} вызовов` +

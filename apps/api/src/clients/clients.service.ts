@@ -17,7 +17,7 @@ import { Prisma } from '@prisma/client';
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
 
-interface CallerMembership {
+export interface CallerMembership {
   id: string;
   role: Role;
   organizationId: string;
@@ -86,10 +86,10 @@ export class ClientsService {
 
     // The search is optional; a longer-than-120 string or a non-string is silently
     // treated as no filter, so a stray query param never turns into a 400 (spec §16).
-    const q = typeof query.q === 'string' ? query.q : '';
+    const searchTerm = typeof query.q === 'string' ? query.q : '';
     const searchFilter =
-      q.length > 0 && q.length <= 120
-        ? { name: { contains: q, mode: Prisma.QueryMode.insensitive } }
+      searchTerm.length > 0 && searchTerm.length <= 120
+        ? { name: { contains: searchTerm, mode: Prisma.QueryMode.insensitive } }
         : {};
 
     const clients = await this.prisma.client.findMany({
@@ -356,8 +356,12 @@ export class ClientsService {
    * nothing (spec TC-01-INT-03 / TC-01-INT-04). The path is the same URL an
    * admin/manager would call, so a distinctive 403 body would leak the fact that
    * the resource exists.
+   *
+   * Public, not private, since requests spec 03: the contacts routes on a client decide
+   * with the same two gates and must give the same answer, so they call these rather
+   * than re-deriving the rule (REQ-03-008).
    */
-  private async requireManageCapability(session: SessionPayload): Promise<CallerMembership> {
+  async requireManageCapability(session: SessionPayload): Promise<CallerMembership> {
     const caller = await this.requireCaller(session);
     if (!can(caller.role, 'manage-clients')) {
       throw new NotFoundException();
@@ -366,7 +370,7 @@ export class ClientsService {
   }
 
   /** `view-clients` gate — same 404 discipline as `requireManageCapability`. */
-  private async requireViewCapability(session: SessionPayload): Promise<CallerMembership> {
+  async requireViewCapability(session: SessionPayload): Promise<CallerMembership> {
     const caller = await this.requireCaller(session);
     if (!can(caller.role, 'view-clients')) {
       throw new NotFoundException();

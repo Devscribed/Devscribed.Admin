@@ -1,0 +1,25 @@
+{
+  "status": "pass",
+  "reviewedUpTo": "32b8217",
+  "sweeps": {
+    "1": 1,
+    "2": 0,
+    "3": 1,
+    "4": 0,
+    "5": 3,
+    "6": 0,
+    "7": 0,
+    "8": 1,
+    "9": 1,
+    "10": 2,
+    "11": 2
+  },
+  "covered": {
+    "scope": 1,
+    "read": [
+      "apps/api/src/documents/envelopes.service.ts"
+    ],
+    "unreached": []
+  },
+  "findings": []
+}

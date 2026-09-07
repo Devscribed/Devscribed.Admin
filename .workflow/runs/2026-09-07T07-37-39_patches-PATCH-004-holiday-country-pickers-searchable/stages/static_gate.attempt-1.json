@@ -1,0 +1,21 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "e659a5baa790c54e7c1e3c3c565385a2359450c6",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/work-uncommitted",
+      "file": "apps/web/app/org/[orgId]/settings/holidays/HolidayModal.tsx",
+      "claim": "no commit on this branch carries the implementation; 4 file(s) are modified in the working tree and invisible to every gate that reads the diff",
+      "witness": {
+        "kind": "command",
+        "detail": "`git diff --name-only e659a5baa790c54e7c1e3c3c565385a2359450c6...HEAD -- . ':(exclude).workflow'` prints nothing. `git status --short` shows:  M apps/web/app/org/[orgId]/settings/holidays/HolidayModal.tsx,  M apps/web/app/org/[orgId]/settings/holidays/page.tsx,  M e2e/tests/holidays.spec.ts,  M e2e/tests/time-off-calendar.spec.ts.",
+        "source": "git diff e659a5baa790c54e7c1e3c3c565385a2359450c6...HEAD"
+      },
+      "suggestedFix": "commit the working-tree changes onto this branch in one commit, naming the attempt, then re-run the gate"
+    }
+  ]
+}

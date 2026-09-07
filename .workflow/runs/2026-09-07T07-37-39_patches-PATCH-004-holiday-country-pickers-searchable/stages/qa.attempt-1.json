@@ -1,0 +1,82 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1430,
+      "failed": 0,
+      "ms": 3640
+    },
+    "int": {
+      "skipped": true,
+      "reason": "no integration suite touched — the patch's blast radius names none, and packages/ds ships isSearchable/testId unedited"
+    },
+    "e2e": {
+      "passed": 25,
+      "failed": 0,
+      "files": [
+        "tests/holidays.spec.ts",
+        "tests/time-off-calendar.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "walkthrough": {
+    "spec": "tests/qa-look.spec.ts (deleted after the pass, per the kit's instructions)",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "screenshots": "e2e/.qa-look/*.png",
+    "notes": "Walked the organization country picker, the list's country filter, and the Add holiday form's country field as admin: live filtering on a substring, the control's own No options row on an unmatched query with the prior selection left unchanged, the input clearing and the wrapper showing the chosen name on commit, and the organization country choice surviving a Save and a reload. Walked the same screen as manager and confirmed the persisted country reads back correctly and the picker is searchable for that role too."
+  },
+  "acceptanceCriteria": [
+    {
+      "criterion": "isSearchable renders a text input inside all three controls and filters case-insensitively on any part of the label",
+      "result": "pass",
+      "evidence": "e2e/.qa-look/admin-org-country-filtered-poland.png, admin-holiday-modal-country-chosen.png"
+    },
+    {
+      "criterion": "An unmatched query draws the control's own No options row and leaves the current selection unchanged",
+      "result": "pass",
+      "evidence": "e2e/.qa-look/admin-org-country-no-options.png, admin-holiday-modal-no-options.png; TC-03-E2E-10 and TC-01-E2E-09"
+    },
+    {
+      "criterion": "Choosing an option clears the typed text, closes the list, and shows the chosen country's full name in the control",
+      "result": "pass",
+      "evidence": "e2e/.qa-look/admin-org-country-chosen-poland.png"
+    },
+    {
+      "criterion": "The option lists (leading rows, values, submitted shapes) are unchanged",
+      "result": "pass",
+      "evidence": "diff touches no country-options.ts, no PUT body, no countryCode shape"
+    },
+    {
+      "criterion": "data-testid moves to the wrapper for all three controls; the inner input takes a new -input id; every shipped assertion that reads these ids keeps passing unchanged",
+      "result": "pass",
+      "evidence": "e2e/tests/holidays.spec.ts and e2e/tests/time-off-calendar.spec.ts both pass, including the pre-existing click()/toContainText() assertions at holidays.spec.ts:108,155 and time-off-calendar.spec.ts:431,436,450,453"
+    },
+    {
+      "criterion": "No other Select in the app changes searchability",
+      "result": "pass",
+      "evidence": "diff is scoped to HolidayModal.tsx and page.tsx under settings/holidays; packages/ds untouched"
+    }
+  ],
+  "testCases": [
+    {
+      "id": "TC-03-E2E-10",
+      "level": "E2E",
+      "found": true,
+      "file": "e2e/tests/holidays.spec.ts",
+      "result": "pass"
+    },
+    {
+      "id": "TC-01-E2E-09",
+      "level": "E2E",
+      "found": true,
+      "file": "e2e/tests/time-off-calendar.spec.ts",
+      "result": "pass"
+    }
+  ],
+  "findings": []
+}

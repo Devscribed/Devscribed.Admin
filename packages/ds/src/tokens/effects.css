@@ -31,6 +31,10 @@
   --duration-quick: 0.1s; /* @kind other */ /* ChapterNavigationCard hover */
   --duration-fast: 0.15s; /* @kind other */
   --duration-hover: 0.3s; /* @kind other */
+  /* PATCH-026 — the step a whole region takes to arrive, where `--duration-fast` is the step
+     a border's colour takes. A block of content replacing another needs long enough to be
+     seen leaving and arriving; at 0.15s the swap reads as a flicker rather than a move. */
+  --duration-region: 0.28s; /* @kind other */
   --duration-spin: 2s; /* @kind other */
 
   /* Named transitions. Reach for one of these rather than composing a duration and an easing

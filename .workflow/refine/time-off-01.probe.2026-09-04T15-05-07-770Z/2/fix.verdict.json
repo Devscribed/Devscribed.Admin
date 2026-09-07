@@ -1,0 +1,89 @@
+{
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "verdict": ".workflow/refine/time-off-01.verdict.json",
+  "fixed": [
+    {
+      "id": "P3",
+      "rule": "spec/divergence",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md"
+      ],
+      "change": "Nothing was required of the bundle and the four removed Decided paragraphs stay removed — each was rationale for a rule that still stands, and README.md carries the Amounts Owed consequence. What the finding asks for is a record that matches the text, so this run's incidental edits are listed here rather than left for the next reader to discover: the behaviour file sits 2 lines under its size budget, so the seven lines P1 and P2 add were paid for by tightening six Decided paragraphs that carry no rule of their own — REQ-01-009 (the `none` sentinel, 4 lines to 3), REQ-01-017 (calendar dates, 2 to 1), REQ-01-025 (`kind` ahead of its need, 2 to 1), REQ-01-032 (the fixed Monday–Friday week, 2 to 1), REQ-01-033 (last-write-wins, 2 to 1) and REQ-01-048 (a restored membership keeps its country, 3 to 2). No decision and no rejected alternative was dropped from any of them; no requirement, criterion or case was weakened.",
+      "verifiedBy": "git show df2e3aa -- specs/time-off/01-vacation-calendar.md; node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md (clean, 468 lines against a 470-line budget)"
+    },
+    {
+      "id": "P4",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "change": "TC-01-E2E-02 gains the step that presses the control: from the refused, nothing-ticked state it reopens `calendar-teams-picker` and ticks **Unassigned** alone, and expects the banner to clear and the grid to draw the one member on no project and none of the three assigned. Its Covers gains REQ-01-007. No new testid: the entry is ticked inside `calendar-teams-picker` the same way the case already ticks the two projects, which is what the contracts' Screens paragraph describes.",
+      "verifiedBy": "specs/time-off/01-vacation-calendar.contracts.md `calendar-teams-picker` row and its Screens paragraph; TC-01-INT-05, whose fixture already has a member on neither project"
+    },
+    {
+      "id": "P5",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "change": "TC-01-INT-19's third caller is now 'an accepted member who has never set a timezone, whose column is therefore `null`' — no membership status that could not reach the `200` the case asserts, and the stored value named as the column holds it. The Verification Plan keeps its `\"\"`, which is what the account read substitutes.",
+      "verifiedBy": "apps/api/src/invitations/invitations.service.ts:286-287,444-445 (stores `null` when no timezone is submitted); apps/api/prisma/schema.prisma:37 (`timezone String?`); apps/api/src/account/account.service.ts:74 (`account.timezone ?? ''`)"
+    },
+    {
+      "id": "P6",
+      "rule": "spec/stale-statement",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.mock.html"
+      ],
+      "change": "The `:root` comment now opens 'The three colour tokens and the one width this spec asks the design system for', matching the four names declared beneath it and the two rows of the contracts' DS gaps table; 'the DS gap in the spec' became 'the DS gaps'.",
+      "verifiedBy": "the `:root` block of specs/time-off/01-vacation-calendar.mock.html and the `## DS gaps` table of specs/time-off/01-vacation-calendar.contracts.md"
+    },
+    {
+      "id": "P7",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/README.md"
+      ],
+      "change": "The area README is committed, so the ledger's range now covers R1's other half. Its sentence about the twin was also carried to P1's decision — it read 'the spelling the calendar's own gate reads through `can(role, …)`' and now reads 'the spelling the calendar's own gate reads, through `can()` on the normalized role, so a membership still storing `member` is read as `user`.'",
+      "verifiedBy": "git log --oneline -1 → fc23f4e refine(time-off-01): round 2 fix — carry R1/P1 into the area README; git status --porcelain no longer lists specs/time-off/README.md"
+    }
+  ],
+  "decided": [
+    {
+      "id": "P1",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md",
+        "specs/time-off/README.md"
+      ],
+      "question": "is the calendar's capability gate handed the raw stored role or the normalized one, given `can()` normalizes nothing and a membership can still store the legacy `member`",
+      "chose": "the normalized role, in both gates — `can(normalizeRole(role), 'view-time-off-calendar')` behind the route and `hasCapability(role, 'ViewTimeOffCalendar')` in the sidebar, so a stored `member` is read as `user`, holds the capability in both spellings, and is answered the page whose row it is drawn",
+      "rejected": "handing `can()` the raw stored role, which refuses that member the calendar while the sidebar draws its Calendar row",
+      "why": "rule 2 — the surrounding rule is the one this spec already states two paragraphs above, that capability checks run against `normalizeRole()` and therefore work on today's `admin` / `member` column; the rejected reading is the dead navigation REQ-01-004 forbids, and it is reachable only because this spec is the first to grant a capability to `user`",
+      "recordedAt": "the **Decided** under `## Roles & Permission Matrix`, which states the choice and both rejected alternatives; carried into the calendar's Guards cell in the contracts Routes table and the paragraph below it, into specs/time-off/README.md's shared-code paragraph, and observed by the new TC-01-UNIT-04, which probes both unions for `member`, `user` and `viewer` and asserts the unnormalized `can('member', …)` is false"
+    },
+    {
+      "id": "P2",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "question": "under the `Month` preset, does back or forward move by the window's own day count or to the adjacent calendar month",
+      "chose": "the adjacent calendar month — under `Month`, back and forward move to the whole calendar month before or after the displayed one; under `Week` and `2 weeks` they move one preset length, which REQ-01-019 anchors on the caller's `firstDayOfWeek`",
+      "rejected": "shifting the anchor by the window's day count, which under `Month` produces a 28-to-31-day span across two months",
+      "why": "rule 2 — REQ-01-019 already carves `Month` out as the first to the last day of the displayed calendar month, and the rejected reading names in the range label a window the preset itself cannot produce",
+      "recordedAt": "REQ-01-049, whose rule now states all three moves per preset, and its **Decided** naming the rejected reading; observed by TC-01-E2E-03, which now presses `calendar-window-month` and `calendar-prev` and expects one day header per day of the previous calendar month, first to last"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/time-off/01-vacation-calendar.md",
+    "specs/time-off/01-vacation-calendar.contracts.md",
+    "specs/time-off/01-vacation-calendar.cases.md",
+    "specs/time-off/01-vacation-calendar.mock.html",
+    "specs/time-off/README.md"
+  ]
+}

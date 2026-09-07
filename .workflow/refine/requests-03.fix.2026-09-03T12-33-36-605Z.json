@@ -1,0 +1,54 @@
+{
+  "spec": "specs/requests/03-client-participants.md",
+  "verdict": ".workflow/refine/requests-03.verdict.json",
+  "fixed": [],
+  "decided": [
+    {
+      "id": "V1",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.cases.md"
+      ],
+      "question": "what a client principal receives for a `scope` value outside the closed set \u2014 the 200 REQ-03-029 promised for any value, or the 400 the list route's row declares",
+      "chose": "the 400: REQ-03-029's rule is bounded to the values the query may carry \u2014 `scope=mine`, `scope=all` or no scope at all \u2014 and any other value is the `400` `validation_error` the route answers every principal, decided before the caller's kind is looked at",
+      "rejected": "answering a client 200 with their own rows for an unparseable value, which would have required deleting 'whichever principal sends it' from the routes paragraph and carving the client out of a refusal that is about the query string and not about the caller",
+      "why": "rule 1 \u2014 the code already parses the query and answers 400 before any principal or scope branching (apps/api/src/requests/requests.service.ts, listRequests: `queryFields.scope = 'unknown_value'` is thrown before the `scope === 'all'` capability branch), and the spec had taken no contrary position deliberately; the refusal is also the narrower answer",
+      "recordedAt": "REQ-03-029 \u2014 its rule now enumerates the two scope values, and its Decided paragraph states the 400 for any other value and names the rejected alternative; TC-03-INT-23 gained the step that observes it (`scope=everything` \u2192 400 validation_error naming `scope`)",
+      "verifiedBy": "apps/api/src/requests/requests.service.ts (listRequests, parseRequestScope \u2192 `unknown_value` before the `view-all-requests` branch); packages/validation/src/requests.test.ts, which pins parseRequestScope to 'mine', 'all' and undefined \u2192 'mine'"
+    },
+    {
+      "id": "V2",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/requests/03-client-participants.contracts.md"
+      ],
+      "question": "which gate the three contacts routes declare \u2014 a capability guard, whose refusal is a 403, or the capability the service decides with, whose refusal is the 404 REQ-03-008 requires",
+      "chose": "the capability spelt as REQ-03-008 spells it: the Guards cells now read `view-clients` and `manage-clients`, and the paragraph under the table says that capability decides the 404 and that no contacts route refuses with a 403 naming it",
+      "rejected": "keeping the `ViewClients` / `ManageClients` spelling, which names the legacy union whose route-level consumer answers 403 and can never produce the 404 the routes' Errors cells and REQ-03-008 declare",
+      "why": "rule 1 \u2014 the capability the contacts surface is decided by is the dashed one, and its refusal is already a 404 (apps/api/src/clients/clients.service.ts, requireViewCapability / requireManageCapability: `can(caller.role, 'view-clients' | 'manage-clients')` then NotFoundException); rule 3 \u2014 the 404 hides more than the 403",
+      "recordedAt": "the Routes table's three contacts rows and the paragraph beneath it; the PII bullet under Security now names `view-clients` in the same spelling",
+      "verifiedBy": "apps/api/src/clients/clients.service.ts (requireViewCapability, requireManageCapability) against apps/api/src/auth/capability.guard.ts (ForbiddenException, TEMPLATE_MESSAGES.generic.forbidden); packages/validation/src/roles.ts, where both spellings exist and only the dashed one is `can`'s"
+    },
+    {
+      "id": "V3",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/requests/03-client-participants.md"
+      ],
+      "question": "for a reassignment, which addressee the recipients are read from \u2014 the holder before the move or after it \u2014 and whether the outgoing addressee is told",
+      "chose": "the addressee the request carries as the transaction that wrote the event leaves it, so a reassignment notifies the incoming addressee and nobody else beyond the requester",
+      "rejected": "writing a second row for the outgoing addressee, telling the person who lost the request",
+      "why": "rule 3 \u2014 the narrower recipient set tells fewer people about a request they no longer hold; rule 4 \u2014 a notification withheld can be added by a later spec, one already sent cannot be taken back, and this bundle declares no reassign route or message of its own to hang it on",
+      "recordedAt": "REQ-03-036 \u2014 the rule now names which row the addressee is read from, and its Decided paragraph states the reassignment outcome and the rejected alternative",
+      "verifiedBy": "specs/requests/03-client-participants.md REQ-03-035, which names `reassigned` among the events, and the Routes table of the contracts file, which carries no reassign route for a case to walk"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/requests/03-client-participants.md",
+    "specs/requests/03-client-participants.contracts.md",
+    "specs/requests/03-client-participants.cases.md"
+  ],
+  "note": "The bundle's behaviour file was at its size budget, so the three additions were paid for by tightening the reasoning in the Decided paragraphs of REQ-03-001, REQ-03-013, REQ-03-017, REQ-03-020, REQ-03-023 and REQ-03-027; every decision and rejected alternative in them is kept. node scripts/spec-lint.mjs specs/requests/03-client-participants.md is clean."
+}

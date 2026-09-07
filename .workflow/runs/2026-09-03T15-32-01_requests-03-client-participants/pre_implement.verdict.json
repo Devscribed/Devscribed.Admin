@@ -1,0 +1,23 @@
+{
+  "stage": "pre_implement",
+  "spec": "specs/requests/03-client-participants.md",
+  "status": "blocked",
+  "recoveredBy": "the stage wrote handoff.json (18:50:20) and stages/pre_implement.md (18:51:54) and was killed by its 20-minute fuse at 18:52:08, before it could write this file. Every field below is transcribed from stages/pre_implement.md — its own report, which opens 'Verdict: blocked. One blocking finding (P1, spec/stale-statement) and eleven notes.' The eleven notes are in that report and are not restated here.",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-002",
+      "claim": "the spec claims a state is unreachable, and two files refute the claim",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-03-002's decision table marks staffRow=active, clientRow=active 'Unreachable — an accept that would write the second row is refused by REQ-03-014, and no other writer creates one.' REQ-03-014 refuses only the accept of a `client` invitation. The staff invitation path is untouched by this spec — POST /api/invitations is not in the Routes table — and its `alreadyMember` check reads Membership rows alone (invitations.service.ts:92-97), while acceptExistingAccount creates a Membership for any account holding none (invitations.service.ts:277-289) without consulting a ClientMembership. So: invite an address as a client contact, accept, then have an admin invite the same address as a `user` — which REQ-03-011 and TC-03-INT-31 explicitly contemplate — and accept that too. The account now holds an active Membership and an active ClientMembership: the cell the table calls unreachable, the State Machine's invariant 1, and the criterion AC-2. TC-03-INT-08 tests only the client-invitation direction, so nothing in the suite would catch it. The Data Model's second claim — that ClientMembership.accountId @unique is 'what makes REQ-03-002's invariant a schema fact rather than a rule' — is false for the same reason: Membership.accountId is itself @unique (schema.prisma:196), and two independent unique constraints on two tables cannot express mutual exclusion between them.",
+        "source": "specs/requests/03-client-participants.md#REQ-03-002 against apps/api/src/invitations/invitations.service.ts:92-97,277-289"
+      },
+      "suggestedFix": "a person decides where the staff side refuses — at invite, beside the existing alreadyMember check, so nobody is handed a token they cannot use; or at accept, with the 409 CLIENT_USER_MESSAGES.principalConflict REQ-03-014 already defines — and the spec states it. The two differ in what an admin sees and when. handoff.json plans T5 as the spec is written and records the hole as risk R1, so the plan absorbs the rule the moment it is stated."
+    }
+  ]
+}

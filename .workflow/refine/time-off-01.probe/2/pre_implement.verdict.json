@@ -1,0 +1,62 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "handoff": ".workflow/refine/time-off-01.probe/2/handoff.json",
+  "report": ".workflow/refine/time-off-01.probe/2/stages/pre_implement.md",
+  "coverage": {
+    "requirements": "50/50",
+    "cases": "41/41",
+    "sections": "20/20 (8 in the spec, 12 across the bundle)",
+    "testIds": 26,
+    "tasks": 9,
+    "note": "handoff-coverage.mjs returns pass but reports `requirements 0/0  cases 0/0`: it counts requirements by matching `^(\\d+)\\. ` inside the Functional Requirements section, and this bundle numbers them as `#### REQ-01-NNN` headings, and it counts cases in the spec file while this bundle keeps all 41 in a sibling. Only its section check (8/8) ran against real input. The requirement and case figures above were verified directly against the bundle rather than taken from that gate."
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "Verification Plan — 'A shared holiday-seeding helper'",
+      "claim": "The row says createHolidayViaApi is 'private to e2e/tests/reports-time-off.spec.ts:38'. It is private to two files, not one, and the two copies are not the same function. Demoted to a note rather than raised as a blocker: the statement is incomplete rather than false, the task it generates (promote it to helpers.ts) is unchanged, and the plan is compilable either way. It is recorded because the second copy is the one that makes the promotion non-trivial — a promoter who reads only the row named will leave a third copy behind, and the two copies disagree on their return type, so whichever shape is promoted, one call site has to change.",
+      "witness": {
+        "kind": "artefact",
+        "detail": "`grep -rn createHolidayViaApi e2e/` returns definitions at e2e/tests/holidays.spec.ts:42 and e2e/tests/reports-time-off.spec.ts:38. The reports copy is declared `Promise<void>` and its two callers (:76, :122) discard the result; the holidays copy returns the created row and its caller at :231 uses it — `const holiday = await createHolidayViaApi(...)`. Promoting the void shape breaks holidays.spec.ts:231; promoting the returning shape leaves reports-time-off.spec.ts's two calls valid but requires repointing both files.",
+        "source": "e2e/tests/holidays.spec.ts:42, :231; e2e/tests/reports-time-off.spec.ts:38, :76, :122"
+      },
+      "suggestedFix": "No spec edit is required for the plan to proceed. If the row is ever amended, name both files and the return-shape disagreement between them. The plan carries the whole of it in T9's notes."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Validation Rules — rule 9 and its Decided",
+      "claim": "The spec uses the phrase 'a valid ISO 3166-1 alpha-2 value' for two different predicates, and the difference is deliberate but is stated only in fragments. The WRITE (Validation Rule 9, REQ-01-036, REQ-01-051) is the shipped shape check: it refuses 'pl' and accepts 'XX'. The READ (REQ-01-026, REQ-01-027, REQ-01-040) must upcase and then test membership of the ISO list: it accepts 'pl' and skips 'XX'. The spec's own Decided note describes the asymmetry as the read being 'more forgiving than the write', which covers the case half and not the 'XX' half. This is NOT a blocker: Validation Rule 9 states the write's constraint explicitly ('Empty, or exactly 2 uppercase letters'), and any stricter reading of the write would make REQ-01-027 and Edge case 10 unreachable, so exactly one implementation satisfies the whole document. Raised because the natural implementation reuses the wrong helper.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A manager PUTs countryCode 'XX' to the organization country. Under Validation Rule 9 (validateHolidayCountryCode, packages/validation/src/holidays.ts:93, COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/ at :34) it is accepted and stored — which is the only way a member can later resolve through REQ-01-027's skip branch and Edge case 10. A member then reads the calendar: REQ-01-026 must treat that same stored 'XX' as not normalizing, and TC-01-UNIT-01 pins it — the pairs ('XX','PL') -> 'PL' and ('XX','YY') -> null both require the read to reject 'XX', while ('pl','BY') -> 'PL' requires it to upcase. validateHolidayCountryCode does the opposite on both: it returns 'XX' as valid and refuses 'pl'. Reusing it for the read — which is exactly what HolidaysService.normalizeResolvedCountry does today at holidays.service.ts:381 — fails TC-01-UNIT-01 on two branches at once. The predicate the read needs is validateCountryCode's (packages/validation/src/autofill.ts:682), which upcases and then tests COUNTRY_NAMES (autofill.ts:717 — 249 codes, verified to contain PL, US and BY and not XX or YY).",
+        "source": "packages/validation/src/holidays.ts:34, :93; packages/validation/src/autofill.ts:682, :717; apps/api/src/holidays/holidays.service.ts:381; specs/time-off/01-vacation-calendar.cases.md TC-01-UNIT-01"
+      },
+      "suggestedFix": "Nothing in the spec needs to change. The plan names both predicates, their files and the failure mode in T2's notes; the implementation should carry the same distinction as a comment on resolveMemberHolidayCountry, so the next reader does not 'unify' the two validators and silently break REQ-01-027."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-23",
+      "claim": "TC-01-INT-23 says 'Read with scope=everyone, then with no scope parameter at all' and does not state the range it sends. The validation rules are ordered and the first failure is the whole answer, with the three range rules numbered ahead of the scope rule — so a read that omits the range as well as the scope is answered rangeRequired, not scopeInvalid. Not a blocker: the case's Expected Result names scopeInvalid unambiguously, which fixes the fixture, and the rule order that makes it so is stated in the same document. Raised so the case is written with a valid range rather than discovered to be flaky.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "GET .../time-off/calendar?scope=everyone with no startDate and no endDate. Rule 1 (startDate required) fails before rule 5 (scope) is reached, and the Decided under the Validation Rules table says the first failure is the whole answer — 'a request that is both inverted and scoped everyone is refused with rangeInverted and nothing else'. The response is 422 rangeRequired. TC-01-INT-23 expects 422 scopeInvalid on both of its reads, which is only produced when both reads carry a valid range.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md, Validation Rules table and its Decided; specs/time-off/01-vacation-calendar.cases.md TC-01-INT-23"
+      },
+      "suggestedFix": "No spec edit required. When TC-01-INT-23 is written, send a valid startDate and endDate on both reads so the scope rule is the first one reached."
+    }
+  ]
+}

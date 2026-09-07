@@ -1,6 +1,6 @@
 ---
 name: spec
-description: Write a functional specification for this repository — a numbered spec file in specs/<area>/ covering behaviour, API contracts, edge cases, blast radius, backward compatibility, acceptance criteria, and unit/integration/E2E test cases. Use when asked to spec a feature, write a specification, design a new area, or extend an existing spec. Also use before implementing anything non-trivial that has no spec yet.
+description: Write a functional specification for this repository — a three-file bundle in specs/<area>/ (NN-name.md for EARS rules with stable ids, NN-name.contracts.md for routes, messages and testids, NN-name.cases.md for the verification plan and test cases) covering behaviour, API contracts, edge cases, blast radius, backward compatibility, acceptance criteria, and unit/integration/E2E test cases. Use when asked to spec a feature, write a specification, design a new area, or extend an existing spec. Also use before implementing anything non-trivial that has no spec yet.
 ---
 
 # Writing specifications
@@ -13,14 +13,21 @@ implementation and its tests are checked against.
 
 Every spec covers all six. None is optional, and none is satisfied by a sentence.
 
-| | What it means |
-|---|---|
-| **Edge cases** | A numbered table of specific situations and the exact behaviour for each. Not a paragraph of caveats. |
-| **Blast radius** | What breaks *outside* this feature, with a mitigation per row. Listing what you add is not blast radius. |
-| **Backward compatibility** | What guarantees existing data, routes, and deployments keep working, and what mechanism enforces each guarantee. |
-| **Acceptance criteria** | Observable, checkable statements. Not a restatement of the functional requirements. |
-| **Automated tests to E2E** | Numbered `TC-NN-UNIT-NN`, `TC-NN-INT-NN`, `TC-NN-E2E-NN` with preconditions, steps, expected results, and — for E2E — the `data-testid` selectors. |
-| **A proven verification route** | The rig an agent verifies this on, walked by you: how it comes up, what reaches each state a case needs, what observes each criterion, and what access that took. Recorded as what ran and what came back. |
+**Two of them are covered in the area `README.md`, not in the bundle**, because they are properties
+of the area rather than of one document: an area has one blast radius and one compatibility story,
+and restating them per spec is a second copy that goes stale. A spec says where they are — the
+shipped ones say *"Blast radius and backward compatibility for this spec are in README.md"* — and
+that sentence is the coverage. A judge asking for a `## Blast Radius` heading inside the bundle is
+asking for the copy, and the answer is the pointer, not a new section.
+
+| | What it means | Where it lives |
+|---|---|---|
+| **Edge cases** | A numbered table of specific situations and the exact behaviour for each. Not a paragraph of caveats. | `## Edge Cases`, in the contracts file |
+| **Blast radius** | What breaks *outside* this feature, with a mitigation per row. Listing what you add is not blast radius. | `## Blast Radius`, in the area `README.md` |
+| **Backward compatibility** | What guarantees existing data, routes, and deployments keep working, and what mechanism enforces each guarantee. | `## Backward Compatibility`, in the area `README.md` |
+| **Acceptance criteria** | Observable, checkable statements. Not a restatement of the functional requirements. | `## Acceptance Criteria`, in `NN-name.md` |
+| **Automated tests to E2E** | Numbered `TC-NN-UNIT-NN`, `TC-NN-INT-NN`, `TC-NN-E2E-NN` with preconditions, steps, expected results, and — for E2E — the `data-testid` selectors. | `## Test Cases`, in the cases file |
+| **A proven verification route** | The rig an agent verifies this on, walked by you: how it comes up, what reaches each state a case needs, what observes each criterion, and what access that took. Recorded as what ran and what came back. | `## Verification Plan`, in the cases file |
 
 ## Workflow
 
@@ -78,6 +85,24 @@ endpoint that gets there, or a fixture under `apps/api/src/test-support/` that t
 behind `assertFixturesOpen`. A state no route reaches is not a test case yet; it is a task this
 spec owes.
 
+**Then ask the other question about the same state: how does a customer reach it?** A fixture is
+a route for the suite, not for a person. Where the honest answer is "nobody has, yet" or "by hand,
+a row at a time", that is a Known Gaps row with what closes it, or the next spec named now — never
+a state the bundle quietly assumes is full. A feature whose mechanism is exercised only by seeded
+data ships with nothing in it.
+
+**Read each case back from what would produce it.** Take the expected result, name the rule, the
+column, the route or the fixture that has to yield each asserted value, and check that one fixture
+can yield them all at once. A case that seeds one row of an entity and asserts two values of a
+field that entity holds once cannot run, whichever value is right — and a case is never made
+runnable by the case saying so.
+
+**Reach it on any day the suite runs.** A case that seeds or asserts a calendar date passes until
+that date is past, and then fails with nobody having changed anything — and a fixture whose start
+is in the past cannot even be created through a route that refuses one. Derive every date from the
+run's own today, and where the case must see another month, name the control that navigates to it.
+A literal date is fine only where it is an argument to a pure function and no clock is involved.
+
 **Rehearse with a throwaway probe.** One scratch Playwright spec that signs in, arrives at the
 parent screen, and touches the ids the cases will name. Run it on the spec run's own ports, then
 delete it. The spec keeps the command and the result, never the file.
@@ -111,32 +136,70 @@ Everything this step establishes goes into the spec's `## Verification Plan` sec
 
 ### 4. Choose the shape
 
-One spec per coherent surface. Past roughly 900 lines, split into numbered specs with an area
-`README.md` index — see `specs/user-management/` (eleven files) and `specs/documents/` (three plus
-an index). A single 2000-line file is not more thorough, it is less readable.
+One spec per coherent surface. A spec is a **bundle of three files** sharing a base path:
+
+```
+specs/<area>/NN-name.md             behaviour  — EARS rules with stable REQ ids, decision tables
+specs/<area>/NN-name.contracts.md   contracts  — routes, messages, data model, testids, screens
+specs/<area>/NN-name.cases.md       cases      — the verification plan and the test cases
+```
+
+They are one document. The split is not tidiness: the three are checked by different means, and
+keeping the tables out of the behaviour file is what lets a script decide most of what used to
+need a judge. The behaviour file is budgeted at `120 + 7 × requirements` lines — over that, the
+reasoning has grown around the rules.
+
+Past roughly 900 lines of behaviour, split into numbered specs with an area `README.md` index —
+see `specs/user-management/` and `specs/documents/`.
 
 New area → create `specs/<area>/README.md` too, and add a "Related Areas" pointer from any area it
 depends on.
 
 ### 5. Write
 
-Follow `references/spec-template.md` for section order and content. Specs are written in English,
-including in Russian-language conversations.
+Follow `references/spec-template.md`. It gives the file split, the EARS patterns, the decision-table
+directive, and the exact table headers the lint parses — keep those verbatim. Specs are written in
+English, including in Russian-language conversations.
 
-### 6. Refine — a stranger judges it, not you
+**The request is the budget.** The Summary opens with the request in one sentence and closes
+with what the spec adds beyond it, one line per addition with its reason — a route the request
+never named, a migration, a change to a route that already ships. An addition not listed there
+is a scope finding for the refiner. Before adding one, ask whether the request works without
+it: a curated list of six words does not need reordering, restoring or a lock to be the feature
+that was asked for, and every route added is paid for by every caller and every later spec.
 
-**Dispatch `spec-refiner` and fix what it returns, before presenting the spec.** Use the
-`refine` skill; the dispatch is one `Task`, given the spec path and the request in one line and
-nothing else.
+**Run the lint as you write, not at the end:**
+
+```bash
+npm run spec:lint -- specs/<area>/NN-name.md
+```
+
+It decides everything mechanical — a rule that matches no EARS pattern, a requirement stating two
+outcomes, a decision table with an empty cell, a status a case expects that no contract declares, a
+message asserted on a route its own row does not list, a testid in one place and not the other, a
+requirement no case covers, a rule carried by reference to another spec, a count in prose about a
+table, a line number into code, a path that does not exist.
+
+**Every one of those repairs deletes or corrects text.** That is why they belong to a script: a
+gate whose findings are answered with new prose makes work for the next pass.
+
+### 6. Refine — one command, and a stranger judges what is left
+
+```bash
+npm run refine:loop -- specs/<area>/NN-name.md --request "<the request, in one line>"
+```
+
+The loop runs three gates — the lint, then `spec-reviewer`, and `pre-implement` **last and once**,
+after the judge's verdict is clean — repairs what the blocking gate finds, commits the round, and
+judges the next round against that commit. Read `.claude/skills/refine/SKILL.md` for how to read the outcome; the important part
+is that **you do not drive the agents and do not decide whether a finding deserves another round.**
 
 You do not check your own spec. You know which sentence you meant, so you read the sentence you
-meant, and `references/checklist.md` in your own hands becomes a list of topics you already had
-in mind. It is the refiner's rubric now. The refiner reads every `depends-on` spec in full,
-which you did not, and it is the only pass that asks what this spec has just made false in the
-documents around it.
+meant. The refiner reads what you did not and asks what this spec has just made false around it.
 
-Fix the blockers, dispatch a fresh agent, and repeat until the verdict is `pass` or every
-finding left is a note. Present the spec with the notes.
+Present the spec when the loop passes, or when it stops and you have carried its remaining findings
+to the person. A stop at `needs-a-person` is a fork the fixer refused to take for you — bring it,
+with the trade-off, and let them choose.
 
 ## Principles
 
@@ -151,7 +214,10 @@ auth guard".
 **Verify a premise against the file that implements it.** Deploy order, what a script does, what
 the pipeline runs — read `infra/deploy.sh`, `.github/workflows/`, the Makefile, and cite the path.
 CLAUDE.md, an earlier spec and a code comment are claims about the code, not the code. Where they
-disagree with it, the spec says so and CLAUDE.md is amended in the same change.
+disagree with it, the spec says so and CLAUDE.md is amended in the same change. **Read the value,
+never the container**: a list settles a claim once you have read its members, a constant once you
+have read what it is, a function once you have read what it answers when the caller passes nothing.
+A name that describes the behaviour is not the behaviour.
 
 **An absolute rule is checked against the code it already governs.** Before writing "never",
 "always" or "every", find the call sites the rule forbids today. Each is fixed by this spec, carved
@@ -182,6 +248,11 @@ PDF is derived. Identify the irreplaceable thing in your feature and protect it 
 redeliveries, webhook replays. State the mechanism (a `UsedAt` set in the same transaction, a FIFO
 group key) and write a concurrency test for it.
 
+**A lock is specified where two writers race in ordinary use**, not on every row that has two
+writers. A settings list one curator edits, a seed that runs once at creation: say in one line
+that the writers do not race and why, instead of a `FOR UPDATE` and a concurrency case for each.
+The mechanism costs a rule, an invariant, a case and every edge the next reader finds in them.
+
 **Retry policy is stated per route, not per client.** For every outbound call say whether it is
 idempotent, and for one that is not, what runs between attempts. A generic retry loop wrapped
 around a create is the default failure.
@@ -207,12 +278,67 @@ Reviewers trust a spec that admits its edges.
 **Out of Scope is a section, not a shrug.** List what a reader would reasonably expect and will not
 get, so nobody discovers it during review.
 
+**Never restate what a route you do not own returns.** Name the read that fills a control and say
+what the control must offer. Repeating another route's rules writes a claim about code this spec
+does not govern, and it is stale on the day that route changes.
+
 **Error messages live in one table.** The business spec owns validation messages and behaviour; a
 paired `.design.md` owns headings, placeholders, and micro-copy. Neither restates the other. Shared
 rules go in the area README, not duplicated per spec.
 
 **The `data-testid` list is a contract.** Every id in the selectors section appears in an E2E case,
 and every selector an E2E case names appears in the list.
+
+**A `Decided:` block is a claim, and it is checked as one.** Name the condition under which its
+reason stops holding, and say whether another rule in this spec can reach that condition. A rule
+whose reason has an unstated precondition is a rule that is wrong somewhere you have not looked.
+
+### Rules of state
+
+**Every screen that asks the server answers a question, and the spec names the question.** The
+question is the set of values the answer depends on — the range, the scope, the filters, the row.
+Name it once; every rule below reads it.
+
+**Nothing on screen outlives the question it answered.** The moment the question changes, the
+previous answer describes something else. Say what is drawn in the gap — the new answer, a
+placeholder, or nothing — and never leave the previous answer standing without saying which
+question the reader is looking at.
+
+**A refusal and a failure are states of the question, not a layer over the answer.** A banner
+above stale content says nothing about the content. Where content is kept under a banner, state
+which question that content still answers.
+
+**Never draw a control whose effect the screen will not show.** A control that changes the
+question and moves nothing else is a control that lies. Where the effect cannot be drawn yet, say
+what stands in for it.
+
+**Every state a screen reaches is drawn from one list, per question.** Loading, empty, answered,
+refused, failed, permission-limited — for each question the screen can ask, not once for the
+screen.
+
+### Rules of what is drawn
+
+**A component is read by its decision, not by its name.** Before placing anything from `@ds`, read
+that component's entry in `specs/design-system/decisions.md` and state what it demands of the
+place it is put in. That it exports is not that it composes.
+
+**The place has a contract too.** A slot, a row, a header, a dialog. Name what the place does to
+what is put in it, and what the new occupant owes the place. Reusing a slot because something
+already lives there is not a reason; the reason is that both occupants share the property the
+place depends on.
+
+**Anything whose length varies names what moves when it does.** A label, a name, a count, a sum. A
+control that moves as a consequence of being used is a defect, not a variant.
+
+**A list is specified with its length and the way to reach a member.** Past a handful of rows, how
+a person finds one is part of the rule, not an implementation detail.
+
+**A source the screen reads names who fills it.** A table a feature draws from is a dependency
+like any other: say what puts rows in it, how often, and what the screen is on the day nobody has.
+
+**A screen this spec changes is drawn.** Prose is not a check on a composition. A screen left out
+of the mock is named as left out, with the risk that leaves open, and the mock is built from the
+components the product uses — where it is not, name every place the two differ.
 
 ## Depending on a system you do not own
 
@@ -306,5 +432,11 @@ second as something not to reproduce.
 ## Reference files
 
 - `references/spec-template.md` — section order, frontmatter, and what belongs in each section.
-- `references/checklist.md` — the rubric `spec-refiner` judges against, and the standard to
-  write to. Not a self-check: step 6 hands it to somebody who has not read your spec.
+- `references/checklist.md` — the standard to write to, the author's own. Not a self-check:
+  step 6 hands it to somebody who has not read your spec.
+- `.claude/skills/spec-review/references/admission-criteria.md` — the closed register the judge
+  works from, and the only thing that may keep a spec out of development. Every `(blocks)` and
+  `(note)` item of the checklist has a criterion there, alongside the repository conventions a
+  spec may not overrule. Write to the checklist; expect to be judged on the register.
+- `.claude/skills/spec-review/SKILL.md` — how a pass is split and what a judge may return a
+  spec for.

@@ -1,0 +1,113 @@
+{
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "verdict": ".workflow/refine/time-off-01.verdict.json",
+  "fixed": [
+    {
+      "id": "R2",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "change": "the Error Messages row for HOLIDAY_MESSAGES.countryCodeInvalid now quotes the string that ships, 'Country code must be 2 uppercase letters.'; the row stays New: no and the note beneath it stays true, because nothing about the export changes",
+      "verifiedBy": "grep -n countryCodeInvalid packages/validation/src/holiday-messages.ts"
+    },
+    {
+      "id": "R4",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/time-off/01-vacation-calendar.cases.md"],
+      "change": "the two Observed cells of the Verification Plan no longer pin the rig: the database row records that the Postgres container was up and healthy, and the start row records that globalSetup migrated the E2E database it chose with no pending migrations and that both servers answered on the pair the harness claimed. No port mapping, host, port or database name is left in an Observed cell; the Command column keeps the E2E_WEB_PORT/E2E_API_PORT form CLAUDE.md documents",
+      "verifiedBy": "grep -n '3100\\|4100\\|5433\\|5434\\|devscribed_e2e\\|localhost' specs/time-off/01-vacation-calendar.cases.md — only the two Command cells remain"
+    },
+    {
+      "id": "R5",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "change": "the sentence naming the shape to copy now names HolidaysService.deleteHoliday and the full route DELETE /api/organizations/{orgId}/holidays/{holidayId}, and states the split it demonstrates — view gate 404, delete gate 403",
+      "verifiedBy": "grep -n '^  async ' apps/api/src/holidays/holidays.service.ts and apps/api/src/holidays/holidays.service.ts deleteHoliday, which calls requireViewCapability (NotFoundException) then throws ForbiddenException on delete-holidays"
+    },
+    {
+      "id": "N1",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "change": "(a) scopeInvalid now has the requirement its three tables already implied — REQ-01-041, an absent or unrecognized scope answers 422 carrying TIME_OFF_CALENDAR_MESSAGES.scopeInvalid — and its observer, TC-01-INT-23, which reads scope=everyone and then no scope at all and asserts the message and that the scope is never defaulted to all. (b) TC-01-E2E-04 now asserts the second half of REQ-01-030: the global day's column header carries the holiday's name, readable in calendar-day-header-2026-09-21, and the PL day's header names nothing; calendar-day-header-{date} is added to its selector list",
+      "verifiedBy": "node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md — clean, 41 requirements, 33 cases, 12 messages"
+    },
+    {
+      "id": "N3",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "change": "the organization country hint gains its Error Messages row — TIME_OFF_CALENDAR_MESSAGES.orgCountryHint, route '—', 'Members without a country of their own get this country's holidays.', New: yes — and the Screens section now names the export instead of quoting the string a second time",
+      "verifiedBy": "node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md — 12 messages, clean"
+    },
+    {
+      "id": "N5",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/time-off/01-vacation-calendar.md"],
+      "change": "REQ-01-033 gains the missing sentence: two admins writing at once is last-write-wins, and no lock and no version check is added, because the write is one column with no read-modify-write",
+      "verifiedBy": null
+    },
+    {
+      "id": "N6",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.md",
+        "specs/time-off/README.md"
+      ],
+      "change": "the Known Gaps row no longer attributes the closing design to organization/03, which names no mechanism. It now states the plan as this spec's own proposal: a later amendment that resolves the holiday set at submit time and stores which holidays the request counted, leaving every issued report's number untouched. The duplicate of the same sentence in the area README's Known Gaps is repaired in the same pass",
+      "verifiedBy": "grep -n -i amendment specs/organization/03-holidays.md — two lines, both saying only that holiday-aware workingDays is a separate future amendment to spec 09"
+    }
+  ],
+  "decided": [
+    {
+      "id": "R1",
+      "rule": "spec/contradiction",
+      "edited": ["specs/time-off/01-vacation-calendar.contracts.md"],
+      "question": "do the two routes gate their capability with RequireCapability, which can only answer 403, or in the service, which can answer the 404 the spec demands",
+      "chose": "in the service; both Guards cells now read SessionGuard, OrgScopeGuard and name the capability as checked in the service, and RequireCapability appears on neither row",
+      "rejected": "keeping RequireCapability and accepting its 403, which would have moved REQ-01-002, REQ-01-039, the Security section and three cases",
+      "why": "rule 1 and rule 3 — CapabilityGuard throws ForbiddenException on every refusing path, and this repository already met the same 404/403 combination in HolidaysService and put the check in the service; 404 is also the answer that leaks less",
+      "recordedAt": "the contracts Routes section, the paragraph under the table and the **Decided:** sentence beneath it"
+    },
+    {
+      "id": "R3",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "question": "does the organization country accept lowercase pl and store PL, or refuse it like the holiday rows whose validator and message it reuses",
+      "chose": "refuse; Validation Rule 9 now reads 'Empty, or exactly 2 uppercase letters' against countryCode (PUT body), and TC-01-INT-21 submits POL, 1, pl and PL and expects 422 for the first three and 200 for PL",
+      "rejected": "normalizing pl to PL on the write, which would have needed the shipped holiday country validator to change behaviour for the holiday rows too",
+      "why": "rule 1 — the shipped validator rejects lowercase so the stored value is the one the holiday uniqueness index compares, and the spec's own note insists this field is that same value; rule 4 — refusing can later be widened, upcasing cannot be taken back once rows are stored",
+      "recordedAt": "the **Decided:** sentence under the Validation Rules table, which also bounds the choice to the write and leaves REQ-01-026's read-side chain upcasing a stored pl"
+    },
+    {
+      "id": "N2",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.cases.md"
+      ],
+      "question": "does edge case 2 mean a vacation spanning exactly the window, or one extending past both of its ends",
+      "chose": "extending past both ends; the row is restated as 'A vacation starts before the window and ends after it', so both edge flags true is the only reading",
+      "rejected": "spanning exactly the window, under which neither edge falls outside and the row contradicts REQ-01-022",
+      "why": "rule 3 and rule 4 — the reading that agrees with REQ-01-022 needs no rule changed anywhere else, and edge case 14 already owns the exactly-fitting window",
+      "recordedAt": "the contracts Edge Cases table, row 2. The other seven uncovered rows are closed in the same pass: 3 now names TC-01-INT-09, which gains a fifth approved request wholly outside the window; 9 names TC-01-INT-13, which gains a global holiday on the PL holiday's own date and asserts appliesToAllInView per holiday rather than per date; 15 names TC-01-INT-16, which gains a 60-day range running December into January; and 5, 13, 16 and 17 each say in their own cell that they have no case and why"
+    }
+  ],
+  "left": [
+    {
+      "id": "N4",
+      "rule": "spec/divergence",
+      "why": "the finding asks for a person's confirmation, not a repair — the spec already records the supersession in REQ-01-026, the Summary and the README's Blast Radius, and the verdict names nothing missing",
+      "question": "is Amounts Owed meant to rise for every member who resolves to a country for the first time once an admin sets the organization country, and is admin-gated and inert-until-set the right guard on that move"
+    }
+  ],
+  "filesTouched": [
+    "specs/time-off/01-vacation-calendar.md",
+    "specs/time-off/01-vacation-calendar.contracts.md",
+    "specs/time-off/01-vacation-calendar.cases.md",
+    "specs/time-off/README.md"
+  ]
+}

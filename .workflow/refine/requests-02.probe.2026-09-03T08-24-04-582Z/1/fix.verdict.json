@@ -1,0 +1,83 @@
+{
+  "spec": "specs/requests/02-request-topics.md",
+  "verdict": ".workflow/refine/requests-02.verdict.json",
+  "fixed": [
+    {
+      "id": "R1",
+      "rule": "spec/untestable-case",
+      "edited": [
+        "specs/requests/02-request-topics.cases.md",
+        "specs/requests/02-request-topics.contracts.md"
+      ],
+      "change": "TC-02-E2E-01 now opens the rename modal from a row before it archives one, and its Expected Result observes both halves the id table obliges: the modal carries the row's stored name and draws neither the audience control nor the kind control, both of which are drawn when adding. The row's rename control is now a named id and is in the case's Selectors list.",
+      "verifiedBy": "specs/requests/02-request-topics.contracts.md, Required data-testid table rows request-topic-audience and request-topic-type ('present when adding, absent when renaming'), read against the amended TC-02-E2E-01"
+    },
+    {
+      "id": "R3",
+      "rule": "spec/incomplete-decision",
+      "edited": ["specs/requests/02-request-topics.contracts.md"],
+      "change": "The Routes row for GET .../requests now carries the 400 it answers, and the 'GET ... amended' section states it in full: an unrecognised status, scope or type is refused with 400 and the body { \"error\": \"validation_error\", \"fields\": { \"status\": \"unknown_value\" } }, keyed by the parameter at fault and carrying the code rather than user-facing copy, with closed now inside the status set. The 'POST ... amended' section names every other 400 that route answers over the fields this spec's body still carries — titleRequired, titleTooShort, titleTooLong, descriptionTooLong, priorityUnknown, neededByInvalid, neededByPast, assigneeInvalid, assigneeInactive, projectUnavailable — and gives the field-keyed shape, with the topic messages under topicId and classifierNotAccepted under the refused name.",
+      "verifiedBy": "sed -n '150,200p' apps/api/src/requests/requests.service.ts (the validation_error body for scope/status/type); sed -n '240,345p' packages/validation/src/requests.ts (validateNewRequest) and grep -n 'assigneeInactive\\|projectUnavailable' apps/api/src/requests/requests.service.ts; sed -n '1807,1870p' packages/validation/src/index.ts (REQUEST_MESSAGES keys); grep -n 'REQUEST_STATUS_QUERIES' -A 4 packages/validation/src/requests.ts (closed is outside the set today)"
+    },
+    {
+      "id": "R4",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-request-topics.contracts.md"],
+      "change": "Added request-topic-row-{id}-rename-btn to the Required data-testid table — present on an active row, absent on an archived row, opening it draws request-topic-modal on that row — and the Screens paragraph now says the archived list draws no rename control, the route accepting a name on an archived topic while the screen offers restoring it instead.",
+      "verifiedBy": "specs/requests/02-request-topics.contracts.md, the Settings mock drawing [ Rename ] on every active row and [ Restore ] alone on the archived one, against specs/requests/02-request-topics.md, the state machine's 'archived | rename' row"
+    },
+    {
+      "id": "R6",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-request-topics.cases.md"],
+      "change": "TC-02-INT-03 now creates a topic with sortOrder 40000 and one with -5, and expects them stored as 32767 and 0, sorting last and first, with 201 rather than 400 — so validation rule 6's clamp fails a build that refuses the value or stores it unclamped.",
+      "verifiedBy": "specs/requests/02-request-topics.contracts.md, Validation Rules row 6 ('Optional integer, 0-32767 ... an out-of-range value is clamped to the bound')"
+    },
+    {
+      "id": "R7",
+      "rule": "spec/scope-gap",
+      "edited": ["specs/requests/02-request-topics.md"],
+      "change": "The Summary now says the requests list gains a filter by topic beside the status one, so the reader confirms the filter was wanted rather than meeting it first in REQ-02-026.",
+      "verifiedBy": "specs/requests/02-request-topics.md REQ-02-026 and specs/requests/02-request-topics.contracts.md, 'GET ... amended' ('Query gains topicId')"
+    },
+    {
+      "id": "R8",
+      "rule": "spec/divergence",
+      "edited": [],
+      "change": "No repair in the spec. The diverging sentence is a comment on Request.assigneeKind in apps/api/prisma/schema.prisma, which this agent may not edit; the spec's own rule is the correct and safe one and is already stated twice — REQ-02-020's decision table declares assigneeKind: member as its whole domain and the requirement text says member is the only addressee kind a request may carry as this spec ships, with the client addressee placed in spec 03 by Known Gaps. Restating it a third time in the Data Model would be a second copy, not a repair.",
+      "verifiedBy": "grep -n 'spec 02 adds' apps/api/prisma/schema.prisma -> line 1143, \"/// 'member' is the only valid value in this spec; spec 02 adds `client`.\""
+    }
+  ],
+  "decided": [
+    {
+      "id": "R2",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/requests/02-request-topics.contracts.md",
+        "specs/requests/02-request-topics.md",
+        "specs/requests/02-request-topics.cases.md"
+      ],
+      "question": "what sortOrder the up and down controls send, given that a move is one PATCH of one row",
+      "chose": "up sends the sortOrder of the row above minus one and down sends the sortOrder of the row below plus one, so the moved row lands strictly past the neighbour it moved over and the list comes back reordered; a value outside 0-32767 is clamped to the bound",
+      "rejected": "sending the neighbour's own value, which leaves the two rows tied on sortOrder and the name tiebreak of REQ-02-009 deciding the order, so a press can leave the list exactly as it was",
+      "why": "rule 3 — the reading whose effect is visible and cannot be mistaken for a dropped write; the rejected one is a silent no-op, and the swap that would avoid both is foreclosed by the single-PATCH rule the spec already states",
+      "recordedAt": "the contracts' Screens section, the paragraph under the Settings mock, as a Decided note beside the ordering rule; the consequence is carried into Known Gaps row 5 of 02-request-topics.md (repeated moves into one gap can close it and leave two rows sharing a value) and observed by TC-02-E2E-01, which presses up on the third staff row and reads the order back"
+    },
+    {
+      "id": "R5",
+      "rule": "spec/contradiction",
+      "edited": ["specs/requests/02-request-topics.contracts.md"],
+      "question": "whether the empty-picker copy may say there are no topics yet and that an admin adds one, when the state is also reached with topics present and a manager may add one too",
+      "chose": "REQUEST_TOPIC_MESSAGES.pickerEmpty reads 'No request topics are available. An admin or manager can add one in Settings.'",
+      "rejected": "'There are no request topics yet. An admin can add one in Settings.'",
+      "why": "rule 2 — the copy has to be true in every state its own rules reach: edge case 13 archives the last active staff topic while topics exist, and the permission matrix grants manage-request-topics to admin and manager",
+      "recordedAt": "the contracts' Error Messages section, the Decided note under the table, beside the sentence saying pickerEmpty carries no route"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/requests/02-request-topics.md",
+    "specs/requests/02-request-topics.contracts.md",
+    "specs/requests/02-request-topics.cases.md"
+  ]
+}

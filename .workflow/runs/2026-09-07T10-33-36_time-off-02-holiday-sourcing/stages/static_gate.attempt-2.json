@@ -1,0 +1,22 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/message-not-implemented",
+      "file": "specs/time-off/02-holiday-sourcing.md",
+      "symbol": "`HOLIDAY_MESSAGES.toastServerError`",
+      "claim": "the Error Messages row \"`HOLIDAY_MESSAGES.toastServerError`\" names a string that exists nowhere in packages/validation",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"(shipped, unchanged)\" -- packages/validation\n(no match)",
+        "source": "specs/time-off/02-holiday-sourcing.md"
+      },
+      "suggestedFix": "add the message to packages/validation and emit it from the route the spec names, or raise a spec finding if the row restates another spec's message"
+    }
+  ]
+}

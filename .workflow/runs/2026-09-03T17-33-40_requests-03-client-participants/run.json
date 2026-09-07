@@ -1,0 +1,189 @@
+{
+  "runId": "2026-09-03T17-33-40_requests-03-client-participants",
+  "spec": "specs/requests/03-client-participants.md",
+  "specSha": "6da7bca30f907aa75e473f481b949810266f1e6c5b9f212f366641494b1ab83d",
+  "task": "requests-03-client-participants",
+  "branch": "spec/requests-03-client-participants",
+  "baseRef": "5840d41a2bc31f809f1b11dab78c77423eb51f24",
+  "headAtInit": "5840d41a2bc31f809f1b11dab78c77423eb51f24",
+  "status": "pre_implement",
+  "createdAt": "2026-09-03T17:33:40.880Z",
+  "updatedAt": "2026-09-03T17:33:41.047Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "running",
+      "attempts": 1,
+      "startedAt": "2026-09-03T17:33:41.046Z"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "carriedFindings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-32",
+      "rule": "specs/requests/01-requests.md requirement 35: \"An admin or manager may reassign an open or answered request to a different member. Reassignment writes a RequestEvent with action = 'assignee_changed' carrying the old and new display names in oldLabel / newLabel, so the trail stays readable after a member is removed.\"",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "reassignRequest",
+      "line": 1003,
+      "claim": "The change extends the already-shipping reassign route to client-addressed requests — it clears assigneeClientMembershipId — which no requirement of this spec asks for, and on that path the assignee_changed event records neither the outgoing contact's id nor their display name, so the request leaves the contact's inbox with no trail of who it was taken from. The control is drawn for that row on the detail screen, so the path is reachable through the product.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A request is created with assigneeKind='client', assigneeClientMembershipId=C, assigneeMembershipId=null, under a client-audience topic. An admin opens it: showReassign is `!terminal && canViewAll` (apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:209), so the Reassign control is drawn for a client-addressed row and ReassignModal is handed currentAssigneeId = the ClientMembership id. Reassigning to member M updates the row to assigneeKind='member', assigneeMembershipId=M, assigneeClientMembershipId=null (requests.service.ts:999-1003); `previous` is looked up from locked.assigneeMembershipId only (:989), so the assignee_changed event is written with oldValue=null and oldLabel=null (:1013-1015). The contact's list no longer returns the request and its detail answers them 404, and the trail names nobody it was taken from. The row now carries a client-audience topic with a member addressee, the pairing REQ-03-024 refuses at creation. The comment at page.tsx:309 asserts the opposite — \"this release has no reassign path that accepts a client addressee\" — while the control beside it is drawn.",
+        "source": "specs/requests/01-requests.md:177"
+      },
+      "suggestedFix": "Snapshot the outgoing contact into oldValue/oldLabel on the client branch, the way spec 03's contracts state it for the event label columns (\"Display names keep being snapshotted into the event's label columns, so the trail survives a removed contact\"), and stop drawing the Reassign control for a client-addressed row. Refusing the transition outright (400 REQUEST_MESSAGES.assigneeInvalid when locked.assigneeKind === 'client') is the other option, but it is a rule nobody has written down, so it needs a spec decision first."
+    },
+    {
+      "id": "F3",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-26",
+      "rule": ".claude/skills/code-review/references/blocking-criteria.md — CR-26: \"a test cannot fail — an assertion about a value nothing produces, a selector nothing renders, a mechanism that throws before the assertion runs\"",
+      "file": "e2e/tests/client-participants.spec.ts",
+      "symbol": "TC-03-E2E-03",
+      "line": 308,
+      "claim": "TC-03-E2E-03 builds its two browser contexts with `browser.newContext()`, which carries no baseURL, and then navigates with the relative path '/login'. The goto throws before any assertion in the case runs, so the case can never exercise its subject — the stamp rotation that ends a removed contact's session.",
+      "witness": {
+        "kind": "rule",
+        "detail": "e2e/playwright.config.ts:72 sets baseURL under `use`. In @playwright/test 1.62.1 those context options are assembled by `_combinedContextOptions` and applied only by `_contextFactory` (node_modules/playwright/lib/index.js:332-333 and :384), which backs the `context`/`page` fixtures; the `browser` fixture is a plain launch, so a context built by hand in a test has no baseURL and `page.goto('/login')` (e2e/tests/client-participants.spec.ts:25, called from :314 and :318 on the contexts created at :308-311) is rejected as an invalid URL. Every other manual context in this suite navigates with an absolute URL — e2e/tests/envelopes-signing.spec.ts:102-104, e2e/tests/outbox.spec.ts:86-88, e2e/tests/regressions.spec.ts:134-136.",
+        "source": "node_modules/playwright/lib/index.js:384"
+      },
+      "suggestedFix": "Take the baseURL fixture in the test signature and pass it to both contexts: `await browser.newContext({ baseURL })`."
+    },
+    {
+      "id": "F4",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-18",
+      "rule": ".claude/skills/code-review/references/blocking-criteria.md — CR-18: \"a mechanism required at a class of call sites is applied at some of them and not the rest\"",
+      "file": "apps/web/app/org/[orgId]/members/page.tsx",
+      "symbol": "MembersPage",
+      "line": 167,
+      "claim": "The staff screens a client principal must not reach short-circuit on that principal — projects calls notFound() and clients returns null — but the members screen has no such gate, so a contact who types its address is served the full members chrome and a skeleton that never resolves. TC-03-E2E-02 asserts only that `members-list` is absent, which is weaker than the case it implements.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Signed in as a client contact, navigate to /org/{orgId}/members. /api/me answers 200 so the shell renders; the page's load() calls GET /api/organizations/{orgId}/members, which OrgScopeGuard answers 404 for a client principal, and the non-ok branch leaves `members` at null while setting loading false (apps/web/app/org/[orgId]/members/page.tsx:55-72). `loading || members === null` then renders MembersLoadingSkeleton forever (:166-167), underneath the PageHeader, the search field and the Show-removed checkbox. The spec's case says the opposite — TC-03-E2E-02 Expected Result: \"Each direct navigation renders no screen behind it, because the route the page reads answers 404 — a destination the caller cannot use is neither drawn nor reachable by typing\" — and the Security section states the 404 discipline exists \"so the shape of the staff product is not enumerable by a contact\". Compare apps/web/app/org/[orgId]/projects/page.tsx:49 (notFound()) and apps/web/app/org/[orgId]/clients/page.tsx:286 (return null).",
+        "source": "specs/requests/03-client-participants.cases.md:646"
+      },
+      "suggestedFix": "Gate the members screen on the principal kind the way projects and clients are gated, and strengthen TC-03-E2E-02 to assert the members chrome is absent rather than only `members-list`."
+    },
+    {
+      "id": "F5",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-25",
+      "rule": "specs/requests/03-client-participants.cases.md, TC-03-UNIT-02 Expected Result: \"with a role of `null`, `hasCapability` answers `true` for `ViewOwnRequests` — the absent role normalizes to `viewer` — while `can` answers `false`.\"",
+      "file": "packages/validation/src/roles.test.ts",
+      "symbol": "TC-03-UNIT-02 — records what the ordering rule protects against",
+      "line": 451,
+      "claim": "The case's load-bearing assertion was replaced with one that is true by construction. The spec says `can` answers false for the absent role; the test normalizes the role first and asserts true, and its third line calls `can` with the string 'client' rather than with the absent role. The disagreement between the two helpers — the whole reason REQ-03-017 is an ordering rule — is asserted nowhere.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-03-UNIT-02. packages/validation/src/roles.test.ts:450-452 asserts hasCapability(null,'ViewOwnRequests') === true, can(normalizeRole(null),'view-own-requests') === true and can('client' as Role,'view-own-requests') === false, under a comment claiming \"the two staff helpers disagree, and one of them GRANTS\". `can(null, 'view-own-requests')` is false — `CAPABILITY_MATRIX[role]?.[capability] ?? false`, packages/validation/src/index.ts:785-787 — so the spec's stated expectation is directly assertable and was not asserted. Nothing in the suite would fail if `can` started granting an absent role.",
+        "source": "specs/requests/03-client-participants.cases.md:164"
+      },
+      "suggestedFix": "Assert the pair the case names: hasCapability(null,'ViewOwnRequests') === true and can(null as unknown as Role,'view-own-requests') === false. Keep the normalized call only if it is labelled as the separate fact it is, and correct the comment to describe what is asserted."
+    }
+  ],
+  "carriedFrom": "2026-09-03T16-00-49_requests-03-client-participants#review",
+  "contested": [],
+  "notes": [],
+  "halt": null,
+  "preflight": {
+    "at": "2026-09-03T17:33:41.000Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/requests-03-client-participants\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "23 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants"
+    ]
+  }
+}

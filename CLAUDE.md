@@ -29,10 +29,14 @@ npm run test:e2e       # Playwright; starts both dev servers itself
 npm run spec   -- <what to spec>   # opens Claude Code on /spec
 npm run refine -- <spec path>      # /refine — a stranger judges the spec, before a run is paid for
 npm run bug    -- <what is broken> # /bug
-npm run ship   -- <spec path>      # /ship — the skill, which checks the branch and reads the outcome
-npm run ship:run -- <spec path>    # scripts/ship.mjs alone, no model either side
-npm run board                      # the run report, opened in a browser — pick the run in the page
+npm run patch  -- <the rule that changes>  # /patch
+npm run ship   -- <document path>  # /ship — the skill, which checks the branch and reads the outcome
+npm run ship:run -- <document path># scripts/ship.mjs alone, no model either side
+npm run config                     # what each track resolves to, and whether the config is valid
+npm run pipeline                   # the pipeline's parts still agree with each other
+npm run board                      # the board: specs → what was run against one → that run
 npm run watch                      # the same, without opening anything
+npm run specs                      # the same index, printed
 ```
 
 Under yarn the `--` is unnecessary: `yarn spec projects and their members`. Install with npm
@@ -137,14 +141,16 @@ suite unrunnable because a port was taken. `npm run reap:dry` says what the reap
   file content; when a script must build a newline, `String.fromCharCode(10)`.
 - **Probe a busy port by connecting, not by binding.** On Windows a server on `0.0.0.0` does not
   prevent a second bind to `127.0.0.1`, so a bind test reports every port free.
-- Migrations should be **additive**. `infra/deploy.sh` runs `prisma migrate deploy` *before*
-  the Terraform rollout — new schema first, then the code that uses it — because a
-  services-first order deploys new code against an old schema and every query against a
-  table the migration has not created yet fails with a 500 until it does. Additive
-  migrations make the *reverse* safe (old code against new schema, which simply ignores the
-  columns it does not know about), which is why a rollback needs no database rollback. The
-  order is documented at `infra/deploy.sh:27`; the additive rule is what makes both
-  directions survivable. This is a rule, not an observation about the current migrations.
+- Migrations should be **additive**. `infra/deploy.sh` runs `prisma migrate deploy` (through
+  `infra/migrate.sh`, as a one-off task on the *new* image) *before* the Terraform rollout of
+  the services — new schema first, then the code that uses it — because a services-first order
+  deploys new code against an old schema and every query against a table the migration has not
+  created yet fails with a 500 until it does. Additive migrations make the *reverse* safe (old
+  code against new schema, which simply ignores the columns it does not know about), which is
+  why a rollback needs no database rollback. The order is documented at `infra/deploy.sh:27`;
+  the additive rule is what makes both directions survivable. The migration step is skipped
+  entirely on a web-only deploy. This is a rule, not an observation about the current
+  migrations.
 - **A workspace package needs two COPY lines in every Dockerfile that uses it**: its manifest
   before `npm ci`, its source after. The `packages/*` glob tolerates a missing package silently,
   so `npm ci` passes and the build fails later at `next build` with "Module not found".
@@ -158,35 +164,122 @@ acceptance criteria, test cases through E2E, and a verification route walked bef
 were written. Specs are written in English.
 
 **A spec is judged by somebody who did not write it.** `/spec` ends by dispatching the
-`spec-refiner` agent on a clean context — it is given the spec path and the request, and nothing
+`spec-reviewer` agent on a clean context — it is given the spec path and the request, and nothing
 else — which asks three questions the author cannot ask of their own work: is every claim about
 this repository still true, do two clear statements disagree, and what has this spec just made
 false in the documents around it. `npm run refine -- <spec path>` runs the same judgement on any
 spec at any time, which is what a spec that has sat while the code moved needs.
+
+**A judge blocks only under a criterion somebody wrote down.** Both judges work from a closed
+register — `.claude/skills/spec-review/references/admission-criteria.md` for the spec judge,
+`.claude/skills/code-review/references/blocking-criteria.md` for the review — and every blocking
+finding names an id from it. A blocker naming none, or one the register marks note-only, is
+demoted to a note by the script that reads the verdict. Anything outside a register is still
+reported, as a note, which is also how a criterion the register lacks gets proposed. Without
+this the blocking surface is a different one every pass, and the loop repairs findings the pass
+before never raised.
 
 **Two statements that disagree block, even when you can tell which one is right.** Neither the
 refiner nor the reviewer settles a contradiction by preferring one side; that decision is a
 person's, and it is made in the document. A contradiction resolved silently upstream is
 implemented, and then found by the gate that is forbidden to resolve it.
 
-**A spec that overrules another spec amends it, statement by statement.** Marked beside each
-statement, naming the requirement that overrules it. A banner at the top of a document is a
-promise about the document, not an amendment to it.
+**A spec is frozen once it is written and refined. Older specs are never edited to stay
+current.** They record what was decided then, and that record is worth more than a document
+that pretends to have always known the answer.
+
+**The newest spec that speaks about a behaviour governs it.** When a new spec changes something
+an older one describes, it states the whole new rule **in its own text** — who may call it,
+what comes back, which status, which message — completely enough that a reader of the new spec
+never has to open the old one. It does not plant markers in the old document, and it does not
+write "this overrules requirement 45 of spec 01": a cross-reference sends the reader away
+instead of answering them, and it is bookkeeping that goes stale on the next edit and is then
+found as a defect of its own.
+
+A spec is judged on whether it is implementable and checkable **from itself alone**. That is
+what `/refine` protects.
 
 Investigate a defect with the `bug` skill (`/bug`). It writes `specs/bugs/BUG-NNN-slug.md` and
 ends in one of three verdicts — the code is wrong, the spec is wrong, or the spec is silent —
 which is what decides whether anything may be fixed yet.
 
+**Three weights of document, and the weight is chosen by what changes, never by how much time
+is left.** A spec bundle in `specs/<area>/` opens a design space and is admitted by `/refine`.
+A bug report in `specs/bugs/` explains behaviour that disagrees with a document. A patch note
+in `specs/patches/` — the `patch` skill (`/patch`) — closes exactly one rule that is changing:
+a field moves, a control is disabled until another is chosen, an input gains a bound. The
+patch's entry condition is closed and lives in that skill; a change that adds a route, touches
+the schema, moves authorization, needs a third product file or a new design-system component
+is a spec however small it looks. A patch supersedes what an older spec said the same way any
+newer document does — by stating the whole new rule in its own text, and writing nothing back.
+
 ## Implementing specs
 
 Use the `ship` skill (`/ship`) to run a spec through pre-implement → implement → static gate →
-review → QA. Routing lives in `scripts/wf.mjs`, not in a prompt: every finding names where the
+review → QA. `/ship bug <report>` and `/ship patch <note>` run the lighter tracks: no plan is
+compiled, and for a patch the review runs its cheap shape. **Every track runs the static
+gate and QA** — a lighter document buys speed against the stages that read intent, never
+against the ones that check the result. Routing lives in `scripts/wf.mjs`, not in a prompt: every finding names where the
 defect lives, only findings addressed to `code` are ever retried, and a finding the implementer
 contests halts the run for a person instead of spending another attempt. The runbook is
 [docs/ai-workflow.md](docs/ai-workflow.md).
 
 The pipeline stops at a green branch. It never merges and never pushes — see the note about
 `main` above.
+
+**A run refuses to start on a spec nothing admitted.** `wf init` reads the spec's refine ledger:
+a loop that is not a `pass`, or a bundle that changed after the round that judged it, stops the
+run before any model is paid. `--accept-unrefined "<why>"` overrides it and the reason is
+recorded in `run.json`.
+
+**The pipeline is configuration, and it is checked before it runs.**
+`.claude/ai-workflow.config.json` is keyed by track: `shipConfig.<track>` names the paths it
+matches, the branch it uses and whether refine admits it, and `shipConfig.<track>.stages.<stage>`
+writes out the agent, model, shard shape, budgets and timeouts in full. Nothing is inherited
+between tracks — what you read under a track is what it runs. `scripts/ship-config.mjs` is the
+only reader, and it validates: an unknown key, a renamed agent, a model that does not exist, a
+missing stage, `static_gate` or `qa` switched off. `npm run config` prints what each track
+resolves to; `ship`, every `wf` command and preflight run the same check first, so a bad edit
+stops a run before a lock or a branch exists.
+
+`npm run pipeline` answers the question after that one — the parts that name each other still
+agree. An agent whose `name:` and filename disagree, a lead dispatching a `subagent_type`
+nobody defines, a hook matcher that stopped matching, a contract an agent no longer reads, the
+port ladder kept in two files, **and any setting the config accepts that no script reads** —
+which is the one that costs most, because the printer reports it back and a person believes it
+took effect.
+
+**Which agent a stage runs is a shape, not a constant.** Every way a stage can run is written
+out in full under its `shapes`, and the block's `use` names the one that runs. A flag names a
+different one for a single run — `--shape` for refine, `--plan-shape`, `--implement-shape`,
+`--review-shape` for ship. So one run goes parallel on
+sonnet shards and the next goes synchronous on one opus agent, with no edit between them, and
+every shape in force is written into the ledger or `run.json`. **No shape a new agent replaced
+is withdrawn** — every method stays selectable, and
+[.claude/agents/VARIANTS.md](.claude/agents/VARIANTS.md) maps every name that used to exist to
+the one that carries it now. What is not kept is a second copy of a definition: two files
+stating one rule is how the rules drifted.
+
+**While a run is in flight, its branch carries the spec's work and nothing else.** The reviewer
+diffs `baseRef...HEAD`, so anything else committed there is handed to it as part of the change
+under review — a script, a research note, a fix to the board — and it is built to block on a
+file no handoff task names and no requirement asks for. The run then halts on work that has
+nothing to do with the spec.
+
+Machinery changes go to a `build/*` branch instead. `node scripts/aside.mjs build/<topic>
+<path>...` commits the working-tree content of those paths onto that branch, in a worktree of
+its own, and puts **HEAD** back to the run's baseRef for them while leaving the change in the
+working tree, uncommitted. Merge the `build/*` branch when the run is over.
+
+**The change stays in force for the run.** Every stage spawns its scripts and reads its agent
+definitions from the working tree when it starts, so what governs a run is what is on disk, not
+what its branch has committed. That is the whole reason `aside` resets the commit and not the
+file: the first machinery it was used on was the static gate, and taking a gate fix off the disk
+hands the next stage the broken gate again.
+
+**Never `git add -A` while an agent is working.** Its half-written files land in your commit,
+and your files land in the commit the gate makes for it — both have happened. Stage the paths
+you touched, by name.
 
 **Agent prompts are rules only.** A definition under `.claude/agents/` states the desired
 behaviour and the prohibitions, in as few words as state them. Never put in a prompt:

@@ -1,0 +1,106 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/time-off/02-holiday-sourcing.md",
+  "handoff": ".workflow/runs/2026-09-07T10-33-36_time-off-02-holiday-sourcing/handoff.json",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "ok",
+    "H-14": "ok",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok"
+  },
+  "compiledNotes": {
+    "H-01": "25 requirements, REQ-02-001 through REQ-02-025, each named in a task's `requirements`. handoff-coverage cannot check this one on this bundle — it matches a numbered list and this spec numbers by heading — so it was checked by hand against the spec's own ids.",
+    "H-02": "22 live cases, none carrying `- **Retired.**`: 2 unit, 16 integration, 4 E2E. All claimed under `testCases`. The cases live in the bundle's third file, which handoff-coverage does not read, so this too was checked by hand.",
+    "H-03": "All 8 `##` headings of the behaviour file are in `sections`, plus the 11 of the contracts file and the 3 of the cases file. `node scripts/handoff-coverage.mjs` reports sections 8/8.",
+    "H-04": "Every existing path cited in the handoff was tested for existence; every line number cited in `premises` was read. Paths that do not exist yet are the ones the tasks create.",
+    "H-05": "`reuse` names 15 things to build on with their file paths; `buildFromZero` names 12, opening with the port, both drivers and the three rows the cases file's Verification Plan marks 'no'.",
+    "H-06": "The 'every X' requirements are REQ-02-001 and REQ-02-008 (every country in the sourced set — the set builder is one function, T1, and T4's only caller of it), REQ-02-013 and REQ-02-014 (one row per country / per active membership) and REQ-02-025 ('a caller … reads GET .../holidays'). T4's `allCallSites` lists all six readers of that route, API and web; T5's lists both entry points into the summary, including the direct one TC-02-INT-11 uses.",
+    "H-07": "13 shipping surfaces, every one with the rule that governs it. The new reachable thing is a Holiday row nobody typed: both scopes of the list route, the shipped edit and delete paths, the create path's default, Amounts Owed, the Time Off and Time & Activity reports, the vacation calendar, the Time Tracking markers and the vacation hint. Nine of the thirteen need no code change and are marked 'verified, not modified'. The two new tables have no shipping reader; the two new nullable columns are selected by no shipped projection, which was checked in each of the three readers rather than assumed.",
+    "H-08": "Three tasks write rows and each carries `concurrency`. Holiday and HolidayImport take no lock deliberately: the two uniqueness indexes are the arbiter and Edge case 12 says so — the second concurrent syncer's inserts collide and are counted as skipped. OrganizationHolidaySourcing is one row written whole, which is the rule organization-country.service.ts already states for the column beside it.",
+    "H-09": "All 8 Error Messages rows are in `messages` with their module and the route (or screen) that emits them. Six are new exports in one new module; two ship today and were located in packages/validation/src/holiday-messages.ts.",
+    "H-10": "Three Verification Plan rows are marked as not existing today. The fake driver and its empty/failing/never-answering behaviours are T2; a caller holding view-holidays without view-amounts-owed is T5's capability-explicit entry point, which TC-02-INT-11 (claimed by T8) depends on.",
+    "H-11": "One migration, T3, additive: two tables, three columns, no rename, no drop, no new NOT NULL on an existing table, no backfill. The note states the deploy order read from infra/deploy.sh:27, not restated from CLAUDE.md or from the spec.",
+    "H-12": "T4, T5 and T6 all gate. Each states `can(normalizeRole(role), …)`, because `can` does not normalize — CAPABILITY_MATRIX is keyed by the four-value union, so a stored `member` would fall through to false rather than to `user`. The shipped holiday gates cast instead and are not changed: that is outside this spec, and normalizing them would alter behaviour no requirement here asks about.",
+    "H-13": "Four External Contracts rows are marked Assumed: the status code an uncovered country answers with, that no country and year answers two entries on one date, the absence of a rate limit, and response time under the call bound. None carries a requirement — REQ-02-009 treats every non-conforming answer alike and REQ-02-006 skips a date already carrying a row whatever put it there — so there is no finding to raise. Checked against the spec's Known Gaps, which names the first one, rather than taken from the spec's own assurance alone.",
+    "H-14": "`doubleBehaviours` is the contracts file's 'What the double must reproduce' table, all six rows, each with the reason a double lacking it certifies nothing. The fake driver's fixtures are the Observations table's measured shapes — Poland's 14, Germany's 20-of-which-10 — not the prose.",
+    "H-15": "`dsGaps` is empty, and it is empty because it was checked: Card, ReportTableHead, ReportGroupBody, Checkbox, InfoBanner, Preloader and Button are all exported from packages/ds/src/index.ts today.",
+    "H-16": "8 tasks, each with `files`, `requirements` and `dependsOn`. T1, T2 and T3 are mutually disjoint; the remaining overlap is app.module.ts, edited by T2, T4 and T6, which costs nothing on this run's `single` implement shape and is recorded for a later `orchestrated` one.",
+    "H-17": "`node scripts/handoff-coverage.mjs --run 2026-09-07T10-33-36_time-off-02-holiday-sourcing` → pass, requirements 0/0, cases 0/0, sections 8/8."
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Error Messages — HOLIDAY_MESSAGES.toastServerError",
+      "claim": "the last Error Messages row's Message cell carries a note, '(shipped, unchanged)', rather than the message, and this repository's static gate reads that cell as a message and will report it as implemented nowhere",
+      "witness": {
+        "kind": "command",
+        "detail": "scripts/static-gate.mjs:294-329 takes each Error Messages row, picks the cell under the `Message` header, and blocks when the text is absent from packages/validation. Running its own parser over this bundle prints, for the last row: `\"`HOLIDAY_MESSAGES.toastServerError`\" -> \"(shipped, unchanged)\"` — a 20-character probe, above the 12-character floor at which the gate stops skipping. `git grep -lF -- \"(shipped, unchanged)\" -- packages/validation` returns nothing. The string the row actually refers to, 'Something went wrong. Please try again.', ships at packages/validation/src/holiday-messages.ts:29.",
+        "source": "scripts/static-gate.mjs"
+      },
+      "suggestedFix": "Nothing to implement. When the static gate raises spec/message-not-implemented on this row, contest it with the counter-witness above rather than adding text to packages/validation to satisfy a grep. A spec change, if one is ever wanted, is to put the shipped text in the Message cell and the word 'no' in the New column, which is what every other carried-over row does."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Data Model — HolidayImport.provider / Holiday.externalKey",
+      "claim": "the Data Model calls `provider` 'the driver that answered' and composes `externalKey` from it, while TC-02-INT-01 runs against the double and expects `nager:DE:{date}` — so either the double names itself after the provider it doubles, or the case cannot pass",
+      "witness": {
+        "kind": "scenario",
+        "detail": "TC-02-INT-01 seeds a member stating DE, points the fake driver at Germany's shape, syncs, and expects each written row to carry 'an `externalKey` of `nager:DE:{date}`'. The contracts file's Holiday column table defines externalKey as '{provider}:{countryCode}:{date}' and the HolidayImport table defines `provider` as 'The driver that answered, e.g. `nager`'. Under the reading where {provider} is the driver, the fake driver writes 'fake:DE:{date}' and the case fails as written; under the reading where it is the service being doubled, it writes 'nager:DE:{date}' and every case passes. No case observes HolidayImport.provider itself.",
+        "source": "specs/time-off/02-holiday-sourcing.cases.md TC-02-INT-01"
+      },
+      "suggestedFix": "Planned as the second reading — the port carries one provider name, 'nager', on both drivers, because the double is a double of that provider and HOLIDAY_PROVIDER selects the driver rather than the identity. It is the only reading under which a case passes. A spec sentence saying so would close it."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/holidays — the example body",
+      "claim": "the example row shows `\"paidHours\": \"8.00\"`, a string, where the shipped route sends a JSON number and two shipped screens parse it as one",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/src/holidays/holidays.service.ts#toSummary returns `paidHours: row.paidHours.toNumber()`. apps/web/app/org/[orgId]/settings/holidays/types.ts:13 and apps/web/app/org/[orgId]/time-tracking/types.ts:61 both declare `paidHours: number`, and the holidays list renders it as `${row.paidHours}h`. An implementer following the example would send '8.00' and the Time Tracking calendar would read '8.00h'. The same example omits createdAt and updatedAt, which the route certainly still sends, and the prose above it says the route keeps what it ships with and gains exactly two things — so the example is abbreviated rather than normative, which is how the plan reads it.",
+        "source": "apps/api/src/holidays/holidays.service.ts"
+      },
+      "suggestedFix": "Keep paidHours a JSON number and add only `source` to the row. Recorded in the handoff's risks so the reviewer sees the reasoning rather than the choice."
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/02-holiday-sourcing.md",
+      "symbol": "REQ-02-004",
+      "claim": "REQ-02-004 lists what an imported holiday carries and does not name `createdByAccountId`, which is NOT NULL behind a foreign key",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/prisma/schema.prisma:932-935 — `createdByAccountId String` with `createdBy Account @relation(..., onDelete: Restrict)`. An insert omitting it fails. REQ-02-004 names the name, the date, the country, paidHours, source and the external key, and nothing else; the schema has no system account and the migration is additive, so the column cannot be made nullable here.",
+        "source": "apps/api/prisma/schema.prisma"
+      },
+      "suggestedFix": "Planned as the account that triggered the sync — the only account in the transaction, and one that necessarily holds manage-holidays. Not a blocker: the repository's own shape leaves exactly one implementation, and no requirement or case observes the column."
+    }
+  ]
+}
