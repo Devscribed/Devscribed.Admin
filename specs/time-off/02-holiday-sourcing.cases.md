@@ -170,14 +170,16 @@ warning exist for. No file was written and none needed deleting.
 ### TC-02-INT-07
 
 - **Level:** Integration
-- **Covers:** REQ-02-008
+- **Covers:** REQ-02-008, REQ-02-021, REQ-02-023
 - **Asserts:** `POST /api/organizations/{orgId}/holidays/sync` → 200
 - **Steps:** After TC-02-INT-03 — nine rows, one deliberately deleted — sync the year with
   `refresh: true`.
 - **Expected Result:** `200`. The driver was called. Ten rows exist again: the deleted one is
   written, the nine survivors are counted in `skipped`, and their `paidHours` and names are
   untouched. This is Edge case 9, and it is the one case where a deletion does not survive —
-  because the admin asked for it.
+  because the admin asked for it. Then refresh once more, with nothing left to write: the `DE`
+  row reports `written: 0, skipped: 10`, the country is still `sourced`, and its `HolidayImport`
+  still carries `holidayCount: 10` — the offered count, not the written one (REQ-02-021).
 
 ### TC-02-INT-08
 
@@ -187,10 +189,14 @@ warning exist for. No file was written and none needed deleting.
 - **Steps:** Seed two members stating `PL` and one stating `US`, with holidays sourced for both.
   Read the summary for that year as an admin.
 - **Expected Result:** `200`. `countries` carries `PL` with `memberCount: 2` and `US` with
-  `memberCount: 1`, each with the number of holidays stored for it. Each member's `holidayCount`
-  is the number of holidays that reach them through the country chain, and their `paidHours` is
-  the sum of those holidays' `paidHours` as a two-decimal string. `totals.holidayCount` is the
-  sum over members, not over countries.
+  `memberCount: 1`, each with the number of holiday rows carrying that code. Each member's
+  `holidayCount` is the number of holidays that reach them through the country chain, and their
+  `paidHours` is the sum of those holidays' `paidHours` as a two-decimal string.
+  `totals.holidayCount` is the sum over **members**, not over countries. Then add one holiday
+  with a null `countryCode` and re-read: `countries` gains a row keyed `null` carrying one day
+  and a `memberCount` of three, every member's `holidayCount` rises by one, and the country rows
+  no longer sum to the total — which is Edge case 22 and is correct, because the two arrays
+  count different things.
 
 ### TC-02-INT-09
 
@@ -211,7 +217,11 @@ warning exist for. No file was written and none needed deleting.
 - **Steps:** Seed two members whose financial settings name different currencies, both with
   holidays.
 - **Expected Result:** `totals.byCurrency` has two entries, one per currency, each summing only
-  its own members. No field anywhere in the body carries a total across the two.
+  its own members, and each member's own `byCurrency` has one. No field anywhere in the body
+  carries a total across the two. Then move one member's currency mid-year through a second
+  snapshot and re-read: that member's `byCurrency` now has two entries whose amounts split their
+  holidays by the currency in force on each holiday's own date, and nothing is converted between
+  them — Edge case 15a.
 
 ### TC-02-INT-11
 
@@ -222,8 +232,8 @@ warning exist for. No file was written and none needed deleting.
   No shipped role is in that state, so the case supplies the capability set directly to the
   service rather than signing a session in.
 - **Expected Result:** `200` with every `holidayCount` and every `paidHours` present. No member
-  row has an `amount` or a `currency` **key at all**, and `totals` has no `byCurrency` — the
-  fields are absent, not null and not zero.
+  row has a `byCurrency` **key at all**, and neither has `totals` — the field is absent, not
+  null, not empty and not zero.
 
 ### TC-02-INT-12
 
@@ -232,8 +242,8 @@ warning exist for. No file was written and none needed deleting.
 - **Asserts:** `GET /api/organizations/{orgId}/holidays/summary` → 200
 - **Steps:** Seed two members in one country, one with financial settings and one without.
 - **Expected Result:** Both rows carry the same `holidayCount` and `paidHours`. The member
-  without settings has no `amount` and no `currency` key, and contributes nothing to
-  `byCurrency`, which still carries the other member's currency and amount.
+  without settings has no `byCurrency` key, and contributes nothing to `totals.byCurrency`,
+  which still carries the other member's currency and amount.
 
 ### TC-02-INT-13
 
@@ -257,6 +267,34 @@ warning exist for. No file was written and none needed deleting.
 - **Expected Result:** `200` within the bound plus a small margin — the request does not hang.
   The country that never answered reports `unsourced` and wrote no `HolidayImport`; the other is
   `sourced`.
+
+### TC-02-INT-15
+
+- **Level:** Integration
+- **Covers:** REQ-02-025
+- **Asserts:** `GET /api/organizations/{orgId}/holidays` → 200
+- **Steps:** Seed an organization with holidays sourced for one country. Read
+  `GET .../holidays?scope=mine&year={the sourced year}` as a `user`, then as a `viewer`, then
+  read the same route with `scope=all` as an admin.
+- **Expected Result:** All three answer `200`. The `user`'s and the `viewer`'s bodies carry
+  `source` on every holiday row and **no `sourcing` key at all** — absent, not null and not
+  empty — so neither learns which countries the organization sources. The admin's body carries
+  the `sourcing` block with one entry per country in the set.
+
+### TC-02-INT-16
+
+- **Level:** Integration
+- **Covers:** REQ-02-006
+- **Asserts:** `POST /api/organizations/{orgId}/holidays` → 201; `POST /api/organizations/{orgId}/holidays/sync` → 200; `GET /api/organizations/{orgId}/reports/amounts-owed` → 200
+- **Steps:** Seed one active member resolving to `PL`. Create a holiday by hand on a date the
+  fake driver will return for `PL`, with `countryCode` **null** — the form's `All countries`
+  option. Create a second by hand, on another date the driver will also return, with
+  `countryCode` `FR`. Sync the year, then read Amounts Owed over it.
+- **Expected Result:** The null-country date carries exactly one `Holiday` row, still the manual
+  one, and the sync counts it in `skipped` — Edge case 7a. The `FR` date carries **two** rows,
+  the manual `FR` one and a written `PL` one, and the sync counts the entry in `written` — Edge
+  case 7b. Amounts Owed emits exactly one paid `Holiday · …` row for the member on the
+  null-country date; two would be the double payment REQ-02-006 exists to prevent.
 
 ### TC-02-E2E-01
 

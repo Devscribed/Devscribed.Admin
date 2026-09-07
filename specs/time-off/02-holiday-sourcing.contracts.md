@@ -33,8 +33,12 @@ nothing checks.
 | `GET /api/organizations/{orgId}/reports/amounts-owed` | no |
 
 `GET .../holidays` keeps every guard, status and query parameter it ships with — `year`,
-`country`, `scope` — and its `holidays` array is unchanged in shape. It **gains one field**,
-`sourcing`, described below. Nothing is removed from it.
+`country`, `scope`. Two things are added and nothing is removed: each holiday gains `source`,
+which is what the `holidays-row-{id}-source` column reads and which no other route exposes; and
+the body gains a `sourcing` block, present only for a caller holding `view-holidays`
+(REQ-02-025). A `scope=mine` read — the one the Time Tracking calendar and the vacation request
+modal make, open to every active member — therefore carries `source` on each row and **no**
+`sourcing` block.
 
 **A provider failure is never a status.** REQ-02-009 makes it a `200` carrying an unsourced
 country, so no row of this table names one.
@@ -76,8 +80,10 @@ Body: `{ "year": 2026, "refresh": false }`. `refresh` is optional and defaults t
 }
 ```
 
-`written`, `skipped` and `discarded` are the three outcomes of the entry decision table.
-`discarded` is the count of regional entries REQ-02-005 refused.
+`written`, `skipped` and `discarded` are the three outcomes of the entry decision table, and
+`written + skipped` is what the import record stores as `holidayCount` — the offered count.
+`discarded` is the count of regional entries REQ-02-005 refused and is not part of it. A refresh
+of a fully-stored country therefore reports `written: 0, skipped: 10` and records `10`.
 
 ### `GET /api/organizations/{orgId}/holidays/summary`
 
@@ -86,24 +92,37 @@ Body: `{ "year": 2026, "refresh": false }`. `refresh` is optional and defaults t
   "year": 2026,
   "countries": [
     { "countryCode": "PL", "holidayCount": 13, "memberCount": 2 },
-    { "countryCode": "US", "holidayCount": 11, "memberCount": 1 }
+    { "countryCode": "US", "holidayCount": 11, "memberCount": 1 },
+    { "countryCode": null, "holidayCount": 1, "memberCount": 3 }
   ],
   "members": [
-    { "membershipId": "…", "displayName": "Alex Kaminski", "countryCode": "PL", "holidayCount": 13, "paidHours": "104.00", "amount": "5200.00", "currency": "USD" },
-    { "membershipId": "…", "displayName": "Sam Reed", "countryCode": null, "holidayCount": 0, "paidHours": "0.00" }
+    { "membershipId": "…", "displayName": "Alex Kaminski", "countryCode": "PL", "holidayCount": 14, "paidHours": "112.00", "byCurrency": [{ "currency": "USD", "amount": "5600.00" }] },
+    { "membershipId": "…", "displayName": "Ivan Demchenko", "countryCode": "PL", "holidayCount": 14, "paidHours": "112.00", "byCurrency": [{ "currency": "USD", "amount": "5600.00" }] },
+    { "membershipId": "…", "displayName": "Sam Reed", "countryCode": "US", "holidayCount": 12, "paidHours": "96.00", "byCurrency": [{ "currency": "USD", "amount": "4800.00" }] }
   ],
   "totals": {
-    "holidayCount": 24,
-    "paidHours": "192.00",
-    "byCurrency": [{ "currency": "USD", "amount": "9600.00" }]
+    "holidayCount": 40,
+    "paidHours": "320.00",
+    "byCurrency": [{ "currency": "USD", "amount": "16000.00" }]
   }
 }
 ```
 
-`amount` and `currency` are **absent** — not null — on every member row and `byCurrency` is
-absent from `totals` when the caller does not hold `view-amounts-owed` (REQ-02-017), and absent
-on the individual row of a member with no financial settings (REQ-02-018). Every money value and
-every hours value is a two-decimal string, the shape the reports already send.
+**How the two arrays relate, since they do not sum to each other.** `countries` counts holiday
+*rows* — thirteen carrying `PL`, eleven carrying `US`, one carrying `null` — and `memberCount`
+is how many active members resolve to that country, the `null` row carrying every active member
+because a global holiday reaches all of them (REQ-02-013). `members` counts holidays that
+*reach* each person, so each Polish member's fourteen is their thirteen plus the one global day.
+`totals.holidayCount` and `totals.paidHours` are sums over `members`, never over `countries`:
+14 + 14 + 12 = 40. A reader who adds the country rows gets 25 and should — they are counting
+different things, and the screen labels them so.
+
+`byCurrency` is a list on every member row because a member whose currency changed mid-year has
+holidays valued in two (REQ-02-015); it holds one entry for almost everybody. It is **absent** —
+not empty, not null — on a member with no financial settings (REQ-02-018), and absent from every
+member row and from `totals` when the caller does not hold `view-amounts-owed` (REQ-02-017).
+Every money value and every hours value is a two-decimal string, the shape the reports already
+send.
 
 ### `GET` / `PUT /api/organizations/{orgId}/settings/holiday-sourcing`
 
@@ -137,7 +156,7 @@ that invents a sentence is a screen whose wording nothing governs — the rule
 | `countryCode` | `String @db.Char(2)` | ISO 3166-1 alpha-2, uppercase. Never null — a global holiday is not sourced |
 | `year` | `Int` | The calendar year sourced |
 | `provider` | `String` | The driver that answered, e.g. `nager` |
-| `holidayCount` | `Int` | How many rows this import wrote. `0` is the covered-but-empty state (REQ-02-010) |
+| `holidayCount` | `Int` | How many nationwide `Public` entries the **provider offered** for this country and year — not how many rows were written (REQ-02-021). `0` is the covered-but-empty state (REQ-02-010), and a refresh that writes nothing still records what was offered |
 | `importedAt` | `DateTime @default(now())` | Updated on a refresh |
 
 `@@unique([organizationId, countryCode, year])` — invariant 3, enforced by the index rather than
@@ -236,13 +255,13 @@ Paid public days for your organization.
  ⚠ The holiday service does not cover India. Add its holidays by hand.
 
  ┌── Paid public days, 2026 ──────────────────────────────────────────────┐
- │ Poland          13 days   2 people      United States   11 days  1 person│
+ │ Poland  13 days  2 people   United States  11 days  1 person   All  1 day│
  ├────────────────────────────────────────────────────────────────────────┤
- │ Alex Kaminski   PL   13 days   104.00 h   $5,200.00                     │
- │ Ivan Demchenko  PL   13 days   104.00 h   $5,200.00                     │
- │ Sam Reed        US   11 days    88.00 h   $4,400.00                     │
+ │ Alex Kaminski   PL   14 days   112.00 h   $5,600.00                     │
+ │ Ivan Demchenko  PL   14 days   112.00 h   $5,600.00                     │
+ │ Sam Reed        US   12 days    96.00 h   $4,800.00                     │
  ├────────────────────────────────────────────────────────────────────────┤
- │ Total                37 days   296.00 h   $14,800.00                    │
+ │ Total                40 days   320.00 h   $16,000.00                    │
  └────────────────────────────────────────────────────────────────────────┘
 
  ┌ January 2026 ──────────────────────────────────────────────────────────┐
@@ -277,28 +296,59 @@ row came from.
 | 5 | A member's country is set to India | `IN` joins the set, the sync reports it `unsourced`, `holiday-sourcing-uncovered-IN` appears, and the member's summary row reads 0 days |
 | 6 | A provider entry is regional | Discarded and counted in `discarded`. For Germany 2026 this is 10 of 20 entries |
 | 7 | A manual holiday already exists on an imported holiday's date and country | The manual row stands; the entry is counted as `skipped` and the list shows one row, `manual` |
+| 7a | A hand-typed **global** holiday (`countryCode: null`) already sits on an imported holiday's date | Nothing is written (REQ-02-006). The global row already reaches every member of that country, and a second row on the day would be a second paid `Holiday · …` line on Amounts Owed for one calendar day. Counted as `skipped` |
+| 7b | A holiday for **another** country sits on an imported holiday's date | The row is written. It reaches nobody the import's country reaches, and the unique index permits the pair |
 | 8 | An admin deletes an imported holiday, then reloads the year | It stays deleted. The import record exists, so no call is made (REQ-02-007) |
 | 9 | An admin deletes an imported holiday, then clicks Refresh | It is written again. Refresh is the explicit instruction to re-ask, and this is what it means |
-| 10 | An admin edits an imported holiday's `paidHours` to 4, then clicks Refresh | The edit stands — the date and country already carry a row, so the entry is `skipped` (REQ-02-006) |
+| 10 | An admin edits an imported holiday's `paidHours` to 4, then clicks Refresh | The edit stands — the date already carries a row that reaches the country, so the entry is `skipped` (REQ-02-006). The country stays `sourced`: the record's count is what the provider offered, not what this refresh wrote (REQ-02-021), so a refresh that writes nothing is never mistaken for an empty country |
 | 11 | The provider times out for one country in a set of three | The other two are written and recorded; the third is reported `unsourced`. `200` |
 | 12 | Two admins open the same unsourced year at the same instant | Both issue a sync; the unique index makes the second's writes collide and be counted as `skipped`. One import record exists |
 | 13 | A member is deactivated between the sync and the summary | They leave the summary's `members` array and their country leaves `countries` if nobody else resolves to it. No holiday row is deleted |
-| 14 | Two members on different currencies | `byCurrency` carries two rows. No total spans them (REQ-02-016) |
-| 15 | A member's rate changed mid-year | Each holiday is valued at the rate in force on its own date, from the snapshot history |
-| 16 | A member with no financial settings | Day count and paid hours present, `amount` and `currency` absent from their row and excluded from `byCurrency` |
+| 14 | Two members on different currencies | `totals.byCurrency` carries two entries. No total spans them (REQ-02-016). Each member's own `byCurrency` carries one |
+| 15 | A member's rate changed mid-year, currency unchanged | Each holiday is valued at the rate in force on its own date, from the snapshot history. Their `byCurrency` carries one entry |
+| 15a | A member's **currency** changed mid-year | Their `byCurrency` carries two entries, each summing only the holidays valued under that currency (REQ-02-015). `totals.byCurrency` receives both. Nothing is converted between them |
+| 16 | A member with no financial settings | Day count and paid hours present, `byCurrency` absent from their row and their holidays excluded from `totals.byCurrency` |
 | 17 | `year` of `1999` | `422` `yearInvalid`, on both routes that take it |
 | 18 | The year tab is switched while a sync for the previous year is in flight | The in-flight request is abandoned; its answer never repaints a year nobody is looking at |
 | 19 | An organization whose country code is not one the provider covers, checkbox on | The country joins the set and is reported `unsourced`. The organization-country picker is unaffected |
-| 20 | A caller holding `view-holidays` but not `view-amounts-owed` reads the summary | `200` with every day count and no `amount`, no `currency`, no `byCurrency` |
+| 20 | A caller holding `view-holidays` but not `view-amounts-owed` reads the summary | `200` with every day count and no `byCurrency`, on any member row or on `totals` |
+| 21 | A `user` or a `viewer` reads `GET .../holidays?scope=mine` | `200`. Each row carries `source`; the body carries **no** `sourcing` block (REQ-02-025), so the organization's country set and its import state do not reach them |
+| 22 | An organization has one PL member, thirteen PL holidays and one hand-typed global holiday | `countries` carries `PL` 13 days and a `null` row of 1 day whose `memberCount` is every active member; the member's own row reads 14. The two arrays are counting different things and are not expected to sum to each other |
+| 23 | The sourced country set is empty and the summary is read | `200`. `countries` is empty unless a global holiday exists, `members` carries every active member at zero days, and `totals.holidayCount` is `0` |
+
+## Decision table — what one provider entry becomes
+
+The rule is REQ-02-004, REQ-02-005 and
+REQ-02-006 in [02-holiday-sourcing.md](02-holiday-sourcing.md); this is the cross product they
+resolve to, one row per reachable state.
+
+The second key is **who the date already reaches**, not who wrote the row on it.
+
+`decision-table: keys=(nationwide, dateAlreadyCarries) domains=(nationwide: yes|no, dateAlreadyCarries: nothing|thisCountry|global|otherCountry)`
+
+| nationwide | dateAlreadyCarries | Outcome |
+|---|---|---|
+| yes | nothing | A `Holiday` row is created, `source: imported` (REQ-02-004). Counted as written. |
+| yes | thisCountry | Nothing is written; the existing row stands, whether manual or imported (REQ-02-006). Counted as skipped. |
+| yes | global | Nothing is written (REQ-02-006). A null-country row already reaches this member, and a second row would be paid twice. Counted as skipped. |
+| yes | otherCountry | The row is created. A holiday for another country reaches nobody here, so the date is free — and the unique index permits it, the pair being distinct. Counted as written. |
+| no | nothing | Discarded — regional entries are not imported (REQ-02-005). Counted as discarded. |
+| no | thisCountry | Discarded (REQ-02-005). The existing row is not consulted and not touched. |
+| no | global | Discarded (REQ-02-005). The existing row is not consulted and not touched. |
+| no | otherCountry | Discarded (REQ-02-005). The existing row is not consulted and not touched. |
 
 ## Security
 
 - Organization scope comes from the session, never from the path. `OrgScopeGuard` answers `404`
   — not `403` — on a mismatch, and every query and every write scopes by
   `session.organizationId`. An import writes `Holiday` rows for the caller's organization only.
-- **A capability per question.** `view-holidays` gates the day counts and `view-amounts-owed`
-  gates the money. REQ-02-017 omits the withheld fields rather than zeroing them, so a body
-  cannot be read for the shape of what it did not say.
+- **A capability per question.** `view-holidays` gates the day counts and the `sourcing` block;
+  `view-amounts-owed` gates the money. REQ-02-017 and REQ-02-025 omit the withheld fields rather
+  than zeroing them, so a body cannot be read for the shape of what it did not say.
+- **`scope=mine` learns nothing new about the organization.** That read is open to every active
+  member, and it gains only `source` on the rows it already returned. The `sourcing` block —
+  which is the list of every country the staff are in — travels with `view-holidays`
+  (REQ-02-025), so a `user` or a `viewer` calling it sees the same organization it saw before.
 - **The provider is never told who we are.** The request carries a year and a country code and no
   header identifying the organization, the account or the deployment. Nothing about the member
   set leaves this system — the country codes sent are a set, not a per-person list, and the
