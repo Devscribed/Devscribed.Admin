@@ -141,6 +141,7 @@ Both bodies: `{ "includeOrgCountry": true }`. `PUT` accepts that one field and n
 | `HOLIDAY_SOURCING_MESSAGES.includeOrgCountryInvalid` | `PUT /api/organizations/{orgId}/settings/holiday-sourcing` | Choose whether to include the organization's country. | yes |
 | `HOLIDAY_SOURCING_MESSAGES.syncFailedSome` | — | Some countries could not be sourced. | yes |
 | `HOLIDAY_SOURCING_MESSAGES.countryNotCovered` | — | The holiday service does not cover this country. Add its holidays by hand. | yes |
+| `HOLIDAY_SOURCING_MESSAGES.countryNoHolidays` | — | The holiday service lists no public holidays for this country this year. Add any by hand. | yes |
 | `HOLIDAY_SOURCING_MESSAGES.syncing` | — | Fetching public holidays… | yes |
 | `HOLIDAY_SOURCING_MESSAGES.summaryUnavailable` | — | The day and cost totals could not be loaded. | yes |
 | `HOLIDAY_MESSAGES.deleteForbidden` | `DELETE /api/organizations/{orgId}/holidays/{holidayId}` | You don't have permission to delete holidays. | no |
@@ -219,7 +220,7 @@ The client re-runs rules 1 to 3 before spending a request. The server re-validat
 | `holiday-sourcing-refresh-btn` | Settings › Holidays | present for admin and manager |
 | `holiday-sourcing-status` | Settings › Holidays | present while a sync is in flight |
 | `holiday-sourcing-uncovered` | Settings › Holidays | present when at least one country is `unsourced` or `empty`, `absent` otherwise |
-| `holiday-sourcing-uncovered-{countryCode}` | Settings › Holidays | present per uncovered country |
+| `holiday-sourcing-uncovered-{countryCode}` | Settings › Holidays | present per country in either state, carrying the message its own state names |
 | `holiday-summary` | Settings › Holidays | present for `view-holidays` |
 | `holiday-summary-country-{countryCode}` | Settings › Holidays | present per country in the sourced set |
 | `holiday-summary-country-{countryCode}-days` | Settings › Holidays | present per country |
@@ -284,7 +285,7 @@ row came from.
 | Loading | The shipped `Preloader` for the list. The summary block draws its own, and neither blocks the other |
 | Syncing | `holiday-sourcing-status` carries `syncing`. The year tabs and the list stay interactive; the summary shows its preloader until the re-read lands |
 | Empty | The shipped empty state, only when the year genuinely has no holiday **and** every country in the set is `sourced` or `empty` — an unsourced country shows the warning instead, because "no holidays" would be a claim the product cannot make |
-| Some countries uncovered | `holiday-sourcing-uncovered` above the summary, naming each country with `countryNotCovered`. Not an error banner: the screen is working and the data is partial |
+| Some countries have nothing to show | `holiday-sourcing-uncovered` above the summary, one line per country, **each line carrying the message its own state names**: `countryNotCovered` for `unsourced`, `countryNoHolidays` for `empty`. Not an error banner: the screen is working and the data is partial |
 | Summary unavailable | `summaryUnavailable` in the summary's place. The list is unaffected |
 | Read-only | No role reaches this screen without `manage-holidays`, so there is no read-only rendering. `user` and `viewer` are redirected to Members |
 | Permission-limited | A caller with `view-holidays` and without `view-amounts-owed` sees every day count and no money column, no totals row and no currency |
@@ -298,7 +299,8 @@ row came from.
 | 2 | No member has a country and the organization has one, checkbox on | The set is that one country. Every member resolves to it through the fallback chain |
 | 3 | No member has a country and the organization has none | The set is empty. No sync is issued, the summary reports zero days for every member, and the list shows only global holidays |
 | 4 | Checkbox turned off while the organization's country is also a member's | The country stays in the set — a member resolves to it (REQ-02-001), and the checkbox only governs REQ-02-002's addition |
-| 5 | A member's country is set to India | `IN` joins the set, the sync reports it `unsourced`, `holiday-sourcing-uncovered-IN` appears, and the member's summary row reads 0 days |
+| 5 | A member's country is set to India | `IN` joins the set, the sync reports it `unsourced`, `holiday-sourcing-uncovered-IN` appears carrying `countryNotCovered`, and the member's summary row reads 0 days |
+| 5a | A country the provider covers and for which it offers nothing that year | The sync reports it `empty` — REQ-02-023's covered-but-empty. `holiday-sourcing-uncovered-{code}` appears carrying **`countryNoHolidays`**, never `countryNotCovered`: the service does cover it, and telling an admin otherwise would send them looking for a provider that already answered |
 | 6 | A provider entry is regional | Discarded and counted in `discarded`. For Germany 2026 this is 10 of 20 entries |
 | 7 | A manual holiday already exists on an imported holiday's date and country | The manual row stands; the entry is counted as `skipped` and the list shows one row, `manual` |
 | 7a | A hand-typed **global** holiday (`countryCode: null`) already sits on an imported holiday's date | Nothing is written (REQ-02-006). The global row already reaches every member of that country, and a second row on the day would be a second paid `Holiday · …` line on Amounts Owed for one calendar day. Counted as `skipped` |

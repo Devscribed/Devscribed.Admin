@@ -322,7 +322,9 @@ it to, and then repaints — which is not a call an API test can make.
 - **Steps:** Sign in as an admin in an organization whose stated country no member resolves to.
   Open Settings › Holidays with the year already sourced. Untick
   `holiday-sourcing-include-org-country`, wait for the summary to repaint, then reload the page.
-  Tick it again and click `holiday-sourcing-refresh-btn`.
+  Tick it again and click `holiday-sourcing-refresh-btn`. Assert `holiday-sourcing-status`
+  becomes **visible** before asserting it goes: an assertion that it has count 0 resolves on the
+  first poll whether or not Refresh did anything, so on its own it cannot fail.
 - **Expected Result:** With the box ticked, `holiday-summary-country-{orgCountry}` is present.
   Unticked, it is absent. After the reload the box is still unticked and the country is still
   absent — the setting is stored, not in-page state. After the re-tick and the refresh,
@@ -340,7 +342,11 @@ it to, and then repaints — which is not a call an API test can make.
   driver refuses and one stating a country it answers. Open Settings › Holidays.
 - **Expected Result:** `holiday-sourcing-uncovered` is present and
   `holiday-sourcing-uncovered-{code}` names the refused country with
-  `HOLIDAY_SOURCING_MESSAGES.countryNotCovered`. The other country's holidays are in the table.
+  `HOLIDAY_SOURCING_MESSAGES.countryNotCovered`. Seed a third member in a country the double
+  covers and answers empty for: its own `holiday-sourcing-uncovered-{code}` line carries
+  `HOLIDAY_SOURCING_MESSAGES.countryNoHolidays` and **not** `countryNotCovered` — the service
+  covers it, so the screen must not say it does not. The answering country's holidays are in the
+  table.
   `holidays-error-banner` is absent — the screen is working, and partial data is not an error.
 - **Selectors:** `holiday-sourcing-uncovered`, `holiday-sourcing-uncovered-{countryCode}`,
   `holidays-table`, `holidays-error-banner` (absent).
