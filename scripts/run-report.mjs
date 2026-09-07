@@ -828,6 +828,24 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 .grouphd{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.55;margin:18px 0 6px;padding:0 14px}
 .grouphd:first-child{margin-top:0}
 .grouphd.sub2{text-transform:none;letter-spacing:0;opacity:.4;margin:10px 0 4px}
+/* A group heading you can open. It carries the same weight as the plain one; what it adds is
+   that the thing it names is itself a document with a page. */
+.grouphd button{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;letter-spacing:inherit;text-transform:inherit}
+.grouphd button:hover{text-decoration:underline;opacity:1}
+/* The indent under a grouping is the lineage made visible: a bug sits under the spec it
+   belongs to, and the eye reads the depth before it reads the words. */
+.nest1{padding-left:46px;border-left:2px solid var(--outline-var);border-radius:0 14px 14px 0;margin-left:14px}
+/* Where a row came from — the feature and the spec above it. Each part opens what it names, so
+   a row is three destinations rather than one, and none of them costs a second list. */
+.lin{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;vertical-align:baseline}
+.lin b{font-weight:600;opacity:.85}
+.lin i{opacity:.4;font-style:normal}
+.lin a{color:inherit;text-decoration:none;cursor:pointer;border-bottom:1px dotted currentColor}
+.lin a:hover{opacity:1;border-bottom-style:solid}
+.wchip{flex:0 0 auto;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:7px;
+  background:var(--surface-5,rgba(0,0,0,.06));color:var(--on-surface-var);min-width:44px;text-align:center}
+.wchip.bug{background:#F9DEDC;color:#410E0B}
+.wchip.patch{background:#FFF3D6;color:#4A3B00}
 .kindchip{flex:0 0 auto;font-size:11px;padding:2px 8px;border-radius:8px;background:var(--secondary-container);
   color:var(--on-secondary-container)}
 .kindchip.refine{background:#EADDFF;color:#21005D}
@@ -854,11 +872,15 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 </div></div>
 
 <div class="board" id="viewIndex" hidden>
-  <div class="card"><h2>Спеки</h2><div class="body" id="specList"></div></div>
+  <div class="card"><h2>Документы</h2><div class="body">
+    <div class="toolbar" id="groupBar"></div>
+    <div id="specList"></div>
+  </div></div>
 </div>
 
 <div class="board" id="viewSpec" hidden>
-  <div class="card"><h2>Прогоны этой спеки</h2><div class="body" id="specRuns"></div></div>
+  <div class="card"><h2>Прогоны этого документа</h2><div class="body" id="specRuns"></div></div>
+  <div class="card" id="cardKin" hidden><h2>Баги и патчи по этой спеке</h2><div class="body" id="specKin"></div></div>
 </div>
 
 <div id="viewRun">
@@ -1371,6 +1393,9 @@ render();
 let IDX = null;
 let view = 'run';
 let openSpec = null;
+/* The feature the index is narrowed to, or null for all of them. It is a filter on the one
+   list rather than a view of its own: the same rows, the same order, fewer of them. */
+let openFeature = null;
 
 const VIEWS = { index: 'viewIndex', spec: 'viewSpec', run: 'viewRun' };
 const specOf = (p) => (IDX ? IDX.specs.find((s) => s.path === p) ?? null : null);
@@ -1401,60 +1426,168 @@ function crumbs() {
     const e = entryOf(D.runId);
     if (e) openSpec = e.spec ?? null;
   }
-  const bits = ['<a data-go="#">Спеки</a>'];
-  if (view !== 'index') {
-    const s = specOf(openSpec);
-    if (s) bits.push('<i>›</i><a data-go="#spec:' + esc(s.path) + '">' + esc(s.key) + '</a>');
-    if (view === 'run') bits.push('<i>›</i><span>' + esc(D.runId) + '</span>');
+  const bits = ['<a data-go="#">Документы</a>'];
+  /* The trail is the lineage: feature, then the spec the document belongs to, then the
+     document, then the run. A bug opened from a link therefore says which feature it is a bug
+     in, which is the thing the directory it lives in does not say. */
+  const s = view === 'index' ? null : specOf(openSpec);
+  const feature = view === 'index' ? openFeature : (s ? s.feature : null);
+  if (feature) bits.push('<i>›</i><a data-go="#feature:' + esc(feature) + '">' + esc(feature) + '</a>');
+  if (s) {
+    const owner = s.relatesToPath ? specOf(s.relatesToPath) : null;
+    if (owner) bits.push('<i>›</i><a data-go="#spec:' + esc(owner.path) + '">' + esc(owner.key) + '</a>');
+    bits.push('<i>›</i>' + (view === 'run'
+      ? '<a data-go="#spec:' + esc(s.path) + '">' + esc(s.key) + '</a>'
+      : '<span>' + esc(s.key) + '</span>'));
   }
+  if (view === 'run') bits.push('<i>›</i><span>' + esc(D.runId) + '</span>');
   el.innerHTML = bits.join('');
 }
 
 const wallOf = (sec) => (sec >= 3600 ? Math.round(sec / 360) / 10 + ' ч' : Math.round(sec / 60) + ' мин');
 
-function renderIndex() {
-  document.title = 'Спеки · борд';
-  document.getElementById('hdTitle').textContent = 'Спеки';
-  document.getElementById('hdStatus').innerHTML =
-    IDX.specs.some((s) => s.running) ? '<span class="chip c-run">что-то идёт</span>' : '';
-  const touched = IDX.specs.filter((s) => s.entries.length);
-  document.getElementById('hdMeta').innerHTML =
-    touched.length + ' из ' + IDX.specs.length + ' документов что-то запускали · $' +
-    touched.reduce((a, s) => a + s.totals.costUsd, 0).toFixed(2) + ' всего';
+/* How the one list is cut up. The list is the same list and the order inside it is the same
+   order in every mode — newest first, by when anything last happened to the document. What a
+   mode changes is only which headings the rows are handed out under, so switching never hides
+   a row and never reorders one. 'none' is the default because "what moved last" is the question
+   the board is opened with; the others answer "and where does it belong". */
+const GROUPINGS = [
+  ['none', 'Без группировки'],
+  ['feature', 'По фиче'],
+  ['spec', 'По спеке'],
+  ['weight', 'По типу'],
+];
+let groupBy = (() => {
+  try { return localStorage.getItem('board.groupBy') || 'none'; } catch { return 'none'; }
+})();
+if (!GROUPINGS.some(([k]) => k === groupBy)) groupBy = 'none';
 
-  const row = (s) => '<button class="specrow" data-go="#spec:' + esc(s.path) + '">' +
+const WEIGHT_LABEL = { spec: 'Спека', bug: 'Баг', patch: 'Патч' };
+const featureOf = (s) => s.feature || null;
+
+/* The row, and above its title the line it came down: the feature, then the spec, each opening
+   what it names. A spec shows no lineage of its own — it *is* the lineage — and under a
+   grouping that already states one of them, that part is dropped rather than repeated. */
+function lineage(s, omit) {
+  const bits = [];
+  const f = featureOf(s);
+  /* Inside a feature, its name is on the heading of the page and repeating it on every row
+     states nothing. The same for the spec under a grouping that already names it. */
+  const featureStated = omit === 'feature' || openFeature || (omit === 'spec' && s.weight === 'spec');
+  if (f && !featureStated) {
+    bits.push('<a data-go="#feature:' + esc(f) + '">' + esc(f) + '</a>');
+  }
+  if (s.weight !== 'spec' && omit !== 'spec') {
+    bits.push(s.relatesToPath
+      ? '<a data-go="#spec:' + esc(s.relatesToPath) + '">' + esc(s.relatesTo) + '</a>'
+      : '<span class="dim">' + esc(s.relatesTo || 'ничьё') + '</span>');
+  }
+  return bits.length ? '<span class="lin">' + bits.join('<i>›</i>') + '</span><i> · </i>' : '';
+}
+
+function specRow(s, { omit = null, depth = 0 } = {}) {
+  const w = s.weight || 'spec';
+  return '<button class="specrow' + (depth ? ' nest' + depth : '') + '" data-go="#spec:' + esc(s.path) + '">' +
     '<span class="specdot' + (s.running ? ' on' : '') + '"></span>' +
+    '<span class="wchip ' + w + '">' + esc(WEIGHT_LABEL[w] || w) + '</span>' +
     '<span class="lead"><span class="nm">' + esc(s.key) + ' · ' + esc(s.title || s.path) + '</span>' +
-    '<span class="sub">' + (s.entries.length
+    '<span class="sub">' + lineage(s, omit) + (s.entries.length
       ? s.entries.slice(0, 3).map((x) => esc(x.kind === 'refine' ? 'refine' : 'ship') + ' ' + esc(x.detail || x.status)).join(' · ')
         + (s.entries.length > 3 ? ' · +' + (s.entries.length - 3) : '')
-      : 'ничего не запускалось') +
-    (s.dependsOn.length ? ' · зависит от ' + esc(s.dependsOn.join(', ')) : '') + '</span></span>' +
+      : 'ничего не запускалось') + '</span></span>' +
     (s.entries.length
       /* Cost sums; wall clock does not. A run abandoned in August and stamped again in
          September spans a fortnight of nobody working, and four of those add up to a number
          that reads as effort and is calendar. */
       ? '<span class="num"><b>$' + s.totals.costUsd.toFixed(2) + '</b>' + s.entries.length + ' прогон(ов)</span>'
       : '') + '</button>';
+}
 
-  /* Grouped by the weight of the document, which is the track a run against it takes. Both the
-     groups and the rows inside them are in clock order — newest first, counting the writing of
-     the document and not only its runs. Somebody who has just written one is looking for it,
-     and it was at the bottom of a list of thirty. */
-  const LABEL = { spec: 'Спеки', bug: 'Баги', patch: 'Патчи' };
-  const groups = [];
-  for (const w of ['spec', 'bug', 'patch']) {
-    const mine = IDX.specs.filter((s) => (s.weight || 'spec') === w);
-    if (!mine.length) continue;
-    groups.push({ w, mine, at: Math.max(0, ...mine.map((s) => s.lastAt || 0)), live: mine.some((s) => s.running) });
+/* A heading and the rows under it. 'at' is the newest thing in the group, which is what orders
+   the groups — so a grouping never buries the feature somebody is working in. */
+const newest = (rows) => Math.max(0, ...rows.map((s) => s.lastAt || 0));
+
+function groupsFor(list) {
+  if (groupBy === 'none') return [{ rows: list }];
+
+  if (groupBy === 'weight') {
+    const LABEL = { spec: 'Спеки', bug: 'Баги', patch: 'Патчи' };
+    return ['spec', 'bug', 'patch']
+      .map((w) => ({ head: LABEL[w], omit: null, rows: list.filter((s) => (s.weight || 'spec') === w) }))
+      .filter((g) => g.rows.length)
+      .sort((a, b) => newest(b.rows) - newest(a.rows));
   }
-  groups.sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || b.at - a.at);
+
+  if (groupBy === 'feature') {
+    const by = new Map();
+    for (const s of list) {
+      const f = featureOf(s) ?? ' ';
+      if (!by.has(f)) by.set(f, []);
+      by.get(f).push(s);
+    }
+    return [...by.entries()]
+      .map(([f, rows]) => ({
+        head: f === ' ' ? 'Без фичи' : f,
+        go: f === ' ' ? null : '#feature:' + f,
+        omit: 'feature',
+        rows,
+      }))
+      .sort((a, b) => newest(b.rows) - newest(a.rows));
+  }
+
+  /* By spec: the whole hierarchy in one pass — a spec is a heading, its bugs and patches are
+     the rows under it, and the heading opens the spec itself. A lighter document whose spec is
+     not in view keeps a heading of its own rather than being folded in somewhere it is not. */
+  const kin = new Map();
+  const heads = [];
+  const loose = [];
+  for (const s of list) {
+    if ((s.weight || 'spec') === 'spec') { heads.push(s); kin.set(s.key, []); }
+  }
+  for (const s of list) {
+    if ((s.weight || 'spec') === 'spec') continue;
+    if (s.relatesTo && kin.has(s.relatesTo)) kin.get(s.relatesTo).push(s); else loose.push(s);
+  }
+  const out = heads.map((s) => ({
+    /* The spec is the row right below, so the heading repeats it word for word if it names the
+       title too. It exists to say what the indent under it belongs to, and a spec with nothing
+       indented under it needs no heading at all. */
+    head: kin.get(s.key).length ? s.key : null,
+    go: '#spec:' + s.path,
+    omit: 'spec',
+    lead: s,
+    rows: kin.get(s.key),
+  }));
+  if (loose.length) out.push({ head: 'Без спеки', omit: null, rows: loose });
+  /* A spec with nothing under it still counts as its own newest thing, or an untouched spec
+     would sort as if it were empty. */
+  return out.sort((a, b) => newest([...(b.lead ? [b.lead] : []), ...b.rows]) - newest([...(a.lead ? [a.lead] : []), ...a.rows]));
+}
+
+function renderIndex(feature) {
+  const all = feature ? IDX.specs.filter((s) => featureOf(s) === feature) : IDX.specs;
+  document.title = (feature || 'Документы') + ' · борд';
+  document.getElementById('hdTitle').textContent = feature || 'Документы';
+  document.getElementById('hdStatus').innerHTML =
+    all.some((s) => s.running) ? '<span class="chip c-run">что-то идёт</span>' : '';
+  const touched = all.filter((s) => s.entries.length);
+  document.getElementById('hdMeta').innerHTML =
+    touched.length + ' из ' + all.length + ' документов что-то запускали · $' +
+    touched.reduce((a, s) => a + s.totals.costUsd, 0).toFixed(2) + ' всего · по времени изменения';
+
+  document.getElementById('groupBar').innerHTML = GROUPINGS
+    .map(([k, label]) => '<button class="fbtn' + (k === groupBy ? ' on' : '') + '" data-group="' + k + '">' + label + '</button>')
+    .join('');
+
+  const head = (g) => '<div class="grouphd">' +
+    (g.go ? '<button data-go="' + esc(g.go) + '">' + esc(g.head) + '</button>' : esc(g.head)) +
+    ' · ' + (g.rows.length + (g.lead && !g.head.startsWith(g.lead.key) ? 1 : 0)) + '</div>';
 
   document.getElementById('specList').innerHTML =
-    groups.map((g) =>
-      '<div class="grouphd">' + LABEL[g.w] + ' · ' + g.mine.filter((s) => s.entries.length).length
-        + ' из ' + g.mine.length + '</div>' + g.mine.map(row).join('')).join('') +
-    (IDX.orphans.length
+    groupsFor(all).map((g) => (g.head ? head(g) : '') +
+      (g.lead ? specRow(g.lead, { omit: g.omit }) : '') +
+      g.rows.map((s) => specRow(s, { omit: g.omit, depth: g.lead ? 1 : 0 })).join('')).join('') +
+    (!feature && IDX.orphans.length
       ? '<div class="grouphd">Прогоны без документа — он переименован или удалён</div>' +
         IDX.orphans.map((e) => '<button class="specrow" data-go="#' + esc(e.id) + '">' +
           '<span class="specdot"></span><span class="lead"><span class="nm">' + esc(e.id) + '</span>' +
@@ -1484,21 +1617,52 @@ function renderSpec(path) {
           (e.blockers ? ' · ' + e.blockers + ' блок.' : '') + (e.notes ? ' · ' + e.notes + ' зам.' : '') +
           (e.branch ? ' · ' + esc(e.branch) : '') + '</span></span>' +
         '<span class="num"><b>$' + e.costUsd.toFixed(2) + '</b>' + wallOf(e.wallSec) + '</span></button>').join('')
-    : '<p class="dim">По этой спеке ещё ничего не запускали.</p>';
+    : '<p class="dim">По этому документу ещё ничего не запускали.</p>';
+
+  /* What hangs off this spec. The relation is written on the lighter document, so the spec
+     itself says nothing about it and this is the only place the other direction is readable. */
+  const kin = IDX.specs.filter((x) => x.relatesToPath === s.path);
+  document.getElementById('cardKin').hidden = !kin.length;
+  if (kin.length) document.getElementById('specKin').innerHTML = kin.map((x) => specRow(x, { omit: 'spec' })).join('');
 }
 
 /* The hash is the whole of the navigation state, so a reload lands where the reader was and a
    link is worth sending to someone. */
+const isListAddress = (h) => !h || h === 'specs' || h.startsWith('spec:') || h.startsWith('feature:');
+
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
-  if (IDX && (!h || h === 'specs')) { show('index'); renderIndex(); crumbs(); return; }
+  /* The two list views are made of the index, and the index arrives on the stream. Until it
+     does there is nothing to draw them from — and falling through to the run branch asked the
+     watcher for a run named 'feature:time-off', which it does not have, so a link to a list
+     opened on whatever run the board happened to start on. The index's arrival routes again. */
+  if (isListAddress(h) && !IDX) return;
+  if (!h || h === 'specs') { openFeature = null; show('index'); renderIndex(); crumbs(); return; }
+  if (h.startsWith('feature:')) {
+    openFeature = h.slice(8);
+    show('index'); renderIndex(openFeature); crumbs(); return;
+  }
   if (h.startsWith('spec:')) { openSpec = h.slice(5); show('spec'); renderSpec(openSpec); crumbs(); return; }
   if (h && h !== D.runId) { wanted(h); return; }
   show('run');
+  /* Drawn, not merely revealed. The header, the title and the metrics belong to whichever view
+     wrote them last, so a run arrived at from a list kept the list's heading over the run's own
+     body, and the page said one thing while showing another. */
+  render();
   crumbs();
 }
 
 document.addEventListener('click', (e) => {
+  /* The grouping is a way of looking at the list, not a place in it: it survives a reload and
+     it is not in the hash, so a link somebody sends opens on the rows and not on somebody
+     else's idea of how they should be stacked. */
+  const grp = e.target.closest('[data-group]');
+  if (grp) {
+    groupBy = grp.dataset.group;
+    try { localStorage.setItem('board.groupBy', groupBy); } catch { /* a private window still groups */ }
+    renderIndex(openFeature);
+    return;
+  }
   const go = e.target.closest('[data-go]');
   if (!go) return;
   e.preventDefault();
@@ -1524,6 +1688,14 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
 
   let es = null;
   let shown = D.runId;
+  /* The run a switch is already on its way to.
+   *
+   * Opening a stream pushes the index before it pushes the payload, and the index handler
+   * re-routes — so without this, 'route' asked for the same run again, 'connect' closed the
+   * stream that was about to answer, and the next stream did the same. The hash moved, the page
+   * never did, and a reload worked because by then the server was already watching what the
+   * hash named. */
+  let pending = null;
 
   /* Switching runs keeps nothing: the ids belong to the run that is leaving, so an open step
      or a chosen tab would either miss or, worse, land on an unrelated step that happens to be
@@ -1544,8 +1716,10 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
        only learns about it on reload is blind exactly when someone is looking. */
     es.addEventListener('index', (ev) => {
       IDX = JSON.parse(ev.data);
-      if (view === 'run') crumbs(); else route();
-      if (!location.hash) route();
+      /* Its arrival is when a list address can finally be honoured — including the one the page
+         was opened on and had to defer. A reader already inside a run keeps their place. */
+      if (isListAddress(decodeURIComponent(location.hash.slice(1))) || view !== 'run') route();
+      else crumbs();
     });
 
     es.addEventListener('payload', (ev) => {
@@ -1558,18 +1732,30 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
       beat();
     });
 
-    es.onerror = () => { live.textContent = '○ связь потеряна'; live.className = 'livebadge lost'; };
+    /* A switch that will never arrive must not leave the page unable to ask again. */
+    es.onerror = () => { pending = null; live.textContent = '○ связь потеряна'; live.className = 'livebadge lost'; };
   }
 
   /* A run asked for from a list: already held, so draw it; otherwise the switch waits for the
      payload the reconnect brings. */
   wanted = (id) => {
-    if (id === shown) { show('run'); render(); crumbs(); return; }
+    if (id === shown) { pending = null; show('run'); render(); crumbs(); return; }
+    if (id === pending) return;
+    pending = id;
     connect(id);
+    /* The server builds the report before it can send it, which on a long run is seconds. A
+       click with nothing on screen to show for it reads as a click that missed, and the second
+       one lands somewhere else. */
+    live.className = 'livebadge';
+    live.textContent = '● открываю прогон…';
     const once = (ev) => {
       if (JSON.parse(ev.data).runId !== id) return;
       es.removeEventListener('payload', once);
+      pending = null;
+      /* The generic handler set 'D' and returned without drawing, because the view was still
+         the list when it ran. Drawing is this listener's half of the switch. */
       show('run');
+      render();
       crumbs();
     };
     es.addEventListener('payload', once);
@@ -1597,7 +1783,11 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
   setInterval(beat, 1000);
 
   const hash = decodeURIComponent(location.hash.slice(1));
-  connect(hash && !hash.startsWith('spec:') ? hash : null);
+  /* Only a run id names something to watch. The two list views are drawn from the index, which
+     every stream carries, so asking the server to follow 'feature:time-off' would be asking it
+     for a directory that is not there. */
+  const addressesARun = hash && !hash.startsWith('spec:') && !hash.startsWith('feature:') && hash !== 'specs';
+  connect(addressesARun ? hash : null);
 }
 
 route();
