@@ -33,6 +33,7 @@ import { useSession } from '@/layout/session-context';
 import { ContractDetails } from '@/members/ContractDetails';
 import { RoleSelect } from './RoleSelect';
 import { VacationPanel } from './VacationPanel';
+import { MemberProjectsPanel } from './MemberProjectsPanel';
 
 /**
  * The Country picker's list: the default option, then the same `COUNTRY_OPTIONS` the
@@ -89,8 +90,9 @@ function jobTitleError(value: string): string | null {
 
 /**
  * Built per-render from `detail` — only the Vacation tab is conditionally enabled
- * (spec 07: `disabled: !detail.canViewVacation`, the API decides). The other
- * placeholder tabs stay permanently disabled until their own specs land.
+ * (spec 07: `disabled: !detail.canViewVacation`, the API decides). Roles and Payments are
+ * still placeholders and stay disabled until their own specs land; Projects opened with
+ * PATCH-019, which gave it something to draw.
  *
  * Contract details (documents spec 03) is not drawn at all rather than drawn disabled:
  * the rest of these are placeholders for screens nobody can reach yet, whereas this one
@@ -110,7 +112,10 @@ function buildTabs(canViewVacation: boolean, showContractDetails: boolean) {
           },
         ]
       : []),
-    { value: 'projects', label: 'Projects', disabled: true, testId: 'member-detail-tab-projects' },
+    /* PATCH-019 — Projects opens. It reads the projects list narrowed to this member, so
+       the tab is offered to whoever that route answers for: a caller who may list projects
+       at all. A `viewer` is refused by the route and never reaches this screen anyway. */
+    { value: 'projects', label: 'Projects', testId: 'member-detail-tab-projects' },
     { value: 'roles', label: 'Roles', disabled: true, testId: 'member-detail-tab-roles' },
     { value: 'payments', label: 'Payments', disabled: true, testId: 'member-detail-tab-payments' },
   ];
@@ -306,6 +311,8 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
           <div style={{ paddingTop: 'var(--space-7)' }}>
             {shownTab === 'vacation' ? (
               <VacationPanel orgId={orgId} memberId={memberId} memberName={detail.fullName} />
+            ) : shownTab === 'projects' ? (
+              <MemberProjectsPanel orgId={orgId} memberId={detail.id} />
             ) : shownTab === 'contract-details' ? (
               <ContractDetails
                 orgId={orgId}

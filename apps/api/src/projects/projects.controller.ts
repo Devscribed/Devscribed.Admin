@@ -30,9 +30,14 @@ import { ProjectsService } from './projects.service';
 export class ProjectsController {
   constructor(private readonly projects: ProjectsService) {}
 
+  /** PATCH-019 — `membershipId` narrows the list to one member's assignments. */
   @Get('projects')
-  async list(@Req() req: AuthenticatedRequest, @Query('status') status?: string) {
-    return this.projects.listProjects(req.session!, { status });
+  async list(
+    @Req() req: AuthenticatedRequest,
+    @Query('status') status?: string,
+    @Query('membershipId') membershipId?: string,
+  ) {
+    return this.projects.listProjects(req.session!, { status, membershipId });
   }
 
   @Post('projects')

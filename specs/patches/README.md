@@ -57,6 +57,7 @@ spec, and writing it as a patch only moves where the run stops.
 | [016](PATCH-016-the-sourcing-panel-is-a-fixed-box.md) | The sourcing panel is a fixed box | time-off/02, PATCH-009 | none |
 | [017](PATCH-017-a-refresh-clears-a-country-nobody-is-in.md) | A refresh clears the imports of a country nobody is in | time-off/02, PATCH-012 | none |
 | [018](PATCH-018-the-holidays-screen-reads-top-to-bottom.md) | The Holidays screen reads top to bottom, and filters by team | time-off/02, design-system, 014, 015, 016 | none |
+| [019](PATCH-019-a-button-holds-its-label-and-projects-opens.md) | A button holds its label, chips share a line, and Projects opens | user-management/05, projects/11, design-system | none |
 
 PATCH-001 is the mock fixture the track was built against and is not indexed as product work.
 
@@ -66,7 +67,7 @@ its whole rule and names the one it replaces in `supersedes`, and nothing is edi
 the earlier note. Three of the four are the same lesson — a first fix that reasoned about the
 cause instead of measuring it.
 
-**006 to 018 carry no cases and were not shipped through the pipeline.** Each was written,
+**006 to 019 carry no cases and were not shipped through the pipeline.** Each was written,
 implemented and committed in one sitting at the user's direction, with the regression waived —
 the `Cases` section of each note says so and names the case it would have carried. PATCH-012 is
 also **wider than the entry condition above allows**, at nine product files, and says so in its

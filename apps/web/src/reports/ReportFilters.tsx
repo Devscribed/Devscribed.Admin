@@ -58,6 +58,12 @@ export function MultiFilter({
   selected,
   onChange,
   disabled,
+  /**
+   * PATCH-019 — a wider box, for a filter that is not in the reports bar. 200 is the width
+   * five filters in a row are budgeted at; a filter standing alone on a screen has room for
+   * more, and chips that fit on one line are the whole point of the number.
+   */
+  width,
 }: {
   label: string;
   testId: string;
@@ -65,6 +71,7 @@ export function MultiFilter({
   selected: readonly string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
+  width?: number;
 }) {
   const rows: SelectOption[] = options.map((option) => ({
     label: option.label,
@@ -85,7 +92,7 @@ export function MultiFilter({
          rendering as a bare id — `optionFor` returns nothing for it. */
       value={selected.map((id) => optionFor(rows, id)).filter((row) => row !== undefined)}
       onChange={(next) => onChange(valuesOf(next))}
-      wrapperStyle={FILTER_WIDTH}
+      wrapperStyle={width === undefined ? FILTER_WIDTH : { width }}
     />
   );
 }

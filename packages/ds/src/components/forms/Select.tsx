@@ -367,13 +367,19 @@ export function Select({
               /* No border, no background: the control around it is the field. It inherits the
                  type and grows to fill whatever the value and the chips leave.
 
-                 PATCH-010 — a single select gives it a flex basis of zero, so "grows to fill
-                 what is left" is what it actually does. An `<input>`'s own basis is its
-                 20-character default size, and a flex line is broken on the basis before
-                 anything is allowed to shrink: with a long value beside it the input carried
-                 the line past the control's width and wrapped. Zero also stops it competing
-                 with the value for the room, which shrank a label that had space for it. */
-              style={{ /* @literal 2px, matching the chips it grows between */ flex: isMulti ? '1 1 auto' : '1 1 0', minWidth: 2, margin: 2, border: 0, padding: 0, outline: 0, background: 'transparent', font: 'inherit', color: N.n80, boxSizing: 'border-box' }}
+                 PATCH-010 — a flex basis of zero, so "grows to fill what is left" is what it
+                 actually does. An `<input>`'s own basis is its 20-character default size, and
+                 a flex line is broken on the basis before anything is allowed to shrink: with
+                 a long value beside it the input carried the line past the control's width and
+                 wrapped. Zero also stops it competing with the value for the room, which
+                 shrank a label that had space for it.
+
+                 PATCH-019 — the multi-select takes the same basis, and states in a minimum
+                 what it actually wants: a line is broken on the clamped basis, so 48 is
+                 "wrap me onto my own line once there is less than a word of room left". At
+                 the 20-character basis every chip but the first started a new line, and a
+                 two-chip filter drew as a column. */
+              style={{ /* @literal 2px, matching the chips it grows between; 48px is a word's worth of typing room */ flex: '1 1 0', minWidth: isMulti ? 48 : 2, margin: 2, border: 0, padding: 0, outline: 0, background: 'transparent', font: 'inherit', color: N.n80, boxSizing: 'border-box' }}
             />
           )}
         </span>

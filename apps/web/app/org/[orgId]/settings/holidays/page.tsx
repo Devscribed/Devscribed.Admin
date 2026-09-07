@@ -587,6 +587,10 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         <MultiFilter
           label="Teams"
           testId="holidays-teams-filter"
+          /* PATCH-019 — the same width the country filter below it carries. This one stands
+             alone on its line rather than fifth in a reports bar, and two team chips on one
+             line is what the extra 100px buys. */
+          width={COUNTRY_FILTER_WIDTH}
           options={[
             { id: TIME_OFF_CALENDAR_UNASSIGNED, label: 'Unassigned' },
             ...teams.map((team) => ({ id: team.id, label: team.label })),
