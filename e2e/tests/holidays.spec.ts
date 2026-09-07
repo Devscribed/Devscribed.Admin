@@ -359,4 +359,32 @@ test.describe('organization/03 — Holidays', () => {
     await expect(page.getByTestId('vacation-working-days-preview')).toContainText('5');
     await expect(page.getByTestId('vacation-request-submit-btn')).toBeEnabled();
   });
+
+  // TC-03-E2E-10 (PATCH-004) — the Add holiday form's country field is searched by typing.
+  // Earns E2E: focus/blur through the search input, the list filtering live, and the
+  // control's own "No options" row, none of which an API test can see.
+  test('the holiday form country field is searchable', async ({ page, request }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    await signInUi(page, adminEmail);
+    await openHolidaysPage(page);
+
+    await page.getByTestId('holidays-add-btn').click();
+    await expect(page.getByTestId('holiday-modal')).toBeVisible();
+
+    await page.getByTestId('holiday-country-select-input').fill('pola');
+    const list = page.getByRole('listbox', { name: 'Country' });
+    await expect(list).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(1);
+    await expect(list.getByRole('option')).toHaveText('Poland');
+
+    await list.getByRole('option').click();
+    await expect(page.getByTestId('holiday-country-select-input')).toHaveValue('');
+    await expect(page.getByTestId('holiday-country-select')).toContainText('Poland');
+
+    await page.getByTestId('holiday-country-select-input').fill('zzzz');
+    await expect(list).toBeVisible();
+    await expect(list).toContainText('No options');
+    await expect(page.getByTestId('holiday-country-select')).toContainText('Poland');
+  });
 });

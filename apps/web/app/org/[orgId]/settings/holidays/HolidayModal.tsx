@@ -139,6 +139,32 @@ function DateInput({
   );
 }
 
+/**
+ * The chosen option's label, or `''` when the value matches nothing.
+ *
+ * PATCH-004 — a searchable `Select` hides its own value span while the input carries a
+ * query (§21: the value area and the search text share one slot), so `holiday-country-select`
+ * — the wrapper that now carries the id — needs its own copy of the chosen label to keep
+ * "containing" it while the admin is mid-search.
+ */
+function selectedLabel(options: { value: string; label: string }[], value: string): string {
+  return options.find((option) => option.value === value)?.label ?? '';
+}
+
+/** Visually hidden, but present in the DOM — the same clip technique `holiday-modal-title`
+ *  uses below, so `holiday-country-select`'s `toContainText` keeps reading the chosen
+ *  country mid-search. */
+function HiddenSelectedLabel({ label }: { label: string }) {
+  return (
+    <span
+      aria-hidden
+      style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Today as `YYYY-MM-DD` in the viewer's own zone — the Add modal's pre-filled date. */
 function localTodayYmd(): string {
   const now = new Date();
@@ -370,21 +396,27 @@ export function HolidayModal({
           errorId="field-error-name"
         />
 
-        <Select
-          label="Country"
-          value={optionFor(HOLIDAY_COUNTRY_OPTIONS, countryCode)}
-          options={HOLIDAY_COUNTRY_OPTIONS}
-          onChange={(option) => {
-            setCountryCode(valueOf(option));
-            clearError('countryCode');
-          }}
-          isDisabled={submitting}
-          variant="formik"
-          data-testid="holiday-country-select"
-          error={errors.countryCode ? true : undefined}
-          errorMessage={errors.countryCode}
-          errorId="field-error-countryCode"
-        />
+        {/* PATCH-004 — searchable; `holiday-country-select` moves onto this wrapper for the
+            same reason as the two pickers on the Holidays list page. */}
+        <div data-testid="holiday-country-select">
+          <Select
+            label="Country"
+            value={optionFor(HOLIDAY_COUNTRY_OPTIONS, countryCode)}
+            options={HOLIDAY_COUNTRY_OPTIONS}
+            onChange={(option) => {
+              setCountryCode(valueOf(option));
+              clearError('countryCode');
+            }}
+            isDisabled={submitting}
+            variant="formik"
+            isSearchable
+            data-testid="holiday-country-select-input"
+            error={errors.countryCode ? true : undefined}
+            errorMessage={errors.countryCode}
+            errorId="field-error-countryCode"
+          />
+          <HiddenSelectedLabel label={selectedLabel(HOLIDAY_COUNTRY_OPTIONS, countryCode)} />
+        </div>
 
         {/* §63 — `leading` is the destructive slot: it widens the row and pushes Delete to
             the far left of the pair, which only reads as "pushed left" because everything

@@ -515,4 +515,39 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await expect(page.getByTestId('member-detail-name')).toHaveText('Nina Nowhere');
     await expect(page.getByTestId('member-country-select')).toHaveCount(0);
   });
+
+  // TC-01-E2E-09 (PATCH-004) — the organization country picker is searched by typing.
+  // Earns E2E: the search input, the filtered list, and the value surviving a reload.
+  test('the organization country picker is searchable and the choice survives a reload', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+
+    await signInUi(page, adminEmail);
+    await clickNav(page, 'Time off', 'settings-tab-holidays');
+    await expect(page.getByTestId('holidays-page')).toBeVisible();
+
+    await page.getByTestId('org-country-select-input').fill('united k');
+    const list = page.getByRole('listbox', { name: 'Organization country' });
+    await expect(list).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(1);
+    await list.getByRole('option').click();
+    await expect(page.getByTestId('org-country-select')).toContainText('United Kingdom');
+
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/settings/country') && response.request().method() === 'PUT',
+    );
+    await page.getByTestId('org-country-save').click();
+    await saved;
+    // The picker repaints from what the PUT just confirmed is stored — the reload then
+    // reads it from a fresh GET rather than from anything still in memory.
+    await expect(page.getByTestId('org-country-select')).toContainText('United Kingdom');
+
+    await page.reload();
+    await expect(page.getByTestId('holidays-page')).toBeVisible();
+    await expect(page.getByTestId('org-country-select')).toContainText('United Kingdom');
+  });
 });

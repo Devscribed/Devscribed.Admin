@@ -44,6 +44,42 @@ function yearTabs(current: number): number[] {
   return [current - 1, current, current + 1];
 }
 
+/**
+ * The chosen option's label, or `''` when the value matches nothing.
+ *
+ * PATCH-004 — a searchable `Select` hides its own value span while the input carries a
+ * query (§21: the value area and the search text share one slot), so the label a sighted
+ * reader saw a moment ago is gone from the DOM the instant they start typing again. The
+ * wrapper that now carries `data-testid` still has to "contain" it regardless — a
+ * screen-reader-only sibling, built the same way `holiday-modal-title` already is, is
+ * what keeps it there without drawing it twice for a sighted reader.
+ */
+function selectedLabel(
+  options: { value: string; label: string }[],
+  value: string,
+): string {
+  return options.find((option) => option.value === value)?.label ?? '';
+}
+
+/** Visually hidden, but present in the DOM — the same clip technique `holiday-modal-title`
+ *  uses, so a wrapper's `toContainText` keeps reading the chosen label mid-search. */
+function HiddenSelectedLabel({ label }: { label: string }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        overflow: 'hidden',
+        clip: 'rect(0 0 0 0)',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 const MONTH_NAMES = [
   'January',
   'February',
@@ -376,21 +412,28 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         {/* The same 220 the country filter directly below it carries: two selects in one
             column that measured differently would read as two unrelated controls. No token
             names a control width — `MultiFilter`'s own 200 is the same literal. */}
-        <div style={{ minWidth: 220 }}>
+        <div style={{ minWidth: 220 }} data-testid="org-country-select">
           {/* The list the WRITE accepts, and not the holiday form's: that one is built from
               the phone list and offers AC, TA and XK, which rule 9 refuses. Above it, the
               option that submits `null` — what REQ-01-034 clears through, and without it
               the rule has no control behind it: a single Select is cleared only by picking
               another option, and an organization that stated a country could never unstate
-              one. It is also what a stored `null` renders as. */}
+              one. It is also what a stored `null` renders as.
+
+              PATCH-004 — searchable, so `org-country-select` moves onto this wrapper (§21
+              puts the control's own attributes, `data-testid` included, on the inner
+              `<input>` once a `Select` is searchable, and the chosen value then sits in a
+              sibling span the wrapper still contains). The input takes its own id. */}
           <Select
             label="Organization country"
             hint={TIME_OFF_CALENDAR_MESSAGES.orgCountryHint}
             value={optionFor(ORG_COUNTRY_OPTIONS, orgCountry)}
             options={ORG_COUNTRY_OPTIONS}
             onChange={(option) => setOrgCountry(valueOf(option))}
-            data-testid="org-country-select"
+            isSearchable
+            data-testid="org-country-select-input"
           />
+          <HiddenSelectedLabel label={selectedLabel(ORG_COUNTRY_OPTIONS, orgCountry)} />
         </div>
         <Button
           onClick={() => void handleSaveCountry()}
@@ -410,13 +453,17 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ minWidth: 220 }}>
+        <div style={{ minWidth: 220 }} data-testid="holidays-country-filter">
+          {/* PATCH-004 — searchable; `holidays-country-filter` moves onto this wrapper for
+              the same reason as the organization picker above. */}
           <Select
             value={optionFor(HOLIDAY_COUNTRY_OPTIONS, country)}
             options={HOLIDAY_COUNTRY_OPTIONS}
             onChange={(option) => setCountry(valueOf(option))}
-            data-testid="holidays-country-filter"
+            isSearchable
+            data-testid="holidays-country-filter-input"
           />
+          <HiddenSelectedLabel label={selectedLabel(HOLIDAY_COUNTRY_OPTIONS, country)} />
         </div>
       </div>
 
