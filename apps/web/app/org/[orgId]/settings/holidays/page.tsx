@@ -405,7 +405,11 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           display: 'flex',
           alignItems: 'flex-end',
           gap: 'var(--space-3)',
-          marginBottom: 'var(--space-6)',
+          /* BUG-011 — the `dropdown` Select's hint hangs 20px below the control's own box and
+             adds no height for it (Select.tsx:480). `--space-6` (16px) let the filter row below
+             paint over the hint's descenders; `--space-8` (24px) clears the hint's 20px plus a
+             4px gap. */
+          marginBottom: 'var(--space-8)',
           flexWrap: 'wrap',
         }}
       >

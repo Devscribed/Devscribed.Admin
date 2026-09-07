@@ -1,3 +1,4 @@
+import { TIME_OFF_CALENDAR_MESSAGES } from '@devscribed/validation';
 import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   VALID,
@@ -549,5 +550,34 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await page.reload();
     await expect(page.getByTestId('holidays-page')).toBeVisible();
     await expect(page.getByTestId('org-country-select')).toContainText('United Kingdom');
+  });
+
+  // TC-01-E2E-10 (BUG-011) — the organization country hint hangs 20px below its control
+  // (§21's message slot, out of flow) and the filter row below it used to leave only 16px,
+  // so the filter's opaque control painted over the hint's descenders. Earns E2E: a rendered
+  // geometry — two boxes and where their edges fall — that no API test can reach.
+  test('the organization country hint clears the country filter below it', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+
+    await signInUi(page, adminEmail);
+    await clickNav(page, 'Time off', 'settings-tab-holidays');
+    await expect(page.getByTestId('holidays-page')).toBeVisible();
+
+    const hint = page.getByText(TIME_OFF_CALENDAR_MESSAGES.orgCountryHint);
+    await expect(hint).toBeVisible();
+    const filter = page.getByTestId('holidays-country-filter');
+    await expect(filter).toBeVisible();
+
+    const hintBox = await hint.boundingBox();
+    const filterBox = await filter.boundingBox();
+    if (!hintBox || !filterBox) throw new Error('expected both boxes to be measurable');
+
+    // The hint's bottom edge sits above the filter's top edge — no pixel of the two boxes
+    // overlaps.
+    expect(hintBox.y + hintBox.height).toBeLessThanOrEqual(filterBox.y);
   });
 });
