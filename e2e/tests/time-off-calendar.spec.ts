@@ -163,9 +163,9 @@ test.describe('time-off/01 — Vacation calendar', () => {
     expect(saturday).not.toBe(monday);
   });
 
-  // TC-01-E2E-02 — the Teams scope, its Unassigned entry, and the refusal that leaves the
-  // last good grid on screen. Earns E2E: a picker, a banner, and a grid that must not clear.
-  test('picking teams draws their union, and unticking the last one refuses without clearing', async ({
+  // TC-01-E2E-02 — the Teams scope, its Unassigned entry, and the refusal that clears the
+  // grid. Earns E2E: a picker, a banner, and a grid that must disappear under it.
+  test('picking teams draws their union, and unticking the last one refuses and clears the grid', async ({
     page,
     request,
   }) => {
@@ -205,12 +205,13 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await expect(page.getByTestId(`calendar-member-row-${c.id}`)).toHaveCount(0);
     await expect(page.getByTestId(`calendar-member-row-${a.id}`)).toBeVisible();
 
-    // Untick the last one: refused, and the grid underneath keeps its last good rows.
+    // Untick the last one: refused, and the grid underneath is gone — REQ-01-049.
     await page.getByRole('button', { name: 'Remove Acme Redesign' }).click();
     await expect(page.getByTestId('calendar-error-banner')).toHaveText(
       'Choose at least one team.',
     );
-    await expect(page.getByTestId(`calendar-member-row-${a.id}`)).toBeVisible();
+    await expect(page.getByTestId('calendar-grid')).toHaveCount(0);
+    await expect(page.getByTestId(`calendar-member-row-${a.id}`)).toHaveCount(0);
 
     // Unassigned alone is a selection, and is answered rather than refused.
     await page.getByTestId('calendar-teams-picker').click();
@@ -300,6 +301,45 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await expect(page.getByTestId(`calendar-day-header-${first}`)).toBeVisible();
     await expect(page.getByTestId(`calendar-day-header-${last}`)).toBeVisible();
     await expect(dayHeaders).toHaveCount(lastDay.getUTCDate());
+  });
+
+  // TC-01-E2E-11 (BUG-012) — the grid used to keep whatever window last answered while the
+  // range label kept moving underneath a scope refusal. Earns E2E: which of two client
+  // objects a screen draws is a rendering decision, out of an API test's reach.
+  test('stepping the window moves the grid with the label, and a scope refusal clears both', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+
+    await signInUi(page, adminEmail);
+    await openCalendar(page);
+    await page.getByTestId('calendar-window-week').click();
+
+    const dayHeaders = page.locator('[data-testid^="calendar-day-header-"]');
+    const label = page.getByTestId('calendar-range-label');
+
+    const firstLabel = await label.textContent();
+    const firstIds = await dayHeaders.evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-testid')),
+    );
+
+    await page.getByTestId('calendar-next').click();
+    await expect(label).not.toHaveText(firstLabel!);
+    await expect(dayHeaders).toHaveCount(7);
+    const nextIds = await dayHeaders.evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-testid')),
+    );
+    for (const id of firstIds) expect(nextIds).not.toContain(id);
+
+    await page.getByTestId('calendar-scope-teams').click();
+    await page.getByTestId('calendar-next').click();
+    await expect(page.getByTestId('calendar-error-banner')).toHaveText(
+      TIME_OFF_CALENDAR_MESSAGES.teamsRequired,
+    );
+    await expect(page.getByTestId('calendar-grid')).toHaveCount(0);
+    await expect(dayHeaders).toHaveCount(0);
   });
 
   // TC-01-E2E-04 — the two holiday treatments. Earns E2E: a column shaded whole against a

@@ -196,16 +196,19 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
   const load = useCallback(
     async (signal: AbortSignal): Promise<void> => {
       // Validation Rules 6 and 7, client-side: a scope with nothing ticked is refused
-      // with the message the server would send, without spending the request. The last
-      // good grid stays on screen underneath, which is what the banner is drawn above.
+      // with the message the server would send, without spending the request. The grid
+      // is cleared along with the refusal — REQ-01-049 — so the banner is the only thing
+      // drawn, never a previous window's grid underneath it.
       if (scope === 'teams' && projectIds.length === 0) {
         setLoading(false);
         setError(TIME_OFF_CALENDAR_MESSAGES.teamsRequired);
+        setData(null);
         return;
       }
       if (scope === 'people' && memberIds.length === 0) {
         setLoading(false);
         setError(TIME_OFF_CALENDAR_MESSAGES.peopleRequired);
+        setData(null);
         return;
       }
 
@@ -289,6 +292,15 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
   }, [days]);
 
   const hasRows = (data?.members.length ?? 0) > 0;
+
+  /**
+   * REQ-01-049 — `data` is written once, on the request that answered `200`, and a step of
+   * the window re-runs `load` before that answer arrives. Comparing `data.range` against the
+   * range the header is showing now is what tells a stale answer from a current one; without
+   * it the grid drew whatever last succeeded, however many windows ago that was.
+   */
+  const isCurrentWindow =
+    data !== null && data.range.startDate === range.startDate && data.range.endDate === range.endDate;
 
   return (
     <div className="time-off-calendar" data-testid="time-off-calendar-page">
@@ -391,16 +403,16 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         </div>
       )}
 
-      {loading && !data ? (
+      {!isCurrentWindow && (loading || data !== null) ? (
         <GridSkeleton />
-      ) : data && !hasRows ? (
+      ) : data && isCurrentWindow && !hasRows ? (
         <div className="time-off-calendar-empty" data-testid="calendar-empty-state">
           <div className="time-off-calendar-empty-title">
             {TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle}
           </div>
           <div>{TIME_OFF_CALENDAR_MESSAGES.emptyStateBody}</div>
         </div>
-      ) : data ? (
+      ) : data && isCurrentWindow ? (
         <div className="time-off-calendar-scroll">
           <div className="time-off-calendar-grid" data-testid="calendar-grid">
             <div className="time-off-calendar-row" style={{ gridTemplateColumns: gridColumns }}>
