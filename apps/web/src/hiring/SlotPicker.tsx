@@ -8,7 +8,7 @@ import {
   monthMatrix,
   parseYearMonth,
 } from '@devscribed/validation';
-import { Button, Calendar, Card, InfoBanner, Preloader, Select, ToggleButton } from '@devscribed/ds';
+import { Button, Calendar, Card, InfoBanner, Preloader, Select, ToggleButton, useBreakpoint } from '@devscribed/ds';
 import { timeZoneOptions } from '@/hiring/format';
 import { valueOf } from '@/select';
 import type { UseAvailability } from '@/hiring/useAvailability';
@@ -85,6 +85,25 @@ export function SlotPicker({
     const parsed = availability.month ? parseYearMonth(availability.month) : null;
     return parsed ? monthMatrix(parsed.year, parsed.month) : [];
   }, [availability.month]);
+
+  /*
+   * The date grid goes edge to edge in its card below `sm`. It is the one control this page
+   * exists for and it is seven columns wide, so at 360 the card's own 32px of side padding is
+   * 32px the columns do not have: with it, and with the grid's own gutters, a day cell is 35.9
+   * against a 44px control height (02 design §Responsive).
+   *
+   * **Not `padded={false}`**, which the plan named and which is the mechanism an edge-to-edge
+   * `Table` uses. That bleeds all four sides, and three of them are wanted: this card also draws
+   * a centred `Preloader` and a failure message with a retry, both of which would then sit
+   * against its edges, and the grid itself needs the vertical air the padding was giving it. A
+   * negative margin bleeds only the axis that is short.
+   *
+   * `useBreakpoint` rather than a media query because the margin is an inline style and no query
+   * reaches one. It is seeded from the stamp on `<html>`, so the first client render already
+   * draws the right form — and this screen renders a loader until availability resolves in any
+   * case, so no server markup ever states a margin.
+   */
+  const bleed = useBreakpoint() === 'xs' ? { marginInline: 'calc(var(--space-6) * -1)' } : undefined;
 
   return (
     <>
@@ -166,6 +185,7 @@ export function SlotPicker({
               maxDate={availability.window?.to}
               today={availability.window?.from ?? null}
               loading={availability.status === 'loading'}
+              style={bleed}
             />
           )}
         </Card>
@@ -285,6 +305,10 @@ export function SlotList({
           role="group"
           aria-label="Available times"
           className="booking-slots"
+          /* Tagged because the responsive rule is about *this* box — the region that caps at 60vh
+             and scrolls inside itself below `sm` — and a class is not a selector a test may use.
+             `slot-list` is its parent and holds the date heading too, so it is the wrong box. */
+          data-testid="slot-list-options"
           onKeyDown={onKeyDown}
         >
           {slots.map((slot) => {

@@ -383,4 +383,50 @@ test.describe('Manage booking', () => {
     await expect(page.getByTestId('manage-booking-when')).toHaveCount(0);
     await expect(page.getByTestId('manage-cancel-button')).toHaveCount(0);
   });
+
+  /**
+   * TC-H07-E2E-05 — the two actions stack below `sm`, with the destructive one lower.
+   *
+   * 576 and 575 are the same pixel from either side, which is what makes this an assertion that a
+   * `575` was written where a `599` used to be. At 360 alone it would pass against either number.
+   */
+  test('stacks its two actions below sm, with Cancel lower', async ({ page, request }) => {
+    const owner = uniqueEmail('manage-ladder-owner');
+    const org = await registerOrganization(request, owner);
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    await bookInterview(request, vacancy.publicSlug, { email: uniqueEmail('manage-ladder') });
+    const manage = await latestManageLink(request, owner);
+
+    await page.goto(manage.path);
+    await expect(page.getByTestId('manage-reschedule-button')).toBeVisible();
+
+    const row = () =>
+      page.evaluate(() => {
+        const box = (id: string) =>
+          document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+        const reschedule = box('manage-reschedule-button');
+        const cancel = box('manage-cancel-button');
+        return {
+          onOneLine: Math.abs(reschedule.top - cancel.top) < 2,
+          sameColumn:
+            Math.abs(reschedule.left - cancel.left) < 1 &&
+            Math.abs(reschedule.width - cancel.width) < 1,
+          cancelIsLower: cancel.top > reschedule.top,
+          shortest: Math.floor(Math.min(reschedule.height, cancel.height)),
+          over: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+
+    // The band the retirement gives back: at 576 the row is 528 wide and the two buttons and
+    // their gap are 401, so they sit side by side there.
+    await page.setViewportSize({ width: 576, height: 900 });
+    await expect.poll(async () => (await row()).onOneLine, { message: 'one row at 576' }).toBe(true);
+
+    for (const width of [575, 360]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect
+        .poll(row, { message: `stacked at ${width}` })
+        .toEqual({ onOneLine: false, sameColumn: true, cancelIsLower: true, shortest: 44, over: 0 });
+    }
+  });
 });

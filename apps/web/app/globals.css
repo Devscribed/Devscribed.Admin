@@ -80,13 +80,28 @@
   max-width: 100%;
 }
 
+/*
+ * The one number on this page that is not the ladder's, and the only one in the system that
+ * survives being off it (design-system 01 §01.3). What defends it is a range rather than a
+ * point: forced to two columns at every width from 700 up, the picker is legal from 818 — where
+ * a day cell reaches `--control-height` at 44.2 — and no ladder number falls inside 818–991.
+ * `md` is 767, where the cell is 39.9; `lg` is 991, which would stack the two cards on a screen
+ * with 173px of room to spare for them. 880 is the page's own, it is what ships, and nothing
+ * measured asks it to move. See `specs/hiring/02-booking-page.design.md` §Responsive.
+ */
 @media (max-width: 879px) {
   .booking-panels {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 599px) {
+/*
+ * Below `sm`. This was 599; 600 was never measured, and one off the ladder reads as a different
+ * decision when it is the same one (01 §01.3). The 24px between them change nothing here — every
+ * rule below is a stack, and the name row it also governs is 258px per column at 600 and 246 at
+ * 576, both of them a first name with room to spare.
+ */
+@media (max-width: 575px) {
   .booking-names {
     grid-template-columns: 1fr;
   }
@@ -96,19 +111,18 @@
     align-items: stretch;
   }
 
+  /* One rule, not the two adjacent ones that were here — the second only ever reopened the
+     same selector to finish the same thought. */
   .booking-zone {
     width: 100%;
+    min-width: 0;
+    max-width: none;
   }
 
   /* Stacked, the toggle keeps its own width instead of stretching into a wide pill. */
   .booking-format {
     flex: 0 0 auto;
     justify-content: flex-start;
-  }
-
-  .booking-zone {
-    min-width: 0;
-    max-width: none;
   }
 
   /* The list scrolls in its own region rather than growing the page unbounded. */
@@ -740,7 +754,7 @@
 }
 
 /*
- * Manage booking (hiring 07). One rule, and it is the one that matters: below 600px the
+ * Manage booking (hiring 07). One rule, and it is the one that matters: below `sm` the
  * actions go full width with the destructive one **beneath** the benign one, so it is
  * never adjacent to the thumb's resting position.
  */
@@ -754,7 +768,10 @@
   margin-top: var(--space-7);
 }
 
-@media (max-width: 599px) {
+/* `599` retired to `575` (01 §01.3). The band it gives up is 576–599, where the row is 528px
+   wide and the two buttons and their gap are 401 — so they fit side by side there, which is
+   what the row is for. */
+@media (max-width: 575px) {
   .manage-actions {
     flex-direction: column;
     align-items: stretch;
@@ -869,7 +886,10 @@
   gap: var(--space-6);
 }
 
-@media (max-width: 599px) {
+/* `599` retired to `575` (01 §01.3). The direction is unchanged: `column-reverse` puts
+   `Confirm` above `Keep current time`, which is the source order read backwards, and neither of
+   the two is destructive — so the thumb rule `.manage-actions` follows has nothing to say here. */
+@media (max-width: 575px) {
   .manage-reschedule-actions {
     flex-direction: column-reverse;
     align-items: stretch;

@@ -367,4 +367,86 @@ test.describe('Booking page', () => {
     await expect(page.getByTestId('booking-vacancy-title')).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('Acme Inc');
   });
+
+  /**
+   * TC-H02-E2E-08 — the page folds at 880 and at `sm`, and the date grid keeps its target at 360.
+   *
+   * Read at the boundaries rather than in the middle of a band: 880 and 879 are the same pixel
+   * from either side, and so are 576 and 575. A case at 360 and 1440 would pass against any pair
+   * of numbers, which is the whole thing being asserted.
+   *
+   * Polled rather than measured after a pause — a resize is applied asynchronously, and this file
+   * runs beside four other workers (`responsive.spec.ts:107`).
+   */
+  test('folds at 880 and at sm, and the date grid keeps its target at 360', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('booking-ladder'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+
+    await page.goto(`/book/${vacancy.publicSlug}`);
+    await expect(page.getByTestId('calendar-control')).toBeVisible();
+    await expect(page.getByTestId('slot-list-options')).toBeVisible();
+
+    /** Two elements are side by side when they share a top edge and differ in `x`. */
+    const sideBySide = (first: string, second: string) => () =>
+      page.evaluate((ids: { first: string; second: string }) => {
+        const one = document.querySelector(`[data-testid="${ids.first}"]`)!.getBoundingClientRect();
+        const two = document.querySelector(`[data-testid="${ids.second}"]`)!.getBoundingClientRect();
+        return Math.abs(one.top - two.top) < 2 && Math.abs(one.left - two.left) > 2;
+      }, { first, second });
+
+    /* `slot-list`, not `slot-list-options`: the options are below the Time panel's own date
+       heading, so their top is never the calendar's even when the two panels are side by side.
+       Both of these are the sole child of their Card's body, so their tops agree exactly when the
+       Cards are on one row. */
+    const panelsSplit = sideBySide('calendar-control', 'slot-list');
+    const namesSplit = sideBySide('booking-first-name-input', 'booking-last-name-input');
+
+    const slotCap = () =>
+      page.getByTestId('slot-list-options').evaluate((el) => getComputedStyle(el).maxHeight);
+
+    // — The picker's own fold. 880 is the one number in the system off the ladder, and the
+    //   measurement that keeps it is in 02 design §Responsive.
+    await page.setViewportSize({ width: 880, height: 900 });
+    await expect.poll(panelsSplit, { message: 'Date beside Time at 880' }).toBe(true);
+    await expect.poll(namesSplit, { message: 'the name row at 880' }).toBe(true);
+
+    await page.setViewportSize({ width: 879, height: 900 });
+    await expect.poll(panelsSplit, { message: 'Date above Time at 879' }).toBe(false);
+    await expect.poll(namesSplit, { message: 'the name row survives the fold' }).toBe(true);
+
+    // — `sm`, where the `599` used to be. The name row is the rule that moved.
+    await page.setViewportSize({ width: 576, height: 900 });
+    await expect.poll(namesSplit, { message: 'two name columns at 576' }).toBe(true);
+    await expect.poll(slotCap, { message: 'the slot region is uncapped at 576' }).toBe('none');
+
+    await page.setViewportSize({ width: 575, height: 900 });
+    await expect.poll(namesSplit, { message: 'one name column at 575' }).toBe(false);
+    // 60vh of 900. The region scrolls inside itself rather than growing the page.
+    await expect.poll(slotCap, { message: 'the slot region caps at 575' }).toBe('540px');
+
+    // — The narrowest supported width. Every cell, not the first: the first is the one the
+    //   arithmetic that ignored the grid's own gutters happened to get right.
+    await page.setViewportSize({ width: 360, height: 900 });
+    const grid = () =>
+      page.evaluate(() => {
+        const cells = Array.from(document.querySelectorAll('[data-testid^="calendar-day-"]'));
+        const boxes = cells.map((cell) => cell.getBoundingClientRect());
+        return {
+          cells: cells.length,
+          minWidth: Math.floor(Math.min(...boxes.map((box) => box.width))),
+          minHeight: Math.floor(Math.min(...boxes.map((box) => box.height))),
+          over: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+    // The width is what the phase moved — 35.9 before the grid was bled and its gutters
+    // collapsed, 46.9 after — so it is the one polled, and its own value is what a failure prints.
+    await expect
+      .poll(async () => (await grid()).minWidth, { message: 'the narrowest day cell at 360' })
+      .toBeGreaterThanOrEqual(44);
+
+    const measured = await grid();
+    expect(measured.minHeight, 'and every cell is at least that tall').toBeGreaterThanOrEqual(44);
+    expect(measured.cells, 'a whole month of dates is on the page').toBeGreaterThan(27);
+    expect(measured.over, 'the page does not scroll horizontally at 360').toBe(0);
+  });
 });

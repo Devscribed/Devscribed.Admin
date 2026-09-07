@@ -57,12 +57,18 @@ interface DayProps {
 /**
  * Calendar — §30. A month of dates, one at a time, for picking a day.
  *
- * The grid is built on a rem scale rather than the pixel spacing tokens: cells are 1.7rem square
- * with a .166rem gutter, the month .4rem in, the month name at .944rem. A date grid is the one
- * place in the system where seven columns and six rows have to stay square and stay aligned
- * while the type around them changes size, and a rem grid does that where a px grid drifts.
- * Everything else is the system's — `--radius-s` on a cell, `--color-blue` for the selection,
- * `--shadow-focus-input` for the ring, 32x32 navigation.
+ * The grid is built on a rem scale rather than the pixel spacing tokens: a .332rem gutter between
+ * the columns, the month .4rem in, the month name at .944rem. A date grid is the one place in the
+ * system where seven columns and six rows have to stay aligned while the type around them changes
+ * size, and a rem grid does that where a px grid drifts. Everything else is the system's —
+ * `--radius-s` on a cell, `--color-blue` for the selection, `--shadow-focus-input` for the ring,
+ * 32x32 navigation.
+ *
+ * **Those two are `base.css` classes, not inline styles** — `.ds-calendar-row` and
+ * `.ds-calendar-body` — because below `sm` they are what the seven columns need back. A cell is
+ * `1fr`, so its width is whatever the consumer's box leaves after the inset and six gutters; at
+ * 360 that is 44.7px of air out of 328, and the cell lands at 35.9 against a control height of
+ * 44. The rule that takes them back is beside `.ds-calendar-day`'s own 44.
  *
  * Three decisions the shape does not make for itself, each written down in
  * `controls/calendar-control.md`:
@@ -241,8 +247,6 @@ export function Calendar({
     }
   };
 
-  const row: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', columnGap: '0.332rem' };
-
   return (
     <div
       {...rest}
@@ -289,7 +293,9 @@ export function Calendar({
           <Chevron />
         </IconButton>
 
-        <div style={{ ...row, marginTop: 'var(--space-1)' }}>
+        {/* The same class the week rows take, so a label and the column under it cannot
+            disagree — including below `sm`, where the gutter between the columns closes. */}
+        <div className="ds-calendar-row" style={{ marginTop: 'var(--space-1)' }}>
           {WEEKDAYS.map((initial, index) => (
             <span
               key={index}
@@ -307,7 +313,9 @@ export function Calendar({
         </div>
       </div>
 
-      <div style={{ position: 'relative', margin: '0.4rem' }}>
+      {/* `.ds-calendar-body` carries the .4rem inset. It is a class for the same reason the row
+          is one: below `sm` the inset is width the seven columns need back. */}
+      <div className="ds-calendar-body" style={{ position: 'relative' }}>
         <div
           ref={gridRef}
           role="grid"
@@ -321,7 +329,7 @@ export function Calendar({
           }}
         >
           {weeks.map((week, index) => (
-            <div key={index} role="row" style={row}>
+            <div key={index} role="row" className="ds-calendar-row">
               {week.map((date, column) => (
                 <Day
                   key={date || `blank-${column}`}

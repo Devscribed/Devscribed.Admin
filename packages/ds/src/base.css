@@ -241,6 +241,49 @@ input, textarea, select { font: inherit; }
   margin: 1px 0;
 }
 
+/* The seven columns, and the inset the grid sits in. Both were inline in `Calendar` until the
+   rule below needed them; the values are unchanged. The weekday initials take `.ds-calendar-row`
+   too, so a label and the column under it cannot disagree. */
+.ds-calendar-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  column-gap: 0.332rem;
+}
+
+.ds-calendar-body {
+  margin: 0.4rem;
+}
+
+/*
+ * §07.39 closes on "every pressable design-system control is at least 44 × 44 to a coarse
+ * pointer", and names the day cell as one that already is. It is 44 **tall**. Its width is
+ * `1fr`, so it is whatever the consumer's box leaves after the inset above and six gutters —
+ * and on the public booking page at 360 that leaves 35.9. The gate the rest of §07 applies to
+ * a control's own box does not reach a control whose width is a share of something else's.
+ *
+ * So below `sm` the grid takes its own air back: 12.8px of inset and 31.9px of gutter, 44.7px
+ * out of a 328px column. With the card bled as well (02 design §Responsive) the cell is 46.9
+ * at 360, against 35.9 today.
+ *
+ * The viewport decides, not the pointer, which is the one place this spec's own §07.37 —
+ * "nothing changes under a fine pointer" — is deliberately not followed. It is written for
+ * controls with a drawn size, where growing the box under a mouse would redraw a control that
+ * was right as it was. A `1fr` cell has no drawn width to protect: at 360 the choice is only
+ * whether the seven columns get the width or the gutters do, and the answer does not depend on
+ * what is pointing at them. A window dragged to 360 on a desktop gets the same grid, which is
+ * one drawing rather than two.
+ */
+@media (max-width: 575px) {
+  .ds-calendar-row {
+    column-gap: 0;
+  }
+
+  .ds-calendar-body {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
 /* §69 — `Preloader`'s animation, here rather than injected into `<head>` by the component. A
    module-scope
    `document.head.appendChild` is a side effect that runs once, on whichever page first
