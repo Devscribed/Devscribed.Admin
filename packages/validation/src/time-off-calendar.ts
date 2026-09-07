@@ -352,3 +352,83 @@ export function timeOffCalendarToday(
 ): string {
   return todayInTimeZone(resolveTimeOffCalendarTimezone(timezone), instant);
 }
+
+/* ------------------------------------------------------------------ *
+ * PATCH-022 — the load a window carries
+ * ------------------------------------------------------------------ */
+
+/**
+ * A working day is eight hours. The product states the same number for a public holiday
+ * (`HOLIDAY_PAID_HOURS_DEFAULT`), and the two are the same claim about the same day; they
+ * are separate constants because one is a default somebody may edit per holiday and this
+ * one is the arithmetic behind a figure nobody edits.
+ */
+export const TIME_OFF_CALENDAR_WORKING_DAY_HOURS = 8;
+
+/** One member, as the load reads them: the window's holidays that reached them, and their bands. */
+export interface TimeOffCalendarLoadMember {
+  /** Dates inside the window on which this member has a public holiday. */
+  holidayDates: readonly string[];
+  absences: readonly { status: string; startDate: string; endDate: string }[];
+}
+
+/** What the strip above the grid states. Days are person-days; hours are days times eight. */
+export interface TimeOffCalendarLoad {
+  people: number;
+  /** Person-days in the window that are neither a weekend nor that person's holiday. */
+  workingDays: number;
+  approvedDays: number;
+  pendingDays: number;
+  /** `workingDays` less both — what is left to plan with. */
+  availableDays: number;
+  availableHours: number;
+}
+
+/**
+ * PATCH-022 — the window's load for the people on screen.
+ *
+ * Counted per person per day, over the days the window actually holds, so a band that
+ * starts before the window or ends after it contributes only the part inside — which is
+ * why the request's own `workingDays` is not summed: that is the whole absence, and the
+ * question here is about this window.
+ *
+ * A weekend is nobody's working day and a public holiday is not a working day for the
+ * person it reached, so neither is capacity and neither is time off. A day covered by an
+ * approved band and a pending one counts once, as approved: the approved answer is the
+ * settled one.
+ *
+ * **Pending is subtracted from what is available.** A manager planning against this number
+ * is asking what is safe to promise, and a day somebody has asked for is not that. The
+ * figure beside it names how much of the subtraction is still only a request.
+ */
+export function timeOffCalendarLoad(
+  days: readonly { date: string; isWeekend: boolean }[],
+  members: readonly TimeOffCalendarLoadMember[],
+): TimeOffCalendarLoad {
+  let workingDays = 0;
+  let approvedDays = 0;
+  let pendingDays = 0;
+
+  for (const member of members) {
+    const holidays = new Set(member.holidayDates);
+    for (const day of days) {
+      if (day.isWeekend || holidays.has(day.date)) continue;
+      workingDays += 1;
+      const covering = member.absences.filter(
+        (absence) => absence.startDate <= day.date && day.date <= absence.endDate,
+      );
+      if (covering.some((absence) => absence.status === 'approved')) approvedDays += 1;
+      else if (covering.some((absence) => absence.status === 'pending')) pendingDays += 1;
+    }
+  }
+
+  const availableDays = workingDays - approvedDays - pendingDays;
+  return {
+    people: members.length,
+    workingDays,
+    approvedDays,
+    pendingDays,
+    availableDays,
+    availableHours: availableDays * TIME_OFF_CALENDAR_WORKING_DAY_HOURS,
+  };
+}

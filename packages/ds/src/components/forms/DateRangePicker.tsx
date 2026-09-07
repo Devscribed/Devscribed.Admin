@@ -248,6 +248,9 @@ export function DateRangePicker({
           )}
           <div>
             <Calendar
+              /* PATCH-023 — the title goes up a level: a month grid, then a year grid. A
+                 range a quarter away was twenty-four presses of the next-month arrow. */
+              zoomable
               month={month}
               weeks={weeks}
               availableDates={selectable}

@@ -60,6 +60,8 @@ spec, and writing it as a patch only moves where the run stops.
 | [019](PATCH-019-a-button-holds-its-label-and-projects-opens.md) | A button holds its label, chips share a line, and Projects opens | user-management/05, projects/11, design-system | none |
 | [020](PATCH-020-a-filter-states-its-selection-on-one-line.md) | A filter states its selection on one line | design-system, 019 | none |
 | [021](PATCH-021-a-holiday-name-does-not-set-the-header-s-height.md) | A holiday's name does not set the calendar header's height | time-off/01 | none |
+| [022](PATCH-022-the-calendar-says-what-the-window-costs.md) | The calendar says what the window costs | time-off/01 | none |
+| [023](PATCH-023-the-calendar-s-title-goes-up-a-level.md) | The calendar's title goes up a level | design-system | none |
 
 PATCH-001 is the mock fixture the track was built against and is not indexed as product work.
 
@@ -69,7 +71,7 @@ its whole rule and names the one it replaces in `supersedes`, and nothing is edi
 the earlier note. Three of the four are the same lesson — a first fix that reasoned about the
 cause instead of measuring it.
 
-**006 to 021 carry no cases and were not shipped through the pipeline.** Each was written,
+**006 to 023 carry no cases and were not shipped through the pipeline.** Each was written,
 implemented and committed in one sitting at the user's direction, with the regression waived —
 the `Cases` section of each note says so and names the case it would have carried. PATCH-012 is
 also **wider than the entry condition above allows**, at nine product files, and says so in its

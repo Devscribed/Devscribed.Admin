@@ -19,6 +19,7 @@ import {
   stepTimeOffCalendarRange,
   timeOffBandAccessibleName,
   timeOffCalendarAnchorFromRange,
+  timeOffCalendarLoad,
   timeOffCalendarRangeToday,
   timeOffCalendarToday,
   timeOffCalendarWindowRange,
@@ -304,6 +305,27 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
     [data],
   );
 
+  /**
+   * PATCH-022 — the window's load, for whoever the filter left on screen. Computed from the
+   * answer already in hand: no second request, and it moves with every control on the page
+   * because every control changes that answer. The rule itself is in `@devscribed/validation`
+   * beside the calendar's others — a figure a manager plans against is not arithmetic a
+   * screen should be the only holder of.
+   */
+  const windowLoad = useMemo(() => {
+    if (!data) return null;
+    return timeOffCalendarLoad(
+      data.days,
+      data.members.map((member) => ({
+        holidayDates: member.holidayIds
+          .map((id) => holidayById.get(id))
+          .filter((holiday): holiday is NonNullable<typeof holiday> => !!holiday)
+          .map((holiday) => holiday.date),
+        absences: member.absences,
+      })),
+    );
+  }, [data, holidayById]);
+
   /** The week bands above the day headers — one cell per ISO week in the window. */
   const weekBands = useMemo(() => {
     const bands: { isoWeek: number; start: number; span: number }[] = [];
@@ -462,6 +484,39 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
           Weekend
         </span>
       </div>
+
+      {/* PATCH-022 — what the window costs, for the people the filter left on screen. The
+          grid says who is away and when; these say how much of the window that is, which is
+          the question a manager opens this screen with and had to count columns to answer.
+          Every figure is counted from the days the window actually holds, so it moves with
+          the scope, the teams, the people and the window and needs no request of its own. */}
+      {windowLoad && (
+        <div className="time-off-calendar-metrics" data-testid="calendar-metrics">
+          <Metric
+            testId="calendar-metric-people"
+            label="People"
+            value={String(windowLoad.people)}
+          />
+          <Metric
+            testId="calendar-metric-working-days"
+            label="Working days"
+            value={String(windowLoad.workingDays)}
+            note="weekends and public holidays already out"
+          />
+          <Metric
+            testId="calendar-metric-time-off"
+            label="Time off"
+            value={`${windowLoad.approvedDays + windowLoad.pendingDays} d`}
+            note={`${windowLoad.approvedDays} approved · ${windowLoad.pendingDays} pending`}
+          />
+          <Metric
+            testId="calendar-metric-available"
+            label="Available to work"
+            value={`${windowLoad.availableHours} h`}
+            note={`${windowLoad.availableDays} days · pending taken out`}
+          />
+        </div>
+      )}
 
       {error && (
         <div className="time-off-calendar-banner" data-testid="calendar-error-banner">
@@ -641,6 +696,34 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * PATCH-022 — one figure of the strip: a number, what it is, and where it came from.
+ *
+ * The note under each is not decoration. `Working days` that quietly dropped the weekends
+ * and somebody's public holidays is a number a reader would otherwise have to reverse
+ * engineer before trusting, and `Available` that has already taken out the requests nobody
+ * has approved yet is a number they would otherwise argue with.
+ */
+function Metric({
+  testId,
+  label,
+  value,
+  note,
+}: {
+  testId: string;
+  label: string;
+  value: string;
+  note?: string;
+}) {
+  return (
+    <div className="time-off-calendar-metric" data-testid={testId}>
+      <span className="time-off-calendar-metric-label">{label}</span>
+      <b className="time-off-calendar-metric-value">{value}</b>
+      {note && <span className="time-off-calendar-metric-note">{note}</span>}
     </div>
   );
 }

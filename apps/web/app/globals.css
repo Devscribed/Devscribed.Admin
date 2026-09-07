@@ -968,6 +968,50 @@
   margin-bottom: var(--space-3);
 }
 
+/* PATCH-022 — the load strip, between the legend and the grid. Four figures in a row that
+   wraps, each in its own card, sized by the row rather than by its own number: a strip whose
+   cells resized as the figures changed would be the jumping this screen has spent four
+   patches removing. */
+.time-off-calendar-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.time-off-calendar-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* @literal 200px — wide enough for the longest note the strip carries on one line, and
+     narrow enough that four of them sit in a row before it wraps. The same argument the
+     reports bar's own 200 is made from. */
+  min-width: 200px;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
+}
+
+.time-off-calendar-metric-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.time-off-calendar-metric-value {
+  font-size: var(--headline-6-size);
+  font-weight: var(--headline-6-weight);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.time-off-calendar-metric-note {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
 /* The grid outgrows the page on a narrow viewport and under a wide window, and it scrolls
    inside its own container rather than taking the page body sideways with it.
 
