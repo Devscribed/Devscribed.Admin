@@ -906,25 +906,33 @@
 }
 
 .time-off-calendar-scroll {
-  transition: opacity var(--duration-fast) var(--ease-standard);
+  transition: opacity var(--duration-region) var(--ease-standard);
 }
 
-/* PATCH-025 — the new window arrives from the side the reader travelled. The transform is on
-   the grid rather than on the scroller around it: the scroller clips it, so the slide can
-   never reach the page and give the body a scrollbar for a frame.
-   @literal 16px — far enough to read as movement at this duration, short enough that the
-   columns never leave the frame they are sliding into.
+/* PATCH-026 — the new window arrives from the side the reader travelled, and it arrives by
+   **growing from that side** rather than by sliding into place.
 
-   The duration is `--duration-fast`, the system's only one. A slide wants a step longer than
-   a border's colour change, and inventing `--duration-slow` here would name a token on one
-   screen; it is a real gap and belongs in the design system, not in this file. */
+   A slide was the obvious shape and it was wrong here. A transformed box contributes its
+   transformed rectangle to its scroller's scrollable overflow, so a grid nudged 16px to the
+   right made the scroller 16px wider than its content for the length of the animation — and
+   in a window whose columns otherwise fit, a horizontal scrollbar appeared and vanished on
+   every press of the arrow.
+
+   A scale below 1 with the origin on the side travelled from cannot do that: the animated
+   rectangle is a subset of the settled one at every frame, so there is no moment at which
+   the grid is wider than where it ends up. The far edge stays pinned and the near one comes
+   in — which reads as the window arriving from that side, which is what it is.
+
+   @literal 0.985 — a 1.5% step, which on a grid this wide is about fifteen pixels of travel
+   at the moving edge: enough to see, small enough that no column is legibly distorted while
+   it settles. */
 @keyframes time-off-calendar-enter-next {
-  from { opacity: 0; transform: translateX(16px); }
+  from { opacity: 0; transform: scaleX(0.985); }
   to { opacity: 1; transform: none; }
 }
 
 @keyframes time-off-calendar-enter-prev {
-  from { opacity: 0; transform: translateX(-16px); }
+  from { opacity: 0; transform: scaleX(0.985); }
   to { opacity: 1; transform: none; }
 }
 
@@ -933,16 +941,19 @@
   to { opacity: 1; }
 }
 
+/* The side the far edge is pinned to is the side it came from. */
 .time-off-calendar-enter-next {
-  animation: time-off-calendar-enter-next var(--duration-fast) var(--ease-standard);
+  transform-origin: right center;
+  animation: time-off-calendar-enter-next var(--duration-region) var(--ease-standard);
 }
 
 .time-off-calendar-enter-prev {
-  animation: time-off-calendar-enter-prev var(--duration-fast) var(--ease-standard);
+  transform-origin: left center;
+  animation: time-off-calendar-enter-prev var(--duration-region) var(--ease-standard);
 }
 
 .time-off-calendar-enter-still {
-  animation: time-off-calendar-enter-still var(--duration-fast) var(--ease-standard);
+  animation: time-off-calendar-enter-still var(--duration-region) var(--ease-standard);
 }
 
 /* Movement is a preference, and this is the whole of what this screen animates. */

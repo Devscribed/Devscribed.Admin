@@ -40,7 +40,8 @@
     "ds:tokens": "node scripts/ds-token-resolve.js",
     "ds:check": "node scripts/ds-adherence.js",
     "seed:demo": "node scripts/seed-demo.mjs",
-    "seed:teams": "node scripts/seed-teams.mjs"
+    "seed:teams": "node scripts/seed-teams.mjs",
+    "seed:db": "node scripts/seed-db.mjs"
   },
   "devDependencies": {
     "release-it": "21.0.2"

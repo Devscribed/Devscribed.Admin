@@ -64,6 +64,7 @@ spec, and writing it as a patch only moves where the run stops.
 | [023](PATCH-023-the-calendar-s-title-goes-up-a-level.md) | The calendar's title goes up a level | design-system | none |
 | [024](PATCH-024-the-key-sits-under-the-picture.md) | The key sits under the picture, and the window's name between its arrows | time-off/01, 022 | none |
 | [025](PATCH-025-the-window-arrives-rather-than-being-replaced.md) | The window arrives rather than being replaced, and its controls join the row | time-off/01, time-off/03, 024 | none |
+| [026](PATCH-026-a-window-grows-from-the-side-it-came-from.md) | A window grows from the side it came from | design-system, 025 | none |
 
 PATCH-001 is the mock fixture the track was built against and is not indexed as product work.
 
@@ -73,7 +74,7 @@ its whole rule and names the one it replaces in `supersedes`, and nothing is edi
 the earlier note. Three of the four are the same lesson — a first fix that reasoned about the
 cause instead of measuring it.
 
-**006 to 025 carry no cases and were not shipped through the pipeline.** Each was written,
+**006 to 026 carry no cases and were not shipped through the pipeline.** Each was written,
 implemented and committed in one sitting at the user's direction, with the regression waived —
 the `Cases` section of each note says so and names the case it would have carried. PATCH-012 is
 also **wider than the entry condition above allows**, at nine product files, and says so in its
