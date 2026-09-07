@@ -1,0 +1,123 @@
+{
+  "status": "blocked",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "ok",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok"
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/02-holiday-sourcing.md",
+      "symbol": "REQ-02-023 / State Machine, row `sourced` + `refresh`",
+      "claim": "After a refresh that writes no new row — the spec's own Edge case 10 — the import record's count is 0, which REQ-02-023 says must be reported as covered-but-empty, while the State Machine's `sourced` + `refresh` row says the state stays `sourced`. No implementation satisfies both, and the two answers paint different text on the screen.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Germany 2026 is sourced: ten imported Holiday rows and a HolidayImport carrying holidayCount 10. An admin edits one holiday's paidHours to 4 and clicks `holiday-sourcing-refresh-btn` (Edge case 10). The provider answers its twenty entries; ten are discarded as regional (REQ-02-005) and ten are skipped because their date and country already carry a row (REQ-02-006). Zero rows are written. REQ-02-021 says the record names 'how many holidays it wrote', and the State Machine's `sourced`+`refresh` row says 'the record's moment and count are updated' — so holidayCount becomes 0. REQ-02-023 then says: 'WHILE an import record carrying a count of zero exists for a country and year, THE SYSTEM SHALL report that country as covered-but-empty.' The same row of the State Machine says 'Stays `sourced`.' The contracts §Required data-testid table makes the difference user-visible: `holiday-sourcing-uncovered` is 'present when at least one country is `unsourced` or `empty`', carrying HOLIDAY_SOURCING_MESSAGES.countryNotCovered — 'The holiday service does not cover this country. Add its holidays by hand.' One reading prints that sentence over a country holding ten sourced holidays; the other does not. A refresh that finds nothing new is the ordinary outcome of the control this spec adds, and TC-02-E2E-02 ends by clicking it."
+      },
+      "suggestedFix": "One sentence deciding what the record's count means, in the spec's own text: either `holidayCount` is the number of holidays stored for that country and year after the import (so a refresh that writes nothing leaves 10 and the country stays `sourced`), or the state is `empty` only while no Holiday row exists for that country and year, with REQ-02-023 restated against that condition instead of against a count of zero."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/02-holiday-sourcing.md",
+      "symbol": "REQ-02-013",
+      "claim": "A country row carries 'the number of holidays stored for it', and nothing says whether a global holiday — `countryCode: null`, which reaches every member — counts toward a country.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An organization with one PL member, thirteen imported PL holidays and one manually typed global holiday. Reading A (rows whose countryCode equals PL) reports PL 13 days while the member's own row reports 14, because REQ-02-014 counts 'the holidays that reach them' and `isHolidayApplicableToMember` (packages/validation/src/reports.ts:545) applies a null-country holiday to everybody. Reading B reports 14 and 14. Both satisfy the text and TC-02-INT-08 seeds no global holiday, so neither is caught."
+      },
+      "suggestedFix": "Six words in REQ-02-013 — 'holidays that apply to that country' or 'holidays stored with that country code'. Planned as the former; the choice is recorded in the handoff's risks."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/holidays/summary — the sample body's `totals`",
+      "claim": "The sample body totals holidayCount 24 (13 + 11, the sum over countries) while TC-02-INT-08 states the total is the sum over members and the §Screens mock shows 37 across three members.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The sample's `countries` array declares PL memberCount 2 and US memberCount 1, so at least three members exist; summing over them gives 13 + 13 + 11 = 37, which is what the §Screens mock's total row shows. The sample says 24 and its paidHours '192.00' is 24 x 8, so the slip is consistent within the sample and inconsistent with both the case and the mock. Planned as the sum over members."
+      },
+      "suggestedFix": "Correct the sample's totals to the member sum, or say in the contract text which of the two the field is."
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/holidays — 'its `holidays` array is unchanged in shape. It gains one field, `sourcing`'",
+      "claim": "The same file's sample row carries `source: \"imported\"` and the testid roster requires `holidays-row-{id}-source` per row, so the array cannot be unchanged in shape.",
+      "witness": {
+        "kind": "quote",
+        "detail": "Contracts §Routes: 'its `holidays` array is unchanged in shape. It **gains one field**, `sourcing`, described below.' The sample immediately below it: '{ \"id\": \"…\", \"name\": \"Independence Day\", …, \"source\": \"imported\" }'. §Required data-testid: '`holidays-row-{id}-source` | Settings › Holidays | present per row', and TC-02-E2E-01 lists that id among its selectors. No other route exposes a holiday's source, so a screen that draws the column must read it from this array.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md"
+      },
+      "suggestedFix": "Say the array gains `source` and nothing is removed. Planned that way, with `paidHours` kept as a JSON number and `createdAt`/`updatedAt` kept, because the shipped screen and the Time Tracking calendar read them."
+    },
+    {
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/holidays — the new `sourcing` block against `scope=mine`",
+      "claim": "`scope=mine` needs no capability at all, and the spec does not say whether that read carries the new `sourcing` block.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/src/holidays/holidays.service.ts#listHolidays gates only `scope=all` on `view-holidays`; `scope=mine` is open to every active member, which is what apps/web/app/org/[orgId]/time-tracking/page.tsx:250 and RequestVacationModal.tsx:106 call for a `user` and a `viewer`. One implementation adds `sourcing` to every response, handing those callers the organization's whole country set and its import state; another adds it only behind `view-holidays`. Both satisfy the contract as written, and §Security says 'a capability per question'."
+      },
+      "suggestedFix": "One clause on the route row saying `sourcing` is present only for a caller holding `view-holidays`. Planned that way; the screen always reads `scope=all`, so no case changes either way."
+    },
+    {
+      "id": "P6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/02-holiday-sourcing.md",
+      "symbol": "REQ-02-006",
+      "claim": "An import can write a national holiday onto a date that already carries a GLOBAL holiday, and both then reach the same member and are both paid.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An admin typed 'New Year's Day' with countryCode null (the holiday form's 'All countries' option, which the shipped screen offers). The provider returns Poland's 'Nowy Rok' on 2026-01-01. REQ-02-006 skips only 'a date and country that already carries one', and the global row's countryCode is null, not PL; the unique index `@@unique([organizationId, date, countryCode])` treats NULL as distinct, so the insert succeeds. isHolidayApplicableToMember (packages/validation/src/reports.ts:545) then applies both rows to a PL member, and apps/api/src/reports/reports.service.ts:785-812 emits two paid 'Holiday · …' rows for one calendar day. The Known Gaps table names the two-entries-on-one-date case only for two entries in one country."
+      },
+      "suggestedFix": "One sentence saying whether a global row on the date blocks the import. Planned exactly as REQ-02-006 reads — the rule is unambiguous — with the consequence recorded so a person can decide; the implementer is told not to widen the skip, which would contradict the decision table."
+    },
+    {
+      "id": "P7",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "summary member row — `currency`",
+      "claim": "A member's row carries one `currency` while their amounts are valued per holiday from the snapshot history, which also records a currency; the spec does not say which currency the row names when it changed mid-year.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "MemberFinancialsSnapshot carries its own `currency` column (apps/api/prisma/schema.prisma:704) and resolveRateAtDate picks the snapshot in force on each holiday's date. A member whose currency changed in July would have January holidays valued under one currency and October's under another, while the row and `byCurrency` can name only one. REQ-02-016 forbids a total across currencies, so the two rules meet here with nothing said."
+      },
+      "suggestedFix": "Name the source of the row's currency. Planned as the live MemberFinancials.currency, which is also what makes REQ-02-018's absent-financials test the same test in both places."
+    }
+  ]
+}
