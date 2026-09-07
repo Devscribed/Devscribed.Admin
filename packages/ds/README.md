@@ -82,7 +82,7 @@ That rule is re-run before anything is added or removed — not assumed. A compo
 renders and no spec asks for pays lint, documentation and review cost forever and repays none of
 it.
 
-What is here today: 49 component modules and 2 shared internals, listed below.
+What is here today: 51 component modules and 2 shared internals, listed below.
 
 What was deliberately left out when this package was created, fourteen files in all:
 `Tracker`, `TimeField`, `DateField`, `DateRangePicker`, `MembersCell`, `MembersMultiField`,
@@ -122,7 +122,7 @@ git history at `5b4b4cd`, the last commit that contained them.
 |---|---|
 | **Core** | `Button`, `Badge`, `Card`, `Chip`, `IconButton`, `PageTitle`, `ToggleButton` |
 | **Forms** | `TextInput`, `TextArea`, `Select`, `SearchInput`, `Checkbox`, `Switch`, `DateRangePicker`, `FileInput`, `FormField`, `FieldLabel`, `RequiredMark`, `FormActions` |
-| **Data** | `Table`, `TableToolbar`, `Calendar`, `BoardCard`, `BoardColumn`, `Avatar` |
+| **Data** | `Table`, `TableToolbar`, `RecordList`, `RecordCard`, `Calendar`, `BoardCard`, `BoardColumn`, `Avatar` |
 | **Feedback** | `InfoBanner`, `Toast`, `ToastHost`, `Tooltip`, `Preloader`, `EmptyState` |
 | **Overlays** | `Modal`, `ConfirmDialog`, `Popover`, `MenuDrawer` |
 | **Navigation** | `Sidebar`, `PageTabs`, `Pagination`, `BackTo`, `NavigationCard` |

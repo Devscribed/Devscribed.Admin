@@ -819,3 +819,53 @@ Errors:
 - **Selectors:** `vacancy-actions-menu-{id}`, `vacancy-action-{board|copy-link|edit|close|delete}-{id}`,
   `vacancy-copy-guard-message-{id}`, `vacancy-delete-guard-message-{id}`, `vacancy-close-confirm`,
   `vacancy-delete-confirm`, `toast-link-copied`, `toast-vacancy-closed`, `toast-vacancy-deleted`.
+
+### TC-H01-UNIT-04: The card's category strip names every category, folded or not
+- **Level:** unit
+- **Steps:** call `vacancyCategoriesDescription` with four names, and with one.
+- **Expected Result:** `Categories: React, Senior, Remote, Contract`, and `Categories: React`.
+  The visible strip stops at two chips and a `+N`; this sentence is the only place the third and
+  fourth exist for a reader, so it names all of them in the order the API sorted them.
+
+### TC-H01-E2E-10: Below `md` a vacancy is a card, and above it a table row
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one open vacancy with three categories, a 45-minute
+  interview length and no applications.
+- **Steps:**
+  1. Open the list at 1280 and read the row's element and class.
+  2. Resize to 360 and read them again.
+  3. Count the nodes carrying each of the row's seven ids.
+  4. Read the card's fact headings, its category chips and its overflow bubble.
+  5. Measure the document's horizontal overflow.
+- **Expected Result:**
+  1. The row is an `<a>` and carries no `ds-record-card` class — the table, unchanged.
+  2. The row is still an `<a>` and now carries `ds-record-card`. The card is the row's other
+     form, not a different kind of thing, so middle-click and copy-address still work.
+  3. Each of the seven ids is on **exactly one** node — never two. This is the assertion the
+     mechanism turns on: two forms behind a `display: none` would put every row id on two nodes.
+  4. `Interviewer`, `45 min` and `Candidates` are all on the card, so `Length` — dropped from the
+     table between `md` and `lg` — is back where there is room for it. Two chips are drawn and
+     the third is a `+1`; the full sentence `Categories: React, Remote, Senior` is beside them,
+     in the order the API sorts them, so nothing exists only inside the bubble.
+  5. Zero. Nothing on this page reaches past 360.
+- **Selectors:** `vacancy-row-{id}`, `vacancy-title-{id}`, `vacancy-status-{id}`,
+  `vacancy-interviewer-{id}`, `vacancy-duration-{id}`, `vacancy-count-{id}`,
+  `vacancy-actions-menu-{id}`, `vacancy-categories-{id}`, `vacancy-categories-more-{id}`,
+  `vacancy-category-chip-{id}`, `vacancies-list`.
+
+### TC-H01-E2E-11: `Length` leaves the table below `lg`, and the floor never does
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one open vacancy.
+- **Steps:**
+  1. Open the list at 1500 and count the nodes carrying `.ds-col-hide-lg`.
+  2. Resize to 900 and count them again.
+  3. Read the title, the status badge and the kebab at 900.
+- **Expected Result:**
+  1. Two nodes — the heading and the cell — and both are drawn.
+  2. Still two nodes, and neither is drawn: a hidden column is gone, header and cell together,
+     which is what keeps the five that remain under their own headings. The row is still a table
+     row and not a card, because 900 is above `md` — this is `hideBelow` and not the other form.
+  3. All three are drawn. They are the floor `Table` refuses to hide however a caller asks.
+- **Selectors:** `vacancies-list`, `.ds-col-hide-lg`, `vacancy-row-{id}`,
+  `vacancy-duration-{id}`, `vacancy-title-{id}`, `vacancy-status-{id}`,
+  `vacancy-actions-menu-{id}`.

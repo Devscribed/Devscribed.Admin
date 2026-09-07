@@ -16,8 +16,13 @@ all three at once, plus a stamp on `<html>` that none of them owns.
 | — | [Decisions](decisions.md) | — | the numbered reference every component cites as `§n` |
 
 `decisions.md` is a **reference, not a spec**: it carries no requirements, no test cases and no
-acceptance criteria. A numbered decision is assigned when the code lands, never reserved. Specs in
-this area add to it from §96.
+acceptance criteria. A numbered decision is assigned when the code lands, never reserved. ~~Specs
+in this area add to it from §96.~~ — **overruled by §96–§98**, which a spec in *hiring* assigned.
+`decisions.md` indexes every numbered decision in `packages/ds` whoever wrote the code, and the
+first three past §95 came from [hiring 01's](../hiring/01-vacancies.design.md) responsive
+revision: `Table.hideBelow`, `RecordCard` and `RecordList`. The rule that survives is the one
+about the numbers — assigned on landing, never reused, cited from the code — not a rule about
+which area is allowed to add one.
 
 ## Product Decisions
 

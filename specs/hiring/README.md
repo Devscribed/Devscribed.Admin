@@ -46,6 +46,7 @@ disagree, this set wins; the six deliberate departures are recorded below.
 | Removing a **candidate** is a flag; their record survives and revives on re-booking | 03 | 01, 02, 04, 05 |
 | A list's whole query lives in its URL; a detail page comes back to the address, not the screen | 03 | 04, 05 |
 | A card is drawn only around content: loaders and empty states stand on the page's own ground; every alert is a toast, and a retry outlives it ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)) | 03 | 01, 04, 05, 06 |
+| A hiring list has two forms — a `Table` above `md`, a column of `RecordCard`s below it — and `RecordList` is the only object that knows so ([§96–§98](../design-system/decisions.md)) | 01 | 03, 06 |
 
 ## Roles & Permission Matrix
 
@@ -127,6 +128,8 @@ link, so a vacancy has exactly one booking link. Multiple links per vacancy woul
 | Candidate deleted | 03 | The vacancy's `Candidates` count drops, and its deletion stays blocked by the surviving applications | 01 |
 | Deleted candidate books again | 02 | `deletedAt` cleared by the upsert; every application, assessment, note and CV version returns with them | 03, 04, 05 |
 | Interviewer reassigned | 01 | Existing applications keep the interviewer they were booked with, and reschedule against **that** mailbox | 07 |
+| The list gains a card form | 01 | The two library lists take the same two forms, and `06`'s "One layout." is overruled | 06 |
+| `Table` gains `hideBelow` | 01 | A column may leave the table below a rung, header and cells together — the floor (first column, status, actions) never may | 03, 06 |
 
 ## Dependency Graph
 

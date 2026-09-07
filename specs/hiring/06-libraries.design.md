@@ -171,8 +171,10 @@ sentence, and each one is reached through a menu — there is no way to arrive a
 | Page header | `PageHeader` → `PageTitle` | `title` | `page-title` |
 | Toolbar | `TableToolbar` | `tabs` (§45 objects), `activeTab`, `onTab`, `search`, per-tab `searchPlaceholder`/`searchTestId` | `libraries-tabs` · `libraries-tab-categories` · `libraries-tab-criteria` · `categories-search-input` · `criteria-search-input` |
 | Primary action | `Button` | `variant="primary"`, one per tab | `category-new-button` · `criterion-new-button` |
-| List surface | `Card` — drawn only around rows | `padded={false}` | `categories-list` · `criteria-list` |
-| Table | `Table` | `columns` (objects, §18), `busy` (§34), `rowTestId` | `category-row-{id}` · `criterion-row-{id}` |
+| List | `RecordList` ([§98](../design-system/decisions.md)) — drawn only around rows | `columns` (`RecordColumn`), `rows`, `rowKey`, `rowTestId`, `busy` (§34) | `categories-list` · `criteria-list` |
+| List surface | `Card` — drawn by `RecordList` in its table form only | `padded={false}` | the ids above, on whichever form is drawn |
+| A row, ≥ `md` | `Table` ([§18](../design-system/decisions.md)) | through `RecordList` | `category-row-{id}` · `criterion-row-{id}` |
+| A row, < `md` | `RecordCard` ([§97](../design-system/decisions.md)) | through `RecordList`; a criterion's `Archived` badge takes the status slot and its scale the subtitle | `category-row-{id}` · `criterion-row-{id}` |
 | Row actions | `Popover` | kebab trigger, `items` with `danger`/`disabled`/`description` (§22), portalled menu (§55) | `category-actions-{id}` · `criterion-actions-{id}` and the item ids |
 | Vacancies cell | app composition | two titles + a `+N` bubble (32px circle, 8% black wash); count as `aria-label` | `category-usage-{id}` |
 | Archived mark | `Badge` | `status="inactive"`, `outlined` | `criterion-archived-badge-{id}` |
@@ -295,9 +297,55 @@ on the screen to say the same thing better.
 
 ## Responsive
 
-One layout. The desktop pass targets ≥ 1200px, and the shape it chose needs no branch below it:
-the previous revision's breakpoint existed to collapse three row buttons into a menu, and the menu
-is now the layout at every width. `useMediaQuery` left the screen with the buttons.
+> ~~One layout. The desktop pass targets ≥ 1200px, and the shape it chose needs no branch below
+> it: the previous revision's breakpoint existed to collapse three row buttons into a menu, and
+> the menu is now the layout at every width. `useMediaQuery` left the screen with the buttons.~~
+>
+> **Overruled by this section.** The sentence answered the question it was asked — whether the
+> *row's actions* needed a branch — and the answer to that has not changed: the kebab is still the
+> layout at every width. What it did not ask is whether the row's **values** survive a phone, and
+> they do not. At 360 the well is 328px; a criterion row spends 96 of it on the actions column and
+> 16 a side on the row's own padding, leaving 198px to split 2.6 / 1 / 1 between Name, Type and
+> Assessments. Type and Assessments get 43px each, less 12px of cell padding, so a 14px `Scale`
+> and `18 assessments` are drawn as `Sca…` and `18…`. Two of a criterion's four values were not
+> narrow on a phone, they were gone.
+
+Both libraries take the system's two-form list — `RecordList`
+([§98](../design-system/decisions.md)) — on the rungs
+[design-system 01 §01](../design-system/01-responsive.md) sets. Above `md` the table is exactly
+what it was; below `md` a row is a `RecordCard` ([§97](../design-system/decisions.md)). Neither
+table gives a column `hideBelow` ([§96](../design-system/decisions.md)): three and four columns
+fit every width the table is drawn at, and a column dropped to make room for nothing is a value
+withheld for tidiness.
+
+```
+  CATEGORY                          CRITERION
+┌──────────────────────────────┐  ┌──────────────────────────────┐
+│                           ⋮  │  │ ⟨Archived⟩                ⋮  │
+│ React                        │  │ English                      │
+│ Vacancies   One, Two  ⟨+2⟩   │  │ A1 › A2 › B1 › B2 › C1 › C2  │
+└──────────────────────────────┘  │ Type          Scale          │
+                                  │ Assessments   18 assessments │
+                                  └──────────────────────────────┘
+```
+
+- **A category card's service line holds only the kebab.** There is no status on a category, and
+  the line is drawn for the menu alone rather than being dropped and leaving the kebab to find its
+  own corner.
+- **The two things a criterion folds into its Name cell reach the card as slots**, not as text
+  inside the title: the `Archived` badge takes the status slot — it *is* a status — and the scale
+  takes the subtitle, which is the same relationship the table draws as a second line inside the
+  leading cell. Both are `cardOnly` columns ([§98](../design-system/decisions.md)), because neither
+  has a column of its own in the table and neither should acquire one.
+- **The scale stays a real `<ol>` with its `›` separators** in the card, so its order is conveyed
+  structurally at both widths and not only by the glyphs. It is one line and ellipsises; the
+  values are also in the criterion dialog, which is where they are edited.
+- **Archived still recedes to `opacity: .7`, and the kebab still does not.** The badge naming the
+  state may fade with its card, the menu holding the way back may not — the table's rule, unmoved.
+- The card is drawn only around rows in both forms: loading, both empty states and the failure
+  stand on the page's own ground, and a refetch dims the cards exactly as it dims the rows
+  ([§34](../design-system/decisions.md)).
+- The merge footnote sits under whichever form is drawn, unchanged.
 
 ## Accessibility
 

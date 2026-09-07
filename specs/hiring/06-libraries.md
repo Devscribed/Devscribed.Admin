@@ -539,3 +539,28 @@ reader.
   1. A confirmation states that existing filters will match differently.
   2. Cancelling leaves the order untouched; confirming saves the new order.
 - **Selectors:** `criterion-actions-{id}`, `criterion-edit-{id}`, `criterion-values-{id}`, `criterion-reorder-confirm`.
+
+### TC-H06-E2E-05: Below `md` a criterion is a card, with its state and its scale in their own slots
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one scale criterion named `English` with three values
+  and no assessments.
+- **Steps:**
+  1. Open the criteria tab at 1280 and read the row's class.
+  2. Resize to 360 and read it again.
+  3. Read the name, the scale, its element, and the `Type` and `Assessments` facts.
+  4. Look for an `Archived` badge, then archive the criterion from its kebab and look again.
+  5. Measure the document's horizontal overflow.
+- **Expected Result:**
+  1. No `ds-record-card` class — the table.
+  2. `ds-record-card`.
+  3. `English` is the title; `A1 › A2 › B1` is the subtitle and is still a real `<ol>`, so its
+     order is structural at both widths; `Type` reads `Scale` and `Assessments` reads
+     `0 assessments`, each under its own heading. Those two are the values the table drew as
+     `Sca…` and `18…` at this width, which is the whole reason the card exists.
+  4. No badge before, exactly one after, reading `Archived`, on the card's service line — a state
+     takes the status slot, and it has no column of its own because in the table it sits beside
+     the name. Before it exists the service line still draws, carrying the kebab alone.
+  5. Zero.
+- **Selectors:** `criterion-row-{id}`, `criterion-name-{id}`, `criterion-values-{id}`,
+  `criterion-type-{id}`, `criterion-usage-{id}`, `criterion-actions-{id}`,
+  `criterion-archive-{id}`, `criterion-archived-badge-{id}`.

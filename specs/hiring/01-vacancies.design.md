@@ -38,6 +38,14 @@ as `§n`.
 > map](#component-map), [Copy](#copy) and [States](#states) sections are Phase 7's; the detail
 > page and both dialogs are untouched and are Phase 8's.
 
+> **Amended by the responsive pass — the list has a second form.** Below `md` a vacancy is a
+> `RecordCard` and not a table row; between `md` and `lg` the table drops `Length`. The list is a
+> `RecordList` ([§98](../design-system/decisions.md)), which is the only object that knows there
+> are two forms. [Responsive](#responsive) is rewritten and the sentence it overrules is struck
+> beside this one, in place; [Component map](#component-map) gains four rows. Nothing about the
+> vacancy screen, the dialog, the copy or the actions changed, and the suite runs at 1280, where
+> the table is what it has always been.
+
 These are the first screens to **lose components rather than repaint them**, so the calls made
 here are the ones Phases 4–7 follow: [where a persistent banner sits](#the-banner-slot), [which
 heading a caption becomes](#headings), and [what replaces a tooltip](#the-blocked-action).
@@ -318,8 +326,11 @@ a loss: the slot exists for a row whose destination needs explaining, and none o
 | List toolbar | `TableToolbar` | `tabs`, `activeTab`, `onTab`, `tabsLabel`, `tabsTestId`, `search*` | — |
 | Status tabs | `PageTabs` (through `TableToolbar`) | `TabItem` objects — `value`, `label`, `testId` | `vacancies-status-tabs`, `vacancies-status-{all\|open\|closed}` |
 | Search | `SearchInput` (through `TableToolbar`) | `searchPlaceholder`, `searchLabel`, `searchTestId` | `vacancies-search-input` |
-| List surface | `Card` | `padded={false}` | `vacancies-list` |
-| List | `Table` | `columns`, `rows`, `rowHref`, `rowTestId`, `onRowClick`, `busy` | — |
+| List | `RecordList` ([§98](../design-system/decisions.md)) | `columns` (`RecordColumn` — `role`, `renderCard`, `cardOnly`, `hideBelow`), `rows`, `rowKey`, `rowHref`, `rowTestId`, `onRowClick`, `busy` | `vacancies-list` |
+| List surface | `Card` — drawn by `RecordList` in its table form only | `padded={false}` | the id above, on whichever form is drawn |
+| A row, ≥ `md` | `Table` ([§18](../design-system/decisions.md)) | through `RecordList`; `Length` carries `hideBelow: 'lg'` ([§96](../design-system/decisions.md)) | `vacancy-row-{id}` |
+| A row, < `md` | `RecordCard` ([§97](../design-system/decisions.md)) | through `RecordList`; status · title · categories · Interviewer · Length · Candidates · kebab | `vacancy-row-{id}` |
+| Card categories | `Badge status="neutral" size="s"` in the card's badge slot, capped at two + a `+N` bubble | the strip's `aria-label` names every category | `vacancy-categories-{id}` · `vacancy-category-chip-{id}` |
 | Row actions | `Popover` | `label`, `items` with `disabled` + `tooltip` ([§62](../design-system/decisions.md)) — six rows: Open board · Copy booking link · Open booking page · Edit vacancy · Close/Reopen vacancy · Delete vacancy | `vacancy-actions-menu-{id}` |
 | Row confirmations | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `vacancy-close-confirm`, `vacancy-delete-confirm` |
 | Category label | **`Badge status="neutral" size="s"`** ([§59](../design-system/decisions.md)) | — | `vacancy-category-chip-{id}` |
@@ -484,11 +495,46 @@ adjacent, so nothing flattened.
 
 ## Responsive
 
+The rungs are the system's — `xs < 576 · sm ≥ 576 · md ≥ 768 · lg ≥ 992 · xl ≥ 1200 · xxl ≥ 1440`,
+minimum supported width 360 ([design-system 01 §01](../design-system/01-responsive.md)). This
+screen introduces none of its own.
+
 | Width | Layout |
 |---|---|
-| ≥ 1200px | Full shell; the vacancy's header over its board, the header fixed and the columns scrolling inside what is left |
-| 1024–1199px | Shell switches to hamburger + drawer (spec 00); the vacancy's header is unchanged and the column group scrolls sideways inside its own container |
-| < 1024px | The header's title and its actions wrap onto separate lines — the title group has a `260px` flex basis, so the button and the kebab drop beneath it rather than squeezing the name. The list toolbar wraps the same way: `TableToolbar` is a `flex-wrap` row, so the tabs keep the first line and the search and `New vacancy` drop below them |
+| ≥ `xl` | Full shell with the rail in view; the vacancy's header over its board, the header fixed and the columns scrolling inside what is left. The list is a `Table` with all six columns |
+| `lg` – `xl` | Shell switches to hamburger + drawer ([design-system 01 §03](../design-system/01-responsive.md)); the vacancy's header is unchanged and the column group scrolls sideways inside its own container. The list is unchanged |
+| `md` – `lg` | The list keeps the table and **drops `Length`** — `hideBelow: 'lg'` ([§96](../design-system/decisions.md)). The well is 736px at 768 and the title cell carries a second line of chips inside it; the four columns that remain give it back the width it was losing to a figure nobody makes a decision on in a list |
+| < `md` | **Each row is a `RecordCard`** ([§97](../design-system/decisions.md)). The header's title and its actions wrap onto separate lines — the title group has a `260px` flex basis, so the button and the kebab drop beneath it rather than squeezing the name. The list toolbar wraps the same way: `TableToolbar` is a `flex-wrap` row, so the tabs keep the first line and the search and `New vacancy` drop below them |
+
+**The vacancy card**, below `md`:
+
+```
+┌──────────────────────────────────┐
+│ ⟨Open⟩                        ⋮  │  ← service line: status left, kebab right
+│ Senior React Engineer            │  ← title, 14/20, clamped to two lines
+│ ⟨React⟩ ⟨Senior⟩ ⟨+2⟩            │  ← categories, one line, capped at two
+│ Interviewer          Pat Owner   │  ← facts
+│ Candidates                  12   │
+└──────────────────────────────────┘
+```
+
+- **Every value the table showed appears exactly once.** Title, status and the kebab move to the
+  service line and the title; `Interviewer` and `Candidates` become facts. `Length` is a fact
+  again here — it is dropped from the *table* between `md` and `lg` because six columns do not fit
+  a 736px well, which is not a reason to withhold it from a card that has a line free.
+- **The categories are the one thing with no column.** They live inside the title cell, so they
+  reach the card as a `cardOnly` column ([§98](../design-system/decisions.md)) filling the badge
+  slot — a chip strip on one line, capped at two with the `+N` bubble the libraries screen already
+  uses for a folded list of vacancy titles ([06 design](06-libraries.design.md)). One line rather
+  than a wrap, because a list of cards is scanned, and the strip's accessible name spells every
+  category out so nothing is only in the `+N`.
+- **A row's `data-testid` is on exactly one node at every width** — the `<a>` above `md`, the card
+  below it, never both. That is why the switch is JavaScript reading the pre-paint stamp and not a
+  pair of CSS-hidden trees.
+- `busy` dims the cards and sets `aria-busy` exactly as it dims the rows, and the first load's
+  `Preloader` and both empty states still stand on the page's own ground with no card around them
+  ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)) —
+  in both forms.
 
 The vacancy screen's `height: 100%` holds at every width, and the one case it degrades in is a
 header taller than the viewport. Nothing is clipped there: the root sets no `overflow`, so it
@@ -499,14 +545,22 @@ here, where a clipped header would hide the only control that leaves the page.
 The booking link truncates with `text-overflow: ellipsis`; the page body never scrolls
 horizontally.
 
-**The table has one layout at every width.** the earlier design's spec described the `CANDIDATES` column
-folding into the title cell at 768–1023px and rows becoming stacked cards below 768px. Neither
-was ever built, and the system's `Table` is a fixed 70px flex row with no responsive form to adopt
-(D1) — its columns flex, and that is the whole behaviour. The claim is removed rather than
-carried forward unimplemented.
+> ~~**The table has one layout at every width.** the earlier design's spec described the
+> `CANDIDATES` column folding into the title cell at 768–1023px and rows becoming stacked cards
+> below 768px. Neither was ever built, and the system's `Table` is a fixed 70px flex row with no
+> responsive form to adopt (D1) — its columns flex, and that is the whole behaviour. The claim is
+> removed rather than carried forward unimplemented.~~
+>
+> **Overruled by this section and by [§96](../design-system/decisions.md) / [§97](../design-system/decisions.md) / [§98](../design-system/decisions.md).**
+> The sentence was true when it was written and its reason was the right one: there was no
+> responsive form to adopt. There is one now, and it was built here. Note what the paragraph got
+> right and this section keeps — the fold it refused was `CANDIDATES` into the title cell at an
+> intermediate width, and that is *not* what `hideBelow` does. A hidden column is gone, not moved
+> into a neighbour; the value it held returns on the card, where there is room for it.
 
 The screen's own geometry lives in `globals.css` rather than in inline styles, because a media
-query cannot be one — the same reason `.page-title` and the shell's breakpoint live there.
+query cannot be one — the same reason `.page-title` and the shell's breakpoint live there. The
+card's own geometry lives in `packages/ds/src/base.css` for the same reason, one level down.
 
 ## Accessibility
 
