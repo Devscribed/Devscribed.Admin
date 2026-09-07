@@ -1,0 +1,5 @@
+{
+  "status": "pass",
+  "findings": [],
+  "note": "All three Holidays pickers are searchable; the shipped ids moved onto the wrapper per the patch's contract table and each Select took a new -input id. Added a screen-reader-only label beside each Select (packages/ds untouched) so the wrapper keeps containing the chosen country while the search input holds a non-matching query, which TC-03-E2E-10 requires. e2e/tests/holidays.spec.ts and e2e/tests/time-off-calendar.spec.ts gained the two new cases; both files pass in full (16/16) across five targeted runs. tsc --noEmit is clean. Two runs of the broader three-file combination hit unrelated, environment-level failures (ERR_NETWORK_IO_SUSPENDED, an unrelated document-signing regression case) that cleared on immediate re-run."
+}
