@@ -1,0 +1,707 @@
+{
+  "spec": {
+    "path": "specs/time-off/02-holiday-sourcing.md",
+    "sha256": "e252bfbad0bbdee03cb5cfe416943d38392c567d49cd8701dacc3efe336887ba",
+    "dependsOn": [
+      "01"
+    ]
+  },
+  "summary": "Settings › Holidays stops being a blank page an admin types into. The organization's sourced country set — every active member's resolved holiday country (Membership.countryCode → Organization.countryCode), plus the organization's own behind a stored checkbox that defaults to on — is fetched from a public holiday service, once per country per year, through a new provider port with a real driver (Nager.Date over HTTPS, no credential) and a local double. An import writes ordinary Holiday rows carrying source 'imported', never overwrites a date that already reaches that country (including a null-country row), never deletes and never touches a manual row, and records what the provider offered so an admin's edits and deletions survive every later load. A provider failure is a 200 with the country reported unsourced. On top of that the screen gains a summary: days per country, days and paid hours per person, and — behind view-amounts-owed, separately from the day counts — what those holidays cost per person and per currency, using the Amounts Owed rate resolution so the two screens agree to the cent. Four new routes, one additive migration (two tables and three Holiday columns), one new export family in packages/validation, no new capability and no new design-system component.",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "The shared rules: the sourced country set, the provider-entry filter, the messages, and currency-at-a-date",
+      "files": [
+        "packages/validation/src/holiday-sourcing.ts",
+        "packages/validation/src/holiday-sourcing.test.ts",
+        "packages/validation/src/reports.ts",
+        "packages/validation/src/reports.test.ts",
+        "packages/validation/src/index.ts"
+      ],
+      "requirements": [
+        "REQ-02-001",
+        "REQ-02-002",
+        "REQ-02-005",
+        "REQ-02-015"
+      ],
+      "dependsOn": [],
+      "detail": [
+        "New module packages/validation/src/holiday-sourcing.ts, exported from index.ts beside './holidays'.",
+        "HOLIDAY_SOURCING_MESSAGES with exactly the six rows of the Error Messages table: yearInvalid, includeOrgCountryInvalid, syncFailedSome, countryNotCovered, syncing, summaryUnavailable. Verbatim text, including the ellipsis character in 'Fetching public holidays…'. The four rows the table marks '—' are screen text and are emitted by no route; they exist here because a screen that invents a sentence is a screen whose wording nothing governs.",
+        "validateSyncYear(input) — Validation Rule 1, an integer 2000..2100 inclusive, message yearInvalid. validateIncludeOrgCountry(input) — Rule 2, a boolean, absent or non-boolean refused and never coerced, message includeOrgCountryInvalid. validateRefreshFlag(input) — Rule 3, a boolean, absent means false, no message.",
+        "buildSourcedCountrySet({ memberCountries, organizationCountry, includeOrgCountry }) — REQ-02-001 and REQ-02-002. Each member's resolved country through the same chain resolveMemberHolidayCountry already implements (membership, then organization; first valid alpha-2 wins; the null resolution dropped), distinct, order-stable, each code passing validateCountryCode (Rule 7 — a code that fails is dropped from the set, never refused). The organization's own code is added only where includeOrgCountry is on, and a country a member resolves to stays in the set whatever the flag says (Edge case 4).",
+        "acceptProviderEntries(entries, { countryCode, year }) — Rules 4 to 6 and REQ-02-005 as one pure pass over a third party's payload, returning the accepted entries and the count discarded. Accepted: global === true, types contains 'Public', date matching YYYY-MM-DD and inside the requested year, countryCode equal to the one requested after uppercasing, and a name of 1..120 trimmed characters passing validateHolidayName. Everything else is discarded and counted; nothing here ever becomes a 422, because the caller did not send it and cannot fix it.",
+        "holidayExternalKey(provider, countryCode, date) — '{provider}:{countryCode}:{date}', the composition the contracts file's Boundary values table names. HOLIDAY_IMPORT_PAID_HOURS = 8.00 (REQ-02-004).",
+        "In reports.ts, additive only: extract the snapshot selection resolveRateAtDate already performs (the newest snapshot with effectiveFrom <= date, else the live row) into one pure helper, and add resolveCurrencyAtDate(snapshots, live, date) on top of it. Two copies of that selection would drift, and REQ-02-015 needs the currency chosen by exactly the rule the rate is chosen by. No existing export changes its signature or its behaviour.",
+        "Unit tests for every function above, including TC-02-UNIT-01 and TC-02-UNIT-02 word for word."
+      ]
+    },
+    {
+      "id": "T2",
+      "title": "The provider port, its two drivers, and how one is chosen",
+      "files": [
+        "apps/api/src/holidays/provider/holiday-provider.ts",
+        "apps/api/src/holidays/provider/nager-holiday.provider.ts",
+        "apps/api/src/holidays/provider/fake-holiday.provider.ts",
+        "apps/api/src/holidays/provider/holiday-provider.config.ts",
+        "apps/api/src/holidays/provider/holiday.provider.ts",
+        "apps/api/src/core.module.ts",
+        "apps/api/.env.example"
+      ],
+      "requirements": [
+        "REQ-02-003",
+        "REQ-02-005",
+        "REQ-02-009",
+        "REQ-02-010",
+        "REQ-02-011"
+      ],
+      "dependsOn": [
+        "T1"
+      ],
+      "detail": [
+        "HolidayProvider is an abstract class used as its own DI token — the shape CalendarProvider, FileStorage, JobQueue and MailService already have. One method: holidays(countryCode, year) resolving to { entries, discarded } where entries are the nationwide Public entries that passed T1's acceptProviderEntries. It also carries `readonly name: string` and `readonly callBoundMs: number`.",
+        "`name` is 'nager' on BOTH drivers. TC-02-INT-01 runs against the double and expects an externalKey of 'nager:DE:{date}'; the double is a double OF Nager.Date, so the name it reports is the provider it doubles. HOLIDAY_PROVIDER selects the driver, not the provider's identity.",
+        "The nager driver: GET {base}/api/v3/PublicHolidays/{year}/{code} over HTTPS with no credential, base defaulting to https://date.nager.at. It parses the array, hands it to acceptProviderEntries, and carries an AbortSignal wired to a setTimeout — the fetchTransport shape at apps/api/src/signature/signwell/signwell-http-client.ts:613 — so an abandoned call releases its socket rather than merely being ignored. Any non-2xx, any unparseable body and any abort throws; REQ-02-009 turns that into an unsourced country in T4, never into a status.",
+        "The fake driver ships a deterministic country table, because an E2E run reaches it only through the running API and TC-02-E2E-01 and TC-02-E2E-03 need a country that answers and a country that refuses with no seeding call available: PL answers Poland's shape (14 entries, all global, all Public, no two on one date), DE answers Germany's shape (20 entries of which 10 carry global:false and a counties array), US answers a nationwide set, one country answers an empty array (REQ-02-010), IN and AE refuse the connection (REQ-02-009), and one country never answers (REQ-02-011). It exposes seeding hooks so an integration case can state its own precondition, which is what the six rows of the contracts file's 'What the double must reproduce' table require.",
+        "holiday-provider.config.ts reads HOLIDAY_PROVIDER, HOLIDAY_PROVIDER_BASE_URL and HOLIDAY_PROVIDER_TIMEOUT_MS. The house rule for a port's own *.provider.ts, verbatim from queue/queue.provider.ts and storage/storage.provider.ts: an explicit value wins, and the local driver is the default whenever NODE_ENV is not 'production'. A value that names no driver throws at boot rather than defaulting. (The hiring ports read their variable as given in every environment; those are the exception, not the pattern this follows.)",
+        "Registered in CoreModule's providers and exports, beside the other five ports, so exactly one instance serves the whole application and overrideProvider(HolidayProvider) in a test overrides the one the routes call.",
+        "The three variables are added to apps/api/.env.example with the note that none of them is a secret — the provider needs no key, so nothing reaches SSM and nothing can rotate. No Terraform change: unset in a deployed environment resolves to the nager driver with its own base URL and call bound, which is the intended production configuration."
+      ]
+    },
+    {
+      "id": "T3",
+      "title": "The migration: two tables and three columns on Holiday",
+      "files": [
+        "apps/api/prisma/schema.prisma",
+        "apps/api/prisma/migrations/20260907120000_time_off_02_holiday_sourcing/migration.sql"
+      ],
+      "requirements": [
+        "REQ-02-004",
+        "REQ-02-021"
+      ],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "One migration for this run and it is additive in the strict sense: two new tables, three new columns on Holiday — `source String @default(\"manual\")`, nullable `externalKey`, nullable `importedAt` — no rename, no drop, no new NOT NULL on an existing table, no backfill. infra/deploy.sh:27 states the order it runs in: 'Migrations run BEFORE the rollout, and the order is the whole point' — additive migrations make old code against a new schema safe, which is why the reverse direction needs no database rollback, and running them first is what stops new code querying a table that does not exist yet. Every existing Holiday row reads source 'manual' from the default, which is exactly what those rows are."
+      },
+      "concurrency": {
+        "rows": [
+          "HolidayImport",
+          "OrganizationHolidaySourcing"
+        ],
+        "lock": "none — uniqueness is the arbiter. @@unique([organizationId, countryCode, year]) on HolidayImport is invariant 3, enforced by the index rather than by the service; organizationId is @unique on OrganizationHolidaySourcing, one row per organization.",
+        "reread": []
+      },
+      "detail": [
+        "HolidayImport: id, organizationId (FK → Organization, onDelete: Cascade), countryCode String @db.Char(2) never null, year Int, provider String, holidayCount Int, importedAt DateTime @default(now()), @@unique([organizationId, countryCode, year]).",
+        "OrganizationHolidaySourcing: id, organizationId String @unique (FK → Organization, onDelete: Cascade), includeOrgCountry Boolean @default(true), updatedAt DateTime @updatedAt, updatedByAccountId String (FK → Account).",
+        "Holiday gains source, externalKey, importedAt exactly as the Data Model states them. `source` is a documented string column, not a Prisma enum — the role/status convention. No unique index on externalKey: the contracts file names the composite (organizationId, date, countryCode) index as what detects an identity mismatch, and a new uniqueness constraint nobody asked for changes what every reader of Holiday may assume.",
+        "The migration is written by hand beside the schema edit, with a header comment saying what it adds and why the reverse is safe, in the shape 20260901130000_spec_org_03_holidays/migration.sql uses. Run `npx prisma migrate dev` from apps/api — from the repository root it produces a client that cannot find apps/api/.env."
+      ]
+    },
+    {
+      "id": "T4",
+      "title": "Sourcing: the country set, the sync route, the import writer, and the list route's two additions",
+      "files": [
+        "apps/api/src/holidays/holiday-sourcing.service.ts",
+        "apps/api/src/holidays/holiday-sourcing.controller.ts",
+        "apps/api/src/holidays/holidays.service.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "requirements": [
+        "REQ-02-001",
+        "REQ-02-002",
+        "REQ-02-003",
+        "REQ-02-004",
+        "REQ-02-005",
+        "REQ-02-006",
+        "REQ-02-007",
+        "REQ-02-008",
+        "REQ-02-009",
+        "REQ-02-010",
+        "REQ-02-011",
+        "REQ-02-020",
+        "REQ-02-021",
+        "REQ-02-022",
+        "REQ-02-023",
+        "REQ-02-025"
+      ],
+      "dependsOn": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "allCallSites": [
+        "apps/api/src/holidays/holidays.service.ts#listHolidays (scope=all — gains `source` on every row and the `sourcing` block)",
+        "apps/api/src/holidays/holidays.service.ts#listHolidays (scope=mine — gains `source` on every row and NO `sourcing` block, REQ-02-025)",
+        "apps/web/app/org/[orgId]/settings/holidays/page.tsx (scope=all, the only reader of the sourcing block)",
+        "apps/web/app/org/[orgId]/time-tracking/page.tsx (scope=mine, holiday markers)",
+        "apps/web/app/org/[orgId]/members/[memberId]/RequestVacationModal.tsx (scope=mine, the range hint)",
+        "e2e/tests/holidays.spec.ts and e2e/tests/helpers.ts#createHolidayViaApi (list reads asserting row ids)"
+      ],
+      "concurrency": {
+        "rows": [
+          "Holiday",
+          "HolidayImport"
+        ],
+        "lock": "none, and deliberately: the two uniqueness indexes on Holiday are the arbiter. Edge case 12 — two admins syncing one unsourced year at the same instant — is resolved by letting the second writer's inserts collide: a P2002 on a Holiday insert is caught per entry and counted as skipped, exactly as if the row had been found by the pre-read. The HolidayImport write is an upsert on (organizationId, countryCode, year) and a P2002 there is retried once as an update, so one import record exists whoever wins. No SELECT … FOR UPDATE is taken; the shipped holiday writers (create, update, delete) take none either, so there is nothing to serialise against.",
+        "reread": [
+          "Holiday rows on the imported dates, before the write, to apply REQ-02-006"
+        ]
+      },
+      "detail": [
+        "sourcedCountrySet(organizationId): read every ACTIVE membership's countryCode and the organization's countryCode and includeOrgCountry (a missing OrganizationHolidaySourcing row reads as true, resolved in the service, never backfilled), then call T1's buildSourcedCountrySet.",
+        "sync(session, { year, refresh }): manage-holidays or 404 (REQ-02-020), can(normalizeRole(role), …). year through validateSyncYear or 422 yearInvalid; refresh through validateRefreshFlag. For each country in the set: with an import record and no refresh, no call is made at all (REQ-02-007) and the country reports its stored state; otherwise the provider is called.",
+        "Every provider call is raced against provider.callBoundMs in THIS service (REQ-02-011). A driver-side timeout would not bound a driver with no HTTP in it, and TC-02-INT-14 makes the fake never answer and still requires the request back inside the bound. A call that times out, throws, or answers unparseably is REQ-02-009: no import record, no holiday, the country reported `unsourced`, and the request still 200.",
+        "The entry decision table, one row per accepted entry, keyed on who the DATE ALREADY REACHES rather than who wrote the row on it: a row on that date whose countryCode equals the imported country OR is null → nothing written, counted skipped (REQ-02-006, Edge cases 7 and 7a — a null-country row already reaches this member and a second row would be paid twice); a row on that date for another country → written, the pair being distinct under the index (Edge case 7b); nothing on the date → written. A written row carries the provider's English name, the date, the uppercase alpha-2, paidHours 8.00, source 'imported', externalKey '{provider}:{country}:{date}', importedAt now, and createdByAccountId of the syncing account — the column is NOT NULL behind an FK and this is the only account in the transaction.",
+        "A sync NEVER deletes a Holiday row and NEVER modifies one whose source is 'manual' (invariants 1 and 2), under any state or event.",
+        "The import record (REQ-02-021) carries provider, importedAt and holidayCount = written + skipped: what the provider OFFERED after the regional entries were discarded, not what this import wrote. `discarded` is not part of it. This is what makes a refresh of a fully-stored country record 10 and stay `sourced` rather than being mistaken for empty (REQ-02-023, Edge case 10). A country the provider offers nothing for records a count of zero and is `empty` (REQ-02-010), and is never re-asked without a refresh.",
+        "The sync response is { year, countries: [{ countryCode, state, written, skipped, discarded }] } and is always 200.",
+        "listHolidays: every row gains `source` in toSummary — and only `source`. `paidHours` stays a JSON number and createdAt/updatedAt stay; the route keeps every guard, status and query parameter it ships with. The `sourcing` block — { year, countries: [{ countryCode, state, holidayCount, lastImportedAt }] } over the sourced country set for the requested year, a country with no import record appearing as `unsourced` — is added ONLY for a caller holding view-holidays (REQ-02-025). A scope=mine read carries no `sourcing` key at all: absent, not null, not empty. The block is the list of every country the staff are in, and that read is open to every active member.",
+        "The controller carries POST holidays/sync and GET holidays/summary (T5's service) on @Controller('api/organizations/:orgId') behind SessionGuard + OrgScopeGuard, capability checked in the service because these answer 404 and CapabilityGuard answers 403. Registered in app.module.ts."
+      ]
+    },
+    {
+      "id": "T5",
+      "title": "The numbers: days by country, days by person, and what they cost",
+      "files": [
+        "apps/api/src/holidays/holiday-summary.service.ts"
+      ],
+      "requirements": [
+        "REQ-02-013",
+        "REQ-02-014",
+        "REQ-02-015",
+        "REQ-02-016",
+        "REQ-02-017",
+        "REQ-02-018",
+        "REQ-02-019",
+        "REQ-02-024"
+      ],
+      "dependsOn": [
+        "T1",
+        "T3"
+      ],
+      "allCallSites": [
+        "apps/api/src/holidays/holiday-sourcing.controller.ts#summary (the only route)",
+        "apps/api/test/holiday-sourcing.spec.ts (TC-02-INT-11 drives the service directly, with the capability set supplied rather than a session signed in)"
+      ],
+      "detail": [
+        "view-holidays or 404 (REQ-02-019). year through validateSyncYear or 422 yearInvalid.",
+        "The public method resolves the caller's capabilities and delegates to a method that takes them explicitly — buildSummary(organizationId, year, { includeAmounts }). No shipped role holds view-holidays without view-amounts-owed, so TC-02-INT-11 cannot reach REQ-02-017 through a session and calls that method with includeAmounts false. The rule has to exist before a role splits the two capabilities, which is why the seam is part of the design rather than an accident of it.",
+        "countries (REQ-02-013): one row per country in the sourced country set, carrying the code, the number of holidays of that year whose countryCode is that code, and how many active members resolve to it — a country in the set that nobody resolves to still appears, with memberCount 0. Where any holiday of the year carries a null countryCode, one further row keyed null carrying their number and the count of EVERY active member. A global holiday is its own row, never added into each country.",
+        "members (REQ-02-014, REQ-02-024): one row per ACTIVE membership carrying membershipId, displayName, the resolved country, the number of holidays that reach them (isHolidayApplicableToMember — null country or a case-insensitive match), and the sum of those holidays' paidHours as a two-decimal string. Present for every member, financials or not.",
+        "byCurrency (REQ-02-015, REQ-02-016): one entry per currency, each the sum over the holidays reaching that member that were valued in that currency of paidHours × the billable rate in force on the holiday's OWN date, from the snapshot history — resolveRateAtDate for the rate, T1's resolveCurrencyAtDate for the currency, both selecting the same snapshot. Each holiday is valued and rounded with toMoney FIRST and the rounded values are then summed, because reports.service.ts sums already-rounded per-row amounts and TC-02-INT-09 is an equality to the cent against exactly that arithmetic. totals.byCurrency is one entry per currency and no field anywhere carries a total across currencies.",
+        "REQ-02-018: a member with no MemberFinancials row and no snapshot has NO byCurrency key at all — absent, not null, not empty, not zero — and contributes nothing to totals.byCurrency, while keeping their holidayCount and paidHours (REQ-02-024).",
+        "REQ-02-017: without view-amounts-owed, every amount and every currency is omitted from the body — no byCurrency key on any member row and none on totals. Omitted, never zeroed: a body cannot then be read for the shape of what it did not say.",
+        "totals.holidayCount and totals.paidHours are sums over MEMBERS, never over countries. The two arrays count different things (Edge cases 22 and 23) and are not expected to sum to each other.",
+        "Every query scopes by session.organizationId. Edge case 23: an empty sourced set answers 200 with an empty countries array unless a global holiday exists, every active member at zero days, and totals.holidayCount 0."
+      ]
+    },
+    {
+      "id": "T6",
+      "title": "The include-organization-country setting, read and written",
+      "files": [
+        "apps/api/src/organizations/holiday-sourcing-settings.controller.ts",
+        "apps/api/src/organizations/holiday-sourcing-settings.service.ts"
+      ],
+      "requirements": [
+        "REQ-02-002",
+        "REQ-02-019",
+        "REQ-02-020"
+      ],
+      "dependsOn": [
+        "T1",
+        "T3"
+      ],
+      "concurrency": {
+        "rows": [
+          "OrganizationHolidaySourcing"
+        ],
+        "lock": "none — one row per organization written whole, no read-modify-write, so there is nothing for a concurrent writer to lose. This is the rule organization-country.service.ts already states for the column beside it. The write is an upsert keyed on the unique organizationId.",
+        "reread": []
+      },
+      "detail": [
+        "GET and PUT /api/organizations/{orgId}/settings/holiday-sourcing, both answering { includeOrgCountry: boolean }. PUT accepts that one field and nothing else.",
+        "Copied in shape from organization-country.{controller,service}.ts: @Controller('api/organizations/:orgId/settings/holiday-sourcing') behind SessionGuard + OrgScopeGuard, no CapabilityGuard, both capability checks in the service because both halves answer 404 — view-holidays on the read (REQ-02-019), manage-holidays on the write (REQ-02-020). Queries scope by session.organizationId; the path orgId is never a selector.",
+        "An organization with no row reads includeOrgCountry true (REQ-02-002's default), resolved in the service rather than by a backfill, so no organization changes behaviour before somebody touches the checkbox.",
+        "A body whose includeOrgCountry is absent or not a boolean is 422 includeOrgCountryInvalid — refused, never coerced (Validation Rule 2). The write records updatedByAccountId."
+      ]
+    },
+    {
+      "id": "T7",
+      "title": "The screen: the sourcing panel, the uncovered warning, the summary, and the sync nobody clicked",
+      "files": [
+        "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+        "apps/web/app/org/[orgId]/settings/holidays/types.ts",
+        "apps/web/app/org/[orgId]/settings/holidays/HolidaySourcingPanel.tsx",
+        "apps/web/app/org/[orgId]/settings/holidays/HolidaySummary.tsx"
+      ],
+      "requirements": [
+        "REQ-02-002",
+        "REQ-02-009",
+        "REQ-02-012",
+        "REQ-02-013",
+        "REQ-02-014",
+        "REQ-02-015",
+        "REQ-02-017",
+        "REQ-02-025"
+      ],
+      "dependsOn": [
+        "T4",
+        "T5",
+        "T6"
+      ],
+      "detail": [
+        "REQ-02-012: when the list read reports at least one country as `unsourced` for the year on screen, the page issues ONE POST .../holidays/sync for that year and re-reads the list and the summary when it answers. Nobody clicks anything. Switching the year tab abandons the in-flight request (Edge case 18) — the AbortController the page already uses for its list read — so a slow answer never repaints a year nobody is looking at.",
+        "holiday-sourcing-panel with holiday-sourcing-include-org-country (the DS Checkbox, read from and written to T6's routes) and holiday-sourcing-refresh-btn (POST with refresh true). holiday-sourcing-status carries HOLIDAY_SOURCING_MESSAGES.syncing while a sync is in flight and stays mounted until the re-read lands — the year tabs and the list stay interactive throughout.",
+        "holiday-sourcing-uncovered above the summary, present when at least one country is `unsourced` or `empty` and absent otherwise, with holiday-sourcing-uncovered-{countryCode} per country carrying countryNotCovered. It is an InfoBanner, not the error banner: the screen is working and the data is partial, so holidays-error-banner stays absent.",
+        "holiday-summary sits ABOVE holidays-table in the document, built from Card, ReportTableHead and ReportGroupBody, with holiday-summary-country-{code}, -days, holiday-summary-member-{membershipId}, -days, -amount and holiday-summary-total-{currency}. The money ids are rendered only where the response carries byCurrency, which is the API's own gate (REQ-02-017) — the screen omits the column rather than drawing a zero. summaryUnavailable stands in the summary's place when its read fails; the list is unaffected. The summary draws its own Preloader and neither wait blocks the other.",
+        "The list gains one column, holidays-row-{id}-source, reading the new `source` field. The empty state is drawn only when the year genuinely has no holiday AND every country in the set is `sourced` or `empty` — an unsourced country shows the warning instead, because 'no holidays' would be a claim the product cannot make.",
+        "Every string comes from HOLIDAY_SOURCING_MESSAGES or HOLIDAY_MESSAGES; nothing is written inline. Every spacing, size and colour is a token. Imports are from '@devscribed/ds' at the package root — Card, ReportTableHead, ReportGroupBody, Checkbox, InfoBanner, Preloader and Button all ship today, which is why the DS gaps table is empty. No control is disabled for validation.",
+        "No new capability and no new gate: the page is already gated on view-holidays and redirects a user or a viewer to Members. The money column follows can(role, 'view-amounts-owed')."
+      ]
+    },
+    {
+      "id": "T8",
+      "title": "The cases",
+      "files": [
+        "apps/api/test/holiday-sourcing.spec.ts",
+        "apps/api/test/stub-holiday.provider.ts",
+        "e2e/tests/holidays.spec.ts",
+        "e2e/tests/helpers.ts"
+      ],
+      "requirements": [
+        "REQ-02-001",
+        "REQ-02-002",
+        "REQ-02-003",
+        "REQ-02-004",
+        "REQ-02-005",
+        "REQ-02-006",
+        "REQ-02-007",
+        "REQ-02-008",
+        "REQ-02-009",
+        "REQ-02-010",
+        "REQ-02-011",
+        "REQ-02-012",
+        "REQ-02-013",
+        "REQ-02-014",
+        "REQ-02-015",
+        "REQ-02-016",
+        "REQ-02-017",
+        "REQ-02-018",
+        "REQ-02-019",
+        "REQ-02-020",
+        "REQ-02-021",
+        "REQ-02-022",
+        "REQ-02-023",
+        "REQ-02-024",
+        "REQ-02-025"
+      ],
+      "dependsOn": [
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "detail": [
+        "apps/api/test/holiday-sourcing.spec.ts carries TC-02-INT-01 to TC-02-INT-16, each named by its id, built on the signup/createMember helpers apps/api/test/holidays.spec.ts already uses. The port is replaced with overrideProvider(HolidayProvider) and a stub — the StubCalendarProvider pattern — which reports name 'nager' and can be pointed at Poland's shape, Germany's shape, an empty answer, a refused connection and a call that never answers.",
+        "TC-02-INT-11 calls the summary service's capability-explicit method rather than signing a session in, because no shipped role holds view-holidays without view-amounts-owed. TC-02-INT-14 sets a short call bound and asserts the request returns inside it. TC-02-INT-09 sums the Amounts Owed report's holiday rows for the member and asserts equality to the cent. TC-02-INT-13 walks all four routes as a user, a viewer and an admin of another organization, then as a manager.",
+        "e2e/tests/holidays.spec.ts gains TC-02-E2E-01 to TC-02-E2E-04, using the shipped helpers setMemberCountryViaApi, setOrganizationCountryViaApi, configureFinancials and backdateFinancials. Selectors are data-testid only and every one of them is named in the spec.",
+        "Run targeted, never whole: `npm test -- test/holiday-sourcing.spec.ts` from apps/api, and `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/holidays.spec.ts tests/regressions.spec.ts` from e2e. Jest here is 29, where the file filter is a positional path.",
+        "The shipped holidays and reports suites must stay green. A fresh signup organization states no country and its members state none, so its sourced set is empty, no sync is issued and the shipped empty-state case is untouched."
+      ]
+    }
+  ],
+  "reuse": [
+    {
+      "what": "org scoping, and 404 rather than 403 on a mismatch",
+      "where": "apps/api/src/auth/org-scope.guard.ts"
+    },
+    {
+      "what": "the session, re-read against Account.securityStamp on every request",
+      "where": "apps/api/src/auth/session.guard.ts"
+    },
+    {
+      "what": "a settings pair on one column, capability checked in the service because both halves answer 404 — the exact shape both holiday-sourcing halves take",
+      "where": "apps/api/src/organizations/organization-country.{controller,service}.ts"
+    },
+    {
+      "what": "the four shipped holiday routes, their gate discipline and toSummary, which the `source` field joins",
+      "where": "apps/api/src/holidays/holidays.service.ts"
+    },
+    {
+      "what": "the member holiday country chain, membership then organization, first valid alpha-2 wins",
+      "where": "packages/validation/src/reports.ts#resolveMemberHolidayCountry"
+    },
+    {
+      "what": "which holidays reach a member — null country or a case-insensitive match",
+      "where": "packages/validation/src/reports.ts#isHolidayApplicableToMember"
+    },
+    {
+      "what": "the rate in force on a date, and the money and hours formatting the reports already send",
+      "where": "packages/validation/src/reports.ts#resolveRateAtDate, #toMoney, #toHours"
+    },
+    {
+      "what": "the per-holiday amount TC-02-INT-09 is measured against, and the sum-of-rounded-rows arithmetic above it",
+      "where": "packages/validation/src/reports.ts#buildHolidayRow, apps/api/src/reports/reports.service.ts:787-855"
+    },
+    {
+      "what": "a port as an abstract class used as its own DI token, registered once and globally",
+      "where": "apps/api/src/core.module.ts, apps/api/src/hiring/calendar/calendar-provider.ts"
+    },
+    {
+      "what": "driver selection: an explicit env var wins, the local driver is the default whenever NODE_ENV is not production",
+      "where": "apps/api/src/queue/queue.provider.ts, apps/api/src/storage/storage.provider.ts, apps/api/src/mail/mail.provider.ts"
+    },
+    {
+      "what": "fetch with a hard deadline through an AbortController",
+      "where": "apps/api/src/signature/signwell/signwell-http-client.ts:613"
+    },
+    {
+      "what": "replacing a port with a stub that states its own preconditions in an integration case",
+      "where": "apps/api/test/stub-calendar.provider.ts, apps/api/test/hiring.helpers.ts:26"
+    },
+    {
+      "what": "capability checks against the normalized role",
+      "where": "packages/validation/src/roles.ts#normalizeRole, apps/api/src/time-off/time-off-calendar.service.ts"
+    },
+    {
+      "what": "the grouped table, the banner, the checkbox, the wait and the buttons the summary is built from",
+      "where": "packages/ds/src/index.ts — Card, ReportTableHead, ReportGroupBody, Checkbox, InfoBanner, Preloader, Button"
+    },
+    {
+      "what": "E2E preconditions: a member country, an organization country, financials and a backdated snapshot",
+      "where": "e2e/tests/helpers.ts#setMemberCountryViaApi, #setOrganizationCountryViaApi, #configureFinancials, #backdateFinancials, #createHolidayViaApi"
+    }
+  ],
+  "buildFromZero": [
+    "The HolidayProvider port — nothing in this repository talks to a public holiday service, and this is the area's first outbound HTTP dependency.",
+    "The nager driver: HTTPS to date.nager.at, no credential, bounded in time.",
+    "The fake driver, with the six behaviours the contracts file's 'What the double must reproduce' table names — Poland's shape, Germany's mixed shape, an empty answer, a failure, a call that never answers, and entries that fail the field rules. The cases file marks all three of its rows 'no'.",
+    "The HolidayImport table and everything that reads it: there is no notion today of a country and year having been sourced.",
+    "The OrganizationHolidaySourcing table and its two routes.",
+    "Holiday.source, .externalKey and .importedAt — a holiday today has no provenance at all.",
+    "The sync route and the import writer, including the entry decision table.",
+    "The summary route: no endpoint reports holidays per country, per person, or what they cost.",
+    "A summary entry point that takes its capability set explicitly, because no shipped role holds view-holidays without view-amounts-owed and REQ-02-017 cannot otherwise be observed (the cases file's last Verification Plan row).",
+    "HOLIDAY_SOURCING_MESSAGES and the four validators beside it.",
+    "resolveCurrencyAtDate — the rate in force on a date is resolved today, the currency in force is not.",
+    "The whole sourcing panel and the whole summary block on the Holidays screen."
+  ],
+  "shippingSurfaces": [
+    {
+      "newValue": "Holiday rows with source = 'imported' (rows nobody typed) — read path, scope=all",
+      "path": "apps/api/src/holidays/holidays.service.ts#listHolidays",
+      "governedBy": "contracts §GET /api/organizations/{orgId}/holidays — every row gains `source`, the block gains `sourcing`, nothing is removed",
+      "planned": "T4"
+    },
+    {
+      "newValue": "Holiday rows with source = 'imported' — read path, scope=mine (open to every active member)",
+      "path": "apps/api/src/holidays/holidays.service.ts#listHolidays (scope=mine)",
+      "governedBy": "REQ-02-025 and Edge case 21 — 200, `source` on each row, no `sourcing` key at all",
+      "planned": "T4"
+    },
+    {
+      "newValue": "an imported Holiday row reaching the shipped edit path",
+      "path": "apps/api/src/holidays/holidays.service.ts#updateHoliday",
+      "governedBy": "Out of Scope ('New controls for editing an imported holiday — the holiday form already governs it') and Edge case 10 — the edit stands and a later refresh skips the date, because the row already reaches the country. The update writes only submitted fields, so source, externalKey and importedAt survive it untouched. No code change.",
+      "planned": "T4 — verified, not modified"
+    },
+    {
+      "newValue": "an imported Holiday row reaching the shipped delete path",
+      "path": "apps/api/src/holidays/holidays.service.ts#deleteHoliday",
+      "governedBy": "Edge cases 8 and 9 — it stays deleted, because the import record stops it being written again; a refresh is the one instruction that brings it back. Delete stays admin-only with its 403. No code change.",
+      "planned": "T4 — verified, not modified"
+    },
+    {
+      "newValue": "Holiday rows written with source = 'manual' by the shipped create path",
+      "path": "apps/api/src/holidays/holidays.service.ts#createHoliday",
+      "governedBy": "contracts §Data Model — `source String @default(\"manual\")`; the create path names none of the three columns and the default is what those rows are",
+      "planned": "T3"
+    },
+    {
+      "newValue": "imported Holiday rows priced on Amounts Owed",
+      "path": "apps/api/src/reports/reports.service.ts#fetchHolidays → #buildResponse (Amounts Owed, All and My, JSON and PDF)",
+      "governedBy": "README Cross-Spec Side Effects, 'Holidays imported for a year' — every one of them is an ordinary Holiday row from that moment and is paid on Amounts Owed; this is the intended effect and the area README calls it the largest single effect in the area. No code change: the report selects the columns it names.",
+      "planned": "T4 — verified, not modified; TC-02-INT-09 and TC-02-INT-16 read the report and assert the number"
+    },
+    {
+      "newValue": "imported Holiday rows counted by the Time Off and Time & Activity reports",
+      "path": "apps/api/src/reports/reports.service.ts:1909-2053 (public holiday rows and the 'Public holidays' summary line)",
+      "governedBy": "README Cross-Spec Side Effects, 'Holidays imported for a year'. No code change and no shape change.",
+      "planned": "T4 — verified, not modified"
+    },
+    {
+      "newValue": "imported Holiday rows shading the vacation calendar",
+      "path": "apps/api/src/time-off/time-off-calendar.service.ts:368 (fetch) and its holidayIds projection",
+      "governedBy": "README Cross-Spec Side Effects, 'Holidays imported for a year' — it shades the calendar. No code change.",
+      "planned": "T4 — verified, not modified"
+    },
+    {
+      "newValue": "imported Holiday rows marking the Time Tracking calendar and the vacation request hint",
+      "path": "apps/web/app/org/[orgId]/time-tracking/page.tsx:250 and apps/web/app/org/[orgId]/members/[memberId]/RequestVacationModal.tsx:106 (both scope=mine)",
+      "governedBy": "REQ-02-025 and Edge case 21 for the body they receive; README Cross-Spec Side Effects for the markers themselves. Both read paidHours as a JSON number and neither reads `sourcing`; the field they gain is `source`, which neither uses. No code change.",
+      "planned": "T4 — verified, not modified"
+    },
+    {
+      "newValue": "Holiday.externalKey and Holiday.importedAt",
+      "path": "every shipping reader of Holiday — holidays.service.ts#toSummary, reports.service.ts#fetchHolidays, time-off-calendar.service.ts",
+      "governedBy": "contracts §Data Model — additive, and no shipped projection selects them: toSummary names its fields one by one and the other two readers select what they need. Nothing leaks and nothing changes meaning.",
+      "planned": "T3"
+    },
+    {
+      "newValue": "HolidayImport rows",
+      "path": "no shipping path reads or writes this table — it is created by this spec",
+      "governedBy": "REQ-02-007, REQ-02-010, REQ-02-021, REQ-02-023 and invariant 3",
+      "planned": "T3, T4"
+    },
+    {
+      "newValue": "OrganizationHolidaySourcing rows",
+      "path": "no shipping path reads or writes this table — it is created by this spec. A missing row reads as includeOrgCountry true, so every organization that predates it behaves identically until somebody touches the checkbox.",
+      "governedBy": "REQ-02-002 and Backward Compatibility 8",
+      "planned": "T3, T6"
+    },
+    {
+      "newValue": "a country entering the sourced set because somebody stated a member's country",
+      "path": "apps/api/src/members (PUT .../members/{memberId}, which time-off/01 put countryCode on) and apps/api/src/organizations/organization-country.service.ts#update",
+      "governedBy": "README Cross-Spec Side Effects, 'A member's country is stated for the first time' — that country joins 02's sourced set and the next load of Settings › Holidays imports its public holidays. No code change on either writer.",
+      "planned": "T4 — verified, not modified"
+    }
+  ],
+  "testCases": {
+    "unit": [
+      "TC-02-UNIT-01",
+      "TC-02-UNIT-02"
+    ],
+    "int": [
+      "TC-02-INT-01",
+      "TC-02-INT-02",
+      "TC-02-INT-03",
+      "TC-02-INT-04",
+      "TC-02-INT-05",
+      "TC-02-INT-06",
+      "TC-02-INT-07",
+      "TC-02-INT-08",
+      "TC-02-INT-09",
+      "TC-02-INT-10",
+      "TC-02-INT-11",
+      "TC-02-INT-12",
+      "TC-02-INT-13",
+      "TC-02-INT-14",
+      "TC-02-INT-15",
+      "TC-02-INT-16"
+    ],
+    "e2e": [
+      "TC-02-E2E-01",
+      "TC-02-E2E-02",
+      "TC-02-E2E-03",
+      "TC-02-E2E-04"
+    ]
+  },
+  "testIds": [
+    "holiday-sourcing-panel",
+    "holiday-sourcing-include-org-country",
+    "holiday-sourcing-refresh-btn",
+    "holiday-sourcing-status",
+    "holiday-sourcing-uncovered",
+    "holiday-sourcing-uncovered-{countryCode}",
+    "holiday-summary",
+    "holiday-summary-country-{countryCode}",
+    "holiday-summary-country-{countryCode}-days",
+    "holiday-summary-member-{membershipId}",
+    "holiday-summary-member-{membershipId}-days",
+    "holiday-summary-member-{membershipId}-amount",
+    "holiday-summary-total-{currency}",
+    "holidays-row-{id}-source",
+    "holidays-year-tab-{year}",
+    "holidays-table",
+    "holidays-row-{id}",
+    "holidays-empty-state",
+    "holidays-error-banner"
+  ],
+  "sections": {
+    "Summary": "T2, T4 — the outbound dependency behind a port, the routes that perform writes, and the money gated apart from the day counts",
+    "Actors & Preconditions": "T4, T5, T6 — the four capabilities, and the provider that may be unreachable, slow or missing a country",
+    "Roles & Permission Matrix": "T4, T5, T6, T7 — view-holidays gates the counts and the sourcing block, manage-holidays the sync and the setting, view-amounts-owed the money, delete-holidays unchanged",
+    "Functional Requirements": "T1, T2, T4, T5, T6, T7 — every REQ-02-0NN is assigned in the tasks' `requirements`",
+    "State Machine": "T4 — unsourced/sourced/empty × sync/refresh/providerFails is the sourcing service's decision, and invariants 1 to 5 are its constraints",
+    "Out of Scope": "no task — a scheduler, regional holidays, new controls for editing an imported holiday, localised names, backfilling other years, a second provider and failover are all outside this change. Recorded so the implementer does not add them.",
+    "Known Gaps": "no task — six accepted gaps. Two shape the plan and are recorded in `risks` rather than built: REQ-02-017 cannot be observed through a session (TC-02-INT-11 drives the service directly, which is why T5's summary takes its capability set explicitly), and the status code an uncovered country answers with was not captured (REQ-02-009 treats every non-conforming answer alike, so nothing depends on it).",
+    "Acceptance Criteria": "T8 — all twenty criteria are observed by cases the plan claims",
+    "Routes": "T4, T5, T6 — four new routes; the four shipped ones the table carries are there because the cases call them and none of them changes",
+    "Error Messages": "T1 for the six new exports, T7 for the four the screen emits, T4/T5/T6 for the two that are route messages. `messages` names each one's module and the route that emits it.",
+    "Data Model": "T3 — two tables, three columns, additive, one migration",
+    "Validation Rules": "T1 for rules 1 to 3 and 6 to 7 and the pure entry filter, T2 for where rules 4 to 6 run, T4 and T6 for re-running everything server-side",
+    "Required data-testid Attributes": "T7 renders every id; T8 asserts them",
+    "Screens": "T7 — the summary above the list, and one new column on the list",
+    "UI Description": "T7 — loading, syncing, empty, partially uncovered, summary unavailable, read-only, permission-limited and error",
+    "Edge Cases": "T4 (1 to 12, 18, 19), T5 (13 to 17, 20, 22, 23), T7 (18), T8 asserts the ones a case names",
+    "Decision table — what one provider entry becomes": "T4 — the entry writer is this table, keyed on who the date already reaches",
+    "Security": "T4, T5, T6 — org scope from the session, a capability per question, omission rather than zeroing, an untrusted payload re-validated field by field, a bounded call, and no credential",
+    "External Contracts": "T2 — the nager driver is written from the Observations table and the fake driver from the 'What the double must reproduce' table, never from prose",
+    "DS gaps": "no task — the table says None, and every component the summary needs (Card, ReportTableHead, ReportGroupBody, Checkbox, InfoBanner, Preloader, Button) is exported from packages/ds/src/index.ts today. Verified against the package, not assumed.",
+    "Verification Plan": "T2 and T5 — the three rows marked 'no' are the fake driver, the fake driver's empty/failing/never-answering behaviours, and a caller holding view-holidays without view-amounts-owed. T8 runs the plan's targeted commands.",
+    "Test Cases": "T8, and T1 for the two unit cases"
+  },
+  "messages": [
+    {
+      "context": "422 on POST .../holidays/sync and GET .../holidays/summary — a year outside 2000..2100 (Validation Rule 1, Edge case 17)",
+      "module": "packages/validation/src/holiday-sourcing.ts#HOLIDAY_SOURCING_MESSAGES.yearInvalid",
+      "emittedBy": "apps/api/src/holidays/holiday-sourcing.controller.ts → holiday-sourcing.service.ts#sync and holiday-summary.service.ts#summary"
+    },
+    {
+      "context": "422 on PUT .../settings/holiday-sourcing — includeOrgCountry absent or not a boolean (Validation Rule 2)",
+      "module": "packages/validation/src/holiday-sourcing.ts#HOLIDAY_SOURCING_MESSAGES.includeOrgCountryInvalid",
+      "emittedBy": "apps/api/src/organizations/holiday-sourcing-settings.service.ts#update"
+    },
+    {
+      "context": "screen text — some countries could not be sourced",
+      "module": "packages/validation/src/holiday-sourcing.ts#HOLIDAY_SOURCING_MESSAGES.syncFailedSome",
+      "emittedBy": "no route — apps/web/app/org/[orgId]/settings/holidays (the sourcing panel)"
+    },
+    {
+      "context": "screen text — the uncovered-country warning, one per country (TC-02-E2E-03)",
+      "module": "packages/validation/src/holiday-sourcing.ts#HOLIDAY_SOURCING_MESSAGES.countryNotCovered",
+      "emittedBy": "no route — apps/web/app/org/[orgId]/settings/holidays (holiday-sourcing-uncovered-{countryCode})"
+    },
+    {
+      "context": "screen text — a sync is in flight (TC-02-E2E-01, holiday-sourcing-status)",
+      "module": "packages/validation/src/holiday-sourcing.ts#HOLIDAY_SOURCING_MESSAGES.syncing",
+      "emittedBy": "no route — apps/web/app/org/[orgId]/settings/holidays"
+    },
+    {
+      "context": "screen text — the summary read failed, in the summary's place, list unaffected",
+      "module": "packages/validation/src/holiday-sourcing.ts#HOLIDAY_SOURCING_MESSAGES.summaryUnavailable",
+      "emittedBy": "no route — apps/web/app/org/[orgId]/settings/holidays"
+    },
+    {
+      "context": "403 on DELETE .../holidays/{holidayId} without delete-holidays — shipped, unchanged, carried because TC-02-INT-03 deletes a holiday",
+      "module": "packages/validation/src/holiday-messages.ts#HOLIDAY_MESSAGES.deleteForbidden",
+      "emittedBy": "apps/api/src/holidays/holidays.service.ts#deleteHoliday — already implemented"
+    },
+    {
+      "context": "the generic toast on every route above — shipped, unchanged. The Error Messages table's Message cell for this row reads '(shipped, unchanged)' rather than the text; the text is 'Something went wrong. Please try again.' and it ships today. See risks: the static gate reads that cell as a message and will report it missing.",
+      "module": "packages/validation/src/holiday-messages.ts#HOLIDAY_MESSAGES.toastServerError",
+      "emittedBy": "apps/web/app/org/[orgId]/settings/holidays/page.tsx — already implemented"
+    }
+  ],
+  "premises": [
+    {
+      "claim": "migrations run as a one-off task on the new image BEFORE the Terraform rollout, which is what makes an additive migration the safe shape",
+      "verifiedAt": "infra/deploy.sh:27"
+    },
+    {
+      "claim": "a port's driver is chosen in the port's own *.provider.ts: an explicit env var wins, and the local driver is the default whenever NODE_ENV is not production",
+      "verifiedAt": "apps/api/src/queue/queue.provider.ts:15, apps/api/src/storage/storage.provider.ts:20, apps/api/src/mail/mail.provider.ts:28"
+    },
+    {
+      "claim": "a port is registered once in CoreModule, which is @Global, so overrideProvider in a test replaces the instance the routes call",
+      "verifiedAt": "apps/api/src/core.module.ts:53-80"
+    },
+    {
+      "claim": "GET .../holidays returns paidHours as a JSON number, not a string, and both scope=mine readers depend on that",
+      "verifiedAt": "apps/api/src/holidays/holidays.service.ts#toSummary, apps/web/app/org/[orgId]/settings/holidays/types.ts:13, apps/web/app/org/[orgId]/time-tracking/types.ts:61"
+    },
+    {
+      "claim": "Holiday.createdByAccountId is NOT NULL behind an FK to Account with onDelete: Restrict, so an imported row must name an account",
+      "verifiedAt": "apps/api/prisma/schema.prisma:932-935"
+    },
+    {
+      "claim": "Holiday carries two uniqueness indexes — the composite one, and a hand-written partial unique on (organizationId, date) WHERE countryCode IS NULL — and Postgres treats NULLs as distinct in the first, which is exactly why REQ-02-006 cannot be delegated to the index",
+      "verifiedAt": "apps/api/prisma/migrations/20260901130000_spec_org_03_holidays/migration.sql:27-36"
+    },
+    {
+      "claim": "Amounts Owed values each holiday with toMoney(paidHours × billRate) per row and then sums the ROUNDED rows, so the summary must round the same way to be equal to the cent",
+      "verifiedAt": "packages/validation/src/reports.ts#buildHolidayRow:554-571, apps/api/src/reports/reports.service.ts:787-800 and :855-866"
+    },
+    {
+      "claim": "MemberFinancials and MemberFinancialsSnapshot both carry a currency column, so a member whose currency changed mid-year genuinely has holidays valued in two",
+      "verifiedAt": "apps/api/prisma/schema.prisma:684 and :704"
+    },
+    {
+      "claim": "can() does not normalize — CAPABILITY_MATRIX is keyed by the four-value union — so every new authorization check must call can(normalizeRole(role), …)",
+      "verifiedAt": "packages/validation/src/index.ts:855-857, packages/validation/src/roles.ts#normalizeRole"
+    },
+    {
+      "claim": "validateCountryCode, validateHolidayName, resolveMemberHolidayCountry, isHolidayApplicableToMember, resolveRateAtDate, toMoney and toHours all exist under the names the spec cites",
+      "verifiedAt": "packages/validation/src/autofill.ts:683, packages/validation/src/holidays.ts:41, packages/validation/src/reports.ts:517, :554, :424, :389, :393"
+    },
+    {
+      "claim": "every design-system component the cases file says the summary is built from is exported from the package root today, so the DS gaps table's 'None' is true",
+      "verifiedAt": "packages/ds/src/index.ts:26, 27, 41, 42, 46, 98"
+    },
+    {
+      "claim": "signup writes no organization country and no member country, so a fresh organization has an empty sourced set, issues no sync, and the shipped holidays E2E cases are untouched",
+      "verifiedAt": "apps/api/src/signup/ — no countryCode write anywhere in the module"
+    },
+    {
+      "claim": "E2E can reach every precondition these cases need through shipped helpers",
+      "verifiedAt": "e2e/tests/helpers.ts:1347 createHolidayViaApi, :1370 setMemberCountryViaApi, :1407 setOrganizationCountryViaApi, :989 configureFinancials, :1020 backdateFinancials"
+    },
+    {
+      "claim": "an integration case replaces a port with a stub through Test.createTestingModule().overrideProvider(Token)",
+      "verifiedAt": "apps/api/test/hiring.helpers.ts:24-26, apps/api/test/stub-calendar.provider.ts"
+    },
+    {
+      "claim": "fetch in Node has no timeout of its own, so an AbortController wired to setTimeout is the whole of the guarantee",
+      "verifiedAt": "apps/api/src/signature/signwell/signwell-http-client.ts:607-631"
+    }
+  ],
+  "doubleBehaviours": [
+    {
+      "behaviour": "a country whose entries are all global: true — Poland's shape, 14 entries for 2026, all types ['Public'], counties null, no two on one date",
+      "whyItMatters": "the happy path. A double that returns only this proves the writer and nothing else, and it is what TC-02-INT-05 counts 14 of."
+    },
+    {
+      "behaviour": "a country mixing global: true and global: false — Germany's shape, 10 of 20 for 2026, the regional ones carrying a counties array of DE-XX codes",
+      "whyItMatters": "REQ-02-005 is the rule most likely to be silently dropped, and its failure overpays every German member for ten days a year. TC-02-INT-01 asserts written 10 and discarded 10 against exactly this."
+    },
+    {
+      "behaviour": "an empty answer for a covered country",
+      "whyItMatters": "separates REQ-02-010's covered-but-empty from REQ-02-009's failure. A double that cannot answer empty makes the two states one, and the service then re-asks that country forever."
+    },
+    {
+      "behaviour": "a failure — a refused connection, a 5xx, an unparseable body",
+      "whyItMatters": "REQ-02-009's whole surface. A double that always succeeds certifies that the screen never breaks, which is the claim being tested."
+    },
+    {
+      "behaviour": "a call that never answers",
+      "whyItMatters": "REQ-02-011. Without it the call bound is untested code and the first slow day is the first time it runs — and it is what proves the bound lives in the service rather than inside the HTTP driver."
+    },
+    {
+      "behaviour": "an entry with a name of 200 characters, and one dated outside the requested year",
+      "whyItMatters": "Validation Rules 4 and 6. Without them the driver is trusted to be handed clean data, which is the assumption the External Contracts table exists to refuse."
+    }
+  ],
+  "dsGaps": [],
+  "risks": [
+    {
+      "risk": "The static gate will raise one blocker this bundle cannot answer. scripts/static-gate.mjs takes each Error Messages row's Message cell and requires the text to exist in packages/validation; the last row's cell reads '(shipped, unchanged)', which is a note about HOLIDAY_MESSAGES.toastServerError rather than a message. Simulating the gate's own parser produces that 20-character probe and a spec/message-not-implemented finding.",
+      "mitigation": "Contest it — `node scripts/wf.mjs contest --finding <key> --reason \"the Message cell for HOLIDAY_MESSAGES.toastServerError is a note, not a message; the export ships at packages/validation/src/holiday-messages.ts:29 and its text 'Something went wrong. Please try again.' is present\"`. Do NOT add a string to packages/validation to satisfy a grep: writing text to pass a checker is the failure this note exists to prevent."
+    },
+    {
+      "risk": "HolidayImport.provider records 'nager' even when the double answered, because TC-02-INT-01 pins the composed externalKey to 'nager:DE:{date}' under the fake driver while the Data Model's prose for the column reads 'the driver that answered'.",
+      "mitigation": "The provider identity is the service being doubled and is one value across both drivers; HOLIDAY_PROVIDER selects the driver. This is the only reading under which a case passes, and no case observes the column's value. Recorded here so the reviewer sees the citation rather than the choice."
+    },
+    {
+      "risk": "The contracts file's GET .../holidays example shows paidHours as the string '8.00', while the route ships it as a JSON number and both scope=mine readers parse it as one. An implementer copying the example would reformat the Time Tracking calendar's hours and the vacation hint.",
+      "mitigation": "Keep paidHours a number and add only `source`. The same example omits createdAt and updatedAt, which certainly still ship, so it is abbreviated rather than normative — and the prose above it says the route keeps what it ships with and gains exactly two things."
+    },
+    {
+      "risk": "TC-02-E2E-01 asserts holiday-sourcing-status appears and then goes, against a driver that answers from memory — a race if the element is unmounted the moment the sync resolves.",
+      "mitigation": "Keep the status mounted for the whole of the sync AND the re-read that follows it, which is what the UI Description already requires (the summary shows its preloader until the re-read lands). The case then has a real window rather than a lucky one."
+    },
+    {
+      "risk": "A country the provider will never cover — India, the UAE — reads `unsourced` forever, so REQ-02-012 issues one bounded provider call per Holidays page load for it, indefinitely. Invariant 5's 'zero once all are recorded' holds only for countries that can be recorded.",
+      "mitigation": "Intended and bounded: the call bound caps the wait, the country set caps the count, the sync is a separate request so the list paints first, and the Known Gaps table names the coverage hole. Do not invent a negative-cache record — REQ-02-009 says a failure writes no record, and writing one would make an outage permanent."
+    },
+    {
+      "risk": "The currency in force on a date and the rate in force on a date could be resolved by two different selections and diverge for a member whose snapshots are close together.",
+      "mitigation": "One pure selection helper in packages/validation/src/reports.ts, called by both resolveRateAtDate and the new resolveCurrencyAtDate. Additive: no existing export changes signature or behaviour, and the shipped reports unit tests cover the refactor."
+    },
+    {
+      "risk": "The import writes tens of Holiday rows where a person wrote one, and every one of them is paid on Amounts Owed. An organization with three countries and eight people can gain forty paid rows from one page load.",
+      "mitigation": "This is the intended behaviour and the area README calls it the largest single effect in the area. Nothing to mitigate in code; TC-02-INT-16 pins the one case where it would be wrong — a second paid row on a calendar day already carrying a global holiday."
+    }
+  ]
+}

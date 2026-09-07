@@ -1,0 +1,212 @@
+{
+  "runId": "2026-09-07T10-33-36_time-off-02-holiday-sourcing",
+  "spec": "specs/time-off/02-holiday-sourcing.md",
+  "specSha": "e252bfbad0bbdee03cb5cfe416943d38392c567d49cd8701dacc3efe336887ba",
+  "task": "time-off-02-holiday-sourcing",
+  "branch": "spec/holiday-sourcing",
+  "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
+  "headAtInit": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
+  "status": "implement",
+  "track": "spec",
+  "shapes": {
+    "pre_implement": "strict",
+    "implement": "single",
+    "static_gate": "script",
+    "review": "lead-open",
+    "qa": "targeted"
+  },
+  "unrefined": {
+    "reason": "the user chose to skip refine and to escalate only on a blocker; the previous run's pre-implement found one contradiction and five gaps, all settled in commit 9ad9fd8 with the rejected alternatives recorded in the area README; spec-lint clean at 25 requirements, 22 cases, 8 routes, 19 testids",
+    "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
+  },
+  "createdAt": "2026-09-07T10:33:36.868Z",
+  "updatedAt": "2026-09-07T10:50:16.839Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T10:33:37.044Z",
+      "endedAt": "2026-09-07T10:50:16.785Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Error Messages — HOLIDAY_MESSAGES.toastServerError",
+      "claim": "the last Error Messages row's Message cell carries a note, '(shipped, unchanged)', rather than the message, and this repository's static gate reads that cell as a message and will report it as implemented nowhere",
+      "witness": {
+        "kind": "command",
+        "detail": "scripts/static-gate.mjs:294-329 takes each Error Messages row, picks the cell under the `Message` header, and blocks when the text is absent from packages/validation. Running its own parser over this bundle prints, for the last row: `\"`HOLIDAY_MESSAGES.toastServerError`\" -> \"(shipped, unchanged)\"` — a 20-character probe, above the 12-character floor at which the gate stops skipping. `git grep -lF -- \"(shipped, unchanged)\" -- packages/validation` returns nothing. The string the row actually refers to, 'Something went wrong. Please try again.', ships at packages/validation/src/holiday-messages.ts:29.",
+        "source": "scripts/static-gate.mjs"
+      },
+      "suggestedFix": "Nothing to implement. When the static gate raises spec/message-not-implemented on this row, contest it with the counter-witness above rather than adding text to packages/validation to satisfy a grep. A spec change, if one is ever wanted, is to put the shipped text in the Message cell and the word 'no' in the New column, which is what every other carried-over row does."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Data Model — HolidayImport.provider / Holiday.externalKey",
+      "claim": "the Data Model calls `provider` 'the driver that answered' and composes `externalKey` from it, while TC-02-INT-01 runs against the double and expects `nager:DE:{date}` — so either the double names itself after the provider it doubles, or the case cannot pass",
+      "witness": {
+        "kind": "scenario",
+        "detail": "TC-02-INT-01 seeds a member stating DE, points the fake driver at Germany's shape, syncs, and expects each written row to carry 'an `externalKey` of `nager:DE:{date}`'. The contracts file's Holiday column table defines externalKey as '{provider}:{countryCode}:{date}' and the HolidayImport table defines `provider` as 'The driver that answered, e.g. `nager`'. Under the reading where {provider} is the driver, the fake driver writes 'fake:DE:{date}' and the case fails as written; under the reading where it is the service being doubled, it writes 'nager:DE:{date}' and every case passes. No case observes HolidayImport.provider itself.",
+        "source": "specs/time-off/02-holiday-sourcing.cases.md TC-02-INT-01"
+      },
+      "suggestedFix": "Planned as the second reading — the port carries one provider name, 'nager', on both drivers, because the double is a double of that provider and HOLIDAY_PROVIDER selects the driver rather than the identity. It is the only reading under which a case passes. A spec sentence saying so would close it."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/holidays — the example body",
+      "claim": "the example row shows `\"paidHours\": \"8.00\"`, a string, where the shipped route sends a JSON number and two shipped screens parse it as one",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/src/holidays/holidays.service.ts#toSummary returns `paidHours: row.paidHours.toNumber()`. apps/web/app/org/[orgId]/settings/holidays/types.ts:13 and apps/web/app/org/[orgId]/time-tracking/types.ts:61 both declare `paidHours: number`, and the holidays list renders it as `${row.paidHours}h`. An implementer following the example would send '8.00' and the Time Tracking calendar would read '8.00h'. The same example omits createdAt and updatedAt, which the route certainly still sends, and the prose above it says the route keeps what it ships with and gains exactly two things — so the example is abbreviated rather than normative, which is how the plan reads it.",
+        "source": "apps/api/src/holidays/holidays.service.ts"
+      },
+      "suggestedFix": "Keep paidHours a JSON number and add only `source` to the row. Recorded in the handoff's risks so the reviewer sees the reasoning rather than the choice."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/02-holiday-sourcing.md",
+      "symbol": "REQ-02-004",
+      "claim": "REQ-02-004 lists what an imported holiday carries and does not name `createdByAccountId`, which is NOT NULL behind a foreign key",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/prisma/schema.prisma:932-935 — `createdByAccountId String` with `createdBy Account @relation(..., onDelete: Restrict)`. An insert omitting it fails. REQ-02-004 names the name, the date, the country, paidHours, source and the external key, and nothing else; the schema has no system account and the migration is additive, so the column cannot be made nullable here.",
+        "source": "apps/api/prisma/schema.prisma"
+      },
+      "suggestedFix": "Planned as the account that triggered the sync — the only account in the transaction, and one that necessarily holds manage-holidays. Not a blocker: the repository's own shape leaves exactly one implementation, and no requirement or case observes the column."
+    }
+  ],
+  "halt": null,
+  "preflight": {
+    "at": "2026-09-07T10:33:36.999Z",
+    "checks": [
+      {
+        "name": "config-valid",
+        "ok": true,
+        "detail": ".claude/ai-workflow.config.json parses and every track resolves"
+      },
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/holiday-sourcing\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-available",
+        "ok": true,
+        "detail": "the suite would take 3000/4000"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "31 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260825130709_hiring_vacancies_candidates_applications",
+      "20260826094500_application_cv_size",
+      "20260826121829_add_invitations_and_job_title",
+      "20260826150000_hiring_categories",
+      "20260826170000_hiring_criteria",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_manage_booking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260828170000_application_cv",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_candidate_soft_delete",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants",
+      "20260904120000_time_off_01_vacation_calendar"
+    ]
+  }
+}
