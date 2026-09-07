@@ -6,7 +6,7 @@
   "branch": "fix/calendar-header-shifts",
   "baseRef": "41b34c2a096b66c12145a0eeafa98a9c65353e06",
   "headAtInit": "41b34c2a096b66c12145a0eeafa98a9c65353e06",
-  "status": "qa",
+  "status": "ready",
   "track": "bug",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-07T08:23:46.225Z",
-  "updatedAt": "2026-09-07T08:28:30.446Z",
+  "updatedAt": "2026-09-07T08:31:12.375Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -50,8 +50,11 @@
       "lastVerdict": "pass"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:28:30.589Z",
+      "endedAt": "2026-09-07T08:31:12.322Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
