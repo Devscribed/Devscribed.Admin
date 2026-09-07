@@ -719,6 +719,160 @@ test.describe('Candidate database', () => {
     ).toHaveCount(1);
   });
 
+  /**
+   * TC-H03-E2E-13 — below `md` a candidate is a card, and every value is on it exactly once.
+   *
+   * The hardest of the four lists, because its `Name` cell is a composite: a name, an
+   * application count and a strip of assessment chips, which the card puts in three different
+   * places. That is what `renderCard` and `cardOnly` exist for (decisions §98), and this is the
+   * case that proves both.
+   */
+  test('draws a candidate as a card below md, with every value on it once', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('cand-card'));
+    // Four criteria, so the strip has two to fold. The row sorts them by name, so `English`
+    // and `Leadership` are the two drawn and `Testing` and `Vision` are the `+2`.
+    const criteria: SeededCriterion[] = [];
+    for (const name of ['English', 'Leadership', 'Testing', 'Vision']) {
+      criteria.push(await createCriterion(request, org, { name, values: ['A1', 'B1'] }));
+    }
+    const first = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    const second = await createVacancy(request, org, { title: 'DotNet Engineer' });
+    // The same address twice: one person, two applications, which is what puts a count beside
+    // the name — "1 application" is never drawn.
+    const email = uniqueEmail('jane');
+    await bookInterview(request, first.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email,
+      slotIndex: 0,
+    });
+    await bookInterview(request, second.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email,
+      slotIndex: 1,
+    });
+    const cards = await columnCards(request, org, first.id, 'scheduled');
+    const jane = cards.find((card) => card.name.startsWith('Jane'))!;
+    for (const criterion of criteria) {
+      await assessCriterion(request, org, jane.applicationId, criterion.id, {
+        valueId: criterion.values.find((entry) => entry.label === 'B1')!.id,
+      });
+    }
+    await signIn(page, org.email);
+
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
+    const id = await onlyRowId(page);
+    const row = page.getByTestId(`candidate-row-${id}`);
+
+    // Wide: a real anchor, which is what makes middle-click and copy-address work.
+    expect(await row.evaluate((el) => el.tagName)).toBe('A');
+    await expect(row).not.toHaveClass(/ds-record-card/);
+
+    await page.setViewportSize({ width: 360, height: 900 });
+    // Retried rather than read once: the switch is a React render, and a class read in the
+    // same tick as the resize reads the form that is on its way out.
+    await expect(row).toHaveClass(/ds-record-card/);
+    await expect(row).toHaveCount(1);
+    // Still an anchor: the card is the row's other form, not a different kind of thing.
+    expect(await row.evaluate((el) => el.tagName)).toBe('A');
+
+    // Every value the table showed, each exactly once and each under its own id — including
+    // the email, which above `md` and below `lg` has no column at all.
+    for (const testId of [
+      `candidate-name-${id}`,
+      `candidate-app-count-${id}`,
+      `candidate-email-${id}`,
+      `candidate-vacancy-${id}`,
+      `candidate-interviewer-${id}`,
+      `candidate-latest-${id}`,
+      `candidate-status-${id}`,
+      `candidate-actions-${id}`,
+      `candidate-criteria-${id}`,
+    ]) {
+      await expect(page.getByTestId(testId)).toHaveCount(1);
+    }
+    await expect(page.getByTestId(`candidate-app-count-${id}`)).toHaveText('2 applications');
+    await expect(page.getByTestId(`candidate-email-${id}`)).toHaveText(email);
+
+    // The facts keep the headings the columns had, so a value has a name with no header row
+    // above it — and `Interviewer`, which the table never draws as a heading at all.
+    await expect(row).toContainText('Vacancy');
+    await expect(row).toContainText('Interviewer');
+    await expect(row).toContainText('Interview date');
+
+    // Two chips and a `+2`, never four — a fixed cap, so this asserts a number rather than
+    // whatever happened to fit.
+    await expect(page.getByTestId(`candidate-criterion-${id}-${criteria[0].id}`)).toBeVisible();
+    await expect(page.getByTestId(`candidate-criterion-${id}-${criteria[1].id}`)).toBeVisible();
+    await expect(page.getByTestId(`candidate-criterion-${id}-${criteria[2].id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`candidate-criterion-${id}-${criteria[3].id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`candidate-criteria-more-${id}`)).toHaveText('+2');
+    // And the two the bubble stands for are still readable — the strip is hidden from a reader
+    // and the whole list is beside it.
+    await expect(row).toContainText(
+      'Assessments: English: B1, Leadership: B1, Testing: B1, Vision: B1',
+    );
+
+    // The card is the whole surface: no bordered slab around a column of bordered cards.
+    await expect(page.getByTestId('candidates-list')).toHaveClass(/ds-record-list/);
+
+    // Nothing on this page reaches past 360 — the page strip included.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  /**
+   * TC-H03-E2E-14 — `hideBelow` takes `Email` out below its rung, header and cells together
+   * (decisions §96), and the floor holds at the same width.
+   *
+   * This is what replaced the hand-rolled fold: the address is not moved into the name cell,
+   * it is gone from the table — and it is the card's subtitle one rung lower.
+   */
+  test('drops the Email column below lg, and never the floor', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('cand-hide'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: uniqueEmail('jane'),
+      slotIndex: 0,
+    });
+    await signIn(page, org.email);
+
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
+    const id = await onlyRowId(page);
+    await expect(page.getByTestId(`candidate-email-${id}`)).toBeVisible();
+    // The heading and the cell together — two nodes, both drawn.
+    const email = page.getByTestId('candidates-list').locator('.ds-col-hide-lg');
+    await expect(email).toHaveCount(2);
+    for (const node of await email.all()) await expect(node).toBeVisible();
+
+    await page.setViewportSize({ width: 900, height: 900 });
+    // Still the table — 900 is above `md`, so this is `hideBelow` and not the card form.
+    await expect(page.getByTestId(`candidate-row-${id}`)).not.toHaveClass(/ds-record-card/);
+    await expect(page.getByTestId(`candidate-email-${id}`)).toBeHidden();
+    // Both nodes are still in the tree and neither is drawn: the column is gone, header and
+    // cell, which is what makes the remaining five line up under their own headings.
+    await expect(email).toHaveCount(2);
+    for (const node of await email.all()) await expect(node).toBeHidden();
+    await expect(page.getByTestId('candidates-list')).not.toContainText('Email', {
+      // `textContent` reads a `display: none` node; what is asked here is what is *drawn*.
+      useInnerText: true,
+    });
+
+    // The floor, at the same width: what the row is, what state it is in, how it is acted on.
+    await expect(page.getByTestId(`candidate-name-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`candidate-status-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`candidate-actions-${id}`)).toBeVisible();
+  });
+
   /** The id of the single row on screen — the tests above narrow to one before asking. */
   async function onlyRowId(page: Page): Promise<string> {
     const row = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');

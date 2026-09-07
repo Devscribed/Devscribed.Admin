@@ -117,6 +117,11 @@ export function Pagination({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        /* §53 — the widest form the strip can take, `‹ 1 … 4 5 6 … 20 ›`, is 331px against the
+           328 a 360px screen leaves. It wraps rather than compressing harder or scrolling inside
+           itself: dropping a control at one width and not another would make the strip a
+           different control on a phone, and a scroller hides the page you are reaching for. */
+        flexWrap: 'wrap',
         gap: 'var(--space-2)',
         padding: 'var(--space-5) 0',
         ...style,

@@ -4,6 +4,7 @@ import {
   CANDIDATE_PAGE_SIZE_DEFAULT,
   CANDIDATE_PAGE_SIZE_MAX,
   candidateActionsLabel,
+  candidateAssessmentsDescription,
   candidateDeleteConfirmation,
   candidateDeletedToast,
   candidateFilterPlan,
@@ -449,6 +450,29 @@ describe('candidateActionsLabel', () => {
     // Twenty-five rows draw the same glyph, so without this a reader walking the page is
     // told "Actions, menu" twenty-five times and cannot tell which row they are on.
     expect(candidateActionsLabel('Jane Doe')).toBe('Actions for Jane Doe');
+  });
+});
+
+/** TC-H03-UNIT-07 — the card's capped strip is spelled out in full. */
+describe('candidateAssessmentsDescription', () => {
+  it('names every assessment, not the two that were drawn', () => {
+    // The card shows `English: B1`, `.NET: 4` and a `+2`. The bubble is a count, so the two it
+    // stands for exist on the screen and nowhere a reader can reach without this sentence.
+    expect(
+      candidateAssessmentsDescription([
+        { name: 'English', value: 'B1' },
+        { name: '.NET', value: '4' },
+        { name: 'Culture', value: 'Yes' },
+        { name: 'Notice', value: '2 weeks' },
+      ]),
+    ).toBe('Assessments: English: B1, .NET: 4, Culture: Yes, Notice: 2 weeks');
+  });
+
+  it('reads as one phrase when there is one assessment', () => {
+    // No separator, and no bubble to account for — the strip drew everything it had.
+    expect(candidateAssessmentsDescription([{ name: 'English', value: 'B1' }])).toBe(
+      'Assessments: English: B1',
+    );
   });
 });
 

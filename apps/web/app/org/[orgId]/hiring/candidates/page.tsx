@@ -10,6 +10,7 @@ import {
   INTERVIEW_MESSAGES,
   MESSAGES,
   candidateActionsLabel,
+  candidateAssessmentsDescription,
   candidateDeleteConfirmation,
   candidateDeleteTitle,
   candidateDeletedToast,
@@ -26,15 +27,14 @@ import {
 import {
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   EmptyState,
   MenuDrawer,
   Pagination,
   Popover,
   Preloader,
+  RecordList,
   Select,
-  Table,
   TableToolbar,
   type SelectOption,
 } from '@devscribed/ds';
@@ -52,7 +52,6 @@ import {
 } from '@/hiring/candidate-list';
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { valuesOf } from '@/select';
-import { useMediaQuery } from '@devscribed/ds';
 import { useToast } from '@/toast';
 import type {
   CandidateDatabase,
@@ -60,6 +59,7 @@ import type {
   Category,
   Criterion,
   InterviewerOption,
+  RowAssessment,
   Vacancy,
 } from '@/hiring/types';
 import {
@@ -73,8 +73,13 @@ import {
 /** 03 §02.6 — the same 300 ms the member and vacancy searches already use. */
 const SEARCH_DEBOUNCE_MS = 300;
 
-/** Below this the email folds under the name (03 design §Responsive). */
-const NARROW = '(max-width: 1023px)';
+/**
+ * How many assessments the **card** draws before the rest become a `+N` (03 design §Responsive).
+ *
+ * A fixed cap and not a measured fit: nothing here observes its own width, and a test asserts
+ * `+2` rather than asserting against whatever happened to fit. The table draws every chip.
+ */
+const CARD_ASSESSMENTS = 2;
 
 type Phase = 'loading' | 'ready' | 'failed' | 'gone';
 
@@ -179,7 +184,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    * `replaceState` of our own would reopen the question we just answered.
    */
   const [scope, setScope] = useState<CandidateScope>(opened.scope);
-  const narrow = useMediaQuery(NARROW);
   /**
    * Toasts, and the one row whose interview is being called off.
    *
@@ -1038,210 +1042,229 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         </EmptyState>
       ) : (
         /*
-          The table's own surface, drawn only around rows: the card gives the edge-to-edge
-          rows their border and rounds the first and last of them. The loader and the empty
-          state stand on the page's own ground above.
+          One list, two forms (decisions §98). Above `md` this is the table it has always
+          been, inside the surface `RecordList` now draws itself — drawn only around rows,
+          so the loader and the empty states above still stand on the page's own ground.
+          Below `md` every row is a `RecordCard` and the columns below say which slot each
+          value lands in. The screen does not know which form it got, and must not.
         */
-        <Card padded={false} data-testid="candidates-list">
-          {rows.length > 0 && (
-            <Table<CandidateRow>
-              rows={rows}
-              busy={refiltering}
-              rowKey="id"
-              rowHref={(row) => `/org/${orgId}/hiring/candidates/${row.id}`}
-              rowTestId={(row) => `candidate-row-${row.id}`}
-              onRowClick={(row, event) => {
-                if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-                // The kebab lives inside the row, and pressing it is not opening the row.
-                // `closest` rather than a stopPropagation in the menu, because the menu is
-                // a portal (decisions §55) and its rows are not inside this anchor at all.
-                if ((event.target as HTMLElement).closest('[data-row-actions]')) {
-                  event.preventDefault();
-                  return;
-                }
-                event.preventDefault();
-                router.push(`/org/${orgId}/hiring/candidates/${row.id}`);
-              }}
-              columns={[
-                {
-                  label: CANDIDATE_MESSAGES.columns.name,
-                  flex: 1.5,
-                  align: 'flex-start',
-                  render: (row) => (
-                    <div className="candidate-name-cell">
-                      <span className="candidate-name-line">
-                        <span data-testid={`candidate-name-${row.id}`} className="candidate-name">
-                          {row.fullName}
-                        </span>
-                        {/* Only when there is more than one — "1 application" is noise. It
-                            sits on the name's own line, above the chips, because it is a
-                            fact about the person rather than one more thing they were
-                            assessed as. */}
-                        {row.applicationCount > 1 && (
-                          <span
-                            data-testid={`candidate-app-count-${row.id}`}
-                            className="candidate-name-meta"
-                          >
-                            {row.applicationCount} applications
-                          </span>
-                        )}
+        <RecordList<CandidateRow>
+          data-testid="candidates-list"
+          rows={rows}
+          busy={refiltering}
+          rowKey="id"
+          rowHref={(row) => `/org/${orgId}/hiring/candidates/${row.id}`}
+          rowTestId={(row) => `candidate-row-${row.id}`}
+          onRowClick={(row, event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            // The kebab lives inside the row, and pressing it is not opening the row.
+            // `closest` rather than a stopPropagation in the menu, because the menu is
+            // a portal (decisions §55) and its rows are not inside this anchor at all.
+            if ((event.target as HTMLElement).closest('[data-row-actions]')) {
+              event.preventDefault();
+              return;
+            }
+            event.preventDefault();
+            router.push(`/org/${orgId}/hiring/candidates/${row.id}`);
+          }}
+          columns={[
+            {
+              label: CANDIDATE_MESSAGES.columns.name,
+              flex: 1.5,
+              align: 'flex-start',
+              role: 'title',
+              render: (row) => (
+                <div className="candidate-name-cell">
+                  {candidateNameLine(row)}
+                  {/*
+                    What this person has been assessed as, rolled up to their most
+                    recent interview that answered each criterion (03 §01.2). The same
+                    neutral label the candidate card draws a recorded assessment with
+                    (decisions §59), and the same sentence in the other direction: the
+                    card records *English is B1*, this says *English: B1*.
+
+                    Every one of them here, wrapping: a cell with a line to itself can
+                    afford that and a card in a scanned column cannot, which is what the
+                    capped strip below is for.
+                  */}
+                  {row.criteria.length > 0 && (
+                    <span className="candidate-criteria">
+                      {row.criteria.map((assessment) => (
+                        <AssessmentBadge
+                          key={assessment.criterionId}
+                          row={row}
+                          assessment={assessment}
+                        />
+                      ))}
+                    </span>
+                  )}
+                </div>
+              ),
+              // The cell is a name, a count *and* a strip of chips; the card's title slot is
+              // the name line alone, and the chips have a slot of their own below. This is the
+              // composite `renderCard` exists for — handing the cell to the slot would put the
+              // chips under a two-line clamp meant for a person's name.
+              renderCard: (row) => candidateNameLine(row),
+            },
+            {
+              /*
+                The chips again, for the card: they live inside the name cell and have no
+                column of their own, so `cardOnly` is what lets them reach the badge slot
+                without the table growing a seventh column (decisions §98).
+              */
+              // Never drawn by either form: the table folds these into the name cell and the
+              // card's badge slot carries no heading. It is here because a column has a label.
+              label: 'Assessments',
+              role: 'badges',
+              cardOnly: true,
+              renderCard: (row) =>
+                row.criteria.length === 0 ? null : <AssessmentStrip row={row} />,
+            },
+            {
+              label: CANDIDATE_MESSAGES.columns.email,
+              flex: 1.2,
+              align: 'flex-start',
+              role: 'subtitle',
+              /*
+                Dropped from the table below `lg` (decisions §96), where the hand-rolled fold
+                into the name cell used to be. At 768 the well is 718px and the six columns
+                leave `Email` 105px of content and `Name` 134 — the fold truncated the address
+                in the same band it was written for. An address is the value on this row nobody
+                decides anything from in a list; it is back in its own column from `lg`, it is
+                the card's subtitle below `md`, and the search matches it at every width.
+              */
+              hideBelow: 'lg',
+              render: (row) => (
+                <span data-testid={`candidate-email-${row.id}`} className="candidate-ellipsis">
+                  {row.email}
+                </span>
+              ),
+            },
+            {
+              /*
+                Vacancy and interview date are two columns rather than one stacked
+                cell: they are scanned for different reasons, and the date wants
+                centring while a title wants its left edge.
+              */
+              label: CANDIDATE_MESSAGES.columns.vacancy,
+              flex: 1.1,
+              align: 'flex-start',
+              render: (row) => (
+                <div data-testid={`candidate-vacancy-${row.id}`} className="candidate-stacked">
+                  <span className="candidate-ellipsis">{row.latestApplication?.vacancyTitle}</span>
+                  {/*
+                    The interviewer rides as a quieter second line under the title
+                    rather than taking a column of its own, which would only repeat the
+                    vacancy: it is 1:1 with it. Absent in `mine`, where it is the viewer
+                    on every row and says nothing (03 §09.48).
+                  */}
+                  {scope !== 'mine' && row.latestApplication && (
+                    <span
+                      data-testid={`candidate-interviewer-${row.id}`}
+                      className="candidate-ellipsis candidate-subline"
+                    >
+                      {row.latestApplication.interviewer.fullName}
+                    </span>
+                  )}
+                </div>
+              ),
+              // A fact's value is one line, so the card takes the title and the interviewer
+              // gets a heading of its own below.
+              renderCard: (row) =>
+                !row.latestApplication ? null : (
+                  <span data-testid={`candidate-vacancy-${row.id}`}>
+                    {row.latestApplication.vacancyTitle}
+                  </span>
+                ),
+            },
+            {
+              /*
+                The second value with no column: in the table it is the vacancy cell's own
+                second line. On the card it is a fact under its own heading, and absent in
+                `mine` for exactly the reason the second line is.
+              */
+              label: CANDIDATE_MESSAGES.columns.interviewer,
+              cardOnly: true,
+              renderCard: (row) =>
+                scope === 'mine' || !row.latestApplication ? null : (
+                  <span data-testid={`candidate-interviewer-${row.id}`}>
+                    {row.latestApplication.interviewer.fullName}
+                  </span>
+                ),
+            },
+            {
+              label: CANDIDATE_MESSAGES.columns.interviewDate,
+              flex: 1,
+              align: 'center',
+              render: (row) => (
+                <div data-testid={`candidate-latest-${row.id}`} className="candidate-date">
+                  {row.latestApplication && (
+                    <>
+                      <span>{formatShortDate(new Date(row.latestApplication.startUtc), zone)}</span>
+                      <span className="candidate-subline">
+                        {formatSlotTime(new Date(row.latestApplication.startUtc), zone)}
                       </span>
-                      {/*
-                        Four columns do not fit a tablet, and the email is the one that can
-                        be read on a second line without losing its meaning — a date or a
-                        status cannot. Rendered here **or** in its own column, never both,
-                        so the row still holds exactly one of each testid.
-                      */}
-                      {narrow && (
-                        <span
-                          data-testid={`candidate-email-${row.id}`}
-                          className="candidate-name-meta"
-                        >
-                          {row.email}
-                        </span>
-                      )}
-                      {/*
-                        What this person has been assessed as, rolled up to their most
-                        recent interview that answered each criterion (03 §01.2). The same
-                        neutral label the candidate card draws a recorded assessment with
-                        (decisions §59), and the same sentence in the other direction: the
-                        card records *English is B1*, this says *English: B1*.
-                      */}
-                      {row.criteria.length > 0 && (
-                        <span className="candidate-criteria">
-                          {row.criteria.map((assessment) => (
-                            <Badge
-                              key={assessment.criterionId}
-                              status="neutral"
-                              size="s"
-                              data-testid={`candidate-criterion-${row.id}-${assessment.criterionId}`}
-                            >
-                              {/* One phrase, two things: the criterion is the context and
-                                  the value is the answer, so the name recedes a level and
-                                  a row of these scans down the values. */}
-                              <span style={{ color: 'var(--text-secondary)' }}>
-                                {`${assessment.name}: `}
-                              </span>
-                              {assessment.value}
-                            </Badge>
-                          ))}
-                        </span>
-                      )}
-                    </div>
-                  ),
-                },
-                ...(narrow
-                  ? []
-                  : [
-                      {
-                        label: CANDIDATE_MESSAGES.columns.email,
-                        flex: 1.2,
-                        align: 'flex-start' as const,
-                        render: (row: CandidateRow) => (
-                          <span data-testid={`candidate-email-${row.id}`} className="candidate-ellipsis">
-                            {row.email}
-                          </span>
-                        ),
-                      },
-                    ]),
-                {
+                    </>
+                  )}
+                </div>
+              ),
+              // One line on the card: the stack is what a centred cell under a heading wants,
+              // and a fact's value is a single line beside its label.
+              renderCard: (row) =>
+                !row.latestApplication ? null : (
+                  <span data-testid={`candidate-latest-${row.id}`}>
+                    {`${formatShortDate(new Date(row.latestApplication.startUtc), zone)}, ${formatSlotTime(new Date(row.latestApplication.startUtc), zone)}`}
+                  </span>
+                ),
+            },
+            {
+              label: CANDIDATE_MESSAGES.columns.status,
+              // `Table` has grow and a cap but no basis, so a fixed 120px column is
+              // written as the smallest share that reaches the cap at every width
+              // this screen targets. The system's own 80px cap is back on the last column,
+              // where the actions cell belongs (§18) — because
+              // Status is no longer the one holding it.
+              flex: 0.8,
+              align: 'flex-start',
+              maxWidth: 120,
+              role: 'status',
+              render: (row) =>
+                !row.latestApplication ? null : row.latestApplication.isCancelled ? (
                   /*
-                    Vacancy and interview date are two columns rather than one stacked
-                    cell: they are scanned for different reasons, and the date wants
-                    centring while a title wants its left edge.
+                    A cancelled interview has no stage to report. `isCancelled` says the
+                    interview did not take place and deliberately nothing about the
+                    candidate's standing (07 §01.1), so the row states that instead of a
+                    status the candidate never moved out of.
                   */
-                  label: CANDIDATE_MESSAGES.columns.vacancy,
-                  flex: 1.1,
-                  align: 'flex-start',
-                  render: (row) => (
-                    <div data-testid={`candidate-vacancy-${row.id}`} className="candidate-stacked">
-                      <span className="candidate-ellipsis">{row.latestApplication?.vacancyTitle}</span>
-                      {/*
-                        The interviewer rides as a quieter second line under the title
-                        rather than taking a column of its own, which would only repeat the
-                        vacancy: it is 1:1 with it. Absent in `mine`, where it is the viewer
-                        on every row and says nothing (03 §09.48).
-                      */}
-                      {scope !== 'mine' && row.latestApplication && (
-                        <span
-                          data-testid={`candidate-interviewer-${row.id}`}
-                          className="candidate-ellipsis candidate-subline"
-                        >
-                          {row.latestApplication.interviewer.fullName}
-                        </span>
-                      )}
-                    </div>
-                  ),
-                },
-                {
-                  label: CANDIDATE_MESSAGES.columns.interviewDate,
-                  flex: 1,
-                  align: 'center',
-                  render: (row) => (
-                    <div data-testid={`candidate-latest-${row.id}`} className="candidate-date">
-                      {row.latestApplication && (
-                        <>
-                          <span>{formatShortDate(new Date(row.latestApplication.startUtc), zone)}</span>
-                          <span className="candidate-subline">
-                            {formatSlotTime(new Date(row.latestApplication.startUtc), zone)}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  ),
-                },
-                {
-                  label: CANDIDATE_MESSAGES.columns.status,
-                  // `Table` has grow and a cap but no basis, so a fixed 120px column is
-                  // written as the smallest share that reaches the cap at every width
-                  // this screen targets. The system's own 80px cap is back on the last column,
-                  // where the actions cell belongs (§18) — because
-                  // Status is no longer the one holding it.
-                  flex: 0.8,
-                  align: 'flex-start',
-                  maxWidth: 120,
-                  render: (row) =>
-                    !row.latestApplication ? null : row.latestApplication.isCancelled ? (
-                      /*
-                        A cancelled interview has no stage to report. `isCancelled` says the
-                        interview did not take place and deliberately nothing about the
-                        candidate's standing (07 §01.1), so the row states that instead of a
-                        status the candidate never moved out of.
-                      */
-                      <Badge
-                        status="inactive"
-                        outlined
-                        data-testid={`candidate-status-${row.id}`}
-                      >
-                        {HIRING_MESSAGES.board.cancelled}
-                      </Badge>
-                    ) : (
-                      <StatusBadge
-                        status={row.latestApplication.status}
-                        data-testid={`candidate-status-${row.id}`}
-                      />
-                    ),
-                },
-                {
-                  label: CANDIDATE_MESSAGES.columns.actions,
-                  render: (row) => (
-                    <Popover
-                      label={candidateActionsLabel(row.fullName)}
-                      /* The trigger is inside the row's anchor by construction, so the row
-                         has to be told which press was not for it. `Popover` forwards rest
-                         props onto the trigger, so this marks the button itself and the
-                         handler above finds it with `closest`. The menu needs no such mark:
-                         it is portalled, and §55 stops what it raises from reaching here. */
-                      data-row-actions=""
-                      data-testid={`candidate-actions-${row.id}`}
-                      items={rowActions(row)}
-                    />
-                  ),
-                },
-              ]}
-            />
-          )}
-        </Card>
+                  <Badge status="inactive" outlined data-testid={`candidate-status-${row.id}`}>
+                    {HIRING_MESSAGES.board.cancelled}
+                  </Badge>
+                ) : (
+                  <StatusBadge
+                    status={row.latestApplication.status}
+                    data-testid={`candidate-status-${row.id}`}
+                  />
+                ),
+            },
+            {
+              label: CANDIDATE_MESSAGES.columns.actions,
+              role: 'actions',
+              render: (row) => (
+                <Popover
+                  label={candidateActionsLabel(row.fullName)}
+                  /* The trigger is inside the row's anchor by construction, so the row
+                     has to be told which press was not for it. `Popover` forwards rest
+                     props onto the trigger, so this marks the button itself and the
+                     handler above finds it with `closest`. The menu needs no such mark:
+                     it is portalled, and §55 stops what it raises from reaching here. */
+                  data-row-actions=""
+                  data-testid={`candidate-actions-${row.id}`}
+                  items={rowActions(row)}
+                />
+              ),
+            },
+          ]}
+        />
       )}
 
       {/*
@@ -1319,6 +1342,82 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         />
       )}
 
+    </>
+  );
+}
+
+/**
+ * The person, and beside them how many applications they hold — one node, two `data-testid`s.
+ *
+ * Drawn by both forms: the table's name cell puts it above the chips, the card's title slot takes
+ * it alone. So each id exists exactly once whichever form was drawn.
+ */
+function candidateNameLine(row: CandidateRow) {
+  return (
+    <span className="candidate-name-line">
+      <span data-testid={`candidate-name-${row.id}`} className="candidate-name">
+        {row.fullName}
+      </span>
+      {/* Only when there is more than one — "1 application" is noise. It sits on the name's
+          own line, above the chips, because it is a fact about the person rather than one
+          more thing they were assessed as. */}
+      {row.applicationCount > 1 && (
+        <span data-testid={`candidate-app-count-${row.id}`} className="candidate-name-meta">
+          {row.applicationCount} applications
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** One assessment, as the row states it: the criterion recedes and the value is the answer. */
+function AssessmentBadge({ row, assessment }: { row: CandidateRow; assessment: RowAssessment }) {
+  return (
+    <Badge
+      status="neutral"
+      size="s"
+      data-testid={`candidate-criterion-${row.id}-${assessment.criterionId}`}
+    >
+      {/* One phrase, two things: the criterion is the context and the value is the answer,
+          so the name recedes a level and a row of these scans down the values. */}
+      <span style={{ color: 'var(--text-secondary)' }}>{`${assessment.name}: `}</span>
+      {assessment.value}
+    </Badge>
+  );
+}
+
+/**
+ * The card's assessment strip: two chips, then how many more.
+ *
+ * The cap is fixed rather than measured, so nothing here observes its own width and a test can
+ * assert `+2` instead of asserting against whatever happened to fit. One line rather than a wrap,
+ * because a list of cards is scanned and a wrap makes every card a different height.
+ *
+ * The strip is hidden from a reader and the whole list is beside it: the `+N` is a count and not
+ * a list, so without the sentence the third assessment is on the screen and nowhere a reader can
+ * reach. A visually hidden `<span>` rather than an `aria-label`, which on a `<span>` is a label on
+ * a `generic` role that no standard requires a browser to expose.
+ */
+function AssessmentStrip({ row }: { row: CandidateRow }) {
+  const shown = row.criteria.slice(0, CARD_ASSESSMENTS);
+  const folded = row.criteria.length - shown.length;
+  return (
+    <>
+      <span
+        data-testid={`candidate-criteria-${row.id}`}
+        aria-hidden
+        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}
+      >
+        {shown.map((assessment) => (
+          <AssessmentBadge key={assessment.criterionId} row={row} assessment={assessment} />
+        ))}
+        {folded > 0 && (
+          <Badge status="neutral" size="s" data-testid={`candidate-criteria-more-${row.id}`}>
+            +{folded}
+          </Badge>
+        )}
+      </span>
+      <span style={SR_ONLY}>{candidateAssessmentsDescription(row.criteria)}</span>
     </>
   );
 }

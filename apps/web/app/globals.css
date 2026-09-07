@@ -683,7 +683,9 @@
   font-weight: var(--font-weight-medium);
 }
 
-/* The application count, and the email when it has folded under the name. */
+/* The application count. It used to carry the email too, folded under the name below 1024px;
+   that fold is gone — below `md` the card gives the address a subtitle of its own, and between
+   `md` and `lg` the column is dropped (03 design §Responsive). */
 .candidate-name-meta {
   flex-shrink: 0;
   overflow: hidden;

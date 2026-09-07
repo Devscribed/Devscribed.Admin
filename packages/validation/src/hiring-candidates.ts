@@ -89,6 +89,12 @@ export const CANDIDATE_MESSAGES = {
     name: 'Name',
     email: 'Email',
     vacancy: 'Vacancy',
+    /**
+     * The one heading the **table** never draws. The interviewer is the second line of the
+     * vacancy cell there, and below `md` the card gives it a fact of its own — so it is a
+     * column heading like the other six, on a column only one of the two forms has.
+     */
+    interviewer: 'Interviewer',
     interviewDate: 'Interview date',
     status: 'Status',
     actions: 'Actions',
@@ -169,6 +175,23 @@ export const candidateActionsLabel = (fullName: string): string => `Actions for 
 /** `128 candidates`, `1 candidate`. */
 export const candidateCountLabel = (count: number): string =>
   count === 1 ? '1 candidate' : `${count} candidates`;
+
+/**
+ * The card's assessment strip, spelled out — `Assessments: English: B1, .NET: 4`.
+ *
+ * Below `md` a candidate is a card and the chips under their name become one line capped at two,
+ * with a `+N` badge for the rest (03 design §Responsive). The badge is a count and not a list, so
+ * without this the third assessment is on the screen and nowhere a reader can reach. Every
+ * assessment the row carries is named, in the order it carries them — not the two that were
+ * drawn — because the sentence exists for the ones that were not.
+ *
+ * The same move the vacancies card makes for its categories, and the libraries screen for a
+ * folded list of vacancy titles.
+ */
+export const candidateAssessmentsDescription = (
+  assessments: readonly { name: string; value: string }[],
+): string =>
+  `Assessments: ${assessments.map((entry) => `${entry.name}: ${entry.value}`).join(', ')}`;
 
 /**
  * `12 of 128 candidates` while anything narrows the list, `128 candidates` otherwise.
