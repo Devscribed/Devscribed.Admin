@@ -12,6 +12,15 @@ export interface TableColumn<Row = any> {
   align?: 'flex-start' | 'center' | 'flex-end';
   /** Defaults to 96 on the last column — the actions column, §60 — and none elsewhere. */
   maxWidth?: number | 'none';
+  /**
+   * §96 — the column is **not drawn** below this rung, header and cells together. `'lg'` is
+   * below 992, `'xxl'` below 1440.
+   *
+   * Ignored on the first and last columns. The first is what a row *is* and the last is how it
+   * is acted on, so neither may be hidden however a caller asks; the third member of that floor,
+   * the status, is a card role `Table` cannot see and `RecordList` (§98) drops it there.
+   */
+  hideBelow?: 'lg' | 'xxl';
 }
 
 export interface TableProps<Row = any> extends Omit<React.HTMLAttributes<HTMLDivElement>, 'rows'> {
@@ -47,6 +56,40 @@ export interface TableProps<Row = any> extends Omit<React.HTMLAttributes<HTMLDiv
    the one column whose width nothing else depends on — every other column's flex share is
    unchanged, because this one was already at its cap and still is. */
 const ACTIONS_MAX_WIDTH = 96;
+
+/**
+ * A string `rowHref` or `rowTestId` applies to every row; a function reads the row.
+ *
+ * Module-level rather than a closure, because `RecordList` (§98) draws the other form of the
+ * same row and has to resolve the same three props the same way. Two copies of "is it a
+ * function" would be two chances for the forms to disagree about what a row is called.
+ */
+export function rowValue(key: any, row: any): any {
+  return typeof key === 'function' ? key(row) : key;
+}
+
+/**
+ * `rowKey` is the exception to the rule above — a string there names the *field* to read,
+ * because "the same key on every row" is the one thing a key can never mean.
+ */
+export function rowKeyOf(rowKey: any, row: any, ri: number): string | number {
+  if (typeof rowKey === 'function') return rowKey(row);
+  if (rowKey && !Array.isArray(row) && row[rowKey] != null) return row[rowKey];
+  return ri;
+}
+
+/**
+ * §96 — the class that takes a column out below its rung, or nothing.
+ *
+ * The floor is enforced here rather than trusted to the caller: the first column and the last
+ * are ignored if they ask to be hidden. A list whose leading value is gone is a list of rows
+ * that say nothing about themselves, and one whose actions are gone is a list nothing can be
+ * done from — neither is a narrower table, it is a broken one.
+ */
+function hiddenClass(col: TableColumn, i: number, count: number): string | undefined {
+  if (!col.hideBelow || i === 0 || i === count - 1) return undefined;
+  return col.hideBelow === 'xxl' ? 'ds-col-hide-xxl' : 'ds-col-hide-lg';
+}
 
 function geometry(col: TableColumn, i: number, count: number): React.CSSProperties {
   const last = i === count - 1;
@@ -94,21 +137,14 @@ export function Table<Row = any>({
      top of it. On a touch screen the tint would be set by a tap and never released. */
   const hoverable = useHoverable();
   const cols = columns.map((col) => (typeof col === 'string' ? { label: col } : col));
-  /* A string `rowHref` or `rowTestId` applies to every row; a function reads the row. `rowKey`
-     is the exception — a string there names the field to read, because "the same key on every
-     row" is the one thing a key can never mean. */
-  const value = (key: any, row: any) => (typeof key === 'function' ? key(row) : key);
-  const keyOf = (row: any, ri: number) => {
-    if (typeof rowKey === 'function') return rowKey(row);
-    if (rowKey && !Array.isArray(row) && row[rowKey] != null) return row[rowKey];
-    return ri;
-  };
+  const value = (key: any, row: any) => rowValue(key, row);
+  const keyOf = (row: any, ri: number) => rowKeyOf(rowKey, row, ri);
   return (
     <div {...rest} aria-busy={busy || undefined} style={{ width: '100%', color: 'var(--text-primary)', fontFamily: 'var(--font-family-base)', ...style }}>
       {!hideHeader && (
         <div style={{ display: 'flex', width: '100%', height: 70, padding: '0 var(--space-6)', backgroundColor: 'var(--surface-sunken)', borderBottom: 'var(--border-width-hairline) solid var(--color-gray-lighter)', position: 'sticky', top: 0, zIndex: 1 }}>
           {cols.map((col, i) => (
-            <div key={i} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-m)' }}>
+            <div key={i} className={hiddenClass(col, i, cols.length)} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-m)' }}>
               {/* §48 — the heading truncates, as every body cell already does. The cell is a
                   flex box, so `text-overflow` has to sit on the child rather than on the cell:
                   an anonymous flex item is not a line box and never ellipsises. Without this a
@@ -156,7 +192,7 @@ export function Table<Row = any>({
             onMouseLeave={(e: React.MouseEvent<HTMLElement>) => { if (!disabled) e.currentTarget.style.backgroundColor = 'var(--surface-card)'; }}
           >
             {cells.map((cell: React.ReactNode, ci: number) => (
-              <div key={ci} style={{ ...geometry(cols[ci] || {}, ci, cols.length), fontSize: 'var(--font-size-s)', overflow: ci === cols.length - 1 ? 'visible' : 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              <div key={ci} className={hiddenClass(cols[ci] || {}, ci, cols.length)} style={{ ...geometry(cols[ci] || {}, ci, cols.length), fontSize: 'var(--font-size-s)', overflow: ci === cols.length - 1 ? 'visible' : 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                 {cell}
               </div>
             ))}

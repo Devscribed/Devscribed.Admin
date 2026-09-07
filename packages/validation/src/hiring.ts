@@ -440,6 +440,17 @@ export const vacancyStatusTabLabel = (filter: VacancyStatusFilter, count: number
 export const vacancyActionsLabel = (title: string): string => `Actions for ${title}`;
 
 /**
+ * The card's category strip, spelled out — `Categories: React, Senior, Remote`.
+ *
+ * Below `md` a vacancy is a card and its categories are one line capped at two, with a `+N`
+ * bubble for the rest (01 design §Responsive). The bubble is a count and not a list, so without
+ * this the third category exists on the screen and nowhere a reader can reach. The same move the
+ * libraries screen makes for a folded list of vacancy titles.
+ */
+export const vacancyCategoriesDescription = (names: readonly string[]): string =>
+  `Categories: ${names.join(', ')}`;
+
+/**
  * What closing does, and — more to the point — what it does not (01 §03.9).
  *
  * The fear this sentence answers is that closing cancels what is already booked. It does

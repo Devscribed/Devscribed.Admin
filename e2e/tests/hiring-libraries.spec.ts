@@ -451,4 +451,63 @@ test.describe('Criteria library', () => {
       'No criteria yet. Add one during an interview.',
     );
   });
+
+  /**
+   * TC-H06-E2E-05 — below `md` a criterion is a card, and the two values the table could not
+   * fit on a phone are on it (06 design §Responsive, decisions §97 §98).
+   *
+   * This is the case for the slots the vacancies list does not exercise. A criterion's Name cell
+   * is three things stacked — the name, its `Archived` badge and its scale — and on the card each
+   * takes a slot of its own from a column the table never draws.
+   */
+  test('draws a criterion as a card below md, with its state and scale in their own slots', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('criteria-card'));
+    const english = await createCriterion(request, org, {
+      name: 'English',
+      values: ['A1', 'A2', 'B1'],
+    });
+    await signIn(page, org.email);
+
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
+    await page.getByTestId('libraries-tab-criteria').click();
+    const row = page.getByTestId(`criterion-row-${english.id}`);
+    await expect(row).toBeVisible();
+    await expect(row).not.toHaveClass(/ds-record-card/);
+
+    await page.setViewportSize({ width: 360, height: 800 });
+    // Retried rather than read once: the switch is a React render, and a class read in the
+    // same tick as the resize reads the form that is on its way out.
+    await expect(row).toHaveClass(/ds-record-card/);
+    await expect(row).toHaveCount(1);
+
+    // The name is the title, the scale is the subtitle and is still a real ordered list,
+    // and the two columns that were drawn as `Sca…` and `18…` are facts with their headings.
+    await expect(page.getByTestId(`criterion-name-${english.id}`)).toHaveText('English');
+    await expect(page.getByTestId(`criterion-values-${english.id}`)).toHaveText('A1 › A2 › B1');
+    expect(
+      await page.getByTestId(`criterion-values-${english.id}`).evaluate((el) => el.tagName),
+    ).toBe('OL');
+    await expect(row).toContainText('Type');
+    await expect(page.getByTestId(`criterion-type-${english.id}`)).toHaveText('Scale');
+    await expect(row).toContainText('Assessments');
+    await expect(page.getByTestId(`criterion-usage-${english.id}`)).toHaveText('0 assessments');
+
+    // No status yet, so the service line carries the kebab alone rather than being dropped.
+    await expect(page.getByTestId(`criterion-archived-badge-${english.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`criterion-actions-${english.id}`)).toBeVisible();
+
+    // Archived, the badge takes the status slot — once, and on the card's service line.
+    await page.getByTestId(`criterion-actions-${english.id}`).click();
+    await page.getByTestId(`criterion-archive-${english.id}`).click();
+    await expect(page.getByTestId(`criterion-archived-badge-${english.id}`)).toHaveCount(1);
+    await expect(page.getByTestId(`criterion-archived-badge-${english.id}`)).toHaveText('Archived');
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
 });

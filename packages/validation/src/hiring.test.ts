@@ -3,6 +3,7 @@ import {
   HIRING_MESSAGES,
   scheduledKeepMessage,
   vacancyActionsLabel,
+  vacancyCategoriesDescription,
   vacancyCloseConfirmation,
   vacancyDeleteConfirmation,
   vacancyStatusTabLabel,
@@ -244,6 +245,23 @@ describe('vacancyStatusTabLabel', () => {
 describe('vacancyActionsLabel', () => {
   it('names the vacancy the menu acts on', () => {
     expect(vacancyActionsLabel('Senior React Engineer')).toBe('Actions for Senior React Engineer');
+  });
+});
+
+/**
+ * TC-H01-UNIT-04 — 01 design §Responsive. The card's category strip is capped at two and the
+ * rest are a `+N`, so the sentence that names every one of them is the only place the third
+ * category exists for a reader.
+ */
+describe('vacancyCategoriesDescription', () => {
+  it('spells out every category, including the ones the strip folded', () => {
+    expect(vacancyCategoriesDescription(['React', 'Senior', 'Remote', 'Contract'])).toBe(
+      'Categories: React, Senior, Remote, Contract',
+    );
+  });
+
+  it('reads the same when nothing was folded', () => {
+    expect(vacancyCategoriesDescription(['React'])).toBe('Categories: React');
   });
 });
 

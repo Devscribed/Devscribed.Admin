@@ -20,14 +20,13 @@ import {
 import {
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   EmptyState,
   FormActions,
   Modal,
   Popover,
   Preloader,
-  Table,
+  RecordList,
   TableToolbar,
   TextInput,
 } from '@devscribed/ds';
@@ -455,100 +454,136 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
             {onCategories ? LIBRARY_MESSAGES.category.noResults : CRITERION_MESSAGES.noResults}
           </EmptyState>
         )
-      ) : (
+      ) : onCategories ? (
         /*
-          The card is the table's and is drawn only around rows: it gives the edge-to-edge
-          table its border and rounds its first and last rows. The row kebab opens inside
-          it, but the DS `Popover` portals its menu (decisions §55), so nothing it raises is
-          clipped by the surface it was opened from.
+          One list, two forms (decisions §98). Above `md` this is the table it has always
+          been, inside the card `RecordList` draws around it — the card is the table's, it
+          gives the edge-to-edge rows their border and rounds the first and last of them, and
+          the row kebab opens inside it but the DS `Popover` portals its menu (decisions §55),
+          so nothing it raises is clipped by the surface it was opened from. Below `md` every
+          row is a `RecordCard` and there is no surface to clip anything.
         */
-        <Card padded={false} data-testid={onCategories ? 'categories-list' : 'criteria-list'}>
-          {onCategories && (
-            <Table<Category>
-              rows={categoryRows}
-              /* A refetch after an action dims the rows in place rather than replacing
-                 them with a loader (decisions §34). */
-              busy={refreshing}
-              rowKey="id"
-              rowTestId={(row) => `category-row-${row.id}`}
-              columns={[
-                {
-                  label: 'Name',
-                  render: (row) => (
-                    <span data-testid={`category-name-${row.id}`} style={ELLIPSIS}>
-                      {row.name}
-                    </span>
-                  ),
-                },
-                {
-                  label: 'Vacancies',
-                  flex: 3,
-                  align: 'flex-start',
-                  render: (row) => <VacanciesCell category={row} />,
-                },
-                {
-                  label: 'Actions',
-                  render: (row) => (
-                    <Popover
-                      label={libraryActionsLabel(row.name)}
-                      data-testid={`category-actions-${row.id}`}
-                      items={categoryActions(row)}
-                    />
-                  ),
-                },
-              ]}
-            />
-          )}
-
-          {!onCategories && (
-            <Table<Criterion>
-              rows={criterionRows}
-              busy={refreshing}
-              rowKey="id"
-              rowTestId={(row) => `criterion-row-${row.id}`}
-              columns={[
-                {
-                  label: 'Name',
-                  flex: 2.6,
-                  render: (row) => <CriterionNameCell criterion={row} />,
-                },
-                {
-                  // Plain text, like Role or Status in the system's own tables — a chip here
-                  // would read as a label on the criterion rather than this column's
-                  // value, and the words are the radio group's, so the row and the
-                  // dialog call a type by one name.
-                  label: 'Type',
-                  align: 'flex-start',
-                  render: (row) => (
-                    <span data-testid={`criterion-type-${row.id}`} style={receded(row)}>
-                      {CRITERION_TYPE_LABELS[row.type]}
-                    </span>
-                  ),
-                },
-                {
-                  label: 'Assessments',
-                  align: 'flex-start',
-                  render: (row) => (
-                    <span data-testid={`criterion-usage-${row.id}`} style={receded(row)}>
-                      {criterionUsageLabel(row.assessmentCount)}
-                    </span>
-                  ),
-                },
-                {
-                  label: 'Actions',
-                  render: (row) => (
-                    <Popover
-                      label={libraryActionsLabel(row.name)}
-                      data-testid={`criterion-actions-${row.id}`}
-                      items={criterionActions(row)}
-                    />
-                  ),
-                },
-              ]}
-            />
-          )}
-
-        </Card>
+        <RecordList<Category>
+          data-testid="categories-list"
+          rows={categoryRows}
+          /* A refetch after an action dims the rows in place rather than replacing
+             them with a loader (decisions §34). */
+          busy={refreshing}
+          rowKey="id"
+          rowTestId={(row) => `category-row-${row.id}`}
+          columns={[
+            {
+              label: 'Name',
+              role: 'title',
+              render: (row) => (
+                <span data-testid={`category-name-${row.id}`} style={ELLIPSIS}>
+                  {row.name}
+                </span>
+              ),
+            },
+            {
+              label: 'Vacancies',
+              flex: 3,
+              align: 'flex-start',
+              render: (row) => <VacanciesCell category={row} />,
+            },
+            {
+              label: 'Actions',
+              role: 'actions',
+              render: (row) => (
+                <Popover
+                  label={libraryActionsLabel(row.name)}
+                  data-testid={`category-actions-${row.id}`}
+                  items={categoryActions(row)}
+                />
+              ),
+            },
+          ]}
+        />
+      ) : (
+        <RecordList<Criterion>
+          data-testid="criteria-list"
+          rows={criterionRows}
+          busy={refreshing}
+          rowKey="id"
+          rowTestId={(row) => `criterion-row-${row.id}`}
+          columns={[
+            {
+              label: 'Name',
+              flex: 2.6,
+              role: 'title',
+              render: (row) => <CriterionNameCell criterion={row} />,
+              // The cell is three things stacked — the name, the Archived badge beside it and
+              // the scale under it. On a card each has a slot of its own, so the title slot
+              // takes the name alone and the two below take the rest.
+              renderCard: (row) => (
+                <span data-testid={`criterion-name-${row.id}`} style={receded(row)}>
+                  {row.name}
+                </span>
+              ),
+            },
+            {
+              /* A state, not a classification, so it takes the card's status slot — and it
+                 has no column of its own because in the table it sits beside the name. */
+              label: 'State',
+              role: 'status',
+              cardOnly: true,
+              renderCard: (row) =>
+                row.isArchived ? (
+                  <span style={receded(row)}>
+                    <Badge
+                      status="inactive"
+                      outlined
+                      data-testid={`criterion-archived-badge-${row.id}`}
+                    >
+                      {CRITERION_MESSAGES.archivedBadge}
+                    </Badge>
+                  </span>
+                ) : null,
+            },
+            {
+              /* The scale, which the table draws as a second line inside the name cell. */
+              label: 'Values',
+              role: 'subtitle',
+              cardOnly: true,
+              renderCard: (row) =>
+                row.type === 'scale' && row.values.length > 0 ? <ScaleList criterion={row} /> : null,
+            },
+            {
+              // Plain text, like Role or Status in the system's own tables — a chip here
+              // would read as a label on the criterion rather than this column's
+              // value, and the words are the radio group's, so the row and the
+              // dialog call a type by one name.
+              label: 'Type',
+              align: 'flex-start',
+              render: (row) => (
+                <span data-testid={`criterion-type-${row.id}`} style={receded(row)}>
+                  {CRITERION_TYPE_LABELS[row.type]}
+                </span>
+              ),
+            },
+            {
+              label: 'Assessments',
+              align: 'flex-start',
+              render: (row) => (
+                <span data-testid={`criterion-usage-${row.id}`} style={receded(row)}>
+                  {criterionUsageLabel(row.assessmentCount)}
+                </span>
+              ),
+            },
+            {
+              label: 'Actions',
+              role: 'actions',
+              render: (row) => (
+                <Popover
+                  label={libraryActionsLabel(row.name)}
+                  data-testid={`criterion-actions-${row.id}`}
+                  items={criterionActions(row)}
+                />
+              ),
+            },
+          ]}
+        />
       )}
 
       {/* Stated rather than discovered: with uniqueness enforced and no merge in this
@@ -762,29 +797,40 @@ function CriterionNameCell({ criterion }: { criterion: Criterion }) {
           </Badge>
         )}
       </span>
-      {criterion.type === 'scale' && criterion.values.length > 0 && (
-        <ol
-          data-testid={`criterion-values-${criterion.id}`}
-          aria-label={`${criterion.name} values, worst to best`}
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            listStyle: 'none',
-            margin: 0,
-            padding: 0,
-            fontSize: 'var(--font-size-xs)',
-            color: 'var(--text-secondary)',
-          }}
-        >
-          {criterion.values.map((value, index) => (
-            <li key={value.id}>
-              {index > 0 && <span aria-hidden="true">{SCALE_SEPARATOR}</span>}
-              {value.label}
-            </li>
-          ))}
-        </ol>
-      )}
+      {criterion.type === 'scale' && criterion.values.length > 0 && <ScaleList criterion={criterion} />}
     </div>
+  );
+}
+
+/**
+ * The scale itself, in one node with one `data-testid`.
+ *
+ * Drawn by both forms — the table's name cell puts it on a second line, the card's subtitle slot
+ * takes it alone — so the id it carries exists exactly once whichever form was drawn. A real
+ * `<ol>` either way, so the order is conveyed structurally and not only by the `›` glyphs.
+ */
+function ScaleList({ criterion }: { criterion: Criterion }) {
+  return (
+    <ol
+      data-testid={`criterion-values-${criterion.id}`}
+      aria-label={`${criterion.name} values, worst to best`}
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        listStyle: 'none',
+        margin: 0,
+        padding: 0,
+        fontSize: 'var(--font-size-xs)',
+        color: 'var(--text-secondary)',
+      }}
+    >
+      {criterion.values.map((value, index) => (
+        <li key={value.id}>
+          {index > 0 && <span aria-hidden="true">{SCALE_SEPARATOR}</span>}
+          {value.label}
+        </li>
+      ))}
+    </ol>
   );
 }
 

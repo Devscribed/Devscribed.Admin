@@ -34,6 +34,8 @@ export { Avatar } from './components/data/Avatar';
 export { BoardCard } from './components/data/BoardCard';
 export { BoardColumn } from './components/data/BoardColumn';
 export { Calendar } from './components/data/Calendar';
+export { RecordCard } from './components/data/RecordCard';
+export { RecordList } from './components/data/RecordList';
 export { Table } from './components/data/Table';
 export { TableToolbar } from './components/data/TableToolbar';
 
@@ -128,6 +130,8 @@ export type { AvatarProps } from './components/data/Avatar';
 export type { BoardCardProps } from './components/data/BoardCard';
 export type { BoardColumnProps } from './components/data/BoardColumn';
 export type { CalendarDate, CalendarMonth, CalendarProps } from './components/data/Calendar';
+export type { RecordCardProps, RecordFact } from './components/data/RecordCard';
+export type { RecordColumn, RecordListProps, RecordRole } from './components/data/RecordList';
 export type { TableColumn, TableProps } from './components/data/Table';
 export type { TableToolbarProps } from './components/data/TableToolbar';
 

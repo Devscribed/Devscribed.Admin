@@ -3,6 +3,7 @@ import {
   addMember,
   bookInterview,
   clickHiringNav,
+  createCategory,
   createVacancy,
   registerOrganization,
   signIn,
@@ -537,5 +538,128 @@ test.describe('Vacancies', () => {
         expect(await page.content()).not.toContain(vacancy.publicSlug);
       });
     }
+  });
+
+  /**
+   * TC-H01-E2E-10 — below `md` a vacancy is a card, and every value the row showed is on it
+   * exactly once (01 design §Responsive, decisions §97 §98).
+   *
+   * The `data-testid` count is the assertion the mechanism turns on: it is 1 at both widths and
+   * never 2, which is what a CSS switch drawing both forms behind a `display: none` could not
+   * give. The suite runs at 1280, so the wide half of this case is the only place the table form
+   * is asserted to still *be* the table.
+   */
+  test('draws a vacancy as a card below md, and as a table row above it', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('hiring-card'));
+    const react = await createCategory(request, org, 'React');
+    const senior = await createCategory(request, org, 'Senior');
+    const remote = await createCategory(request, org, 'Remote');
+    const vacancy = await createVacancy(request, org, {
+      title: 'Senior React Engineer',
+      durationMinutes: 45,
+      categoryIds: [react.id, senior.id, remote.id],
+    });
+    await signIn(page, org.email);
+
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
+    const row = page.getByTestId(`vacancy-row-${vacancy.id}`);
+    await expect(row).toBeVisible();
+
+    // Wide: a real anchor, which is what makes middle-click and copy-address work.
+    expect(await row.evaluate((el) => el.tagName)).toBe('A');
+    await expect(row).not.toHaveClass(/ds-record-card/);
+
+    await page.setViewportSize({ width: 360, height: 800 });
+    // Retried rather than read once: the switch is a React render, and a class read in the
+    // same tick as the resize reads the form that is on its way out.
+    await expect(row).toHaveClass(/ds-record-card/);
+    await expect(row).toHaveCount(1);
+    // Still an anchor: the card is the row's other form, not a different kind of thing.
+    expect(await row.evaluate((el) => el.tagName)).toBe('A');
+
+    // Every value the table showed, each exactly once and each under its own id.
+    for (const id of [
+      `vacancy-title-${vacancy.id}`,
+      `vacancy-status-${vacancy.id}`,
+      `vacancy-interviewer-${vacancy.id}`,
+      `vacancy-duration-${vacancy.id}`,
+      `vacancy-count-${vacancy.id}`,
+      `vacancy-actions-menu-${vacancy.id}`,
+      `vacancy-categories-${vacancy.id}`,
+    ]) {
+      await expect(page.getByTestId(id)).toHaveCount(1);
+    }
+
+    // The facts keep their headings, so a value has a name without a header row above it.
+    await expect(row).toContainText('Interviewer');
+    await expect(row).toContainText('45 min');
+    await expect(row).toContainText('Candidates');
+
+    // Two chips and a `+1`, never three chips — a fixed cap, so this asserts a number rather
+    // than whatever happened to fit. The two kept are the first two *alphabetically*, which is
+    // the order the API sorts a vacancy's categories into and not the order they were attached.
+    await expect(page.getByTestId(`vacancy-category-chip-${react.id}`)).toBeVisible();
+    await expect(page.getByTestId(`vacancy-category-chip-${remote.id}`)).toBeVisible();
+    await expect(page.getByTestId(`vacancy-category-chip-${senior.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`vacancy-categories-more-${vacancy.id}`)).toHaveText('+1');
+    // And the one the bubble stands for is still readable — the strip is hidden from a reader
+    // and the whole list is beside it.
+    await expect(row).toContainText('Categories: React, Remote, Senior');
+
+    // The card is the whole surface: no bordered slab around a column of bordered cards.
+    await expect(page.getByTestId('vacancies-list')).toHaveClass(/ds-record-list/);
+
+    // Nothing on this page reaches past 360.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  /**
+   * TC-H01-E2E-11 — `hideBelow` takes a column out below its rung, header and cells together
+   * (decisions §96).
+   *
+   * `Length` is the column that carries it. The floor is asserted at the same width: the title,
+   * the status and the kebab are all still there, because those three are what a row *is*, what
+   * state it is in and how it is acted on.
+   */
+  test('drops the Length column below lg, and never the floor', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('hiring-hide'));
+    const vacancy = await createVacancy(request, org, {
+      title: 'Senior React Engineer',
+      durationMinutes: 45,
+    });
+    await signIn(page, org.email);
+
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
+    await expect(page.getByTestId(`vacancy-row-${vacancy.id}`)).toBeVisible();
+    await expect(page.getByTestId(`vacancy-duration-${vacancy.id}`)).toBeVisible();
+    // The heading and the cell together — two nodes, both drawn.
+    const length = page.getByTestId('vacancies-list').locator('.ds-col-hide-lg');
+    await expect(length).toHaveCount(2);
+    for (const node of await length.all()) await expect(node).toBeVisible();
+
+    await page.setViewportSize({ width: 900, height: 900 });
+    // Still the table — 900 is above `md`, so this is `hideBelow` and not the card form.
+    await expect(page.getByTestId(`vacancy-row-${vacancy.id}`)).not.toHaveClass(/ds-record-card/);
+    await expect(page.getByTestId(`vacancy-duration-${vacancy.id}`)).toBeHidden();
+    // Both nodes are still in the tree and neither is drawn: the column is gone, header and
+    // cell, which is what makes the remaining five line up under their own headings.
+    await expect(length).toHaveCount(2);
+    for (const node of await length.all()) await expect(node).toBeHidden();
+    await expect(page.getByTestId('vacancies-list')).not.toContainText('Length', {
+      // `textContent` reads a `display: none` node; what is asked here is what is *drawn*.
+      useInnerText: true,
+    });
+
+    // The floor, at the same width.
+    await expect(page.getByTestId(`vacancy-title-${vacancy.id}`)).toBeVisible();
+    await expect(page.getByTestId(`vacancy-status-${vacancy.id}`)).toBeVisible();
+    await expect(page.getByTestId(`vacancy-actions-menu-${vacancy.id}`)).toBeVisible();
   });
 });

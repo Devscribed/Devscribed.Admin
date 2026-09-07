@@ -283,6 +283,132 @@ input, textarea, select { font: inherit; }
   white-space: nowrap;
 }
 
+/* §96 — `Table`'s `hideBelow`. Two rules, one per rung the prop offers, and they take out the
+   heading and the cells together because a column is both.
+
+   `!important` because the cell's geometry — `display: flex` among the rest — is an inline style
+   object, and a stylesheet loses to one. The alternative is a `display` branch in JavaScript,
+   which is the responsive form arriving after hydration; this is the same trade the sheet block
+   below makes, for the same reason. */
+@media (max-width: 991px) {
+  .ds-col-hide-lg { display: none !important; }
+}
+@media (max-width: 1439px) {
+  .ds-col-hide-xxl { display: none !important; }
+}
+
+/* §97 §98 — the card form of a list row, and the column it stacks in. Only `RecordList` draws
+   these, and only below `md`; above it the same rows are a `Table` and none of this applies.
+
+   The card's numbers live here rather than in a style object because two of them are media-query
+   work — the two-line clamp needs `-webkit-line-clamp`, and the service line's height follows the
+   pointer — and splitting a component's geometry across a stylesheet and a style object is two
+   places for it to drift. */
+.ds-record-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ds-record-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+}
+
+.ds-record-card {
+  display: block;
+  padding: var(--space-6);
+  border: var(--border-width-hairline) solid var(--border-default);
+  border-radius: var(--radius-l);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+/* The service line: the status on the left, the row's menu on the right, and 32px of height
+   whichever of the two is there. It reaches `--control-height` under a coarse pointer — see the
+   block at the end of this file. */
+.ds-record-card-service {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 32px;
+}
+
+.ds-record-card-status { display: flex; align-items: center; min-width: 0; }
+.ds-record-card-actions { display: flex; align-items: center; flex: 0 0 auto; }
+
+/* Two lines, then an ellipsis. A title is the one value on a card that may not be cut to one
+   line: it is what the row *is*, and half of a vacancy's name names nothing. */
+.ds-record-card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: var(--space-3);
+  font-size: var(--font-size-s);
+  line-height: 20px;
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.ds-record-card-service + .ds-record-card-title { margin-top: 0; }
+
+.ds-record-card-subtitle {
+  margin-top: var(--space-1);
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  line-height: 16px;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One line, and whoever fills it decides what fits — the vacancies list caps its categories at
+   two and adds the `+N` bubble the libraries screen already uses. A wrap would be complete and
+   would also make every card a different height, which is what a list of cards is scanned
+   against. */
+.ds-record-card-badges {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  align-items: center;
+  margin-top: var(--space-3);
+  overflow: hidden;
+}
+.ds-record-card-badges > * {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A real `<dl>`: the label is attached to its value rather than sitting to the left of it. The
+   grid is `auto 1fr` so every label in a card lines up and the value takes what is left. */
+.ds-record-card-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-5);
+  margin: var(--space-5) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 16px;
+}
+
+.ds-record-card-fact-label { color: var(--text-secondary); }
+
+.ds-record-card-fact-value {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* §10.49 — below `sm` an overlay panel is a sheet. `Modal`, `ConfirmDialog` and `MenuDrawer` all
    take this form; `Popover`'s menu is not a panel and stays anchored at every width (§10.50).
 
@@ -366,6 +492,12 @@ input, textarea, select { font: inherit; }
     min-width: var(--control-height);
     min-height: var(--control-height);
   }
+
+  /* §97 — the record card's service line. A card that has a menu grows to 44 without this,
+     because the `Popover` trigger inside it is in the list above; the rule is here so a card with
+     a status and no menu is the same height as one with both, and a list of cards does not step
+     because one row happens to have a kebab. */
+  .ds-record-card-service { min-height: var(--control-height); }
 
   /* The three overlay close buttons draw a 13px glyph; centring it in the larger box is what
      keeps the mark where it was while the target reaches 44. */

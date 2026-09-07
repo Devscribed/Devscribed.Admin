@@ -8,6 +8,7 @@ import {
   VACANCY_STATUS_FILTERS,
   vacancyActionsLabel,
   vacancyCloseConfirmation,
+  vacancyCategoriesDescription,
   vacancyDeleteConfirmation,
   vacancyStatusTabLabel,
   type VacancyStatusFilter,
@@ -15,12 +16,11 @@ import {
 import {
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   EmptyState,
   Popover,
   Preloader,
-  Table,
+  RecordList,
   TableToolbar,
 } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
@@ -392,8 +392,14 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             : HIRING_MESSAGES.vacancy.emptyFiltered}
         </EmptyState>
       ) : (
-      <Card padded={false} data-testid="vacancies-list">
-        <Table<Vacancy>
+        /*
+          One list, two forms (decisions §98). Above `md` this is the table it has always been,
+          inside the card `RecordList` now draws itself; below `md` every row is a `RecordCard`
+          and the columns below say which slot each value lands in. The screen does not know
+          which form it got, and must not: the branch reads the viewport in exactly one place.
+        */
+        <RecordList<Vacancy>
+          data-testid="vacancies-list"
           rows={vacancies}
           /* A refilter dims the rows in place rather than replacing them with a loader:
              a table that collapsed and re-expanded on every keystroke would reflow the
@@ -421,20 +427,10 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
               // most room of any column — but at 3 it took it from `Interviewer`, whose
               // names then ellipsised while the title cell ran half empty.
               flex: 2,
+              role: 'title',
               render: (row) => (
                 <div style={{ minWidth: 0 }}>
-                  <span
-                    data-testid={`vacancy-title-${row.id}`}
-                    style={{
-                      display: 'block',
-                      minWidth: 0,
-                      overflowWrap: 'anywhere',
-                      fontWeight: 'var(--font-weight-medium)',
-                      lineHeight: '20px',
-                    }}
-                  >
-                    {row.title}
-                  </span>
+                  {vacancyTitle(row)}
                   {/* Labels on a second line inside the title cell — read-only here,
                       editable only in the dialog (01 §UI Notes). */}
                   {row.categories.length > 0 && (
@@ -460,6 +456,22 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
                   )}
                 </div>
               ),
+              // The cell is title *and* chips; the card's title slot is the title alone, and
+              // the chips have a slot of their own below. Handing the cell to the slot would
+              // put the chips under a two-line clamp meant for a name.
+              renderCard: (row) => vacancyTitle(row),
+            },
+            {
+              /*
+                The one value on this row with no column of its own: in the table it is a
+                second line inside the title cell. `cardOnly` is what lets it reach the card's
+                badge slot without the table growing a seventh column (decisions §98).
+              */
+              label: 'Categories',
+              role: 'badges',
+              cardOnly: true,
+              renderCard: (row) =>
+                row.categories.length === 0 ? null : <CategoryStrip vacancy={row} />,
             },
             {
               label: 'Interviewer',
@@ -474,6 +486,14 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
               // the earlier design, and the system has one family and no mono treatment to align.
               label: 'Length',
               flex: 1,
+              /*
+                Dropped from the table below `lg` (decisions §96). At 768 the well is 736px and
+                six columns leave the title cell — which carries a second line of chips inside
+                it — about 200. A duration is the value on this row nobody decides anything from
+                in a list, so it is the one that goes. It is still a fact on the card, where
+                there is a line free for it.
+              */
+              hideBelow: 'lg',
               render: (row) => (
                 <span data-testid={`vacancy-duration-${row.id}`}>{row.durationMinutes} min</span>
               ),
@@ -488,12 +508,14 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             {
               label: 'Status',
               flex: 1,
+              role: 'status',
               render: (row) => (
                 <VacancyStatusBadge status={row.status} testId={`vacancy-status-${row.id}`} />
               ),
             },
             {
               label: 'Actions',
+              role: 'actions',
               render: (row) => (
                 <Popover
                   label={vacancyActionsLabel(row.title)}
@@ -509,7 +531,6 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             },
           ]}
         />
-      </Card>
       )}
 
       <VacancyDialog
@@ -572,3 +593,82 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
     </>
   );
 }
+
+/**
+ * The vacancy's name, in one node with one `data-testid`.
+ *
+ * Drawn by both forms — the table's title cell wraps it above its chips, the card's title slot
+ * takes it alone — so the id it carries exists exactly once whichever form was drawn.
+ */
+function vacancyTitle(vacancy: Vacancy) {
+  return (
+    <span
+      data-testid={`vacancy-title-${vacancy.id}`}
+      style={{
+        display: 'block',
+        minWidth: 0,
+        overflowWrap: 'anywhere',
+        fontWeight: 'var(--font-weight-medium)',
+        lineHeight: '20px',
+      }}
+    >
+      {vacancy.title}
+    </span>
+  );
+}
+
+/**
+ * The card's category strip: two chips, then how many more.
+ *
+ * The cap is fixed rather than measured, so nothing here needs to observe its own width and a
+ * test can assert `+2` instead of asserting against whatever happened to fit. The `+N` is a
+ * `Badge` and not the libraries screen's 32px bubble — beside two 20px chips a circle that size
+ * is the largest thing on the line, and the system already has a mark for "one more small thing
+ * in a row of small things".
+ *
+ * The strip is hidden from a reader and the full list is beside it. An `aria-label` on a `<span>`
+ * is a label on a `generic` role, which no standard requires a browser to expose; a visually
+ * hidden sentence is read by all of them.
+ */
+function CategoryStrip({ vacancy }: { vacancy: Vacancy }) {
+  const shown = vacancy.categories.slice(0, 2);
+  const folded = vacancy.categories.length - shown.length;
+  return (
+    <>
+      <span
+        data-testid={`vacancy-categories-${vacancy.id}`}
+        aria-hidden
+        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}
+      >
+        {shown.map((category) => (
+          <Badge
+            key={category.id}
+            status="neutral"
+            size="s"
+            data-testid={`vacancy-category-chip-${category.id}`}
+          >
+            {category.name}
+          </Badge>
+        ))}
+        {folded > 0 && (
+          <Badge status="neutral" size="s" data-testid={`vacancy-categories-more-${vacancy.id}`}>
+            +{folded}
+          </Badge>
+        )}
+      </span>
+      <span style={VISUALLY_HIDDEN}>
+        {vacancyCategoriesDescription(vacancy.categories.map((category) => category.name))}
+      </span>
+    </>
+  );
+}
+
+/** Present to a screen reader, absent to everything else. */
+const VISUALLY_HIDDEN = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const;
