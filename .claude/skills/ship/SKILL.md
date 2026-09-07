@@ -72,6 +72,34 @@ A halt is not a crash, and most halts are the pipeline working:
 | `infra-error` | The environment failed twice | Fix the environment and re-run; nothing about the code is known yet |
 | `budget-exhausted` | Five code attempts without converging | Read `wf:log`; if the detectors above never fired, the feedback was probably too vague to act on |
 
+## A halt you have fixed is resumed, never restarted
+
+Running `ship <doc>` again after a halt starts a new run and throws the old one away — its
+passed stages, its committed work, and everything it spent. Fix what the halt named, then
+re-enter **the same run**:
+
+```bash
+node scripts/wf.mjs resume --stage <the stage that blocked> --accept-spec-edits
+node scripts/ship.mjs --resume
+```
+
+**Re-enter at the stage that stopped, never earlier.** A stage that passed does not run again
+because a later one failed. A `contested` or `static_gate` halt re-enters at `static_gate`; the
+implement work is already committed on the branch and is not rebuilt.
+
+**Editing the document mid-run is expected**, not a transgression: `spec-defect`,
+`spec-ambiguity` and most `contested` halts ask for precisely that, and `resume` advances the
+static gate's spec-immutability mark so your fix is not charged to the implementer.
+
+**What the edit costs depends on which file carries it.** `resume` hashes the behaviour file
+alone — `NN-name.md`. Edits confined to `NN-name.contracts.md` or `NN-name.cases.md` leave every
+stage re-enterable. An edit to `NN-name.md` makes every stage past `pre_implement` refuse,
+because `handoff.json` was compiled from a document that no longer exists — so that repair costs
+a replan, a fresh `pre_implement`, and one of the run's `replans` budget.
+
+So fix the blocker where the blocker is, and nothing else. Repairs the halt did not ask for are
+a follow-up document; folded into `NN-name.md` they turn a resume into a replan.
+
 ```bash
 npm run wf:status
 npm run wf:log -- --tail 30 --agents
