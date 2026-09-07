@@ -1,0 +1,374 @@
+{
+  "spec": {
+    "path": "specs/time-off/01-vacation-calendar.md",
+    "sha256": "4a5b88bb7953f92d7d0e0048719046fa586b5d15e06cca980912ca17a2ee6429",
+    "bundle": [
+      { "path": "specs/time-off/01-vacation-calendar.contracts.md", "sha256": "86fac5d0078a0a8f7c6c544ec85439dcd94691f472af5efd6dc420ccf2a07ad0" },
+      { "path": "specs/time-off/01-vacation-calendar.cases.md", "sha256": "c25b95cab5b567be185056cff0b17333647d1ab3de7dd2d4e479465f678ba40b" }
+    ],
+    "dependsOn": ["user-management/09", "user-management/11", "organization/03"]
+  },
+
+  "summary": "Add a read-only vacation wallchart at /org/{orgId}/time-off/calendar and the two stated country columns the holidays behind it now follow. Two nullable Char(2) columns land (Membership.countryCode, Organization.countryCode); one shared helper resolveMemberHolidayCountry(membership, organization) replaces the four places that read Account.phoneCountryCode to decide a member's holiday country, so the chain has one implementation and the phone is dropped as a source everywhere at once. One new capability ships in both unions (ViewTimeOffCalendar in roles.ts, view-time-off-calendar in index.ts), gating one new read endpoint that answers 404 rather than 403. Two new endpoints carry the organization country (GET and PUT .../settings/country, both 404-gated on ViewHolidays / ManageHolidays); the member country rides the shipped member read and write, which keep every status and message they have and refuse an invalid code with the 400 they already refuse an invalid role with. Three screens: the new calendar page and nav row, one Select on Settings > Holidays, one Select in the member About block. Nothing is written by the calendar and no vacation math is recomputed.",
+
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "The two nullable country columns and one additive migration",
+      "files": [
+        "apps/api/prisma/schema.prisma",
+        "apps/api/prisma/migrations/**"
+      ],
+      "requirements": [26, 33, 34, 40, 42, 43, 46, 48],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "One migration adding two nullable columns with no default: Membership.countryCode String? @db.Char(2) and Organization.countryCode String? @db.Char(2). No table, no rename, no drop, no new NOT NULL, no backfill. infra/deploy.sh runs prisma migrate deploy, from the image it is about to deploy, as step 5 of 6 — BEFORE the Terraform rollout of the services (infra/deploy.sh:27: '**Migrations run BEFORE the rollout**, and the order is the whole point'), because new code against an old schema 500s on every query touching a column the migration has not added. Additive is what makes the reverse safe — old code against the new schema simply does not select these columns — so a code rollback needs no database rollback. Membership.countryCode is the one a reviewer misses: the feature reads as organization-scoped and it is not.",
+        "reverseSafe": "Both columns land null on every existing row, so the migration alone changes no observed behaviour. The chain is evaluated on read (REQ-01-026), so no stored value can be wrong in the meantime."
+      },
+      "allCallSites": [],
+      "concurrency": {
+        "rows": ["Membership", "Organization"],
+        "lock": "none — DDL only; both columns are added nullable so no row is rewritten and no existing writer's transaction changes shape",
+        "reread": []
+      },
+      "notes": "Holiday.countryCode is already String? @db.Char(2) (schema.prisma:916) — the two new columns take that exact type so all three compare the same way."
+    },
+
+    {
+      "id": "T2",
+      "title": "Shared validation: the country chain, the calendar messages, the capability in both unions, the calendar query rules and the window presets",
+      "files": [
+        "packages/validation/src/reports.ts",
+        "packages/validation/src/time-off-calendar-messages.ts",
+        "packages/validation/src/roles.ts",
+        "packages/validation/src/index.ts",
+        "packages/validation/src/*.test.ts"
+      ],
+      "requirements": [1, 3, 9, 13, 14, 15, 16, 19, 26, 27, 28, 29, 40, 41],
+      "dependsOn": ["T1"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [
+        "packages/validation/src/reports.ts#resolveMemberHolidayCountry (new)",
+        "packages/validation/src/reports.ts#isHolidayApplicableToMember (ships at reports.ts:509, unchanged — it already answers REQ-01-028 and REQ-01-029 given a resolved country)"
+      ],
+      "concurrency": { "rows": [], "lock": "none — pure functions", "reread": [] },
+      "notes": "Two different predicates are both called 'a valid alpha-2 value' in this spec and they are deliberately not the same one. The WRITE (Validation Rule 9, REQ-01-036, REQ-01-051) is the shipped shape check: validateHolidayCountryCode (packages/validation/src/holidays.ts:93) against COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/ (holidays.ts:34) — it refuses 'pl' rather than upcasing it and it ACCEPTS 'XX', which is what makes REQ-01-027 and Edge case 10 reachable at all. The READ (REQ-01-026, REQ-01-027, REQ-01-040) must upcase and then test membership of the 249-code ISO list, because TC-01-UNIT-01 requires 'pl' -> 'PL' and 'XX'/'YY' -> not usable. That is the semantics of validateCountryCode (packages/validation/src/autofill.ts:682) over COUNTRY_NAMES (autofill.ts:717, 249 codes, no XX and no YY — verified). Do NOT build resolveMemberHolidayCountry on validateHolidayCountryCode: it would return 'XX' as usable and refuse 'pl', failing TC-01-UNIT-01 on both branches, and it is exactly the mistake HolidaysService.normalizeResolvedCountry makes today (holidays.service.ts:381). Both arguments of resolveMemberHolidayCountry are required with no default (contracts, Shared code). ViewTimeOffCalendar goes into the Capability union and all four ROLE_CAPABILITIES rows (true for admin/manager/user); view-time-off-calendar goes into MemberCapability and all four CAPABILITY_MATRIX rows (index.ts:660), false for viewer — both unions are exhaustively typed, so the compiler names every row that must be revisited. TIME_OFF_CALENDAR_MESSAGES is a new module beside holiday-messages.ts carrying all eleven rows of the Error Messages table marked 'new'; HOLIDAY_MESSAGES.countryCodeInvalid ('Country code must be 2 uppercase letters.') and MEMBER_MESSAGES.editForbidden / viewForbidden (index.ts:515, 520) already ship verbatim and are reused, never re-worded. The calendar query rules 1-8 and the Week / 2 weeks / Month preset computation live here too, because TC-01-UNIT-02 is a unit case and unit runs only over packages/validation."
+    },
+
+    {
+      "id": "T3",
+      "title": "Adopt the country chain at all four shipped call sites; no call site keeps a phone-country read",
+      "files": [
+        "apps/api/src/holidays/holidays.service.ts",
+        "apps/api/src/reports/reports.service.ts"
+      ],
+      "requirements": [26, 27, 28, 29, 40],
+      "dependsOn": ["T1", "T2"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [
+        "apps/api/src/holidays/holidays.service.ts:99-105 — the scope=mine branch of listHolidays; today `this.normalizeResolvedCountry(account?.phoneCountryCode)`. This is the country behind the Time Tracking calendar's holiday markers. TC-01-INT-29 is its observer.",
+        "apps/api/src/reports/reports.service.ts:552 — loadCaller, `countryCode: membership.account.phoneCountryCode ?? null`. The caller's own country, Time Off `my`.",
+        "apps/api/src/reports/reports.service.ts:1047 — the member roster load shared by Amounts Owed and Time & Activity, `countryCode: m.account.phoneCountryCode ?? null`. Every member's country.",
+        "apps/api/src/reports/reports.service.ts:1884 — the membership country union behind the Time Off `organization_wide` group, `countryCode: r.account.phoneCountryCode ?? null`."
+      ],
+      "concurrency": { "rows": [], "lock": "none — reads only", "reread": [] },
+      "notes": "Exactly four sites; grep for phoneCountryCode under apps/api/src returns these four plus account.service.ts:72/94 (the phone field that owns the column) and holidays.service.ts:77/377 (comments). The Account column stays; nothing about holidays consults it again. Each site must now load Membership.countryCode and the organization's country alongside — reports.service.ts:1039 and :1879 select through `account: { select: { phoneCountryCode } }`, so the selection moves onto the membership row and the organization is one extra read per request, not per member. HolidaysService.normalizeResolvedCountry (holidays.service.ts:381) becomes dead or is rewritten onto the shared helper — leaving it in place next to the new chain is how a second answer to one question survives. Blast radius: this pays Amounts Owed LESS for any member whose only country was their phone's until a country is stated, and MORE for members who had no phone country once one is. Both directions follow from a field a person set and both are evaluated on read."
+    },
+
+    {
+      "id": "T4",
+      "title": "The organization country: GET and PUT /api/organizations/{orgId}/settings/country",
+      "files": [
+        "apps/api/src/organizations/organization-country.controller.ts",
+        "apps/api/src/organizations/organization-country.service.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "requirements": [33, 34, 35, 36, 46, 47],
+      "dependsOn": ["T1", "T2"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [
+        "apps/api/src/organizations/organization-country.controller.ts#get (new)",
+        "apps/api/src/organizations/organization-country.controller.ts#put (new)"
+      ],
+      "concurrency": {
+        "rows": ["Organization"],
+        "lock": "none — REQ-01-033 decides last-write-wins with no lock and no version check, and the write is one column with no read-modify-write. Plan it unlocked.",
+        "reread": [],
+        "otherWriters": [
+          "apps/api/src/members/members.service.ts:404 — updateDetail takes `SELECT id FROM \"Organization\" ... FOR UPDATE` for the whole of its transaction",
+          "apps/api/src/members/members.service.ts:160 — remove takes the same lock",
+          "apps/api/src/organizations/signing-settings.service.ts:119 — organization.update inside a transaction (signatureProviderKey)"
+        ],
+        "note": "An unlocked UPDATE of Organization.countryCode issued while a member update or a member removal holds FOR UPDATE on that same row waits for that transaction to commit; it never reads stale and never interleaves. Waiting is the correct outcome and it is not a reason to add a lock REQ-01-033 rules out."
+      },
+      "notes": "Model the controller on apps/api/src/organizations/signing-settings.controller.ts, which is @Controller('api/organizations/:orgId/settings/signing') — the shape REQ-01-046 names. Guards are SessionGuard + OrgScopeGuard on the class; the capability check runs IN THE SERVICE, not through @RequireCapability, because CapabilityGuard answers every refusal with 403 and both halves of this route must answer 404. Copy HolidaysService.requireViewCapability / requireManageCapability (holidays.service.ts:239, 248), each of which throws a bare `new NotFoundException()` with no body — verified, and byte-identity with the wrong-organization 404 is the point. Query by session.organizationId, never the path orgId. The PUT validates with validateHolidayCountryCode and answers 422 HOLIDAY_MESSAGES.countryCodeInvalid; empty or null stores null. The PUT's response body is the GET's body carrying the value now stored. Register both flat in app.module.ts beside SigningSettingsController (app.module.ts:221) and HolidaysController (:211) — this repository registers these controllers flat, not in a feature module."
+    },
+
+    {
+      "id": "T5",
+      "title": "The member country on the two shipped member routes, and the restore that must leave it alone",
+      "files": [
+        "apps/api/src/members/members.service.ts",
+        "apps/api/src/members/members.controller.ts"
+      ],
+      "requirements": [42, 43, 44, 45, 48, 51],
+      "dependsOn": ["T1", "T2"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [
+        "apps/api/src/members/members.service.ts#getDetail:352-374 — the explicit projection; countryCode has to be added field by field, it does not ride along",
+        "apps/api/src/members/members.service.ts#updateDetail:388-458 — the write, inside the existing $transaction and the existing organization-row lock",
+        "apps/api/src/members/members.service.ts#restore:273 — writes `{ status: 'active', joinedAt, jobTitle: null }` and must NOT add countryCode (REQ-01-048)",
+        "apps/api/src/invitations/invitations.service.ts:529-531 — the SECOND restore path: re-inviting a removed member of the same organization writes `{ status: 'active', role, joinedAt, jobTitle: null }`. It must not add countryCode either, or REQ-01-048 holds on one route and not the other. TC-01-INT-28 walks the members route only."
+      ],
+      "concurrency": {
+        "rows": ["Membership", "Organization"],
+        "lock": "the shipped one: updateDetail already runs `SELECT id FROM \"Organization\" WHERE id = ... FOR UPDATE` at members.service.ts:404 and the whole handler runs in that transaction. countryCode is written by the same tx.membership.update at :457 and adds no lock of its own — which is REQ-01-042's stated reason it is unlike REQ-01-033's unlocked single column.",
+        "reread": ["Membership.role", "Membership.status", "the active-admin count"]
+      },
+      "notes": "The read is gated by no capability — MembersService.getDetail answers every role and gates only its two edit flags (verified at members.service.ts:305-311); REQ-01-045 keeps it that way, so a user and a viewer get the identical body, countryCode included, and null is returned as null rather than resolved. The write keeps its shipped refusal: `can(caller.role, 'edit-detail')` -> 403 MEMBER_MESSAGES.editForbidden (members.service.ts:398-401), unchanged by the new field. The field failure is 400, not 422 — an invalid role (`MESSAGES.role.invalid`) and an invalid job title are both BadRequestException today (members.service.ts:422, 426) and countryCode joins them, so one form never refuses one of its fields in a second status. Validation order in updateDetail is spec-05's and must not move: caller permission, existence, removed status, role validity, job title, role authority, zero-admin. Put the country check with the other field checks. Neither route gains a capability and neither gains a @RequireCapability decorator; MembersController (members.controller.ts:24-25) carries only SessionGuard + OrgScopeGuard and keeps them."
+    },
+
+    {
+      "id": "T6",
+      "title": "GET /api/organizations/{orgId}/time-off/calendar — the read the screen is built on",
+      "files": [
+        "apps/api/src/time-off/time-off-calendar.controller.ts",
+        "apps/api/src/time-off/time-off-calendar.service.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "requirements": [2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 39, 40, 41],
+      "dependsOn": ["T1", "T2", "T4", "T5"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [
+        "apps/api/src/time-off/time-off-calendar.controller.ts#read (new; the address answers 404 today — no controller in apps/api/src maps time-off/calendar, verified)"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — the calendar writes nothing. Invariant 1 of the State Machine: it never writes a VacationRequest, a VacationReserveTransaction or a Holiday, and TC-01-INT-12 and TC-01-INT-14 both assert no membership was written by a read.",
+        "reread": []
+      },
+      "notes": "Gate: SessionGuard + OrgScopeGuard on the class, then `can(normalizeRole(role), 'view-time-off-calendar')` in the service throwing a bare NotFoundException — never @RequireCapability, whose guard answers 403, and the refusal must be byte-identical to the wrong-organization 404 (REQ-01-002 and REQ-01-039). Hand the check the NORMALIZED role: a membership still storing 'member' normalizes to 'user' (roles.ts:32, LEGACY_ALIASES) and must be answered 200, because the sidebar draws its row from hasCapability, which normalizes — handing can() the raw stored value is the dead navigation REQ-01-004 forbids and is what TC-01-UNIT-04's last probe fails on. Validation order is Validation Rule 1..9 with the FIRST failure the whole answer: range required, range inverted, range too wide, scope invalid, teams/people required, then the row cap over the RESOLVED rows. Dates: VacationRequest.startDate/endDate and Holiday.date are all @db.Date (schema.prisma:742, 744, 912) — compare against the raw ISO range and never against a tz-shifted instant, which is what TC-01-INT-10 fails a DATE-against-TIMESTAMPTZ comparison on. `range.today` alone comes from Account.timezone, falling back to UTC on null, '' or an unrecognized zone (Edge case 18; the stored column is null until a member sets one and the account read projects that as '' — account.service.ts hands back the stored value and the settings read coerces). Scope resolution: all = every active membership; teams = the union of ProjectMember rows on the named projects (one row per membership, never one per assignment — ProjectMember is @@unique([projectId, membershipId]), schema.prisma:1016, and the union still needs a distinct over memberships); the `none` sentinel additionally returns every active membership with no ProjectMember row on any NON-archived project (Project.status, schema.prisma:784) — that archived flag is read ONLY by the none bucket, never by the named-project branch (Edge case 5). projectIds and memberIds are intersected with session.organizationId BEFORE they reach a where clause, so a foreign id is dropped rather than answered (REQ-01-010). holidays[] carries every holiday dated inside the window whatever country it names; holidayIds per member is the chain's OUTPUT, and appliesToAllInView is computed per holiday against the rows THIS response carries and no others. Bands carry the true startDate and endDate plus the two edge flags — clipped in the paint, never in the payload — and workingDays is the frozen column, never a recount. Emit no financial field and no MemberProfile field: TC-01-INT-01 asserts the absence over the whole body, and MemberProfile.country sits behind ViewMemberProfilePii and is never read here."
+    },
+
+    {
+      "id": "T7",
+      "title": "The calendar screen and the nav row",
+      "files": [
+        "apps/web/app/org/[orgId]/time-off/calendar/**",
+        "apps/web/src/layout/Sidebar.tsx"
+      ],
+      "requirements": [1, 3, 4, 12, 19, 22, 23, 30, 31, 32, 37, 38, 49],
+      "dependsOn": ["T2", "T6"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [
+        "apps/web/src/layout/Sidebar.tsx:152-165 — the `timeOff` submenu, which today holds Holidays (gated on hasCapability(role, 'ViewHolidays')) and the unconditional Requests row. The Calendar row is pushed FIRST, above Holidays, gated on hasCapability(role, 'ViewTimeOffCalendar')."
+      ],
+      "concurrency": { "rows": [], "lock": "none — a read screen", "reread": [] },
+      "notes": "'use client', fetch /api/... with credentials: 'same-origin'; no route handler and no server action. The filter bar is ReportControls (packages/ds/src/components/reports/ReportControls.tsx, exported from the package root at index.ts:97) in its scope + children shape, so the row is one announced <fieldset> with a clipped legend. The six segments are TWO ToggleButtons in their `options` form (packages/ds/src/components/core/ToggleButton.tsx, index.ts:31): the component draws a role=radiogroup of role=radio segments with one tab stop, arrow keys, the --radius-pill track and --shadow-toggle-active on the chosen one, and it takes a testId per option (ToggleButtonOption.testId) — which is the only way the six calendar-scope-* / calendar-window-* ids can be attached. Draw NO segmented control of your own. Import from '@devscribed/ds', the package root only; ds:check fails a deep import. The window presets are computed client-side from the caller's firstDayOfWeek, which the session already carries (apps/web/src/layout/session-context.tsx:13), through the shared helper of T2 — Month runs first-to-last of the displayed calendar month for both week starts. calendar-prev / calendar-next move by one preset length under Week and 2 weeks and by a whole calendar month under Month, never by the window's day count. A 422 draws calendar-error-banner ABOVE the grid and leaves the last good grid underneath rather than clearing it. Empty scope draws calendar-empty-state INSTEAD of calendar-grid; a month with no absences draws the full grid and no empty state. All 23 calendar-* ids of the testid table, and the member column at var(--name-col) sticky left: 0. The three band colours, --name-col and the two 3px literals are the DS gaps below — declared once on this page's own root, referenced through var(), never re-improvised per element, and no colour on the page written as a literal.",
+      "dsGapsCovered": ["absence-band colour", "sticky-column width", "sub---space-1 step"]
+    },
+
+    {
+      "id": "T8",
+      "title": "The two country pickers on the two shipped screens",
+      "files": [
+        "apps/web/app/org/[orgId]/settings/holidays/page.tsx",
+        "apps/web/app/org/[orgId]/members/[memberId]/MemberDetailScreen.tsx"
+      ],
+      "requirements": [33, 42, 43, 45, 46],
+      "dependsOn": ["T4", "T5"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/settings/holidays/page.tsx:306 — holidays-country-filter, the existing country filter the new org-country-select sits above",
+        "apps/web/app/org/[orgId]/members/[memberId]/MemberDetailScreen.tsx:270-320 — the About block holding RoleSelect and job-title-input, and its job-title-save-button"
+      ],
+      "concurrency": { "rows": [], "lock": "none — both write through endpoints planned above", "reread": [] },
+      "notes": "Settings > Holidays: a @ds Select labelled 'Organization country', hinted from TIME_OFF_CALENDAR_MESSAGES.orgCountryHint, above holidays-country-filter, with org-country-select and org-country-save. Its first-paint value is GET .../settings/country, fetched beside the holiday list the page already loads. The page is already a 404 for a user and a viewer (gated on view-holidays), so there is no read-only rendering to draw. Reuse HOLIDAY_COUNTRY_OPTIONS / country-options.ts, which already rebuilds COUNTRY_OPTIONS with plain names — the phone list's labels carry a dialling code and a flag emoji and the design system forbids emoji. Member About: a @ds Select labelled 'Country' with member-country-select, first option labelled from TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption and valued as null. WATCH THIS ONE: the tab's save button is `disabled={saving || !!jobTitleErr || !dirty}` (MemberDetailScreen.tsx:316) and `dirty` is computed from role and jobTitle only (:169-171). The country must join `dirty`, or the control saves nothing and TC-01-E2E-08's one-save-one-toast cannot happen. It saves through the PUT the form already submits (:186, which sends role and jobTitle) — no second form and no second save button. The control is drawn only for a caller who may save it, and no role sees either country read-only: member-country-select is simply absent for a user, which is what TC-01-E2E-08 asserts."
+    },
+
+    {
+      "id": "T9",
+      "title": "The suites, and the three fixture helpers the Verification Plan owes",
+      "files": [
+        "packages/validation/src/*.test.ts",
+        "apps/api/test/time-off-calendar.spec.ts",
+        "apps/api/test/holidays.spec.ts",
+        "apps/api/test/member-detail.spec.ts",
+        "e2e/tests/helpers.ts",
+        "e2e/tests/time-off-calendar.spec.ts",
+        "e2e/tests/reports-time-off.spec.ts",
+        "e2e/tests/holidays.spec.ts"
+      ],
+      "requirements": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51],
+      "dependsOn": ["T2", "T3", "T4", "T5", "T6", "T7", "T8"],
+      "migration": { "additive": true, "note": "no schema change in this task" },
+      "allCallSites": [],
+      "concurrency": { "rows": [], "lock": "none", "reread": [] },
+      "notes": "Three fixture helpers the spec's Verification Plan marks as not existing and owes to e2e/tests/helpers.ts: (1) promote createHolidayViaApi — note it exists as TWO private copies, e2e/tests/holidays.spec.ts:42 and e2e/tests/reports-time-off.spec.ts:38, and they differ (the holidays copy returns the created row and is used that way at :231; the reports copy returns void). Promote the returning shape and repoint both files, or the promotion leaves a third copy behind. (2) setMemberCountryViaApi, which TC-01-INT-12, TC-01-INT-25 and TC-01-E2E-08 all reach their state through. (3) setOrganizationCountryViaApi. Fixture facts the probe paid for and every new fixture must respect: accepting an invitation switches the cookie jar to the new member, so `login(request, adminEmail)` must run before EACH inviteAndAcceptViaApi or the second one answers 403; inviteAndAcceptViaApi takes the four-role enum and refuses 'member' with 400; updateAccountSettingsViaApi requires firstDayOfWeek capitalized ('Monday', not 'monday') and a real timezone, because an invited member's stored timezone is null and the settings read hands it back as ''. Every helper line the plan cites was checked and is exact: signupOrg helpers.ts:746, inviteAndAcceptViaApi :933, findMember :965, configureFinancials :989, seedReserveCredit :1072, submitVacationRequestViaApi :1093, reviewVacationRequestViaApi :1117, createProjectViaApi :1140, assignProjectMembersViaApi :1160, updateAccountSettingsViaApi :1310, removeMember :1346, setMembershipRole :172. TC-01-INT-17 seeds 101 active members and is the one integration case with a real fixture cost — build it through direct row creation rather than 101 invitation round-trips. TC-01-INT-19 must compute each zone's calendar date for the instant itself and write no date literal; Pacific/Kiritimati and Pacific/Niue are 25 hours apart so their answers never agree whichever hour the run starts. TC-01-INT-29 is the observer that the country chain answers on the holidays screen too, and it discriminates: today holidays.service.ts:103 resolves from the phone, so the shipped code returns the global holiday alone and the case fails until T3 lands. Run targeted, never whole: `npm test -- test/<file>.spec.ts` from apps/api (Jest 29 — the file filter is a positional path; --testPathPatterns is the Jest 30 spelling and is ignored silently here), and `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/time-off-calendar.spec.ts tests/regressions.spec.ts` from e2e. The reports and holidays suites are the backward-compatibility enforcement for the routes they cover and must stay green untouched."
+    }
+  ],
+
+  "reuse": [
+    { "what": "org scoping, 404 not 403, path orgId compared and never used as a selector", "where": "apps/api/src/auth/org-scope.guard.ts" },
+    { "what": "a capability gate that answers 404 with a bare NotFoundException, because CapabilityGuard can only answer 403", "where": "apps/api/src/holidays/holidays.service.ts:239 requireViewCapability, :248 requireManageCapability" },
+    { "what": "the caller's own active membership resolved from the session, never from the URL", "where": "apps/api/src/holidays/holidays.service.ts:220 requireCaller; apps/api/src/members/members.service.ts:286 requireCaller" },
+    { "what": "the settings route shape REQ-01-046 names for the new country pair", "where": "apps/api/src/organizations/signing-settings.controller.ts:25 @Controller('api/organizations/:orgId/settings/signing')" },
+    { "what": "flat controller registration — this repository registers HolidaysController and SigningSettingsController directly in app.module.ts rather than in feature modules", "where": "apps/api/src/app.module.ts:211, :221" },
+    { "what": "the ISO 3166-1 alpha-2 list and the upcase-then-check semantics the read chain needs", "where": "packages/validation/src/autofill.ts:682 validateCountryCode, :701 countryName, :717 COUNTRY_NAMES (249 codes)" },
+    { "what": "the shape-only country validator and its message, reused unchanged by both country writes", "where": "packages/validation/src/holidays.ts:93 validateHolidayCountryCode; packages/validation/src/holiday-messages.ts countryCodeInvalid" },
+    { "what": "REQ-01-028 and REQ-01-029 given a resolved country — already shipped and unchanged", "where": "packages/validation/src/reports.ts:509 isHolidayApplicableToMember" },
+    { "what": "role normalization, so the gate works on today's admin/member column and survives the enum migration", "where": "packages/validation/src/roles.ts:38 normalizeRole, :286 hasCapability; packages/validation/src/index.ts:842 can" },
+    { "what": "the member update's existing transaction and organization-row lock, which the member country write rides and adds nothing to", "where": "apps/api/src/members/members.service.ts:403-404" },
+    { "what": "the announced filter-bar fieldset with its clipped legend", "where": "packages/ds/src/components/reports/ReportControls.tsx" },
+    { "what": "the segmented control: radiogroup semantics, one tab stop, arrow keys, --radius-pill track, --shadow-toggle-active, and a testId per segment", "where": "packages/ds/src/components/core/ToggleButton.tsx" },
+    { "what": "the country picker options rebuilt with plain names rather than the phone list's dialling codes and flag emoji", "where": "apps/web/app/org/[orgId]/settings/holidays/country-options.ts" },
+    { "what": "the Time off sidebar group the Calendar row joins above Holidays", "where": "apps/web/src/layout/Sidebar.tsx:152-165" }
+  ],
+
+  "buildFromZero": [
+    "Membership.countryCode and Organization.countryCode — neither column exists; verified against apps/api/prisma/schema.prisma models Membership (:226) and Organization (:174).",
+    "resolveMemberHolidayCountry in packages/validation/src/reports.ts — the chain of REQ-01-026, REQ-01-027 and REQ-01-040. Nothing in the repository resolves a member's country from a stated column today; the only resolver, HolidaysService.normalizeResolvedCountry, reads the phone and is shape-only.",
+    "TIME_OFF_CALENDAR_MESSAGES — a new module beside packages/validation/src/holiday-messages.ts, eleven rows.",
+    "ViewTimeOffCalendar in the Capability union and all four ROLE_CAPABILITIES rows, and view-time-off-calendar in MemberCapability and all four CAPABILITY_MATRIX rows.",
+    "The calendar query validators (Validation Rules 1-8) and the Week / 2 weeks / Month preset computation — no report validator covers a 92-day bound, a scope enum of these three values or a row cap.",
+    "GET /api/organizations/{orgId}/time-off/calendar — controller, service, response assembly. Nothing answers this address today: no controller under apps/api/src maps time-off/calendar, and the spec's probe observed 404 against it.",
+    "GET and PUT /api/organizations/{orgId}/settings/country — both new.",
+    "The whole calendar screen: page, filter bar, teams and people pickers with the Unassigned entry, window presets, range navigation, legend, grid, day headers, whole-column and per-cell holiday marks, weekend shading, bands with their accessible names, empty state, error banner.",
+    "The Calendar sidebar row.",
+    "The organization-country control on Settings > Holidays and the country control in the member About block.",
+    "Three e2e fixture helpers — createHolidayViaApi promoted out of two private copies, setMemberCountryViaApi, setOrganizationCountryViaApi.",
+    "The three DS-gap declarations local to the calendar page: --surface-timeoff-band, --border-timeoff-band, --text-timeoff-band and --name-col."
+  ],
+
+  "testCases": {
+    "unit": ["TC-01-UNIT-01", "TC-01-UNIT-02", "TC-01-UNIT-03", "TC-01-UNIT-04"],
+    "int": [
+      "TC-01-INT-01", "TC-01-INT-02", "TC-01-INT-03", "TC-01-INT-04", "TC-01-INT-05",
+      "TC-01-INT-06", "TC-01-INT-07", "TC-01-INT-08", "TC-01-INT-09", "TC-01-INT-10",
+      "TC-01-INT-11", "TC-01-INT-12", "TC-01-INT-13", "TC-01-INT-14", "TC-01-INT-15",
+      "TC-01-INT-16", "TC-01-INT-17", "TC-01-INT-18", "TC-01-INT-19", "TC-01-INT-20",
+      "TC-01-INT-21", "TC-01-INT-22", "TC-01-INT-23", "TC-01-INT-24", "TC-01-INT-25",
+      "TC-01-INT-26", "TC-01-INT-27", "TC-01-INT-28", "TC-01-INT-29"
+    ],
+    "e2e": [
+      "TC-01-E2E-01", "TC-01-E2E-02", "TC-01-E2E-03", "TC-01-E2E-04",
+      "TC-01-E2E-05", "TC-01-E2E-06", "TC-01-E2E-07", "TC-01-E2E-08"
+    ]
+  },
+
+  "caseOwners": {
+    "T2": ["TC-01-UNIT-01", "TC-01-UNIT-02", "TC-01-UNIT-03", "TC-01-UNIT-04"],
+    "T3": ["TC-01-INT-29"],
+    "T4": ["TC-01-INT-15", "TC-01-INT-20", "TC-01-INT-21", "TC-01-INT-24"],
+    "T5": ["TC-01-INT-25", "TC-01-INT-26", "TC-01-INT-27", "TC-01-INT-28"],
+    "T6": [
+      "TC-01-INT-01", "TC-01-INT-02", "TC-01-INT-03", "TC-01-INT-04", "TC-01-INT-05",
+      "TC-01-INT-06", "TC-01-INT-07", "TC-01-INT-08", "TC-01-INT-09", "TC-01-INT-10",
+      "TC-01-INT-11", "TC-01-INT-12", "TC-01-INT-13", "TC-01-INT-14", "TC-01-INT-16",
+      "TC-01-INT-17", "TC-01-INT-18", "TC-01-INT-19", "TC-01-INT-22", "TC-01-INT-23"
+    ],
+    "T7": ["TC-01-E2E-01", "TC-01-E2E-02", "TC-01-E2E-03", "TC-01-E2E-04", "TC-01-E2E-05", "TC-01-E2E-06"],
+    "T8": ["TC-01-E2E-07", "TC-01-E2E-08"]
+  },
+
+  "testIds": [
+    "nav-time-off-calendar", "time-off-calendar-page",
+    "calendar-scope-all", "calendar-scope-teams", "calendar-scope-people",
+    "calendar-teams-picker", "calendar-people-picker",
+    "calendar-window-week", "calendar-window-2weeks", "calendar-window-month",
+    "calendar-prev", "calendar-next", "calendar-today", "calendar-range-label",
+    "calendar-legend", "calendar-grid",
+    "calendar-day-header-{date}", "calendar-day-holiday-{date}",
+    "calendar-member-row-{membershipId}", "calendar-cell-holiday-{membershipId}-{date}",
+    "calendar-absence-{vacationRequestId}", "calendar-empty-state", "calendar-error-banner",
+    "org-country-select", "org-country-save", "member-country-select"
+  ],
+
+  "sections": {
+    "Summary": "T1, T2, T4, T5, T6, T7, T8 — the whole change, restated in the implementer's terms in this plan's summary",
+    "Actors & Preconditions": "T6, T7 — the gate (admin/manager/user hold it, viewer does not) and the empty-rather-than-error precondition are implemented in the calendar service and screen; TC-01-INT-02, TC-01-E2E-06, TC-01-INT-22",
+    "Roles & Permission Matrix": "T2 — both capability unions and all four role rows in each; the ViewHolidays / ManageHolidays / edit-detail rows are shipped grants reused by T4 and T5 with no new capability",
+    "Functional Requirements": "T1, T2, T3, T4, T5, T6, T7, T8 — all 50 numbered requirements are assigned; see each task's requirements array",
+    "State Machine": "T6 — the calendar returns a band for approved and pending and none for rejected or cancelled, and writes nothing. The machine itself belongs to user-management/09 and is not touched. Invariants 1 and 2 are asserted by TC-01-INT-09 and TC-01-INT-10; invariant 3 by TC-01-INT-01's days[] assertion",
+    "Out of Scope": "no task — six exclusions, each of which is work this plan deliberately does not contain: absence types (kind stays the constant 'vacation' per REQ-01-025), a balance column, booking or approving from the calendar, a Quarter preset, excluding holidays from workingDays, and export",
+    "Known Gaps": "no task — four accepted gaps. Three are product states this release ships with (no absence types; both columns null on the day the migration lands; a member with neither country sees global holidays only) and one is a measurement owed to docs/research/ for the flat 100 cap. The deploy-day step the second gap names — state the organization country in the same change window — is an operational instruction, not code, and belongs in the release note rather than in a task",
+    "Acceptance Criteria": "T2, T3, T4, T5, T6, T7, T8, T9 — all 20 criteria; every case each criterion names is in testCases and owned in caseOwners",
+    "Routes (contracts)": "T4, T5, T6 — six routes: three new, two shipped member routes gaining one field each, and GET .../holidays unchanged but re-answered by the new chain (T3, TC-01-INT-29)",
+    "Error Messages (contracts)": "T2 — eleven new TIME_OFF_CALENDAR_MESSAGES rows; three reused rows verified verbatim in the shipped code",
+    "Data Model (contracts)": "T1 — the two nullable columns; T2 — the five shared-code exports and the four call sites that must adopt the chain, which is T3",
+    "Validation Rules (contracts)": "T2 — the nine rules, first-failure-wins ordering, and the deliberate client/server split (5 and 8 server-only); T6 re-runs all nine server-side",
+    "Required data-testid Attributes (contracts)": "T7, T8 — all 26 ids; see testIds",
+    "Screens (contracts)": "T7 — the calendar page against the mock; T8 — the two shipped screens each gaining one control",
+    "UI Description (contracts)": "T7, T8 — loading, both empty states, the 422 banner that leaves the last good grid, the permission-limited renderings, the narrow viewport and the keyboard. Three of these rows explicitly carry no case, with the reason stated in the spec, and this plan does not invent one",
+    "DS gaps (contracts)": "T7 — three gaps, each declared locally on the calendar page and recorded in dsGaps below; nothing is improvised per element and nothing enters @ds this release",
+    "Edge Cases (contracts)": "T5, T6, T7 — twenty rows. Eight are covered by a named case; the other twelve state the exact behaviour of a branch the tasks implement and the spec says of each why it earns no case of its own",
+    "Security (contracts)": "T4, T5, T6 — org scoping by session.organizationId, byte-identical 404s, no money and no PII in the payload (both asserted by TC-01-INT-01 over the whole body), the read-wider-than-write split, and no new outbound call, secret or AWS resource",
+    "Verification Plan (cases)": "T9 — the three fixture helpers the plan marks as owed, plus the three fixture facts the probe paid for. The 'Not proven' rows are closed by TC-01-INT-12, TC-01-INT-25, TC-01-INT-14, TC-01-INT-15 and TC-01-INT-09, all of which are in testCases",
+    "Test Cases (cases)": "T2, T3, T4, T5, T6, T7, T8, T9 — all 41 live cases; see caseOwners"
+  },
+
+  "messages": [
+    { "context": "Calendar: range absent or not an ISO date", "export": "TIME_OFF_CALENDAR_MESSAGES.rangeRequired", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts (new) — 422", "new": true },
+    { "context": "Calendar: end before start", "export": "TIME_OFF_CALENDAR_MESSAGES.rangeInverted", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts (new) — 422", "new": true },
+    { "context": "Calendar: range over 92 days", "export": "TIME_OFF_CALENDAR_MESSAGES.rangeTooWide", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts (new) — 422", "new": true },
+    { "context": "Calendar: scope absent or unknown", "export": "TIME_OFF_CALENDAR_MESSAGES.scopeInvalid", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts (new) — 422, server-only rule 5", "new": true },
+    { "context": "Calendar: scope=teams with an empty selection", "export": "TIME_OFF_CALENDAR_MESSAGES.teamsRequired", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts (new) — 422", "new": true },
+    { "context": "Calendar: scope=people with an empty selection", "export": "TIME_OFF_CALENDAR_MESSAGES.peopleRequired", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts (new) — 422", "new": true },
+    { "context": "Calendar: more than 100 resolved rows", "export": "TIME_OFF_CALENDAR_MESSAGES.tooManyMembers", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts (new) — 422, server-only rule 8", "new": true },
+    { "context": "Calendar empty state, title", "export": "TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "the calendar screen — no route", "new": true },
+    { "context": "Calendar empty state, body", "export": "TIME_OFF_CALENDAR_MESSAGES.emptyStateBody", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "the calendar screen — no route", "new": true },
+    { "context": "Organization country field hint", "export": "TIME_OFF_CALENDAR_MESSAGES.orgCountryHint", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "Settings > Holidays — no route", "new": true },
+    { "context": "Member country picker's default option", "export": "TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption", "module": "packages/validation/src/time-off-calendar-messages.ts (new)", "emittedBy": "member detail > About — no route; asserted by TC-01-E2E-08", "new": true },
+    { "context": "An invalid country on either write", "export": "HOLIDAY_MESSAGES.countryCodeInvalid", "module": "packages/validation/src/holiday-messages.ts — SHIPS, verified verbatim: 'Country code must be 2 uppercase letters.'", "emittedBy": "PUT .../settings/country — 422 (REQ-01-036); PUT .../members/{memberId} — 400 (REQ-01-051). One message, two statuses, deliberately.", "new": false },
+    { "context": "A caller without edit-detail submits a member country", "export": "MEMBER_MESSAGES.editForbidden", "module": "packages/validation/src/index.ts:515 — SHIPS, verified verbatim: 'You do not have permission to edit members'", "emittedBy": "apps/api/src/members/members.service.ts:398-401 — 403, the shipped refusal, unchanged by the new field", "new": false },
+    { "context": "The member detail read for a caller who is no longer an active member", "export": "MEMBER_MESSAGES.viewForbidden", "module": "packages/validation/src/index.ts:520 — SHIPS, verified verbatim: 'You do not have permission to view this member'", "emittedBy": "apps/api/src/members/members.service.ts:313-316 — 403, shipped and unchanged", "new": false }
+  ],
+
+  "premises": [
+    { "claim": "Migrations run before the services roll out, from the image about to be deployed, so new schema precedes new code; and additive migrations are what make the reverse (old code, new schema) safe, which is why a code rollback needs no database rollback", "verifiedAt": "infra/deploy.sh:27 — '**Migrations run BEFORE the rollout**, and the order is the whole point', with steps 5 and 6 at :19 and :20", "status": "true" },
+    { "claim": "The calendar address is free — nothing answers GET /api/organizations/{orgId}/time-off/calendar today", "verifiedAt": "no controller under apps/api/src maps time-off/calendar; the only time-off routes are reports.controller.ts:128, :133, :138, :155", "status": "true" },
+    { "claim": "MembersService.getDetail builds its projection field by field, so countryCode has to be added to it rather than assumed to ride along", "verifiedAt": "apps/api/src/members/members.service.ts:352-374", "status": "true" },
+    { "claim": "The member country is written inside the member update's existing transaction and organization-row lock and adds no lock of its own", "verifiedAt": "apps/api/src/members/members.service.ts:403-404 — `this.prisma.$transaction` then `SELECT id FROM \"Organization\" ... FOR UPDATE`, with the membership write at :457", "status": "true" },
+    { "claim": "PUT .../members/{memberId} refuses an invalid role and an invalid job title with 400 today, which is the status countryCode joins", "verifiedAt": "apps/api/src/members/members.service.ts:422 (BadRequestException, MESSAGES.role.invalid) and :426 (BadRequestException, errors.jobTitle)", "status": "true" },
+    { "claim": "The member restore clears the job title beside the country, and leaving countryCode alone is therefore a deliberate omission rather than an accident", "verifiedAt": "apps/api/src/members/members.service.ts:273-275 — `data: { status: 'active', joinedAt: new Date(), jobTitle: null }`", "status": "true" },
+    { "claim": "No route in the holidays area carries RequireCapability; the checks run in the service so a refusal can be 404", "verifiedAt": "apps/api/src/holidays/holidays.controller.ts:27-28 carries only SessionGuard and OrgScopeGuard; requireViewCapability (holidays.service.ts:239) and requireManageCapability (:248) each `throw new NotFoundException()` bare. MembersController (members.controller.ts:24-25) likewise carries only the two guards", "status": "true" },
+    { "claim": "scope=mine on the holidays list needs no capability — every member's Time Tracking calendar reads it", "verifiedAt": "apps/api/src/holidays/holidays.service.ts:86-91 — the mine branch calls requireCaller, not requireViewCapability", "status": "true" },
+    { "claim": "Exactly four call sites resolve a member's country from Account.phoneCountryCode", "verifiedAt": "holidays.service.ts:103, reports.service.ts:552, :1047, :1884. A repository-wide grep for phoneCountryCode under apps/api/src returns only these four plus account.service.ts:72/94, which is the phone field that owns the column, and two comments", "status": "true" },
+    { "claim": "The shape api/organizations/:orgId/settings/signing ships, and is the model REQ-01-046 names for the country pair", "verifiedAt": "apps/api/src/organizations/signing-settings.controller.ts:25", "status": "true" },
+    { "claim": "isHolidayApplicableToMember already ships and already answers REQ-01-028 and REQ-01-029 case-insensitively given a resolved country", "verifiedAt": "packages/validation/src/reports.ts:509-516 — null holiday country is global; a null member country matches no country-scoped holiday; comparison is toUpperCase on both sides", "status": "true" },
+    { "claim": "Both capability types are exhaustively keyed, so adding a member forces every role's entry to be revisited at compile time", "verifiedAt": "packages/validation/src/roles.ts:131 ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]>; packages/validation/src/index.ts:660 CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>>", "status": "true" },
+    { "claim": "A membership storing the legacy 'member' normalizes to 'user'", "verifiedAt": "packages/validation/src/roles.ts:30-32 LEGACY_ALIASES = { member: 'user' }, applied by normalizeRole at :38", "status": "true" },
+    { "claim": "The sidebar has a Time off group holding Holidays and Requests, which the Calendar row joins above Holidays", "verifiedAt": "apps/web/src/layout/Sidebar.tsx:152-165", "status": "true" },
+    { "claim": "The DS carries every token the mock names outside its own root", "verifiedAt": "--shadow-toggle-active at packages/ds/src/tokens/effects.css:19; --space-10 at spacing.css:17; --radius-s at :38; --radius-pill at :46; --layout-breakpoint-desktop at :35; --color-holiday at colors.css:21. ToggleButton and ReportControls are both exported from the package root (packages/ds/src/index.ts:31, :97)", "status": "true" },
+    { "claim": "ToggleButton takes a data-testid per segment and owns the roving tab stop, so the six calendar segments need no control of their own", "verifiedAt": "packages/ds/src/components/core/ToggleButton.tsx — ToggleButtonOption.testId at :11, the role=radiogroup / role=radio and arrow-key note at :41-46, the options list form at :48", "status": "true" },
+    { "claim": "The mock writes no colour as a literal", "verifiedAt": "a grep of specs/time-off/01-vacation-calendar.mock.html for rgba(, rgb( and hex returns zero matches; the only colour values are the three oklch() names declared in the page's own :root at :17-22", "status": "true" },
+    { "claim": "Every e2e helper the Verification Plan cites exists at the line it cites", "verifiedAt": "all twelve checked line by line against e2e/tests/helpers.ts — see T9's notes for the list", "status": "true" },
+    { "claim": "createHolidayViaApi is private to a spec file and must be promoted", "verifiedAt": "TRUE BUT INCOMPLETE — it is private to TWO files, e2e/tests/reports-time-off.spec.ts:38 (which the spec names) and e2e/tests/holidays.spec.ts:42 (which it does not), and the two copies return different things. Recorded as note N3; it changes the promotion task, not the design", "status": "incomplete" },
+    { "claim": "spec-lint is clean over the bundle", "verifiedAt": "`node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md` -> clean; 50 requirements, 41 cases, 6 routes, 14 messages, 26 testids — which reconciles exactly with this plan's coverage", "status": "true" }
+  ],
+
+  "doubleBehaviours": [],
+  "doubleBehavioursNote": "None. This spec has no External Contracts section and names no system we do not own: no third-party call, no key, no MCP server, no new secret and no new AWS resource. The cases file states it outright under 'Access this needs' — 'None. Every observation above was made against this repository's own API on its own ports.' There is therefore no Assumed row carrying a requirement, and nothing to build a double from.",
+
+  "dsGaps": [
+    { "missing": "An absence-band colour set — the approved fill and border, the pending hatch and dashed border, the band label, and the legend's two swatches", "resolution": "Declared once on the calendar page's own root as --surface-timeoff-band, --border-timeoff-band and --text-timeoff-band and read through var() everywhere a band, its border, its hatch or its label is drawn, so no colour on this screen is a literal. Violet, which none of --status-success, --status-warning, --status-error, --status-info or --color-holiday uses, so a band reads as a category and not as a claim about how somebody is doing. Closed by the three names entering @ds as time-off category tokens with the page's local block deleted in the same change — the policy catalogue wants a colour per absence type and this is the first of that set. Never improvised per element." },
+    { "missing": "A layout token for a pinned first column", "resolution": "--name-col: 264px, declared beside the three colours and referenced by every row's grid-template-columns. Closed by a pinned-first-column token in @ds, which the reports tables would take as well." },
+    { "missing": "Any step below --space-1 (4px)", "resolution": "Two 3px measures stay as literals, each carrying an @literal comment and its reason: the margin on each side of a band, which is what separates two adjacent bands and which 4px would eat the day column for; and the 3px stripe of the pending hatch in the legend swatch — note this is the LEGEND swatch's stripe (mock :97, 0 3px / transparent 3px 6px), not the band's own hatch (mock :164-165, 0 4px / transparent 4px 8px), which is not below --space-1. Closed by a sub---space-1 step in @ds or a band-gap token." }
+  ],
+
+  "dsSettled": "Three measures that would otherwise have been improvised are already answered by the package and must not be re-declared: the band's height is --space-10, the legend swatch's corner is --radius-s, and the two segmented controls are ToggleButton with the track, pill and shadow that component owns. Drawing a segmented control on this page would put a second shadow colour beside the package's and a second keyboard beside its roving tab stop.",
+
+  "risks": [
+    { "risk": "The member About save button is disabled unless the form is dirty, and dirty is computed from role and jobTitle only (MemberDetailScreen.tsx:169-171, :316). Adding the country Select without adding it to dirty produces a control that changes and never saves, and TC-01-E2E-08's 'one save, one toast' cannot be observed.", "mitigation": "T8 extends the dirty computation to the country. Note this is a pre-existing disabled-for-state button on a shipped screen, not a new one; the repository rule about never disabling for validation is not being widened here, and nothing in this spec asks for that button's behaviour to change beyond including the new field." },
+    { "risk": "The read chain and the write validator mean two different things by 'a valid alpha-2 value', and reusing validateHolidayCountryCode for the read is the natural mistake — it is what HolidaysService.normalizeResolvedCountry does today. That single reuse fails TC-01-UNIT-01 on two branches at once ('pl' refused instead of upcased, 'XX' returned instead of skipped) and silently breaks REQ-01-027 and REQ-01-040.", "mitigation": "T2 names both predicates and their files explicitly. TC-01-UNIT-01's ('XX','PL') and ('XX','YY') pairs are the discriminating cases and they run in under a second." },
+    { "risk": "Dropping Account.phoneCountryCode as a holiday source moves money on Amounts Owed the moment T3 lands, and it moves it DOWN first: a member whose only country was their phone's resolves to null and stops receiving that country's holiday rows until somebody states a country. The spec's own probe measured the shape — one PL holiday produced one holiday row (320.00) against five (1280.00) for a global day in a five-member fixture.", "mitigation": "Not a code mitigation: stating the organization country on Settings > Holidays in the same change window as the deploy is the step, and it restores and then widens what was being paid. It belongs in the release note. The migration alone changes nothing because both columns land null and the chain is evaluated on read, so nothing is stored wrong in the meantime and a rollback needs no data repair." },
+    { "risk": "T3 changes four call sites that three shipped E2E suites cover (reports-amounts-owed, reports-time-and-activity, reports-time-off) and one integration suite (holidays). Those suites are the backward-compatibility enforcement named in the README and this area does not otherwise touch them.", "mitigation": "Run them targeted after T3 rather than at the end. Any fixture in them that relied on a phone country to reach a national holiday set now needs a stated country instead — that is the change working, not a regression, but it must be recognised as such rather than patched by re-adding the phone read." },
+    { "risk": "TC-01-INT-17 needs 101 active members in one organization. Built through invitation round-trips — each of which needs an admin re-login, per the probe's own finding — it is minutes, not the half-second an integration case is supposed to cost.", "mitigation": "Seed the memberships directly rather than through the invitation flow. The case asserts a row count against a cap; it does not need a real acceptance journey for any of the 101." },
+    { "risk": "An unlocked write to Organization.countryCode contends with two shipped transactions that hold SELECT ... FOR UPDATE on that same row (members.service.ts:160 remove, :404 updateDetail) and one that updates it (signing-settings.service.ts:119). The write waits.", "mitigation": "Waiting is correct and REQ-01-033 rules out a lock explicitly — one column, no read-modify-write, last-write-wins. Recorded in T4's concurrency so a reviewer does not read the missing lock as an omission." },
+    { "risk": "The calendar's response assembles days, holidays, per-member holiday resolution and bands for up to 100 members over up to 92 days. A naive implementation resolves the country and re-tests every holiday per member per day.", "mitigation": "Resolve each member's country once, test each holiday against each member once (holidays in a 92-day window are a handful), and emit holidayIds per member. appliesToAllInView is one pass over the resolved rows. No case measures this and none should; it is named here so the shape is chosen deliberately rather than discovered." }
+  ],
+
+  "openQuestions": [],
+  "notes": "Nothing in this spec was found unplannable. The three findings recorded in the verdict are notes — one incomplete premise about a fixture helper, one case whose fixture must supply an input the case does not name, and one deliberate asymmetry worth writing into the code as a comment so the next reader does not 'fix' it."
+}

@@ -1,0 +1,79 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/requests/03-client-participants.md",
+  "specSha": "6da7bca30f907aa75e473f481b949810266f1e6c5b9f212f366641494b1ab83d",
+  "handoff": ".workflow/runs/2026-09-03T16-00-49_requests-03-client-participants/handoff.json",
+  "report": ".workflow/runs/2026-09-03T16-00-49_requests-03-client-participants/stages/pre_implement.md",
+  "addressed": [
+    {
+      "finding": "F1 — reassign clears the client addressee and writes no old label",
+      "disposition": "planned (T5), one half contested",
+      "detail": "Confirmed at apps/api/src/requests/requests.service.ts#reassignRequest: `previous` is read from locked.assigneeMembershipId alone, so a client-addressed row produces oldValue/oldLabel null while assigneeClientMembershipId is cleared. T5 reads the outgoing ClientMembership from the locked row inside the same transaction and snapshots its id and display name, which spec 01 requirement 35 and this spec's contracts both require unconditionally. Contested: 'stop drawing the Reassign control for a client-addressed row'. Counter-witness — spec 01 requirement 35 restricts the reassign TARGET to a member and not the row; requirement 36 makes the inactive-addressee flag draw 'the reassign banner and the reassign control on the detail screen', repeated by the UI-states row 'Addressee inactive | reassign offered to admin/manager only'; spec 03 withdraws neither in any numbered requirement, and its Known Gaps row names what is missing as a reassign path that ACCEPTS a client addressee — the body naming a contact, which stays refused with 400 assigneeInvalid. Withdrawing a shipping control so a transition a numbered requirement grants is unreachable is a product decision nobody wrote down; it is carried as note P2 instead. The two comments that assert the opposite of what the code does are corrected by the same task."
+    },
+    {
+      "finding": "F2 — a `user` may address a contact but may not list one",
+      "disposition": "fixed in the spec by a person; compiled here",
+      "detail": "Commit 30401b4 adds REQ-03-043 and GET /api/organizations/{orgId}/request-contacts on `create-request`, bounded by REQ-03-023's projects, and leaves the client-detail contacts route on `view-clients`. Re-checked the bundle for a residual disagreement: the Routes table carries both rows with different guards, the contracts say which caller each is for, and the matrix row for `user` is now satisfiable (`create-request` true, `list-assigned-projects` true). Planned as T11 (route and service), T9 (the modal reads it instead of the clients-then-contacts loop) and T10 (TC-03-INT-36)."
+    },
+    {
+      "finding": "F3 — TC-03-E2E-03's hand-built contexts carry no baseURL",
+      "disposition": "planned (T10)",
+      "detail": "Confirmed: e2e/playwright.config.ts:72 declares baseURL under `use`, which reaches the context/page fixtures only, so page.goto('/login') on a browser.newContext() context is an invalid URL and throws before the first assertion. Every other hand-built context in the suite navigates absolutely (envelopes-signing.spec.ts:102, outbox.spec.ts:87, regressions.spec.ts:134). T10 takes the baseURL fixture in the test signature and passes it to both contexts."
+    },
+    {
+      "finding": "F4 — the members screen renders for a client contact",
+      "disposition": "planned (T7), at the class rather than the instance",
+      "detail": "Confirmed: apps/web/app/org/[orgId]/members/page.tsx has no gate; the 404 read leaves members null and the render falls to MembersLoadingSkeleton under the header, the search field and the show-removed checkbox. It is the only staff screen in that state because it is the only one every staff role may see. The gate goes in apps/web/app/org/[orgId]/layout.tsx, where the principal is already resolved before anything renders: a client principal outside the requests destination calls notFound(). That covers all twenty-one organization pages, including the member detail and project sub-pages which have no gate of their own, and holds for screens not yet written; T7's allCallSites enumerates them with what each does today. T10 strengthens TC-03-E2E-02 to assert members-search-input and show-removed-checkbox absent, not only members-list."
+    },
+    {
+      "finding": "F5 — TC-03-UNIT-02 asserts a normalized role where the case names the absent one",
+      "disposition": "planned (T10)",
+      "detail": "Confirmed: can is CAPABILITY_MATRIX[role]?.[capability] ?? false (packages/validation/src/index.ts:785-787), so can(null, 'view-own-requests') is false and the case's stated expectation is directly assertable. T10 asserts the pair the case names — hasCapability(null,'ViewOwnRequests') true and can(null as unknown as Role,'view-own-requests') false — and rewrites the comment to describe the assertions actually made."
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-035",
+      "claim": "A decline writes two RequestEvents in one transaction, so a per-event reading of REQ-03-035 produces two outbox rows per recipient for one decline, and no case asserts the count either way.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/src/requests/requests.service.ts#transition records a `message_posted` event for the decline reason AND a `status_changed` event in the same transaction. REQ-03-035 writes one row per recipient 'in the same transaction as the RequestEvent' and REQ-03-039's uniqueness key is ([eventId, recipientKind, recipientId]) — both per event, so a decline notifies its recipient twice. TC-03-INT-21 exercises decline and asserts nothing about the outbox; TC-03-INT-24 asserts counts for create, message and answer only. Either reading ships green."
+      },
+      "suggestedFix": "if one notification per decline is wanted rather than two, say so in REQ-03-035 and add a count assertion to TC-03-INT-21"
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "Known Gaps — row 2",
+      "claim": "Nobody has decided whether staff may take a client-addressed request away from the contact and hand it to a colleague. The route accepts it, spec 01 requirement 35 permits it, and the row it leaves carries a client-audience topic with a member addressee — a pairing REQ-03-024 refuses at creation and constrains nowhere afterwards.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A request is created with assigneeKind='client' under a client-audience topic. An admin POSTs …/reassign with assigneeKind='member': the row becomes member-addressed, assigneeClientMembershipId is cleared, and the request leaves the contact's list and answers them 404. Spec 01 requirement 35 permits it ('reassign an open or answered request to a different member' — the restriction is on the target) and requirement 36 draws the control; spec 03's Known Gaps row says a removed contact's open requests are 'flagged but not reassigned', which reads either as 'nothing reassigns automatically' (edge case 5 uses the same words for exactly that) or as 'the route refuses the row'. The plan takes the first reading, which leaves every written statement true, and repairs the trail so the event names who the request was taken from. Under the second reading the route would answer 400 for a client-addressed row — a refusal no document states."
+      },
+      "suggestedFix": "one sentence in the spec: either a numbered requirement stating that a client-addressed request may be reassigned to a member and what the event records, or one refusing it with a named status and message"
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-043",
+      "claim": "REQ-03-043 says 'every client owning a project that member is assigned to' without naming project status, while the create route it exists to mirror refuses an archived project. The plan filters to active projects; the requirement does not say so.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A member is assigned to one project of client Acme and that project is archived. REQ-03-043 read literally returns Acme's contacts; addressing one of them is then 400 REQUEST_MESSAGES.projectUnavailable at apps/api/src/requests/requests.service.ts#createRequest, since the project read tests status before the assignment check. The requirement's own Decided line — 'the boundary the create route already enforces, so the picker offers what the server accepts' — is what the plan follows. TC-03-INT-36 does not cover an archived project, so either implementation passes it."
+      },
+      "suggestedFix": "add the word to REQ-03-043 and a fourth caller or fixture to TC-03-INT-36 if the narrowing is wanted; drop it from the plan if it is not"
+    }
+  ]
+}

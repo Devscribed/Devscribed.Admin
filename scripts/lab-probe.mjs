@@ -51,7 +51,7 @@ console.log(`▶ ${model}/${effort} · ${files.length} file(s) · ${label}`);
 const started = Date.now();
 const r = spawnSync(
   'claude',
-  ['-p', prompt, '--agent', 'review-shard', '--permission-mode', 'acceptEdits', '--output-format', 'json', '--model', model, '--effort', effort],
+  ['-p', prompt, '--agent', 'code-reviewer-sweeps', '--permission-mode', 'acceptEdits', '--output-format', 'json', '--model', model, '--effort', effort],
   { cwd: ROOT, encoding: 'utf8', timeout: fuseMin * 60_000, maxBuffer: 32 * 1024 * 1024 },
 );
 const secs = Math.round((Date.now() - started) / 1000);

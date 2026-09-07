@@ -1,0 +1,12 @@
+{
+  "stage": "qa",
+  "attempt": 1,
+  "agent": "qa",
+  "model": "sonnet",
+  "resumedSession": null,
+  "fuseMin": 30,
+  "via": "sdk",
+  "startedAt": "2026-09-04T11:45:32.564Z",
+  "baseRef": "00049feefa3a5f514b57fef557e6aa6f892588f1",
+  "head": "4778de8ecd2f0e938ceece8bc99e33243f00f2fc"
+}

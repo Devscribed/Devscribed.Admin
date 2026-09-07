@@ -24,7 +24,13 @@ export class LoginService {
 
     const account = await this.prisma.account.findUnique({
       where: { email },
-      include: { memberships: { where: { status: 'active' } } },
+      include: {
+        memberships: { where: { status: 'active' } },
+        // Requests spec 03 REQ-03-003 — the second kind of principal an account may
+        // hold. Read here rather than in a second query so the decision below is made
+        // against one snapshot.
+        clientMembership: true,
+      },
     });
 
     // Unknown email and wrong password must be indistinguishable (requirement 4),
@@ -32,9 +38,22 @@ export class LoginService {
     if (!account) throw this.invalidCredentials();
 
     // Checked *before* the password (requirement 6): verifying first would let a
-    // caller tell a correct password from a wrong one on a deactivated account.
+    // caller tell a correct password from a wrong one on a deactivated account. That
+    // ordering is unchanged by requests spec 03; only the set of accounts that pass it
+    // grows, by REQ-03-002's table — an active staff row wins, an active client row
+    // alone resolves the client principal and every other cell is still the deactivated
+    // refusal (REQ-03-004, REQ-03-007).
     const membership = account.memberships[0];
-    if (!membership) {
+    const contact =
+      account.clientMembership && account.clientMembership.status === 'active'
+        ? account.clientMembership
+        : null;
+    const organizationId = membership
+      ? membership.organizationId
+      : contact
+        ? contact.organizationId
+        : null;
+    if (!organizationId) {
       throw new BadRequestException({ message: AUTH_MESSAGES.deactivated });
     }
 
@@ -43,7 +62,7 @@ export class LoginService {
 
     return {
       accountId: account.id,
-      organizationId: membership.organizationId,
+      organizationId,
       securityStamp: account.securityStamp,
     };
   }

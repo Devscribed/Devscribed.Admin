@@ -31,6 +31,42 @@ and the member detail tabs from spec 05 (it adds a Contract details tab). It als
 first role-based authorization in the codebase and, until the role enum below is migrated, resolves
 capabilities through a `normalizeRole()` helper that maps the legacy `member` value to `user`.
 
+[`specs/requests/`](../requests/README.md) — access requests and questions, addressed to a member
+of staff (spec 01 there) or to a person at a client (spec 02 there). It builds on spec 04
+(`Membership` and its soft delete), spec 11 (`Project`), spec 03 (`Invitation` and its token),
+and organization spec 01 (`Client`).
+
+**It introduces a second kind of signed-in principal.** A client user is an `Account` plus a
+`ClientMembership` — deliberately *not* a `Membership` with a fifth role, because `Membership`
+means "member of staff" at 35 query sites across 16 files and a client row there would reach
+vacation accrual, the members list and project assignment silently. Nothing in this area's
+queries changes as a result. Two things here do change: `CapabilityGuard` resolves the principal
+from either table, and login (spec 02) stops refusing an account whose only link to the
+organization is a `ClientMembership`.
+
+**It amends spec 10.** The Requests page stops being gated by `view-requests` and opens to every
+signed-in member, because a person must be able to see requests addressed to them regardless of
+role. The capability itself is unchanged in meaning and in grants — it moves from the page to the
+organization-wide vacation section within it, and `view-all-requests` gates the new All scope. No
+role gains sight of anything it cannot see today; see requests/01 requirements 41–45 and
+TC-01-INT-24. Vacation requests remain `VacationRequest` rows: the page unifies, the model does
+not.
+
+[`specs/time-off/`](../time-off/README.md) — the screens that read across this area's vacation
+requests, `organization/03`'s holidays and this area's projects at once. Its first spec is the
+vacation calendar, a row per member and a column per day.
+
+It **reads and never writes** the vacation tables: no `VacationRequest`, no
+`VacationReserveTransaction`, and no recomputed `workingDays` — spec 09 keeps owning the request
+lifecycle and spec 08 the ledger. Its `Teams` scope is spec 11's `Project` and `ProjectMember`
+with no new entity, which is the answer this repository gives to "team" until something needs
+departments.
+
+**It touches this area in two places.** `Membership` gains a nullable `countryCode` — the country
+whose public holidays that member is paid for — and spec 05's About tab gains the picker that
+sets it, riding the member update that already carries role and job title. Both are additive:
+the column is nullable with no backfill, and the route keeps every status and message it has.
+
 ## Shared Rules
 
 | Rule | Defined in | Referenced by |

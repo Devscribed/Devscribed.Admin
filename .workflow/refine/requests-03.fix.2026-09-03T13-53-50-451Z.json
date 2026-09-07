@@ -1,0 +1,27 @@
+{
+  "spec": "specs/requests/03-client-participants.md",
+  "verdict": ".workflow/refine/requests-03.verdict.json",
+  "fixed": [],
+  "decided": [
+    {
+      "id": "R1",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.contracts.md",
+        "specs/requests/03-client-participants.cases.md"
+      ],
+      "question": "does a client principal calling GET /api/organizations/{orgId}/request-topics get the catalogue (200) or REQ-03-019's default refusal (404)",
+      "chose": "404 — the route falls under REQ-03-019's default deny, since it is not among the requirement's named exceptions",
+      "rejected": "leaving the route open to a client principal because the new-request modal reads it",
+      "why": "fail-safe (decision order step 3): a client contact cannot raise a request at all (REQ-03-027), so there is no legitimate read for them to make on this route, and refusing it keeps REQ-03-019 an exhaustive default-deny list rather than one silently punctured by an unlisted route",
+      "recordedAt": "contracts.md's Routes section prose (the paragraph explaining which routes are listed and why) and the route's own '### GET .../request-topics' subsection now state the client principal meets 404 there; the main spec's AC-3 now names the request-topics route alongside members, projects and contacts; TC-03-INT-13 in cases.md now asserts the 404 and its Steps call the route"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/requests/03-client-participants.md",
+    "specs/requests/03-client-participants.contracts.md",
+    "specs/requests/03-client-participants.cases.md"
+  ]
+}

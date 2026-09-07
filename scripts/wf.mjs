@@ -21,7 +21,7 @@
  * and therefore cannot be wrong about the code.
  *
  * Usage:
- *   node scripts/wf.mjs init --spec <path> [--task <slug>] [--from <ref>] [--carry <runId>|--no-carry]
+ *   node scripts/wf.mjs init --spec <path> [--track <name>] [--task <slug>] [--from <ref>] [--carry <runId>|--no-carry]
  *   node scripts/wf.mjs preflight
  *   node scripts/wf.mjs stage <name> --start|--end
  *   node scripts/wf.mjs verdict <stage> --file <verdict.json>
@@ -40,6 +40,11 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
+import { enforceCriteria, readRegister } from './criteria.mjs';
+import { bundleMembers, stemFor } from './spec-paths.mjs';
+import { convergenceFor, loadConfig, trackNames, CONFIG_REL, STAGES } from './ship-config.mjs';
+import { freePair, ladderEnd, BASE_WEB, BASE_API } from './ports.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, '.workflow');
 const RUNS = join(WF, 'runs');
@@ -47,9 +52,8 @@ const CURRENT = join(WF, 'current');
 const LOCK = join(WF, 'lock');
 const CONFIG = join(ROOT, '.claude', 'ai-workflow.config.json');
 
-/* ── stage order ─────────────────────────────────────────────────────────── */
-
-const STAGES = ['preflight', 'pre_implement', 'implement', 'static_gate', 'review', 'qa'];
+/* Stage order comes from ship-config, which is also what validates it. Two lists would drift,
+   and the one that drifted would be the one deciding what runs. */
 
 /**
  * Which addresses each stage may hand out. A gate that cannot read the spec has no
@@ -96,9 +100,19 @@ function fail(msg) {
   process.exit(1);
 }
 
+/**
+ * The configuration, validated and cached.
+ *
+ * Every command here reads it through this, so a config that would break a stage stops the run
+ * at the command that noticed rather than at the stage that tripped over it.
+ */
+let CFG_CACHE = null;
 function config() {
+  if (CFG_CACHE) return CFG_CACHE;
   if (!existsSync(CONFIG)) fail(`missing ${relative(ROOT, CONFIG)}`);
-  return read(CONFIG);
+  try { CFG_CACHE = loadConfig(ROOT); }
+  catch (e) { fail(e.message); }
+  return CFG_CACHE;
 }
 
 function parseArgs(argv) {
@@ -108,8 +122,12 @@ function parseArgs(argv) {
     if (a.startsWith('--')) {
       const key = a.slice(2);
       const next = argv[i + 1];
-      if (next === undefined || next.startsWith('--')) out[key] = true;
-      else { out[key] = next; i++; }
+      const value = next === undefined || next.startsWith('--') ? true : (i++, next);
+      /* A repeated flag collects rather than overwrites: `--shape implement=orchestrated
+         --shape review=lead-sweeps` names two stages, and keeping only the last would silently
+         run one of them in a shape nobody asked for. */
+      if (key in out) out[key] = [].concat(out[key], value);
+      else out[key] = value;
     } else out._.push(a);
   }
   return out;
@@ -182,10 +200,31 @@ function witnessDefect(f) {
       return w.source ? null : 'witness kind "rule" needs a source (file:line)';
     case 'scenario':
       return null;
+    /* A command and its output. Checkable by anyone who runs it again, which is what rule 2
+       asks for — and the only witness available for a claim about the repository's state
+       rather than about its code. */
+    case 'command':
+      return w.source ? null : 'witness kind "command" needs a source (the command that was run)';
     default:
       return `unknown witness kind "${w.kind}"`;
   }
 }
+
+/**
+ * The review's closed register, and what a review may block under besides it: a numbered
+ * requirement of the spec it is reviewing, which is a written rule the register does not own.
+ *
+ * The register is the review's half of rule 2. A witness makes a finding checkable; a criterion
+ * makes the blocking surface the same on the next pass, so an implementer who fixed what was
+ * named is not met by a different objection over the same diff.
+ */
+const REVIEW_CRITERIA = readRegister(ROOT, 'review');
+/* Present but unparseable is a broken register, not a missing one: enforcement would switch
+   itself off and every blocker would stand unanchored, with nothing in the log to say so. */
+if (REVIEW_CRITERIA.exists && !REVIEW_CRITERIA.ids.size) {
+  fail(`${REVIEW_CRITERIA.path} parsed to zero criteria — the register is unreadable, so no finding would be anchored`);
+}
+const isRequirementId = (id) => /^REQ-[A-Za-z0-9-]+$/.test(id);
 
 /**
  * Applies rules 1 and 2 to a raw verdict and returns the findings split into what may
@@ -207,6 +246,12 @@ function classify(stage, findings) {
     const defect = witnessDefect(f);
     if (defect) { notes.push({ ...f, severity: 'note', demoted: defect }); continue; }
     blockers.push(f);
+  }
+
+  if (stage === 'review') {
+    const demoted = enforceCriteria(blockers, REVIEW_CRITERIA, { extra: isRequirementId });
+    for (const f of demoted) notes.push(f);
+    return { blockers: blockers.filter((f) => f.severity === 'blocker'), notes, rejected };
   }
   return { blockers, notes, rejected };
 }
@@ -235,6 +280,9 @@ function goto(run, stage, why) {
  */
 function route(run, stage, verdict, classified) {
   const cfg = config();
+  /* Budgets belong to the track: a patch that needs eight code attempts was misfiled, and a
+     spec that halts after three has been cut off mid-convergence. */
+  const budget = convergenceFor(cfg, run.track ?? 'spec');
   const { blockers } = classified;
 
   /* An environment failure is not a finding about the code at all. It never costs a
@@ -242,7 +290,7 @@ function route(run, stage, verdict, classified) {
   if (verdict.status === 'error') {
     run.budget.infra += 1;
     event(run, { event: 'infra-error', count: run.budget.infra, detail: verdict.error ?? null });
-    if (run.budget.infra > cfg.convergence.infraRetries) {
+    if (run.budget.infra > budget.infraRetries) {
       return halt(run, 'infra-error', `environment failed ${run.budget.infra}× at ${stage}: ${verdict.error ?? 'unspecified'}`);
     }
     saveRun(run);
@@ -288,7 +336,7 @@ function route(run, stage, verdict, classified) {
      attempts declared them stuck on the first pass, before any attempt to fix either. */
   for (const key of new Set(blockers.map(findingKey))) {
     run.findingHistory[key] = (run.findingHistory[key] ?? 0) + 1;
-    if (run.findingHistory[key] >= cfg.convergence.autoContestAfter) {
+    if (run.findingHistory[key] >= budget.autoContestAfter) {
       return halt(run, 'stuck-finding', `"${key}" survived ${run.findingHistory[key]} attempts — the requirement is ambiguous or the finding is wrong`);
     }
   }
@@ -307,7 +355,18 @@ function route(run, stage, verdict, classified) {
       return halt(run, 'gate-rule-defect', `${stage} reports its own rule is wrong: ${summary}`);
 
     case 'handoff':
-      if (run.budget.handoffReplans >= cfg.convergence.maxHandoffReplans) {
+      /* A track that compiles no plan has no stage that could rebuild one. Routing there
+         would march the run through a skipped stage and back, spending the replan budget on
+         a finding nobody can act on — so on those tracks "the plan is wrong" is a claim
+         about the code, and the implementer is the party that answers it. */
+      if (cfg.shipConfig?.[run.track ?? 'spec']?.stages?.pre_implement?.enabled === false) {
+        run.budget.codeAttempts += 1;
+        if (run.budget.codeAttempts > budget.maxCodeAttempts) {
+          return halt(run, 'budget-exhausted', `${run.budget.codeAttempts} code attempts without converging: ${summary}`);
+        }
+        return goto(run, 'implement', `no plan stage on the ${run.track} track: ${summary}`);
+      }
+      if (run.budget.handoffReplans >= budget.maxHandoffReplans) {
         return halt(run, 'spec-ambiguity', `the plan was rebuilt ${run.budget.handoffReplans}× and ${stage} still rejects it — the spec is ambiguous: ${summary}`);
       }
       run.budget.handoffReplans += 1;
@@ -316,7 +375,7 @@ function route(run, stage, verdict, classified) {
 
     case 'code':
       run.budget.codeAttempts += 1;
-      if (run.budget.codeAttempts > cfg.convergence.maxCodeAttempts) {
+      if (run.budget.codeAttempts > budget.maxCodeAttempts) {
         return halt(run, 'budget-exhausted', `${run.budget.codeAttempts} code attempts without converging: ${summary}`);
       }
       return goto(run, 'implement', `fix ${forTarget.length} blocker(s): ${summary}`);
@@ -386,6 +445,57 @@ function findCarrySource(specRel) {
   return null;
 }
 
+/**
+ * Whether this spec was ever judged, and whether the judgement still covers what is on disk.
+ *
+ * The pipeline used to read nothing about refine at all: a spec whose loop died mid-gate, or
+ * whose last verdict reported no criterion, entered a run indistinguishable from one that had
+ * cleared every gate. Both have happened, and the run that followed spent five stages on a
+ * document nothing had admitted.
+ *
+ * Returns null when the spec is admitted, or the reason it is not.
+ */
+function refineGate(specRel, track) {
+  const rc = config().refine ?? {};
+  if (rc.shipRequiresRefine === false) return null;
+  /* Refine judges a spec bundle. A bug report and a patch are admitted by the skill that
+     writes them, and there is no loop ledger to look up. */
+  if (track && config().shipConfig?.[track]?.requiresRefine === false) return null;
+
+  const stem = stemFor(specRel);
+  const ledgerPath = join(WF, 'refine', `${stem}.loop.json`);
+  if (!existsSync(ledgerPath)) {
+    return `no refine ledger at .workflow/refine/${stem}.loop.json — this spec has not been judged`;
+  }
+
+  let ledger;
+  try { ledger = read(ledgerPath); } catch (e) { return `the refine ledger will not parse: ${e.message}`; }
+
+  if (ledger.spec && ledger.spec !== specRel) {
+    return `the ledger at .workflow/refine/${stem}.loop.json judged ${ledger.spec}, not this spec`;
+  }
+  if (ledger.status !== 'pass') {
+    const why = ledger.outcome?.reason ? `: ${ledger.outcome.reason}` : '';
+    return `the last refine loop ended "${ledger.status}"${why} — it never admitted this spec`;
+  }
+
+  /* A pass covers the text it judged. The bundle moving afterwards is the ordinary case — a
+     person answers a note by hand — and it is exactly the case where the verdict no longer
+     describes what the pipeline is about to build. */
+  const judged = [...(ledger.rounds ?? [])].reverse().find((r) => r.commit)?.commit;
+  if (!judged) return 'no round of that loop produced a commit, so there is nothing it judged';
+  const paths = [specRel, ...bundleMembers(specRel)].filter((p) => existsSync(resolve(ROOT, p)));
+  let moved;
+  try { moved = git('diff', '--name-only', `${judged}..HEAD`, '--', ...paths); } catch {
+    return `the commit that judged this spec (${judged.slice(0, 8)}) is not reachable from HEAD`;
+  }
+  if (moved) {
+    return `the bundle changed after the round that judged it (${judged.slice(0, 8)}): `
+      + moved.split('\n').join(', ');
+  }
+  return null;
+}
+
 function cmdInit(args) {
   const specRel = args.spec;
   if (!specRel) fail('init needs --spec <path>');
@@ -400,6 +510,18 @@ function cmdInit(args) {
   if (existsSync(LOCK)) {
     fail(`another run holds ${relative(ROOT, LOCK)} (${readFileSync(LOCK, 'utf8').trim()}). Runs share ports and databases, so they are serialised.`);
   }
+
+  const track = typeof args.track === 'string' ? args.track : 'spec';
+  if (!config().shipConfig?.[track]) fail(`unknown track "${track}" — have ${trackNames(config()).join(', ')}`);
+
+  const unrefined = typeof args['accept-unrefined'] === 'string' ? args['accept-unrefined'] : null;
+  const notAdmitted = refineGate(specRel, track);
+  if (notAdmitted && !unrefined) {
+    fail(`${notAdmitted}.\n`
+      + `    Run it: node scripts/refine-loop.mjs ${specRel}\n`
+      + `    Or start anyway: --accept-unrefined "<why>" — the reason is recorded in run.json and printed by every stage.`);
+  }
+  if (notAdmitted) process.stdout.write(`wf: starting an unrefined spec — ${notAdmitted}. Reason given: ${unrefined}\n`);
 
   /* `--carry <runId>` pins the source; `--no-carry` turns it off for a deliberately clean
      run; neither means "find it yourself". */
@@ -427,6 +549,19 @@ function cmdInit(args) {
        gate asking "what did *this run* change" rather than "what does the diff contain". */
     headAtInit: git('rev-parse', 'HEAD'),
     status: 'preflight',
+    /* Which pipeline this document earned. Read back by the router, which will not send a
+       finding to a stage this track does not run. */
+    track,
+    /* The shape each stage ran in when it was not the one the track's `use` names, and the
+       reason if this run started on a spec nothing admitted. Both are read back by the board
+       and by anyone comparing two runs: a result that cannot be attributed to a shape measures
+       nothing. A stage absent here ran what its track declares. */
+    shapes: Object.fromEntries(
+      (Array.isArray(args.shape) ? args.shape : args.shape ? [args.shape] : [])
+        .map((v) => String(v).split('='))
+        .filter((v) => v.length === 2),
+    ),
+    unrefined: notAdmitted ? { reason: unrefined, why: notAdmitted } : null,
     createdAt: now(),
     updatedAt: now(),
     stages: Object.fromEntries(STAGES.map((s) => [s, { status: 'pending', attempts: 0 }])),
@@ -464,6 +599,11 @@ function cmdPreflight() {
   const checks = [];
   const add = (name, ok, detail) => checks.push({ name, ok, detail });
 
+  /* `config()` has already refused an invalid file by the time this runs, so the row is
+     always ok. It is printed because preflight is the list a person reads before a long run,
+     and a check absent from it reads as a check nobody does. */
+  add('config-valid', true, `${CONFIG_REL} parses and every track resolves`);
+
   const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
   add('branch-not-protected', !cfg.protectedBranches.includes(branch), `on "${branch}"`);
 
@@ -479,20 +619,16 @@ function cmdPreflight() {
 
   add('node-modules-present', existsSync(join(ROOT, 'node_modules')), 'dependencies installed');
 
-  /* Ports 3000 and 4000 are fixed in e2e/playwright.config.ts. Anything already listening on
-     them is a server this run did not start, and with CI=1 Playwright refuses to attach —
-     so QA cannot run at all. Catching it here costs a millisecond; catching it in QA costs
-     the unit and integration suites first, and then a stage that reports nothing about the
-     code. This is the one preflight check that a long run should repeat before QA. */
-  const held = [3000, 4000].filter((port) => {
-    try {
-      return execFileSync('netstat', ['-ano'], { encoding: 'utf8' })
-        .split('\n').some((l) => /LISTENING/.test(l) && new RegExp(`[:.]${port}\\s`).test(l));
-    } catch { return false; }
-  });
-  add('e2e-ports-free', held.length === 0,
-    held.length ? `${held.join(' and ')} already listening — stop that server or QA cannot run`
-      : '3000 and 4000 are free for the e2e suite');
+  /* QA needs *a* pair, not 3000 and 4000. Under CI the suite reaps this repository's stale
+     servers and then steps both ports by 100 until a free pair answers, so a busy default is
+     not a stopped run — an exhausted ladder is. Asking the wrong question here refused every
+     run started while somebody had `npm run dev` up, which is most of them. Catching a real
+     exhaustion costs a second here and the unit and integration suites in QA. */
+  const pair = freePair();
+  add('e2e-ports-available', pair !== null,
+    pair
+      ? `the suite would take ${pair.web}/${pair.api}${pair.step ? ` — ${BASE_WEB}/${BASE_API} is held, ${pair.step} step(s) along` : ''}`
+      : `every pair from ${BASE_WEB}/${BASE_API} through ${ladderEnd()} is held — \`node scripts/reap-stale-servers.mjs --dry-run\` says which are ours`);
   add('prisma-client-generated', existsSync(join(ROOT, 'node_modules/.prisma/client')),
     'prisma client generated (postinstall runs it from apps/api)');
 
@@ -677,8 +813,18 @@ function cmdVerdict(args) {
       process.stdout.write(`rejected  ${r.f.rule ?? '(no rule)'} — ${r.why}\n`);
     }
     const detail = classified.rejected.map((r) => r.why).join('; ');
-    halt(run, 'gate-authority', `${stage} produced findings outside its authority: ${detail}`);
-    process.stdout.write(`\nhalted: gate-authority\n`);
+    /* Two different failures reach here and send a reader to different places. A finding
+       naming a target the stage may not address is an authority defect and the question is
+       whether the authority is right. A finding naming no target at all is a malformed
+       verdict and the question is whether the agent wrote its own schema. Saying which
+       costs one word and is the difference between reading AUTHORITY and reading the
+       agent's definition. */
+    const malformed = classified.rejected.every((r) => r.why === 'finding has no target');
+    const reason = malformed ? 'gate-schema' : 'gate-authority';
+    halt(run, reason, malformed
+      ? `${stage} produced findings that name no target, so nothing can be routed: ${detail}`
+      : `${stage} produced findings outside its authority: ${detail}`);
+    process.stdout.write(`\nhalted: ${reason}\n`);
     process.exit(2);
   }
 
@@ -687,7 +833,11 @@ function cmdVerdict(args) {
     join(runDir(run.runId), 'stages', `${stage}.attempt-${run.stages[stage].attempts || 1}.json`),
     `${JSON.stringify(verdict, null, 2)}\n`,
   );
-  run.stages[stage].lastVerdict = verdict.status ?? (classified.blockers.length ? 'blocked' : 'pass');
+  /* A stage the track does not carry passes without running. Recording that as a plain `pass`
+     tells a reader it ran, which is the one thing status must never say. */
+  run.stages[stage].lastVerdict = verdict.skipped
+    ? 'skipped'
+    : verdict.status ?? (classified.blockers.length ? 'blocked' : 'pass');
 
   for (const f of classified.blockers) process.stdout.write(`blocker   [${f.target}] ${findingKey(f)}\n`);
   for (const n of classified.notes) {
@@ -721,19 +871,24 @@ function cmdAbort(args) {
 function cmdStatus(args) {
   const run = loadRun();
   if (args.json) { process.stdout.write(`${JSON.stringify(run, null, 2)}\n`); return; }
-  const cfg = config();
+  const budget = convergenceFor(config(), run.track ?? 'spec');
   const mark = { passed: 'ok', blocked: 'XX', running: '..', pending: '  ' };
   process.stdout.write(`run     ${run.runId}\n`);
   process.stdout.write(`spec    ${run.spec}\n`);
   process.stdout.write(`branch  ${run.branch}\n`);
+  process.stdout.write(`track   ${run.track ?? 'spec'}\n`);
   process.stdout.write(`status  ${run.status}${run.halt ? ` — ${run.halt.reason}` : ''}\n\n`);
   for (const s of STAGES) {
     const st = run.stages[s];
+    if (st.lastVerdict === 'skipped') {
+      process.stdout.write(`  --  ${s.padEnd(15)} skipped — not a stage of the ${run.track ?? 'spec'} track\n`);
+      continue;
+    }
     process.stdout.write(`  ${mark[st.status] ?? '  '}  ${s.padEnd(15)} ${String(st.attempts).padStart(2)} attempt(s)  ${st.lastVerdict ?? ''}\n`);
   }
-  process.stdout.write(`\nbudget  code ${run.budget.codeAttempts}/${cfg.convergence.maxCodeAttempts}`);
-  process.stdout.write(`  replans ${run.budget.handoffReplans}/${cfg.convergence.maxHandoffReplans}`);
-  process.stdout.write(`  infra ${run.budget.infra}/${cfg.convergence.infraRetries}\n`);
+  process.stdout.write(`\nbudget  code ${run.budget.codeAttempts}/${budget.maxCodeAttempts}`);
+  process.stdout.write(`  replans ${run.budget.handoffReplans}/${budget.maxHandoffReplans}`);
+  process.stdout.write(`  infra ${run.budget.infra}/${budget.infraRetries}\n`);
   if (run.contested.length) process.stdout.write(`contested ${run.contested.map((c) => c.key).join(', ')}\n`);
   if (run.notes.length) process.stdout.write(`notes   ${run.notes.length} non-blocking finding(s) for the human\n`);
   if (run.halt) process.stdout.write(`\nhalt    ${run.halt.reason}\n        ${run.halt.detail}\n`);

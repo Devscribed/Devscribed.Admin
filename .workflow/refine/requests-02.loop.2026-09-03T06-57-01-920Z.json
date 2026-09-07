@@ -1,0 +1,38 @@
+{
+  "spec": "specs/requests/02-request-topics.md",
+  "stem": "requests-02",
+  "startedAt": "2026-09-03T06:57:01.920Z",
+  "rounds": [
+    {
+      "round": 1,
+      "startedAt": "2026-09-03T06:57:01.921Z",
+      "head": "01efadb289369e40c8ca82b551825d93cedd8eec",
+      "status": "running",
+      "lint": 0,
+      "judge": {
+        "status": "blocked",
+        "mode": "full",
+        "blockers": 7,
+        "notes": 6
+      },
+      "gate": "T2",
+      "blockers": 7,
+      "keys": [
+        "spec/stale-statement:02-request-topics.contracts.md — Seed Data",
+        "spec/stale-statement:02-request-topics.contracts.md — DS gaps, row 2",
+        "spec/contradiction:02-request-topics.contracts.md — Screens against DS gaps",
+        "spec/ambiguous-requirement:02-request-topics.contracts.md — topic row shape",
+        "spec/incomplete-decision:REQ-02-019",
+        "spec/missing-artefact:TC-02-E2E-04",
+        "spec/missing-artefact:02-request-topics.contracts.md — Edge case 8"
+      ]
+    }
+  ],
+  "status": "error",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "outcome": {
+    "reason": "fixer-error",
+    "detail": "spec-fixer produced no verdict at .workflow/refine/requests-02.fix.json (result success)",
+    "at": "2026-09-03T07:22:04.570Z"
+  }
+}

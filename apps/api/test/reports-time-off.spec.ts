@@ -83,6 +83,8 @@ describe('Reports · Time Off (spec reports/01)', () => {
       firstName?: string;
       lastName?: string;
       phoneCountryCode?: string | null;
+      /** Time off spec 01 REQ-01-026 — the holiday country, now on the MEMBERSHIP. */
+      countryCode?: string | null;
       timezone?: string;
     },
   ): Promise<Signed> => {
@@ -106,6 +108,7 @@ describe('Reports · Time Off (spec reports/01)', () => {
         organizationId,
         role: opts.role,
         status: 'active',
+        countryCode: opts.countryCode ?? null,
       },
     });
     const cookies = (await login(opts.email, password)).headers[
@@ -412,7 +415,11 @@ describe('Reports · Time Off (spec reports/01)', () => {
       role: 'viewer',
       firstName: 'Vera',
       lastName: 'Ipso',
-      phoneCountryCode: 'BY',
+      // The membership says BY and the phone says US. The case asserts the BY day is in
+      // the group and the US day is not, so it fails in both directions if the country
+      // is ever resolved from the phone again.
+      phoneCountryCode: 'US',
+      countryCode: 'BY',
     });
     await seedHoliday(admin, { date: '2026-07-03', name: 'BY Day', countryCode: 'BY' });
     await seedHoliday(admin, { date: '2026-07-04', name: 'US Day', countryCode: 'US' });

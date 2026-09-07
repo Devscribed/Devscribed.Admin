@@ -77,6 +77,18 @@ model Account {
   clientsArchived           Client[]                     @relation("ClientsArchived")
   /// Spec organization/03 — audit back-relation for the Holiday entity.
   holidaysCreated           Holiday[]                    @relation("HolidaysCreated")
+  /// Time off spec 02 — who last touched the include-organization-country checkbox.
+  holidaySourcingUpdated    OrganizationHolidaySourcing[] @relation("HolidaySourcingUpdatedBy")
+  /// Requests spec 01 — the account that moved a request into a terminal status.
+  requestsResolved          Request[]                    @relation("RequestResolvedBy")
+  /// Requests spec 02 — audit back-relations for the RequestTopic entity.
+  requestTopicsCreated      RequestTopic[]               @relation("RequestTopicsCreated")
+  requestTopicsArchived     RequestTopic[]               @relation("RequestTopicsArchived")
+  /// Requests spec 03 — the client-contact principal this account holds, if any. At
+  /// most one, by the `@unique` on `ClientMembership.accountId`.
+  clientMembership          ClientMembership?            @relation("ClientMembershipAccount")
+  /// Requests spec 03 — audit back-relation for a removed client contact.
+  clientMembershipsRemoved  ClientMembership[]           @relation("ClientMembershipsRemoved")
   /// Hiring specs 01-07 — the interviewer side of a vacancy and of the interviews
   /// actually booked against it, which a later reassignment never rewrites (07 §13.63).
   interviewerVacancies      Vacancy[]                    @relation("VacancyInterviewer")
@@ -130,8 +142,13 @@ model Invitation {
   /// Set when the invitation is accepted; null while unused.
   usedAt    DateTime?
 
+  /// Requests spec 03 — set on a client-contact invitation, null on a staff one.
+  /// Nullable, so every existing row stays valid without a backfill.
+  clientId String?
+
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inviterMembership Membership   @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
+  client            Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   // Supersession lookup: at most one live `pending` invitation per (email, org).
   @@index([email, organizationId, status])
@@ -174,23 +191,48 @@ model Organization {
 
   signatureProviderSetByAccount Account? @relation("SignatureProviderSetBy", fields: [signatureProviderSetBy], references: [id], onDelete: SetNull)
 
-  memberships       Membership[]
-  documentTemplates DocumentTemplate[]
-  envelopes         Envelope[]
-  invitations       Invitation[]
-  projects          Project[]
-  timeEntries       TimeEntry[]
-  runningTimers     RunningTimer[]
+  /// Requests spec 01 requirement 10 — atomically-allocated per-organization request
+  /// counter. Advanced inside a `SELECT ... FOR UPDATE` transaction on the organization
+  /// row before every Request insert, mirroring `Project.nextTaskNumber`. The default is
+  /// what makes a backfill unnecessary for organizations that predate the column.
+  nextRequestNumber Int @default(1)
+
+  /// Time off spec 01 REQ-01-026 — ISO 3166-1 alpha-2, uppercase. The SECOND link of the
+  /// holiday-country chain, and the one that covers every member nobody has stated a
+  /// country for. Nullable with no default: an organization that predates this column
+  /// resolves `null` and its members receive global holidays only until somebody states
+  /// one (REQ-01-040).
+  countryCode String? @db.Char(2)
+
+  memberships          Membership[]
+  documentTemplates    DocumentTemplate[]
+  envelopes            Envelope[]
+  invitations          Invitation[]
+  projects             Project[]
+  timeEntries          TimeEntry[]
+  runningTimers        RunningTimer[]
   /// Spec organization/01 — the clients that group projects for billing/reporting.
-  clients           Client[]
+  clients              Client[]
   /// Spec organization/03 — the organization's paid public-holiday calendar.
-  holidays          Holiday[]
+  holidays             Holiday[]
+  /// Time off spec 02 — which (country, year) pairs have been sourced, and the
+  /// include-organization-country setting. Both cascade with the organization.
+  holidayImports       HolidayImport[]
+  holidaySourcing      OrganizationHolidaySourcing?
+  /// Requests spec 01 — the organization's requests.
+  requests             Request[]
+  /// Requests spec 02 — the organization's own catalogue of request topics.
+  requestTopics        RequestTopic[]
+  /// Requests spec 03 — the client contacts who are signed-in principals here.
+  clientMemberships    ClientMembership[]
+  /// Requests spec 03 — the notification outbox.
+  requestNotifications RequestNotification[]
   /// Hiring specs 01-06. Every hiring entity is org-scoped from its first migration.
-  vacancies         Vacancy[]
-  candidates        Candidate[]
-  applications      Application[]
-  categories        Category[]
-  criteria          Criterion[]
+  vacancies            Vacancy[]
+  candidates           Candidate[]
+  applications         Application[]
+  categories           Category[]
+  criteria             Criterion[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -207,25 +249,38 @@ model Membership {
   /// Optional job title, max 100 chars. Cleared on membership restoration via invitation
   /// acceptance (spec 03 requirement 5; spec 05).
   jobTitle       String?
+  /// Time off spec 01 REQ-01-026 — ISO 3166-1 alpha-2, uppercase. The FIRST link of the
+  /// holiday-country chain: `null` means "use the organization's country", and a value
+  /// that does not normalize to a real alpha-2 code falls through to it as well
+  /// (REQ-01-027). Stated by an admin or a manager on the member's screen; kept across a
+  /// remove/restore (REQ-01-048).
+  countryCode    String?  @db.Char(2)
 
-  account             Account                      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  envelopesAsSubject  Envelope[]                   @relation("EnvelopeSubject")
-  signerRecords       EnvelopeSigner[]             @relation("SignerMembership")
-  profile             MemberProfile?
-  invitationsSent     Invitation[]
-  financials          MemberFinancials?
-  financialsSnapshots MemberFinancialsSnapshot[]
-  transactions        VacationReserveTransaction[]
-  vacationRequests    VacationRequest[]
-  projectMemberships  ProjectMember[]
-  timeEntries         TimeEntry[]
-  runningTimer        RunningTimer?
-  tasksAssigned       Task[]                       @relation("TaskAssignee")
-  tasksReported       Task[]                       @relation("TaskReporter")
-  commentsAuthored    TaskComment[]                @relation("TaskCommentAuthor")
-  watchedTasks        TaskWatcher[]                @relation("TaskWatcherMembership")
-  taskActivity        TaskActivity[]               @relation("TaskActivityActor")
+  account                  Account                      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization             Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  envelopesAsSubject       Envelope[]                   @relation("EnvelopeSubject")
+  signerRecords            EnvelopeSigner[]             @relation("SignerMembership")
+  profile                  MemberProfile?
+  invitationsSent          Invitation[]
+  financials               MemberFinancials?
+  financialsSnapshots      MemberFinancialsSnapshot[]
+  transactions             VacationReserveTransaction[]
+  vacationRequests         VacationRequest[]
+  projectMemberships       ProjectMember[]
+  timeEntries              TimeEntry[]
+  runningTimer             RunningTimer?
+  tasksAssigned            Task[]                       @relation("TaskAssignee")
+  tasksReported            Task[]                       @relation("TaskReporter")
+  commentsAuthored         TaskComment[]                @relation("TaskCommentAuthor")
+  watchedTasks             TaskWatcher[]                @relation("TaskWatcherMembership")
+  taskActivity             TaskActivity[]               @relation("TaskActivityActor")
+  /// Requests spec 01 — the request rows this membership takes part in.
+  requestsRaised           Request[]                    @relation("RequestRequester")
+  requestsAssigned         Request[]                    @relation("RequestAssignee")
+  requestMessages          RequestMessage[]             @relation("RequestMessageAuthor")
+  requestEvents            RequestEvent[]               @relation("RequestEventActor")
+  /// Requests spec 03 — the client contacts this member invited (audit).
+  clientMembershipsInvited ClientMembership[]           @relation("ClientMembershipsInvited")
 
   @@index([organizationId])
 }
@@ -771,6 +826,8 @@ model Project {
   columns       BoardColumn[]
   tasks         Task[]
   labels        TaskLabel[]
+  /// Requests spec 01 — requests raised against this project (SetNull on hard delete).
+  requests      Request[]
 
   @@index([organizationId])
   @@index([clientId])
@@ -799,12 +856,56 @@ model Client {
   /// Account that archived the client (audit). Cleared on restore.
   archivedByAccountId String?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    Account      @relation("ClientsCreated", fields: [createdByAccountId], references: [id])
-  archivedBy   Account?     @relation("ClientsArchived", fields: [archivedByAccountId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account            @relation("ClientsCreated", fields: [createdByAccountId], references: [id])
+  archivedBy   Account?           @relation("ClientsArchived", fields: [archivedByAccountId], references: [id])
   projects     Project[]
+  /// Requests spec 03 — the people at this client who hold a principal here.
+  contacts     ClientMembership[]
+  /// Requests spec 03 — invitations written for a contact of this client.
+  invitations  Invitation[]
 
   @@index([organizationId, status])
+}
+
+/// Requests spec 03 (REQ-03-001) — what makes a person at a client a signed-in principal
+/// of the organization. A table of its own rather than a role on `Membership`, so every
+/// staff-membership query — accrual, the members list, project assignment, time
+/// tracking — is incapable of returning a client by construction.
+model ClientMembership {
+  id                    String    @id @default(uuid())
+  /// One client contact per account, as a schema fact. It says nothing about the staff
+  /// row: `Membership.accountId` is `@unique` too, and two unique constraints on two
+  /// tables cannot express mutual exclusion between them. That exclusion is a rule —
+  /// REQ-03-014 and REQ-03-042 — enforced at both writes, never by the schema.
+  accountId             String    @unique
+  /// Scope key.
+  organizationId        String
+  /// The client this person works for.
+  clientId              String
+  /// 'active' | 'removed'. Removal is a soft delete; there is no hard delete.
+  status                String    @default("active")
+  /// Audit — the membership of the contact manager who invited them.
+  invitedByMembershipId String?
+  /// Set when the invitation is accepted.
+  joinedAt              DateTime  @default(now())
+  /// Set on removal, cleared on restore.
+  removedAt             DateTime?
+  /// Set on removal, cleared on restore.
+  removedByAccountId    String?
+
+  account      Account      @relation("ClientMembershipAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invitedBy    Membership?  @relation("ClientMembershipsInvited", fields: [invitedByMembershipId], references: [id], onDelete: SetNull)
+  removedBy    Account?     @relation("ClientMembershipsRemoved", fields: [removedByAccountId], references: [id], onDelete: SetNull)
+
+  requestsAssigned Request[]        @relation("RequestClientAssignee")
+  requestMessages  RequestMessage[] @relation("RequestMessageClientAuthor")
+  requestEvents    RequestEvent[]   @relation("RequestEventClientActor")
+
+  @@index([organizationId, status])
+  @@index([clientId, status])
 }
 
 /// Spec organization/03 — a paid public holiday in an organization's calendar. A
@@ -835,12 +936,66 @@ model Holiday {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   createdByAccountId String
+  /// Time off spec 02 §Data Model — 'manual' | 'imported'. A documented string column,
+  /// matching the role/status convention — not a Prisma enum. Every row that predates
+  /// the column reads 'manual' from the default, which is exactly what those rows are.
+  source             String   @default("manual")
+  /// The provider's stable key for an imported holiday, `{provider}:{countryCode}:{date}`.
+  /// Null on a manual row. Deliberately NOT unique: the composite index on
+  /// (organizationId, date, countryCode) is what detects an identity mismatch, and a new
+  /// uniqueness constraint would change what every reader of Holiday may assume.
+  externalKey        String?
+  /// When an import wrote this row. Null on a manual row.
+  importedAt         DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    Account      @relation("HolidaysCreated", fields: [createdByAccountId], references: [id])
 
   @@unique([organizationId, date, countryCode])
   @@index([organizationId, date])
+}
+
+/// Time off spec 02 REQ-02-021 — that a `(organization, country, year)` has been sourced,
+/// and what the provider offered for it. Its absence is the `unsourced` state and a
+/// `holidayCount` of 0 is the covered-but-empty one (REQ-02-010); the difference is what
+/// stops a country the provider does not cover being re-asked on every page load.
+model HolidayImport {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// ISO 3166-1 alpha-2, uppercase. Never null — a global holiday is not sourced.
+  countryCode    String   @db.Char(2)
+  /// The calendar year sourced.
+  year           Int
+  /// The provider that answered, e.g. `nager`.
+  provider       String
+  /// How many nationwide `Public` entries the provider OFFERED for this country and
+  /// year — not how many rows were written (REQ-02-021). A refresh that writes nothing
+  /// because every date is already stored still records what was offered, which is what
+  /// keeps such a country `sourced` rather than `empty` (REQ-02-023).
+  holidayCount   Int
+  /// Updated on a refresh.
+  importedAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Invariant 3 — at most one import record per (organization, country, year),
+  /// enforced by the index rather than by the service, which is also what resolves two
+  /// admins syncing the same unsourced year at the same instant (Edge case 12).
+  @@unique([organizationId, countryCode, year])
+}
+
+/// Time off spec 02 REQ-02-002 — the include-organization-country checkbox. One row per
+/// organization; a MISSING row reads as `true`, so no organization changes behaviour
+/// before somebody touches the control and no backfill is needed.
+model OrganizationHolidaySourcing {
+  id                 String   @id @default(uuid())
+  organizationId     String   @unique
+  includeOrgCountry  Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+  updatedByAccountId String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy    Account      @relation("HolidaySourcingUpdatedBy", fields: [updatedByAccountId], references: [id])
 }
 
 /// Spec 13 — a column on a project's Kanban board. Lazy-created on first `GET /board`
@@ -1116,6 +1271,228 @@ model TaskActivity {
   actor Membership @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
 
   @@index([taskId, createdAt])
+}
+
+/// Requests spec 01 — one record of somebody needing something from somebody else: an
+/// access, a seat on a tool, an answer to a question. Every value set below is a
+/// documented `String` column rather than a Prisma enum (following `Project.status` and
+/// `Client.status`), so adding a request type, an access kind, or spec 02's second
+/// addressee kind is additive and needs no migration.
+model Request {
+  id                         String    @id @default(uuid())
+  /// Scope key. A required argument on every service method; there is no default.
+  organizationId             String
+  /// Per-organization human-readable number. Written exactly once, under a `FOR UPDATE`
+  /// lock on the organization row inside the creating transaction (requirement 10).
+  number                     Int
+  /// 'access' | 'question'.
+  type                       String
+  /// Required when `type = 'access'`, absent otherwise. One of repository, environment,
+  /// server, vpn, saas, admin_panel, documentation, other.
+  accessKind                 String?
+  title                      String    @db.VarChar(200)
+  /// Plain text, <= 5000 chars. No markup is accepted, stored or interpreted.
+  description                String?   @db.Text
+  /// SetNull rather than Cascade: a request outlives a hard-deleted project.
+  projectId                  String?
+  requesterMembershipId      String
+  /// 'member' is the only valid value in this spec; spec 02 adds `client`.
+  assigneeKind               String
+  /// Required while `assigneeKind = 'member'`. Nullable in the column so spec 02's
+  /// second addressee kind needs no column change.
+  assigneeMembershipId       String?
+  /// Requests spec 03 — required while `assigneeKind = 'client'`, null otherwise.
+  assigneeClientMembershipId String?
+  /// 'low' | 'normal' | 'high' | 'urgent'.
+  priority                   String    @default("normal")
+  blocking                   Boolean   @default(false)
+  /// Date-only. `overdue` is derived from it per reading account's timezone and is
+  /// never stored (requirement 33).
+  neededBy                   DateTime? @db.Date
+  /// 'open' | 'answered' | 'granted' | 'declined' | 'cancelled'.
+  status                     String    @default("open")
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  /// Written exactly once, on the first entry into `answered`.
+  answeredAt                 DateTime?
+  /// Written exactly once, on entry into a terminal status.
+  resolvedAt                 DateTime?
+  resolvedByAccountId        String?
+  /// Sort key. Updated by any message, status change or reassignment.
+  lastActivityAt             DateTime  @default(now())
+  /// Requests spec 02 requirement 18 — the topic the request was raised under. Nullable
+  /// so requests that predate that spec need no backfill; `SetNull` is the correct
+  /// semantics for a hard delete that no route this product exposes can perform
+  /// (requirement 14), and the state it would leave — a `topicLabel` with no `topicId` —
+  /// is one the serializer still answers for.
+  topicId                    String?
+  /// Requests spec 02 requirement 23 — snapshot of the topic's name at creation, written
+  /// once inside the creating transaction and never rewritten by any topic write
+  /// (requirement 25).
+  topicLabel                 String?   @db.VarChar(60)
+
+  organization             Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project                  Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  requester                Membership            @relation("RequestRequester", fields: [requesterMembershipId], references: [id], onDelete: Cascade)
+  assignee                 Membership?           @relation("RequestAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
+  resolvedBy               Account?              @relation("RequestResolvedBy", fields: [resolvedByAccountId], references: [id], onDelete: SetNull)
+  topic                    RequestTopic?         @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  /// Requests spec 03 — the client contact this request is addressed to.
+  assigneeClientMembership ClientMembership?     @relation("RequestClientAssignee", fields: [assigneeClientMembershipId], references: [id], onDelete: SetNull)
+  messages                 RequestMessage[]
+  events                   RequestEvent[]
+  /// Requests spec 03 — the outbox rows this request's events produced.
+  notifications            RequestNotification[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, assigneeMembershipId, status])
+  @@index([organizationId, lastActivityAt])
+}
+
+/// Requests spec 01 — one message in a request's conversation. Append-only: the
+/// application has no edit path and no delete path.
+model RequestMessage {
+  id                       String   @id @default(uuid())
+  requestId                String
+  /// 'member' | 'client'. The same seam as `Request.assigneeKind`.
+  authorKind               String
+  authorMembershipId       String?
+  /// Requests spec 03 — set when `authorKind` is `client`.
+  authorClientMembershipId String?
+  /// Plain text, 1-5000 chars.
+  body                     String   @db.Text
+  createdAt                DateTime @default(now())
+
+  request      Request           @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author       Membership?       @relation("RequestMessageAuthor", fields: [authorMembershipId], references: [id], onDelete: SetNull)
+  clientAuthor ClientMembership? @relation("RequestMessageClientAuthor", fields: [authorClientMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
+}
+
+/// Requests spec 01 — append-only journal of what happened to a request. No hash chain:
+/// this is an operational trail, not the evidence of a legally executed contract, and
+/// claiming tamper-evidence it does not have would be worse than not claiming it.
+model RequestEvent {
+  id                      String   @id @default(uuid())
+  requestId               String
+  /// 'member' | 'client' | 'system'.
+  actorKind               String
+  actorMembershipId       String?
+  /// Requests spec 03 — set when `actorKind` is `client`.
+  actorClientMembershipId String?
+  /// 'created' | 'status_changed' | 'assignee_changed' | 'field_changed' | 'message_posted'.
+  action                  String
+  /// Set for `field_changed`.
+  field                   String?
+  oldValue                String?
+  newValue                String?
+  /// Display-name snapshots taken at write time, so the trail survives a removed or
+  /// renamed member (the device `TaskActivity` uses).
+  oldLabel                String?
+  newLabel                String?
+  createdAt               DateTime @default(now())
+
+  request       Request               @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor         Membership?           @relation("RequestEventActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+  clientActor   ClientMembership?     @relation("RequestEventClientActor", fields: [actorClientMembershipId], references: [id], onDelete: SetNull)
+  /// Requests spec 03 — the outbox rows this event caused.
+  notifications RequestNotification[]
+
+  @@index([requestId, createdAt])
+}
+
+/// Requests spec 03 — the notification outbox. One row is what a future adapter reads;
+/// nothing else is added when a channel arrives. Written in the same transaction as the
+/// `RequestEvent` that caused it (REQ-03-035) and delivered only after that transaction
+/// has committed (REQ-03-037).
+model RequestNotification {
+  id             String    @id @default(uuid())
+  /// Scope key.
+  organizationId String
+  requestId      String
+  /// The event that caused it. Deleting a request removes both.
+  eventId        String
+  /// 'member' | 'client'.
+  recipientKind  String
+  /// The membership or client-membership id. **No foreign key**: a notification must
+  /// survive the principal it points at being removed, the same reason the event trail
+  /// snapshots display names.
+  recipientId    String
+  /// 'none' today. An adapter writes its own value.
+  channel        String    @default("none")
+  /// Which adapter handled the row.
+  providerKey    String?
+  /// The provider's own id for the message it sent, recorded before the next attempt.
+  providerRef    String?
+  /// 'pending' | 'delivered' | 'skipped' | 'failed'.
+  status         String    @default("pending")
+  /// Incremented before each delivery attempt.
+  attempts       Int       @default(0)
+  /// The failure text, never the recipient's address.
+  lastError      String?
+  /// Set when the row leaves `pending`.
+  handledAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  request      Request      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  event        RequestEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// REQ-03-039's mechanism — a replayed event can never manufacture a second row.
+  @@unique([eventId, recipientKind, recipientId])
+  /// The dispatcher's query.
+  @@index([organizationId, status, createdAt])
+}
+
+/// Requests spec 02 — one entry in an organization's curated catalogue of request
+/// topics: the presets a person picks instead of typing a category.
+///
+/// `audience`, `type` and `status` are documented `String` columns rather than Prisma
+/// enums, following `Client.status` and `Project.status`, so a third audience is an
+/// additive validation change rather than a migration of the column.
+///
+/// Uniqueness needs a functional index Prisma cannot express: two topics of one
+/// organization and audience may not hold names equal ignoring case (REQ-02-006), and a
+/// plain `@@unique` would be case-sensitive. The `UNIQUE (organizationId, audience,
+/// LOWER(name))` index is written by hand in the migration SQL, the device `Client`
+/// already uses for its per-organization name uniqueness.
+///
+/// Archiving is the only removal — there is no hard delete and no route that performs
+/// one (REQ-02-014).
+model RequestTopic {
+  id                  String    @id @default(uuid())
+  /// Scope key. A required argument with no default on every service method
+  /// (REQ-02-001).
+  organizationId      String
+  /// 'staff' | 'client'.
+  audience            String
+  /// 'access' | 'question'. Written onto every request raised under the topic
+  /// (REQ-02-021).
+  type                String
+  /// Trimmed and whitespace-collapsed on write; 1-60 characters.
+  name                String    @db.VarChar(60)
+  /// Ascending. Ties break on name, case-insensitively (REQ-02-009).
+  sortOrder           Int       @default(0)
+  /// 'active' | 'archived'. `active` is the only status a topic may be created in.
+  status              String    @default("active")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  /// Audit, set from the session. `null` on a seeded row, which nobody created.
+  createdByAccountId  String?
+  /// Set on archive, cleared on restore.
+  archivedAt          DateTime?
+  /// Set on archive, cleared on restore.
+  archivedByAccountId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account?     @relation("RequestTopicsCreated", fields: [createdByAccountId], references: [id], onDelete: SetNull)
+  archivedBy   Account?     @relation("RequestTopicsArchived", fields: [archivedByAccountId], references: [id], onDelete: SetNull)
+  requests     Request[]
+
+  /// The picker's query: one audience of one organization, active only.
+  @@index([organizationId, audience, status])
 }
 
 /// One open position: one interviewer, one interview length, one public booking link.

@@ -1,5 +1,7 @@
 # 0008 — A spec is judged by a stranger, before the pipeline is paid for
 
+> **Renamed by [ADR 15](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md).** The agents this record names still exist under the current names; the rules they duplicated now live once, in `.claude/agents/references/`. The decision below is unchanged.
+
 **Decided** 2026-09-02.
 
 ## The rule now

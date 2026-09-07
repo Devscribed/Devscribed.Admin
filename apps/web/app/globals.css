@@ -11,6 +11,19 @@
  */
 
 /*
+ * PATCH-027 — the loaded faces, bound to the token every component already reads.
+ *
+ * The design system states the family and cannot fetch it: it is a package of TypeScript
+ * source with no build step and no place to put a `@font-face`, so the app that renders it
+ * is where the files are loaded (`app/layout.tsx`) and this is where the token is pointed at
+ * them. Order is the whole rule — Poppins for Latin, Montserrat for the Cyrillic Poppins
+ * does not carry, and the generic behind both.
+ */
+:root {
+  --font-family-base: var(--font-poppins), var(--font-montserrat), sans-serif;
+}
+
+/*
  * The public booking page is the one screen with real breakpoints — a calendar beside
  * a slot list beside a form. Inline styles cannot express a media query, so its layout
  * lives here. Every value is still a token or a breakpoint from
@@ -851,4 +864,518 @@
     opacity: 0.45;
     transform: scale(0.8);
   }
+}
+
+/*
+ * The vacation calendar (time off spec 01). Here rather than inline because of what
+ * inline styles cannot express — the pinned member column, the scroll container below the
+ * desktop breakpoint, and the hatch that draws a pending band — and because this is where
+ * the spec's three DS gaps are declared, once, and read through `var()` everywhere below.
+ *
+ * `--surface-timeoff-band`, `--border-timeoff-band` and `--text-timeoff-band`: the design
+ * system carries no absence-band colour. Violet, which none of the status colours and none
+ * of `--color-holiday` uses, so a band reads as a category and not as a claim about how
+ * somebody is doing. `--name-col`: no token carries a pinned first column's width.
+ * `--range-col` (BUG-013, and REQ-03-015's reservation): no token carries a reserved width
+ * for a variable-width label beside controls that must not move when it changes. It is the
+ * ONE name for that reservation across all four windows — Week, 2 weeks, Month and the
+ * custom Range — and the widest string `rangeLabel` can return under any of them is a span
+ * crossing both a month and a year boundary: `28 Dec 2026 – 10 Jan 2027` for a preset,
+ * `28 Dec 2026 – 14 Mar 2027` for a custom range, the same 25 characters. A second property
+ * for the same width is how two names come to reserve one thing, so Range widens nothing.
+ * `--day-col-min` (REQ-03-014): no token carries a minimum data-column width, and a 92-day
+ * range divided by the page draws 12px columns that no day header fits. 32px is what the
+ * two-line header (weekday over day-of-month) needs; it must stay well above ~11px, below
+ * which 92 columns fit a 1280px viewport and the grid stops scrolling at all.
+ * All six close by entering `@devscribed/ds` and this block losing them in the same change.
+ */
+.time-off-calendar {
+  --surface-timeoff-band: oklch(0.9 0.06 285);
+  --border-timeoff-band: oklch(0.55 0.14 285);
+  --text-timeoff-band: oklch(0.38 0.12 285);
+  --name-col: 264px;
+  --range-col: 26ch;
+  --day-col-min: 32px;
+}
+
+/* PATCH-025 — the window's controls at the end of the filter row. `margin-left: auto` in a
+   wrapping flex row puts them against the right edge while there is room and lets them wrap
+   onto their own line when there is not. */
+.time-off-calendar-nav-slot {
+  margin-left: auto;
+}
+
+.time-off-calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* PATCH-025 — the grid while the next window is in flight. It stays, dimmed, rather than
+   being replaced by a placeholder of another width: three layouts in a blink is what one
+   press of an arrow used to draw. */
+.time-off-calendar-scroll.is-busy {
+  opacity: 0.55;
+}
+
+.time-off-calendar-scroll {
+  transition: opacity var(--duration-region) var(--ease-standard);
+}
+
+/* PATCH-026 — the new window arrives from the side the reader travelled, and it arrives by
+   **growing from that side** rather than by sliding into place.
+
+   A slide was the obvious shape and it was wrong here. A transformed box contributes its
+   transformed rectangle to its scroller's scrollable overflow, so a grid nudged 16px to the
+   right made the scroller 16px wider than its content for the length of the animation — and
+   in a window whose columns otherwise fit, a horizontal scrollbar appeared and vanished on
+   every press of the arrow.
+
+   A scale below 1 with the origin on the side travelled from cannot do that: the animated
+   rectangle is a subset of the settled one at every frame, so there is no moment at which
+   the grid is wider than where it ends up. The far edge stays pinned and the near one comes
+   in — which reads as the window arriving from that side, which is what it is.
+
+   @literal 0.985 — a 1.5% step, which on a grid this wide is about fifteen pixels of travel
+   at the moving edge: enough to see, small enough that no column is legibly distorted while
+   it settles. */
+@keyframes time-off-calendar-enter-next {
+  from { opacity: 0; transform: scaleX(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes time-off-calendar-enter-prev {
+  from { opacity: 0; transform: scaleX(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes time-off-calendar-enter-still {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The side the far edge is pinned to is the side it came from. */
+.time-off-calendar-enter-next {
+  transform-origin: right center;
+  animation: time-off-calendar-enter-next var(--duration-region) var(--ease-standard);
+}
+
+.time-off-calendar-enter-prev {
+  transform-origin: left center;
+  animation: time-off-calendar-enter-prev var(--duration-region) var(--ease-standard);
+}
+
+.time-off-calendar-enter-still {
+  animation: time-off-calendar-enter-still var(--duration-region) var(--ease-standard);
+}
+
+/* Movement is a preference, and this is the whole of what this screen animates. */
+@media (prefers-reduced-motion: reduce) {
+  .time-off-calendar-enter-next,
+  .time-off-calendar-enter-prev,
+  .time-off-calendar-enter-still,
+  .time-off-calendar-scroll {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* PATCH-024 — the window's name, between the two arrows that move it. Its width is
+   reserved rather than measured, so stepping from May to September never moves the arrows
+   either side of it; centred, because it now has one of them on each side. */
+.time-off-calendar-range {
+  display: inline-block;
+  width: var(--range-col);
+  white-space: nowrap;
+  text-align: center;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+/* PATCH-024 — Today is the only control in this row that is not a step, and it is set
+   apart by the one gap that is wider than the row's own. */
+.time-off-calendar-today {
+  margin-left: var(--space-4);
+}
+
+/* PATCH-028 — a block of its own, between the figures and the grid.
+   It was a bare line of text: under the grid it ended up against the bottom of the window,
+   and its swatches began outside the edge every card on the screen keeps, because a line of
+   text has no box to keep one with. It has a box now — the grid's own width, its radius and
+   its inset — so it reads as part of the screen rather than as something that fell out of
+   it, and the row it names starts where the grid's first column does. */
+.time-off-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.time-off-calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.time-off-calendar-swatch {
+  width: var(--space-8);
+  height: var(--space-4);
+  border-radius: var(--radius-s);
+  display: inline-block;
+}
+
+.time-off-calendar-swatch-approved {
+  background: var(--surface-timeoff-band);
+  border: 1px solid var(--border-timeoff-band);
+}
+
+/* @literal 3px — the hatch's stripe. The scale's smallest step is --space-1 at 4px, and a
+   4px stripe inside a swatch this size draws two bars rather than a hatch. */
+.time-off-calendar-swatch-pending {
+  border: 1px dashed var(--border-timeoff-band);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-timeoff-band) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.time-off-calendar-swatch-holiday {
+  background: var(--surface-holiday);
+  border: 1px solid var(--border-holiday);
+}
+
+.time-off-calendar-swatch-weekend {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+}
+
+.time-off-calendar-banner {
+  margin-bottom: var(--space-5);
+}
+
+.time-off-calendar-empty {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-page);
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.time-off-calendar-empty-title {
+  font-size: var(--headline-6-size);
+  font-weight: var(--headline-6-weight);
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+/* PATCH-022 — the load strip, between the legend and the grid. Four figures in a row that
+   wraps, each in its own card, sized by the row rather than by its own number: a strip whose
+   cells resized as the figures changed would be the jumping this screen has spent four
+   patches removing. */
+.time-off-calendar-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.time-off-calendar-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* @literal 200px — wide enough for the longest note the strip carries on one line, and
+     narrow enough that four of them sit in a row before it wraps. The same argument the
+     reports bar's own 200 is made from. */
+  min-width: 200px;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
+}
+
+.time-off-calendar-metric-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.time-off-calendar-metric-value {
+  font-size: var(--headline-6-size);
+  font-weight: var(--headline-6-weight);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.time-off-calendar-metric-note {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+/* The grid outgrows the page on a narrow viewport and under a wide window, and it scrolls
+   inside its own container rather than taking the page body sideways with it.
+
+   **The frame is on the container that scrolls, and it is not decoration that it is.** A
+   sticky cell is pinned to its NEAREST scrollport ancestor, and any box between it and the
+   scroller carrying an `overflow` other than `visible` becomes that scrollport — one whose
+   own scroll offset never leaves 0, because its width is its content's width. The border,
+   the radius and the `overflow: hidden` that clips them therefore cannot sit on
+   `.time-off-calendar-grid`: with them there the member column below scrolled away with the
+   days, which is the one thing this whole arrangement exists to prevent. A scroll container
+   clips to its own rounded corners, so moving the frame here loses nothing and the frame
+   now stays put around the scrolling area instead of sliding off with it. */
+.time-off-calendar-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-page);
+}
+
+.time-off-calendar-grid {
+  /* REQ-03-018 — at EVERY width, not below a breakpoint: the day columns take their own
+     minimum (--day-col-min) and the container above scrolls once the sum of them is wider
+     than the page. A 92-day range is wider than a desktop viewport, so a rule that applied
+     only below 1200px compressed exactly the window the floor exists for.
+
+     **`min-content`, and never `max-content`.** Under a min-content constraint a
+     `minmax(--day-col-min, 1fr)` track is its base size — the floor — so this is exactly the
+     sum the rule above describes: the name column plus one floor per day. `max-content`
+     instead asks what the widest CELL wants, and because every day track carries the same
+     flex factor, the answer sets the width of ALL of them: one whole-view holiday named in
+     one header made every column in a 30-day month 87px wide and put two thirds of the
+     reader's own month off the right edge. A day column is sized by the floor and by the
+     space available, never by what one day happens to hold. */
+  min-width: min-content;
+}
+
+.time-off-calendar-row {
+  display: grid;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.time-off-calendar-row:last-child {
+  border-bottom: 0;
+}
+
+.time-off-calendar-head {
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* The names survive a horizontal scroll — the whole reason the grid scrolls rather than
+   the page. `position: sticky` on a cell is the one thing an inline style cannot do here,
+   because it needs the `left: 0` and the stacking order together. It holds only while
+   nothing between this cell and `.time-off-calendar-scroll` establishes a scrollport of its
+   own; see the note on that rule before adding an `overflow` to anything in between. */
+.time-off-calendar-who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  border-right: 1px solid var(--border-default);
+  min-width: 0;
+  background: var(--surface-page);
+  position: sticky;
+  left: 0;
+  z-index: 3;
+}
+
+.time-off-calendar-corner {
+  align-items: flex-end;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.time-off-calendar-who-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.time-off-calendar-who-text b {
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* PATCH-027 — the job title, and the line it keeps whether or not there is one. A member
+   with no title left the cell one line short, so their row was shorter than every row around
+   it and the name inside it sat where no other name sat. The slot is the same shape the
+   sourcing panel's status line was given: reserved, not conditional. */
+.time-off-calendar-who-text i {
+  font-style: normal;
+  font-size: var(--font-size-xs);
+  min-height: var(--line-height-label);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time-off-calendar-week {
+  grid-row: 1;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  padding: var(--space-3) 0 var(--space-1);
+  text-align: center;
+  border-left: 1px solid var(--border-subtle);
+  font-weight: var(--font-weight-medium);
+}
+
+.time-off-calendar-day {
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) 0 var(--space-3);
+  border-left: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.time-off-calendar-day em {
+  font-style: normal;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.time-off-calendar-day b {
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* PATCH-021 — the holiday's marker in the column header, on a whole-column holiday only.
+   It was the name itself, set in the smallest step and allowed to wrap; a day column is
+   about 40px wide, so a name of more than one word ran three lines deep and the header row
+   grew by them. The row is shared by every column, so one named holiday anywhere in the
+   window made the whole grid taller — and moving to a month without one made it shorter
+   again, which is the jump.
+
+   The marker is a bar under the date, the name is on hover (the design system's `Tooltip`)
+   and inside the marker for a reader. Its box is `position: absolute`, set by the component
+   that draws it, so it adds no height whatever it holds: the header row is now the same
+   height in every window there is. */
+.time-off-calendar-day-holiday {
+  font-style: normal;
+  display: block;
+  /* @literal 14x3 — a bar the width of a two-digit date, thick enough to see and thin
+     enough not to read as a border on the cell. Neither is on the spacing scale, which
+     steps 4px: at 4px the bar is a block, and 12px is narrower than the numeral above it. */
+  width: 14px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--action-primary);
+}
+
+/* The name, present for a screen reader and for a test, drawn by the bar above. The clip
+   technique the app already uses where a node has to be readable but not seen. */
+.time-off-calendar-day-holiday-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.time-off-calendar-cell {
+  grid-row: 1;
+  height: var(--space-12);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.time-off-calendar-day.is-weekend,
+.time-off-calendar-cell.is-weekend {
+  background: var(--surface-sunken);
+}
+
+.time-off-calendar-day.is-holiday,
+.time-off-calendar-cell.is-holiday {
+  background: var(--surface-holiday);
+}
+
+.time-off-calendar-day.is-today b {
+  color: var(--action-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+/* @literal 2px — the inset that marks today's column. The scale's smallest step is
+   --space-1 at 4px, and a 4px inset reads as a border on the cell rather than as a marker
+   beside it. Recorded in the spec's DS gaps table with the two 3px values. */
+.time-off-calendar-cell.is-today {
+  box-shadow: inset 2px 0 0 0 var(--action-primary);
+}
+
+/* The loading skeleton's placeholders — the grid's own geometry, greyed. No animation:
+   `ds-pulse-loader` is the design system's, staggered across three dots, and a shimmer of
+   our own would be a second motion vocabulary beside it. */
+.time-off-calendar-skeleton .time-off-calendar-shimmer {
+  display: block;
+  width: 100%;
+  height: var(--space-4);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+}
+
+/* A fraction of the track it sits in, never a new number of pixels: the name placeholder
+   reads as a name rather than as a filled column, and the spec's DS gaps table closes the
+   set of literals this screen may carry at three. */
+.time-off-calendar-skeleton .time-off-calendar-who .time-off-calendar-shimmer {
+  max-width: 60%;
+}
+
+/* @literal 3px — the band's side margin, which is what separates two adjacent bands
+   (Edge case 16). The scale's smallest step is --space-1 at 4px, and 4px each side eats
+   the day column the band has to stay inside. */
+.time-off-calendar-band {
+  grid-row: 1;
+  align-self: center;
+  height: var(--space-10);
+  margin: 0 3px;
+  border-radius: var(--radius-s);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-base);
+  color: var(--text-timeoff-band);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  padding: 0;
+}
+
+.time-off-calendar-band.is-approved {
+  background: var(--surface-timeoff-band);
+  border: 1px solid var(--border-timeoff-band);
+}
+
+/* Hatched and dashed rather than a second fill: a pending band has to be told apart from
+   an approved one at a glance and without colour alone. */
+.time-off-calendar-band.is-pending {
+  border: 1px dashed var(--border-timeoff-band);
+  background-color: var(--surface-page);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--surface-timeoff-band) 0 var(--space-1),
+    transparent var(--space-1) var(--space-4)
+  );
 }

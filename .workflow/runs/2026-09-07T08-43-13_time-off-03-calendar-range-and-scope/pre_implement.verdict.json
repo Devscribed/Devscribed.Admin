@@ -1,0 +1,178 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/time-off/03-calendar-range-and-scope.md",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "n/a",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "n/a",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "n/a",
+    "H-15": "finding",
+    "H-16": "ok",
+    "H-17": "ok"
+  },
+  "compiledNotes": {
+    "H-01": "All 18 numbered requirements (REQ-03-001 … REQ-03-018) are assigned; handoff-coverage confirms.",
+    "H-02": "All 10 live cases claimed — TC-03-UNIT-11/12/13, TC-03-INT-21/22/23/24, TC-03-E2E-11/12/13. None is retired.",
+    "H-03": "All 9 '##' sections have an entry in `sections`; the four that carry no requirement and no case (Summary, Out of Scope, Known Gaps, Acceptance Criteria) say why.",
+    "H-04": "Every cited path was opened or listed: the six task file sets, the three DateRangePicker consumers, infra/deploy.sh, globals.css, both test suites, packages/ds/README.md. The one path that does not exist yet is apps/api/src/test-support/seed-memberships.ts, which is a task output.",
+    "H-05": "`reuse` names 12 shipping surfaces with paths; `buildFromZero` names 10 things that do not exist.",
+    "H-06": "REQ-03-003 says 'under any scope' — both call sites listed (service :119-124, screen :198-212). REQ-03-014 says 'WHILE the grid is drawn' — both templates listed (CalendarScreen.tsx:75 skeleton, :268 grid). REQ-03-015 'throughout a session' — the four window segments and the three nav controls.",
+    "H-07": "Nine rows in `shippingSurfaces`, each with what the path does with the newly reachable value, not merely that it is reached. The one that decides the run is `resolveRows`: `idFilter` must stay null, because `id: { in: [] }` answers 200 with zero rows and passes every other check.",
+    "H-08": "No task writes a product row. The route is a pure read (time-off/01 §State Machine invariant 1); the only writer added is a test fixture inserting fresh Account/Membership rows into an organization the test just created, in a per-run database. `concurrency` is recorded on every task saying so.",
+    "H-09": "All seven surviving Error Messages rows name their packages/validation export and the route that emits them; both Withdrawn rows name the export, the line it is emitted from today, and every import that stops compiling. No row's text exists nowhere.",
+    "H-10": "One Verification Plan row is marked as not existing today — 'More than 100 active memberships, for Edge case 1'. It is task T3. No live case depends on it, so T3 also carries the Edge case 1 assertion that consumes it; see note P3.",
+    "H-11": "No migration. No entity, no column, no default — the contracts file's Data Model section, confirmed against the service, which reads Membership, Project, ProjectMember, VacationRequest and Holiday exactly as time-off/01 does. The deploy-order premise is recorded from infra/deploy.sh:27 anyway, because the migration step is skipped rather than absent.",
+    "H-12": "No task changes authorization. T2 re-verifies it in place: `can(normalizeRole(caller.role), 'view-time-off-calendar')` at time-off-calendar.service.ts:241 reads a stored `member` as `user` and answers 200; the target set is admin|manager|user, and `viewer` is answered a bare 404 for every scope, empty selection included.",
+    "H-13": "The bundle has no External Contracts table — this spec adds no external dependency, no credential and no key (cases file, 'Access this needs').",
+    "H-14": "No double. Nothing external is called.",
+    "H-15": "REQ-03-009 needs a control capability `@devscribed/ds` does not have and the bundle's DS-gaps table does not record — see finding P1. Recorded in `dsGaps` and planned as T4, into the design system rather than worked around per screen.",
+    "H-16": "Six tasks, each carrying `files`, `requirements` and `dependsOn`; the file globs are disjoint.",
+    "H-17": "`node scripts/handoff-coverage.mjs --run 2026-09-07T08-43-13_time-off-03-calendar-range-and-scope` returns {\"status\":\"pass\",\"findings\":[]}."
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "criterion": "REQ-03-009",
+      "file": "specs/time-off/03-calendar-range-and-scope.cases.md",
+      "symbol": "DS gaps",
+      "claim": "REQ-03-009 needs a bound the design system's DateRangePicker cannot express, and the bundle's DS-gaps table records only three custom properties while asserting that every new value is one of them",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-03-009: 'WHILE the Range window is active and a start has been armed, THE SYSTEM SHALL bound the picker so that no end more than 91 days after that start can be chosen.' In packages/ds/src/components/forms/DateRangePicker.tsx the armed start is private state (`const [pending, setPending] = React.useState<CalendarDate | null>(null)`, :87) and the selectable set is computed from the fixed props alone (`weeks.flat().filter(date => !!date && (!minDate || date >= minDate) && (!maxDate || date <= maxDate))`, :124-127). No prop narrows the panel after the first click, so the requirement cannot be met without changing the component. The cases file's DS gaps table lists only `--name-col`, `--day-col-min`, `--range-label-col` and the three band colours, and closes with 'No colour is written that the design system does not name, and this spec declares no @literal value: every new number is one of the three custom properties above' — which is true of the numbers and silent about the capability.",
+        "source": "specs/time-off/03-calendar-range-and-scope.cases.md:3-13"
+      },
+      "suggestedFix": "a DS-gaps row for the span bound. Planned as T4 regardless: one optional `maxSpanDays` prop on the component, narrowing `availableDates` only — never the minDate/maxDate that gate Calendar's month arrows — and undefined by default so the three shipped report consumers are unchanged."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "criterion": "REQ-03-015",
+      "file": "specs/time-off/03-calendar-range-and-scope.cases.md",
+      "symbol": "--range-label-col",
+      "claim": "the DS-gaps table asks for a new custom property to reserve the range label's width, and that reservation already ships under another name",
+      "witness": {
+        "kind": "rule",
+        "detail": "The cases file: '`--range-label-col` — no token carries a reserved width for a variable-width label in a control row | REQ-03-015 needs one.' apps/web/app/globals.css:872-878 already declares `--range-col: 26ch` on the `.time-off-calendar` block and :886-893 applies `width: var(--range-col)` to `.time-off-calendar-range`, added by commit 595fcf6 ('fix(time-off): reserve calendar range label width so nav controls hold still (BUG-013)'), which landed after the bundle was written in e659a5b. Declaring a second property would leave two names reserving one width.",
+        "source": "apps/web/app/globals.css:877"
+      },
+      "suggestedFix": "T5 widens the existing `--range-col` to cover the widest label the four windows now produce and records the decision in the block comment, rather than declaring a second property. The widest string the contracts file names, `28 Dec 2026 – 14 Mar 2027`, is the same length as the widest preset label BUG-013 measured."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "criterion": "REQ-03-003",
+      "file": "specs/time-off/03-calendar-range-and-scope.md",
+      "symbol": "Known Gaps — Edge case 1",
+      "claim": "the bundle both writes Edge case 1 off as an acceptable gap and calls its fixture a task this spec owes, and no numbered case consumes the fixture either way",
+      "witness": {
+        "kind": "rule",
+        "detail": "Known Gaps: 'No fixture can seed more than 100 active memberships, so Edge case 1 is unreachable | It is the refusal that replaces the one being withdrawn, and it is the one state this spec most needs to see | A seeding fixture under apps/api/src/test-support/, declared as a task this spec owes in the cases file.' The cases file: 'The one `no` is a task this spec owes: a seeding fixture for the over-100 case.' A gap listed as acceptable now and a task the spec owes are different obligations, and neither TC-03-INT-21…24 nor any E2E case names the fixture — so building it as written produces a file with no reader, which is what the review stage blocks on.",
+        "source": "specs/time-off/03-calendar-range-and-scope.md:216"
+      },
+      "suggestedFix": "planned as owed, with a consumer: T3 adds apps/api/src/test-support/seed-memberships.ts as a module (never a controller — the contracts file says no route is added) and uses it for one assertion marked `// Edge case 1` in apps/api/test/time-off-calendar.spec.ts, asserting 422 tooManyMembers for scope=teams with 101 active memberships and nothing ticked."
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "criterion": "REQ-03-003",
+      "file": "specs/time-off/03-calendar-range-and-scope.contracts.md",
+      "symbol": "Withdrawn",
+      "claim": "three shipped test cases assert the two refusals this spec withdraws, and the bundle says nothing about what becomes of them",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-INT-06, TC-01-INT-08, TC-01-E2E-03",
+        "detail": "apps/api/test/time-off-calendar.spec.ts:427 asserts `{ error: 'validation_error', fields: { projectIds: 'Choose at least one team.' } }` with status 422 for scope=teams and nothing ticked; :466 asserts `fields.memberIds === 'Choose at least one person.'`; e2e/tests/time-off-calendar.spec.ts:335-342 clicks calendar-scope-teams and expects calendar-error-banner to hold TIME_OFF_CALENDAR_MESSAGES.teamsRequired with calendar-grid at count 0. REQ-03-003 makes all three false, and the deletion of the two exports (contracts §Withdrawn) stops the last one compiling. The bundle names none of them, and specs/time-off/01 may not be edited to record a retirement.",
+        "source": "apps/api/test/time-off-calendar.spec.ts:427"
+      },
+      "suggestedFix": "planned: T3 and T6 rewrite all three in place to assert the new rule, keeping their `// TC-01-INT-06` / `// TC-01-INT-08` / `// TC-01-E2E-03` markers so the ids stay traceable, and leave specs/time-off/01-*.md untouched."
+    },
+    {
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "criterion": "TC-03-E2E-11",
+      "file": "specs/time-off/03-calendar-range-and-scope.cases.md",
+      "symbol": "Verification Plan — reaching the states the cases need",
+      "claim": "the plan names an E2E helper that does not exist",
+      "witness": {
+        "kind": "command",
+        "detail": "The cases file: 'An admin session in an organization with active members | `signInAsAdmin` in `e2e/tests/helpers.ts`, the same one `time-off-calendar.spec.ts` opens with | yes'. `grep -rn \"signInAsAdmin\" e2e/` returns nothing. e2e/tests/time-off-calendar.spec.ts imports `login`, `signupOrg` and `uniqueEmail` from ./helpers and reaches an admin session through `signupOrg` followed by the local `signInUi`.",
+        "source": "e2e/tests/time-off-calendar.spec.ts:3-22"
+      },
+      "suggestedFix": "no work: T6 follows the suite's own opening, which the file already establishes. Recorded because the Verification Plan's whole value is the route it hands the next agent."
+    },
+    {
+      "id": "P6",
+      "target": "self",
+      "severity": "note",
+      "rule": "agent/stale-reference",
+      "criterion": "H-15",
+      "file": ".claude/agents/pre-implementer-strict.md",
+      "symbol": "What you read",
+      "claim": "my own definition tells me to read a design-system document at a path that does not exist",
+      "witness": {
+        "kind": "command",
+        "detail": "The definition's 'What you read' item 4: \"`CLAUDE.md`, and `1_DS for dev/README.md` when the task touches UI.\" `ls '1_DS for dev/'` → 'No such file or directory'. The four normative design-system rules are in packages/ds/README.md, which is the file CLAUDE.md names ('the four normative rules are in packages/ds/README.md') and the one I read. The same stale path appears in packages/ds/README.md's own prose about `_adherence.oxlintrc.json` and in scripts/static-gate.mjs:24.",
+        "source": "packages/ds/README.md:20"
+      },
+      "suggestedFix": "point item 4 at packages/ds/README.md. This is a note for a person, not a halt — the correct document exists and was read."
+    }
+  ],
+  "coverage": {
+    "read": [
+      "specs/time-off/03-calendar-range-and-scope.md",
+      "specs/time-off/03-calendar-range-and-scope.contracts.md",
+      "specs/time-off/03-calendar-range-and-scope.cases.md",
+      "specs/time-off/README.md",
+      "specs/bugs/BUG-013-calendar-header-shifts-with-the-range-label.md",
+      "CLAUDE.md",
+      "packages/ds/README.md",
+      "apps/api/src/time-off/time-off-calendar.service.ts",
+      "apps/api/src/time-off/time-off-calendar.controller.ts",
+      "apps/api/src/test-support/fixture-gate.ts",
+      "apps/api/test/time-off-calendar.spec.ts",
+      "packages/validation/src/time-off-calendar.ts",
+      "packages/validation/src/time-off-calendar.test.ts",
+      "packages/validation/package.json",
+      "packages/ds/src/components/forms/DateRangePicker.tsx",
+      "packages/ds/src/components/forms/Select.tsx",
+      "packages/ds/src/components/data/Calendar.tsx",
+      "packages/ds/src/components/core/ToggleButton.tsx",
+      "packages/ds/src/index.ts",
+      "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+      "apps/web/app/globals.css",
+      "apps/web/src/reports/ReportFilters.tsx",
+      "e2e/tests/time-off-calendar.spec.ts",
+      "e2e/tests/helpers.ts",
+      "infra/deploy.sh",
+      "scripts/static-gate.mjs",
+      "scripts/handoff-coverage.mjs"
+    ],
+    "unreached": []
+  },
+  "outputs": {
+    "handoff": ".workflow/runs/2026-09-07T08-43-13_time-off-03-calendar-range-and-scope/handoff.json",
+    "report": ".workflow/runs/2026-09-07T08-43-13_time-off-03-calendar-range-and-scope/stages/pre_implement.md"
+  }
+}

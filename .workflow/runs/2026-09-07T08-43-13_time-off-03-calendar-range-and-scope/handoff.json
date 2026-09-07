@@ -1,0 +1,384 @@
+{
+  "spec": {
+    "path": "specs/time-off/03-calendar-range-and-scope.md",
+    "sha256": "5eb0ebc73e366ac4efdc5d26549a49d082410c7e3af4c01b8e706353ca2f2ac8",
+    "dependsOn": ["01"],
+    "bundle": [
+      "specs/time-off/03-calendar-range-and-scope.contracts.md",
+      "specs/time-off/03-calendar-range-and-scope.cases.md"
+    ]
+  },
+
+  "summary": "The Time off calendar gains a fourth window, Range, and stops refusing to draw anything when Teams or People is chosen with nothing ticked. Three things change together. (1) packages/validation loses TIME_OFF_CALENDAR_MESSAGES.teamsRequired and .peopleRequired — deleted, not deprecated, so every consumer stops compiling — and gains the range arithmetic the new window needs (step by the range's own length, Today keeping the length, and the anchor a range converts to). (2) apps/api/src/time-off/time-off-calendar.service.ts drops the two 422s and, critically, makes an empty projectIds / memberIds mean *no narrowing* rather than the empty id filter it would otherwise become — `id: { in: [] }` returns zero rows, which is the exact wrong answer this spec forbids. (3) The screen adds the Range segment, a DateRangePicker whose ends become startDate/endDate unchanged, prev/next/Today under a custom range, and a day-column floor with a horizontal scroll so a 92-column grid is readable. The design system's DateRangePicker gains one optional prop — a span bound applied once a start is armed — because REQ-03-009 cannot be expressed with the fixed minDate/maxDate it has today. No route is added, no response body changes shape, no entity, no column, no migration.",
+
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "packages/validation — delete the two withdrawn messages, add the custom-range arithmetic",
+      "files": [
+        "packages/validation/src/time-off-calendar.ts",
+        "packages/validation/src/time-off-calendar.test.ts"
+      ],
+      "requirements": ["REQ-03-003", "REQ-03-007", "REQ-03-009", "REQ-03-011", "REQ-03-012", "REQ-03-013", "REQ-03-017"],
+      "dependsOn": [],
+      "migration": null,
+      "detail": [
+        "Delete `teamsRequired` and `peopleRequired` from TIME_OFF_CALENDAR_MESSAGES (packages/validation/src/time-off-calendar.ts:27-28). REQ-03-003 and the Withdrawn table of the contracts file: deleted, never left unreferenced. The remaining five 422 messages and the four screen-only strings are unchanged, verbatim.",
+        "Remove the two assertions that pin the deleted text in packages/validation/src/time-off-calendar.test.ts:137-138. Every other assertion in that `carries the tabulated message text, verbatim` case stays.",
+        "REQ-03-007 — the fourth window. Do NOT widen `TimeOffCalendarWindow` (currently 'week' | '2weeks' | 'month'): it is the parameter of `timeOffCalendarWindowRange` and `stepTimeOffCalendarAnchor`, both of which are anchor-driven and have no meaning for a span the reader picked by hand. Add `export type TimeOffCalendarWindowChoice = TimeOffCalendarWindow | 'range'` and let the screen hold that. State the reason in the doc comment.",
+        "REQ-03-011 — `export function stepTimeOffCalendarRange(range: TimeOffCalendarRange, direction: -1 | 1): TimeOffCalendarRange`. Both ends move by `calendarDaySpan(range.startDate, range.endDate)` days in `direction`; the span is preserved by construction (move both ends by the same number). TC-03-UNIT-11 checks a 10-day span both ways and a one-day span.",
+        "REQ-03-012 — `export function timeOffCalendarRangeToday(range: TimeOffCalendarRange, today: string): TimeOffCalendarRange`. Start becomes `today`; end becomes `addCalendarDays(today, span - 1)` where `span` is the input's span. TC-03-UNIT-12 checks a 10-day range not containing today, and a one-day range.",
+        "REQ-03-013 — `export function timeOffCalendarAnchorFromRange(range: TimeOffCalendarRange): string` returning `range.startDate`. It is one line and it exists so the rule 'a preset opens on the window containing the range's start' has one definition rather than being retyped in the screen. TC-03-UNIT-13 asserts `timeOffCalendarWindowRange('month', timeOffCalendarAnchorFromRange(range), 'Monday')` is the month containing a mid-month start.",
+        "REQ-03-017 — the reverse direction needs no new function: seeding Range from a preset is `timeOffCalendarWindowRange(preset, anchor, firstDayOfWeek)`, which already returns exactly `{ startDate, endDate }`. TC-03-UNIT-13's second half asserts that against a month window. Do not add a wrapper that only forwards.",
+        "REQ-03-009 — `export function timeOffCalendarLatestEnd(startDate: string): string` = `addCalendarDays(startDate, TIME_OFF_CALENDAR_MAX_RANGE_DAYS - 1)`, i.e. start + 91. The 92-day bound is inclusive (Validation Rule 3, Edge case 6), so the last permitted end is 91 days after the start. The screen and the picker both read this; neither restates the arithmetic.",
+        "`packages/validation` resolves through `dist/` (package.json main/types), which is gitignored and built by `npm run build --workspace @devscribed/validation`. Run that build after editing, or the API, the web app and the static gate's typecheck all keep seeing the deleted exports."
+      ],
+      "allCallSites": [
+        "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES",
+        "apps/api/src/time-off/time-off-calendar.service.ts:120 (teamsRequired)",
+        "apps/api/src/time-off/time-off-calendar.service.ts:123 (peopleRequired)",
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx:204 (teamsRequired)",
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx:210 (peopleRequired)",
+        "e2e/tests/time-off-calendar.spec.ts:339 (teamsRequired)",
+        "packages/validation/src/time-off-calendar.test.ts:137-138"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — this task writes no database row",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T2",
+      "title": "The calendar read — withdraw the two refusals, and make an empty selection narrow nothing",
+      "files": ["apps/api/src/time-off/time-off-calendar.service.ts"],
+      "requirements": ["REQ-03-001", "REQ-03-002", "REQ-03-003", "REQ-03-006", "REQ-03-010"],
+      "dependsOn": ["T1"],
+      "migration": null,
+      "detail": [
+        "Delete both refusal branches at time-off-calendar.service.ts:119-124. Nothing replaces them: Validation Rules 6 and 7 of the contracts file are now the absence of a rule.",
+        "**The trap.** `resolveRows` sets `idFilter` to `[...ids]` for `teams` (line 301) and to `memberIds` for `people` (line 305). With the refusal gone and nothing ticked, both become `[]`, the query becomes `id: { in: [] }`, and the route answers 200 with zero rows and `calendar-empty-state` — the opposite of REQ-03-001/002. `idFilter` must stay `null` (the sentinel that already means 'no id narrowing', used by the `all` scope) whenever the scope's own selection is empty: guard the `teams` branch with `if (projectIds.length > 0)` and the `people` branch with `if (memberIds.length > 0)`.",
+        "REQ-03-006 — a non-empty selection still narrows, unchanged: the named-project union, the `none` Unassigned sentinel, the foreign-id drop and the ordering all stay exactly as they are. Only the empty case changes.",
+        "REQ-03-010 — nothing to do. `validateTimeOffCalendarRange` already refuses a span over TIME_OFF_CALENDAR_MAX_RANGE_DAYS with `rangeTooWide` and the service already throws it (line 108). Named here so the reviewer knows it was checked and deliberately left alone; TC-03-INT-24 pins it.",
+        "Validation Rule 5 (`tooManyMembers`) stays where it is — after the rows resolve — and becomes newly reachable from an empty Teams/People selection in an organization over 100 people. That is Edge case 1, and it is the intended refusal.",
+        "`meta.scope` keeps echoing the scope that was asked for: an empty `teams` selection reports `\"teams\"`, never `\"all\"`. It already does; do not 'simplify' it to the resolved scope.",
+        "Update the block comment at :113-118 so it no longer describes 'then that scope's own selection' as a validation step."
+      ],
+      "allCallSites": [
+        "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar",
+        "apps/api/src/time-off/time-off-calendar.service.ts#resolveRows",
+        "apps/api/src/time-off/time-off-calendar.controller.ts#get — the one caller of getCalendar"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — this route is a pure read (time-off/01, §State Machine invariant 1: it writes nothing), so no row is contended and no lock is taken",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T3",
+      "title": "Integration cases, and the fixture that seeds an organization over the row cap",
+      "files": [
+        "apps/api/test/time-off-calendar.spec.ts",
+        "apps/api/src/test-support/seed-memberships.ts"
+      ],
+      "requirements": ["REQ-03-001", "REQ-03-002", "REQ-03-003", "REQ-03-006", "REQ-03-010"],
+      "dependsOn": ["T2"],
+      "migration": null,
+      "detail": [
+        "TC-03-INT-21 — three active memberships, two of them on a project; `scope=teams` with no `projectIds` over a two-week span bound to the run's own today. 200, three `members`, `meta.scope === 'teams'`, no `fields` and no `message` in the body.",
+        "TC-03-INT-22 — the same organization, `scope=people` with no `memberIds`. 200, three members, `meta.scope === 'people'`.",
+        "TC-03-INT-23 — `scope=teams` with the one project id answers the two members on it; `scope=people` with one membership id answers that one. Neither answers three.",
+        "TC-03-INT-24 — with `D` the run's own today: `D`..`D+92 days` is 422 with `rangeTooWide` under `fields.range`; `D`..`D+91 days` is 200. The 92-day bound is inclusive and a 92-day span ends 91 days after its start.",
+        "**Two shipped cases now assert a rule this spec withdrew and will fail.** TC-01-INT-06 at apps/api/test/time-off-calendar.spec.ts:427 ('scope=teams with nothing ticked is refused, not drawn empty') and TC-01-INT-08 at :466 ('scope=people with nobody picked is refused'). Rewrite both to assert the new rule — 200 with every active membership — keeping their `// TC-01-INT-06` / `// TC-01-INT-08` markers and retitling them, so the ids stay traceable. Do not edit specs/time-off/01-*.md: an older spec records what was decided then and is never edited to stay current.",
+        "Edge case 1 (contracts, §Edge Cases) — the fixture the cases file says this spec owes. Add `apps/api/src/test-support/seed-memberships.ts` exporting one function that seeds N active memberships (account + membership) into an organization in one call, taking the PrismaService the caller already holds. **It is a module, not a controller**: the spec's own contracts say no route is added, and every existing file under `apps/api/src/test-support/` is a route only because an E2E browser needed one. Nothing registers it in `app.module.ts`.",
+        "Use it for one assertion in apps/api/test/time-off-calendar.spec.ts, marked `// Edge case 1` (the file already carries unnumbered edge-case assertions elsewhere in the suite): seed 101 active memberships, request `scope=teams` with no `projectIds`, expect 422 with `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers`. This is the refusal that replaces the one being withdrawn.",
+        "Run targeted: `npm test -- test/time-off-calendar.spec.ts` from `apps/api`. Never the whole integration suite."
+      ],
+      "allCallSites": [
+        "apps/api/test/time-off-calendar.spec.ts#TC-01-INT-06 (:427)",
+        "apps/api/test/time-off-calendar.spec.ts#TC-01-INT-08 (:466)"
+      ],
+      "concurrency": {
+        "rows": ["Account", "Membership"],
+        "lock": "none — the fixture inserts fresh rows into an organization the test just created; the integration database is wiped per run and no other writer exists inside a case",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T4",
+      "title": "DateRangePicker — bound the span once a start is armed",
+      "files": ["packages/ds/src/components/forms/DateRangePicker.tsx"],
+      "requirements": ["REQ-03-009"],
+      "dependsOn": [],
+      "migration": null,
+      "detail": [
+        "REQ-03-009 needs the panel to stop offering an end more than 91 days after the armed start. The component cannot express that today: `minDate` / `maxDate` are fixed props, and the armed start is the component's own `pending` state, which no consumer can see (DateRangePicker.tsx:87, :124-127).",
+        "Add one optional prop — `maxSpanDays?: number` — documented as the inclusive number of days the committed range may cover. While `pending` is null it changes nothing. While `pending` is set, `selectable` additionally excludes every date after `addDays(pending, maxSpanDays - 1)`; `Calendar` renders those days with a real `disabled` (its `availableDates` contract, Calendar.tsx:22-23), and the arrow walk skips them.",
+        "Apply the bound to `availableDates` **only**, never to the `minDate` / `maxDate` handed to `Calendar`: those two gate the month arrows (Calendar.tsx:175-176), and narrowing them would stop the reader paging to the month their end date is in.",
+        "The date arithmetic stays inside this file — `packages/ds` does not depend on `@devscribed/validation` and will not (the note at DateRangePicker.tsx:41-44). Add a small local day-shift on the ISO string through `Date.UTC`, matching how `monthWeeks` already reads a `CalendarDate` off the string.",
+        "The prop is optional and the three shipped consumers pass nothing, so their behaviour is unchanged: apps/web/app/org/[orgId]/reports/amounts-owed/page.tsx:440, .../reports/time-and-activity/page.tsx:511, .../reports/time-off/page.tsx:415.",
+        "No new export from packages/ds/src/index.ts is needed — `DateRangePickerProps` is already exported (index.ts:141) and gains the field.",
+        "No hardcoded colour or size: this task adds behaviour, not paint."
+      ],
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/reports/amounts-owed/page.tsx:440",
+        "apps/web/app/org/[orgId]/reports/time-and-activity/page.tsx:511",
+        "apps/web/app/org/[orgId]/reports/time-off/page.tsx:415",
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx — the new consumer, added by T5"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — a presentation component writes no row",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T5",
+      "title": "The calendar screen — the Range window, the picker, the nav under a custom range, and the grid's floor",
+      "files": [
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+        "apps/web/app/globals.css"
+      ],
+      "requirements": ["REQ-03-004", "REQ-03-005", "REQ-03-007", "REQ-03-008", "REQ-03-009", "REQ-03-011", "REQ-03-012", "REQ-03-013", "REQ-03-014", "REQ-03-015", "REQ-03-016", "REQ-03-017", "REQ-03-018"],
+      "dependsOn": ["T1", "T4"],
+      "migration": null,
+      "detail": [
+        "REQ-03-005 / REQ-03-016 — delete the two client-side short-circuits at CalendarScreen.tsx:198-212. A scope change with nothing ticked now spends the request like any other, and no banner is drawn. The `setError` / `setData(null)` pair goes with them; the 422 and network branches below stay untouched.",
+        "REQ-03-004 — nothing to do. `MultiFilter` is a `Select` with `placeholder=\"All\"` (apps/web/src/reports/ReportFilters.tsx:76-80) and `Select` draws the placeholder whenever there is no value (Select.tsx:345). Verify by reading, do not reimplement.",
+        "REQ-03-007 — a fourth segment in WINDOW_SEGMENTS: `{ value: 'range', label: 'Range', testId: 'calendar-window-range' }`. `ToggleButton`'s `options` form already takes any number of segments and gives each its own test id and arrow-key stop. Range is a window, not a mode: all four stay in the one control.",
+        "State: hold the choice as `TimeOffCalendarWindowChoice` and keep a separate `customRange: TimeOffCalendarRange` beside the existing `anchor`. The window that is fetched is `timeOffCalendarWindowRange(preset, anchor, firstDayOfWeek)` under a preset and `customRange` under Range. The window, the scope and the range stay in-page state and out of the URL (Actors & Preconditions; time-off/01's decision, restated here).",
+        "REQ-03-008 — while Range is active, draw `<DateRangePicker>` in the filter row beside the pickers, `data-testid=\"calendar-range-picker\"` on the component (it spreads the rest onto its root) and `triggerTestId=\"calendar-range-picker-trigger\"`. `onChange` writes the two ends into `customRange` unchanged — no rounding to a week, no clamping. Both ids are absent while any preset is active.",
+        "REQ-03-009 — pass `maxSpanDays={TIME_OFF_CALENDAR_MAX_RANGE_DAYS}` (T4's prop). The panel then offers no end more than 91 days after the armed start, which is what `timeOffCalendarLatestEnd` computes and what TC-03-E2E-12 reads. The bound is forward-only, exactly as REQ-03-009 states; a reader who arms a start and clicks a much earlier day still commits a legal-or-refused range, and Edge case 7 is the answer when it is over 92 days.",
+        "REQ-03-011 — `calendar-prev` / `calendar-next` call `stepTimeOffCalendarRange(customRange, ∓1)` while Range is active, and keep calling `stepTimeOffCalendarAnchor` under the three presets. Both ends move by the range's own length; the length is preserved (Edge case 9).",
+        "REQ-03-012 — `calendar-today` sets `customRange = timeOffCalendarRangeToday(customRange, today())` while Range is active, and keeps setting the anchor under a preset. `today()` stays the account-timezone reading already in the file (CalendarScreen.tsx:136) — never the browser clock.",
+        "REQ-03-013 — leaving Range for a preset sets `anchor = timeOffCalendarAnchorFromRange(customRange)`; the preset then opens on the window containing that start (Edge case 11).",
+        "REQ-03-017 — entering Range from a preset seeds `customRange` with that preset's current `range` (Edge case 12: Month → Range is that month's first and last day).",
+        "The range label. `rangeLabel` takes the window and two dates; give it the Range case — the same `d Mon yyyy – d Mon yyyy` shape the week presets produce, which is what the §Screens block draws and what TC-03-E2E-12 reads off `calendar-range-label`.",
+        "REQ-03-015 — the reservation already exists: BUG-013 shipped `--range-col` on the `.time-off-calendar` block and `width: var(--range-col)` on `.time-off-calendar-range` (globals.css:877, :886-893). REQ-03-015 asks only that the reserved width cover the widest label **any** window can now produce, which the contracts file measures as `28 Dec 2026 – 14 Mar 2027`. Widen the existing property if that string does not fit at the shipped font, and update the comment above the block to name the four windows. **Do not add a second property for the same reservation** — the cases file calls it `--range-label-col`, but two custom properties reserving one width is the drift the DS-gap table exists to prevent; record the chosen name in the block comment.",
+        "REQ-03-014 / REQ-03-018 — the geometry. Add `--day-col-min` to the `.time-off-calendar` block and use it in both grid templates: `var(--name-col) repeat(N, minmax(var(--day-col-min), 1fr))` at CalendarScreen.tsx:75 (the skeleton) and :268 (the grid). Pick a value that keeps the two-line day header legible — around 32px — and note in the block comment that it must exceed roughly 11px or 92 columns still fit a 1280px viewport and TC-03-E2E-13's scroll assertion has nothing to observe.",
+        "REQ-03-018 — `.time-off-calendar-grid { min-width: max-content }` is today inside `@media (max-width: 1199px)` (globals.css:978-983). TC-03-E2E-13 reads the scroll at a 1280px viewport, above that breakpoint, so the rule must apply at every width. Make it unconditional and drop the media query; `.time-off-calendar-scroll` already carries `overflow-x: auto` (globals.css:965-967), so the container scrolls and the member column keeps its `position: sticky`.",
+        "Design system: import from `@devscribed/ds`, the package root only. No hardcoded colour or size in the TSX — the three new numbers are the custom properties above, declared in the one block that already declares `--name-col` and the band colours, with a reason beside each."
+      ],
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx#GridSkeleton (:75 — the skeleton's own template)",
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx#CalendarScreen (:268 — the data-derived template)",
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx#load (:186-249 — the one request the screen spends)",
+        "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx#rangeLabel (:38)",
+        "apps/web/app/globals.css .time-off-calendar (:872) and .time-off-calendar-grid (:969, :978)"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — the screen writes nothing; every control changes what is asked for",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T6",
+      "title": "E2E — the empty selection, the custom range, and the geometry",
+      "files": ["e2e/tests/time-off-calendar.spec.ts"],
+      "requirements": ["REQ-03-001", "REQ-03-002", "REQ-03-004", "REQ-03-005", "REQ-03-007", "REQ-03-008", "REQ-03-009", "REQ-03-014", "REQ-03-015", "REQ-03-016", "REQ-03-018"],
+      "dependsOn": ["T3", "T5"],
+      "migration": null,
+      "detail": [
+        "TC-03-E2E-11 — admin, at least two active members. Click `calendar-scope-teams`, tick nothing; then `calendar-scope-people`, tick nothing. After each: `calendar-error-banner` absent, `calendar-grid` present, the picker reads `All`, and every `calendar-member-row-{membershipId}` is on screen.",
+        "TC-03-E2E-12 — click `calendar-window-range`, then `calendar-range-picker-trigger`. Arm a start, read which later days the panel offers (no day more than 91 after it is selectable), then click a day 20 days after the start. `calendar-range-label` names the two days, the grid holds 21 `calendar-day-header-{date}` cells and the first is the armed start. `calendar-range-picker` is present only while Range is active.",
+        "TC-03-E2E-13 — record `calendar-today`'s bounding box across all four window segments and across `calendar-prev` once / `calendar-next` twice; every recorded `x` is the same. Under a 92-day range at a 1280px viewport, no day column is narrower than the declared minimum and the scroll container's `scrollWidth` exceeds its `clientWidth`.",
+        "**One shipped case asserts a rule this spec withdrew.** The tail of TC-01-E2E-03 (e2e/tests/time-off-calendar.spec.ts:335-342) clicks `calendar-scope-teams` and expects `calendar-error-banner` to carry `teamsRequired` with `calendar-grid` absent. It stops compiling the moment T1 deletes the export. Replace that tail with the new rule — the banner absent and the grid present — keeping the case's `// TC-01-E2E-03` marker and its window-stepping assertions above, which this spec does not touch. Drop the now-unused `TIME_OFF_CALENDAR_MESSAGES` import if nothing else in the file uses it.",
+        "This suite reaches September 2026 by stepping from the screen's own default, computed from the run's date (the file's header comment). Bind the custom range the same way — to the run's own today — never to a literal that is in the past on a later run.",
+        "Selectors are `data-testid` only. Run targeted: `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/time-off-calendar.spec.ts tests/regressions.spec.ts` from `e2e`. Never the whole suite, and never free a busy port by killing what holds it — the suite claims its own pair under CI."
+      ],
+      "allCallSites": [
+        "e2e/tests/time-off-calendar.spec.ts:335-342 — the only shipped E2E assertion of a withdrawn refusal"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none",
+        "reread": []
+      }
+    }
+  ],
+
+  "reuse": [
+    { "what": "the whole route — guards, org scoping and the 404-not-403 refusal", "where": "apps/api/src/time-off/time-off-calendar.controller.ts (SessionGuard, OrgScopeGuard) and time-off-calendar.service.ts#requireViewCapability" },
+    { "what": "`normalizeRole()` + `can(role, 'view-time-off-calendar')`, so a legacy `member` reads as `user` and is answered 200", "where": "apps/api/src/time-off/time-off-calendar.service.ts:241 via packages/validation/src/roles.ts" },
+    { "what": "the `startDate` / `endDate` query parameters and the inclusive 92-day bound — already shipped, unchanged", "where": "packages/validation/src/time-off-calendar.ts#validateTimeOffCalendarRange and TIME_OFF_CALENDAR_MAX_RANGE_DAYS (:39)" },
+    { "what": "`idFilter === null` as the existing sentinel for 'no id narrowing'", "where": "apps/api/src/time-off/time-off-calendar.service.ts:264, :309-312" },
+    { "what": "the `All` placeholder REQ-03-004 asks for — already what the multi-select draws with nothing chosen", "where": "apps/web/src/reports/ReportFilters.tsx#MultiFilter (placeholder=\"All\") and packages/ds/src/components/forms/Select.tsx:345" },
+    { "what": "a segmented control that takes more than two options, each with its own test id and arrow-key stop", "where": "packages/ds/src/components/core/ToggleButton.tsx (the `options` form)" },
+    { "what": "the two-click range panel, its trigger geometry and its `availableDates` disabling", "where": "packages/ds/src/components/forms/DateRangePicker.tsx and packages/ds/src/components/data/Calendar.tsx:22-23" },
+    { "what": "the horizontal scroll container and the pinned member column", "where": "apps/web/app/globals.css .time-off-calendar-scroll (:965) and .time-off-calendar-who (:1002)" },
+    { "what": "the reserved range-label width BUG-013 shipped", "where": "apps/web/app/globals.css --range-col (:877) and .time-off-calendar-range (:886)" },
+    { "what": "the stale-answer guard that keeps the grid in step with the header", "where": "apps/web/app/globals.css / CalendarScreen.tsx#isCurrentWindow — BUG-012's fix, which the new Range window must not bypass" },
+    { "what": "day arithmetic on raw ISO strings, never a tz-shifted instant", "where": "packages/validation/src/time-off-calendar.ts#addCalendarDays, #calendarDaySpan" },
+    { "what": "the account-timezone reading of today, shared by the endpoint and the screen", "where": "packages/validation/src/time-off-calendar.ts#timeOffCalendarToday" }
+  ],
+
+  "buildFromZero": [
+    "`TimeOffCalendarWindowChoice` — the four-valued window the screen holds, beside the three-valued preset union the anchor helpers take.",
+    "`stepTimeOffCalendarRange(range, direction)` — REQ-03-011.",
+    "`timeOffCalendarRangeToday(range, today)` — REQ-03-012.",
+    "`timeOffCalendarAnchorFromRange(range)` — REQ-03-013.",
+    "`timeOffCalendarLatestEnd(startDate)` — the start + 91 bound REQ-03-009 needs.",
+    "`maxSpanDays` on `DateRangePicker` — the span bound applied once a start is armed. The component has no way to express it today.",
+    "The `Range` segment, the `calendar-range-picker` / `calendar-range-picker-trigger` surface, and the screen's custom-range state.",
+    "`--day-col-min` — the minimum data-column width REQ-03-014 declares.",
+    "`apps/api/src/test-support/seed-memberships.ts` — a module (not a route) that seeds N active memberships in one call, so Edge case 1's over-100 organization is reachable at all.",
+    "Six test cases: TC-03-UNIT-11/12/13, TC-03-INT-21/22/23/24, TC-03-E2E-11/12/13, plus the Edge case 1 assertion."
+  ],
+
+  "shippingSurfaces": [
+    {
+      "newValue": "scope=teams with an empty projectIds resolving to every active membership",
+      "path": "apps/api/src/time-off/time-off-calendar.service.ts#resolveRows",
+      "governedBy": "REQ-03-001; decision table row (teams, empty); Validation Rule 6",
+      "planned": "T2",
+      "whatItDoesWithIt": "`idFilter` stays `null`, so the membership query filters on organization and `status: 'active'` only — the same rows, in the same order and the same shape, the `all` scope already answers with. It must not become `id: { in: [] }`."
+    },
+    {
+      "newValue": "scope=people with an empty memberIds resolving to every active membership",
+      "path": "apps/api/src/time-off/time-off-calendar.service.ts#resolveRows",
+      "governedBy": "REQ-03-002; decision table row (people, empty); Validation Rule 7",
+      "planned": "T2",
+      "whatItDoesWithIt": "Identical to the teams case — `idFilter` stays `null`."
+    },
+    {
+      "newValue": "422 tooManyMembers reached from an empty Teams/People selection",
+      "path": "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar (the row cap, after the rows resolve)",
+      "governedBy": "Edge case 1 (contracts §Edge Cases); Validation Rule 5",
+      "planned": "T2 (behaviour), T3 (the fixture and the assertion)",
+      "whatItDoesWithIt": "Refuses with `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` under `fields.scope`; the screen draws it in `calendar-error-banner`. This is the refusal that replaces the one being withdrawn, and it is the true one."
+    },
+    {
+      "newValue": "meta.scope = 'teams' / 'people' on a response carrying every member",
+      "path": "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar (meta)",
+      "governedBy": "contracts §Routes — `meta.scope` echoes the scope that was asked for, unchanged",
+      "planned": "T2 (verified unchanged), TC-03-INT-21/22 assert it",
+      "whatItDoesWithIt": "Echoes the asked-for scope. It is not rewritten to `all` when the selection is empty; nothing downstream branches on it — the screen reads only `range`, `days`, `holidays` and `members`."
+    },
+    {
+      "newValue": "a `range` window value reaching the screen's window-dependent code",
+      "path": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx#rangeLabel, #load, calendar-prev/next/today",
+      "governedBy": "REQ-03-007, REQ-03-008, REQ-03-011, REQ-03-012, REQ-03-013, REQ-03-017; decision table 'where a window control lands'",
+      "planned": "T1 (the type and the arithmetic), T5 (the screen)",
+      "whatItDoesWithIt": "`rangeLabel` gains the case; the three nav controls branch to the range helpers; `load` sends `customRange`'s two ends. `timeOffCalendarWindowRange` and `stepTimeOffCalendarAnchor` never see it — the preset union is deliberately not widened."
+    },
+    {
+      "newValue": "a window up to 92 days wide reaching the absence and holiday queries",
+      "path": "apps/api/src/time-off/time-off-calendar.service.ts#fetchAbsences, #fetchHolidays",
+      "governedBy": "REQ-03-010 and Validation Rule 3 — the inclusive 92-day bound, unchanged",
+      "planned": "T2 (verified unchanged), TC-03-INT-24",
+      "whatItDoesWithIt": "Nothing changes: the route already accepted any span up to 92 days and both queries already take the raw ISO bounds through `utcMidnight`. Only the UI can now ask for spans it previously could not reach."
+    },
+    {
+      "newValue": "`--day-col-min` in the grid template, reaching the loading skeleton as well as the data grid",
+      "path": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx:75 (GridSkeleton) and :268",
+      "governedBy": "REQ-03-014 — 'WHILE the grid is drawn', which is both",
+      "planned": "T5",
+      "whatItDoesWithIt": "Both templates take `minmax(var(--day-col-min), 1fr)`. The skeleton keeps its own fourteen-column template rather than the data-derived one, for the reason its comment already gives."
+    },
+    {
+      "newValue": "`maxSpanDays` on the shared DateRangePicker",
+      "path": "packages/ds/src/components/forms/DateRangePicker.tsx; consumers at reports/amounts-owed/page.tsx:440, reports/time-and-activity/page.tsx:511, reports/time-off/page.tsx:415",
+      "governedBy": "REQ-03-009",
+      "planned": "T4",
+      "whatItDoesWithIt": "Optional and undefined by default, so all three shipped report screens keep exactly today's behaviour — no bound, every date inside `minDate`/`maxDate` selectable. Only the calendar passes it."
+    },
+    {
+      "newValue": "an organization of more than 100 active memberships existing in the integration database",
+      "path": "apps/api/src/test-support/seed-memberships.ts, used by apps/api/test/time-off-calendar.spec.ts",
+      "governedBy": "cases file §Verification Plan ('a fixture … that seeds N memberships in one call', marked as not existing today) and Known Gaps",
+      "planned": "T3",
+      "whatItDoesWithIt": "A module, never a controller: the contracts file says no route is added, and no E2E case needs the state from a browser. Nothing registers it in app.module.ts, so it reaches no deployed surface."
+    }
+  ],
+
+  "testCases": {
+    "unit": ["TC-03-UNIT-11", "TC-03-UNIT-12", "TC-03-UNIT-13"],
+    "int": ["TC-03-INT-21", "TC-03-INT-22", "TC-03-INT-23", "TC-03-INT-24"],
+    "e2e": ["TC-03-E2E-11", "TC-03-E2E-12", "TC-03-E2E-13"]
+  },
+
+  "testIds": [
+    "calendar-window-range",
+    "calendar-range-picker",
+    "calendar-range-picker-trigger",
+    "calendar-scope-teams",
+    "calendar-scope-people",
+    "calendar-teams-picker",
+    "calendar-people-picker",
+    "calendar-error-banner",
+    "calendar-grid",
+    "calendar-today",
+    "calendar-range-label",
+    "calendar-prev",
+    "calendar-next",
+    "calendar-day-header-{date}",
+    "calendar-window-week",
+    "calendar-window-2weeks",
+    "calendar-window-month",
+    "calendar-member-row-{membershipId}"
+  ],
+
+  "sections": {
+    "Summary": "T2, T5 — the two halves it describes: the withdrawn refusals on the route and the Range window on the screen. No task of its own.",
+    "Actors & Preconditions": "T2 — the capability gate and the 404 for a viewer are unchanged and re-verified there; the in-page-state rule is honoured by T5, which puts nothing in the URL.",
+    "Roles & Permission Matrix": "T2 — no capability changes; `normalizeRole()` already reads a legacy `member` as `user` at time-off-calendar.service.ts:241 and the empty-selection widening grants nothing new.",
+    "Functional Requirements": "T1, T2, T3, T4, T5, T6",
+    "Decision table — what a scope and a selection resolve to": "T2, asserted by TC-03-INT-21/22/23 and TC-03-E2E-11.",
+    "Decision table — where a window control lands": "T1 (the arithmetic), T5 (the wiring), asserted by TC-03-UNIT-11/12/13.",
+    "Out of Scope": "no task — the URL, a Quarter preset, panel presets, absence types and a balance column are all deliberately not built; BUG-012 and BUG-013 are separate documents and their fixes are not restated here.",
+    "Known Gaps": "T3 covers the one gap that names a task this spec owes — the over-100 seeding fixture. The other five are accepted as written and need no work.",
+    "Acceptance Criteria": "T2, T3, T5, T6 — every criterion is observed by a case listed in testCases."
+  },
+
+  "messages": [
+    { "context": "Missing or malformed range", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.rangeRequired", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar via validateTimeOffCalendarRange", "change": "none" },
+    { "context": "End before start", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.rangeInverted", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar", "change": "none" },
+    { "context": "Span over 92 days", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.rangeTooWide", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar", "change": "none — pinned by TC-03-INT-24" },
+    { "context": "Absent or unrecognized scope", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.scopeInvalid", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar", "change": "none — Edge case 15, a scope is never defaulted" },
+    { "context": "More than 100 rows resolved", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.tooManyMembers", "emittedBy": "apps/api/src/time-off/time-off-calendar.service.ts#getCalendar", "change": "none in text; newly reachable from an empty selection (Edge case 1)" },
+    { "context": "Empty state title", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle", "emittedBy": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx (no route)", "change": "none" },
+    { "context": "Empty state body", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.emptyStateBody", "emittedBy": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx (no route)", "change": "none" },
+    { "context": "WITHDRAWN — empty Teams selection", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.teamsRequired", "emittedBy": "was apps/api/src/time-off/time-off-calendar.service.ts:120", "change": "deleted from packages/validation (REQ-03-003). Every import stops compiling: service :120, screen :204, e2e :339, validation test :137" },
+    { "context": "WITHDRAWN — empty People selection", "module": "packages/validation/src/time-off-calendar.ts#TIME_OFF_CALENDAR_MESSAGES.peopleRequired", "emittedBy": "was apps/api/src/time-off/time-off-calendar.service.ts:123", "change": "deleted from packages/validation (REQ-03-002/003). Imports at service :123, screen :210, validation test :138" }
+  ],
+
+  "premises": [
+    { "claim": "migrations run before the Terraform rollout, so new schema lands before the code that uses it", "verifiedAt": "infra/deploy.sh:27 — '**Migrations run BEFORE the rollout**, and the order is the whole point.' This run writes no migration, so the step is skipped entirely; the premise is recorded because the rule governs the deploy either way." },
+    { "claim": "this change needs no migration — no entity, no column, no default", "verifiedAt": "specs/time-off/03-calendar-range-and-scope.contracts.md §Data Model, and apps/api/prisma: the route reads Membership, Project, ProjectMember, VacationRequest and Holiday exactly as time-off/01 does" },
+    { "claim": "`id: { in: [] }` returns zero rows, so an empty selection must leave `idFilter` null rather than empty", "verifiedAt": "apps/api/src/time-off/time-off-calendar.service.ts:264, :301, :305, :309-312 — `idFilter === null ? {} : { id: { in: idFilter } }`" },
+    { "claim": "the multi-select already draws `All` when nothing is chosen, so REQ-03-004 needs no new code", "verifiedAt": "apps/web/src/reports/ReportFilters.tsx#MultiFilter (placeholder=\"All\") and packages/ds/src/components/forms/Select.tsx:345" },
+    { "claim": "`DateRangePicker` cannot bound the span today — the armed start is private state and `minDate`/`maxDate` are fixed props", "verifiedAt": "packages/ds/src/components/forms/DateRangePicker.tsx:87 (`pending`), :124-127 (`selectable`, computed from minDate/maxDate only)" },
+    { "claim": "`ToggleButton` takes four segments and tags each", "verifiedAt": "packages/ds/src/components/core/ToggleButton.tsx — the `options` form, normalised to the same segments and keyboard as the two-value spelling" },
+    { "claim": "the grid does not scroll above 1200px today, so REQ-03-018 needs the media query removed", "verifiedAt": "apps/web/app/globals.css:978-983 — `min-width: max-content` is inside `@media (max-width: 1199px)`, while TC-03-E2E-13 measures at 1280px" },
+    { "claim": "a reserved width for the range label already ships, from BUG-013", "verifiedAt": "apps/web/app/globals.css:877 (`--range-col: 26ch`) and :886-893 (`width: var(--range-col)`), added by commit 595fcf6" },
+    { "claim": "`packages/validation` resolves through a gitignored `dist/`, so deleting a source export is invisible until the package is rebuilt", "verifiedAt": "packages/validation/package.json (main `dist/index.js`, types `dist/index.d.ts`) and `git check-ignore` on packages/validation/dist" },
+    { "claim": "three shipped tests assert the refusals this spec withdraws and will fail unchanged", "verifiedAt": "apps/api/test/time-off-calendar.spec.ts:427 (TC-01-INT-06), :466 (TC-01-INT-08), e2e/tests/time-off-calendar.spec.ts:335-342 (TC-01-E2E-03's tail)" }
+  ],
+
+  "doubleBehaviours": [],
+
+  "dsGaps": [
+    { "missing": "`DateRangePicker` has no span bound — no way to say 'no end more than N days after the armed start'", "resolution": "added to the design system as the optional `maxSpanDays` prop on the component itself (T4), never worked around in the screen. It is the one gap in this bundle that is a behaviour rather than a value, and the cases file's DS-gaps table does not list it — recorded here as a note." },
+    { "missing": "`--day-col-min` — no token carries a minimum data-column width", "resolution": "declared on the `.time-off-calendar` block beside the properties time-off/01 already declares there, with the reason written beside it. It closes when the width enters `@devscribed/ds` and the block loses the property." },
+    { "missing": "`--range-label-col` — no token carries a reserved width for a variable-width label in a control row", "resolution": "the reservation already exists on the same block as `--range-col`, shipped by BUG-013. Widen that property to cover the widest label the four windows now produce rather than declaring a second name for one width; record the decision in the block comment." },
+    { "missing": "`--name-col` — no token carries a pinned first column's width", "resolution": "inherited from time-off/01 and unchanged here." },
+    { "missing": "`--surface-timeoff-band`, `--border-timeoff-band`, `--text-timeoff-band`", "resolution": "inherited from time-off/01 and unchanged here; listed so this bundle's block is complete." }
+  ],
+
+  "risks": [
+    { "risk": "The empty selection resolves to `id: { in: [] }` and the route answers 200 with no rows — the failure mode that looks like success and that TC-03-INT-21 is the only thing standing in front of.", "mitigation": "T2 names it explicitly; TC-03-INT-21 and TC-03-INT-22 both assert three members rather than merely a 200." },
+    { "risk": "`packages/validation/dist` is stale after the two messages are deleted, so tsc and the static gate keep seeing them and the compile-time break this spec relies on never happens.", "mitigation": "T1 ends with `npm run build --workspace @devscribed/validation`." },
+    { "risk": "Widening `TimeOffCalendarWindow` to include 'range' forces `timeOffCalendarWindowRange` and `stepTimeOffCalendarAnchor` to invent a meaning for a window that has no anchor.", "mitigation": "T1 adds `TimeOffCalendarWindowChoice` beside the preset union instead, and says why in the doc comment." },
+    { "risk": "`--day-col-min` chosen too small: 92 columns then fit a 1280px viewport and TC-03-E2E-13's scroll assertion passes vacuously or fails confusingly.", "mitigation": "T5 states the arithmetic — the floor must exceed roughly 11px at that viewport — and proposes ~32px, which is what the two-line day header needs anyway." },
+    { "risk": "The Range window bypasses BUG-012's `isCurrentWindow` guard, and the grid draws the previous window while the header shows the new one.", "mitigation": "T5 keeps the guard, which compares `data.range` against the range being displayed and therefore covers a custom range unchanged — but the implementer must confirm the custom range flows into the same `range` value the guard reads." },
+    { "risk": "TC-03-E2E-13 measures a rendered box across four windows and three steps; a one-pixel difference from a font fallback fails it for a reason that is not the rule.", "mitigation": "The reservation is a fixed width on the label, not a max-width, so the label's content cannot move its neighbours at all; assert equality of `x` on `calendar-today` only, as the case says." },
+    { "risk": "Deleting the client-side short-circuit removes the only place the screen cleared `data` on an invalid scope; a scope change must still not leave the previous window's grid on screen.", "mitigation": "`isCurrentWindow` already governs that, and the request is now always spent, so the skeleton draws while it is in flight." }
+  ]
+}

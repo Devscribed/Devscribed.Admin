@@ -54,7 +54,18 @@ describe('Holidays (spec organization/03)', () => {
 
   const createMember = async (
     organizationId: string,
-    opts: { email: string; role: string; phoneCountryCode?: string | null; timezone?: string },
+    opts: {
+      email: string;
+      role: string;
+      phoneCountryCode?: string | null;
+      /**
+        * Time off spec 01 REQ-01-026 — the member's holiday country, stated on the
+        * MEMBERSHIP. Where a case seeds a phone country too it seeds a DIFFERENT one, so
+        * the case fails if the resolution ever reads the phone again.
+        */
+      countryCode?: string | null;
+      timezone?: string;
+    },
   ): Promise<Signed> => {
     const password = 'Passw0rd';
     const passwordHash = await bcrypt.hash(password, TEST_BCRYPT_ROUNDS);
@@ -74,6 +85,7 @@ describe('Holidays (spec organization/03)', () => {
         organizationId,
         role: opts.role,
         status: 'active',
+        countryCode: opts.countryCode ?? null,
       },
     });
     const cookies = (await login(opts.email, password)).headers[
@@ -399,7 +411,11 @@ describe('Holidays (spec organization/03)', () => {
     const belarusian = await createMember(admin.organizationId, {
       email: 'by@acme.com',
       role: 'user',
-      phoneCountryCode: 'BY',
+      // The two disagree on purpose: the membership says BY and the phone says US, and
+      // this case expects the BY holiday. A resolution that read the phone again would
+      // return Independence Day here instead of Victory Day, and this case would fail.
+      phoneCountryCode: 'US',
+      countryCode: 'BY',
     });
     const mine = await listHolidays(
       belarusian.cookies,

@@ -1,0 +1,14 @@
+{
+  "runId": "refine-time-off-01-2",
+  "dir": ".workflow/refine/time-off-01.probe/2",
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "specSha": null,
+  "status": "pre_implement",
+  "task": "compile this spec into a plan; this is a refine probe, not a ship run",
+  "stages": {
+    "pre_implement": {
+      "status": "running",
+      "attempts": 0
+    }
+  }
+}

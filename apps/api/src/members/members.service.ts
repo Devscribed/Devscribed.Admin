@@ -15,6 +15,7 @@ import {
   getAvatarInitials,
   isValidRole,
   validateJobTitle,
+  validateStatedCountryCode,
   visibleMembers,
   type MembershipStatus,
   type Role,
@@ -57,6 +58,14 @@ export interface MemberDetail {
   status: MembershipStatus;
   joinedAt: string;
   jobTitle: string | null;
+  /**
+   * Time off spec 01 REQ-01-045 — the country **stored** on this membership, `null`
+   * included; never the value they resolve to. `null` is what the picker's default option
+   * renders, and a screen handed the resolved value would show a country nobody stated
+   * for this member. Unconditional: this read is gated by no capability and the field is
+   * not conditional on one.
+   */
+  countryCode: string | null;
   timezone: string | null;
   avatarInitials: string;
   isLastAdmin: boolean;
@@ -76,8 +85,21 @@ export interface MemberDetail {
 
 /** Spec 05 — `PUT /members/:memberId` request body. */
 export interface MemberDetailUpdateInput {
-  role: string;
+  /**
+   * PATCH-006 — **presence decides**, the rule `countryCode` below already carries. A body
+   * without the key asks for no role change, so nothing about the role is validated, no
+   * change authority is checked and no zero-admin count is run. A body with it is applied
+   * exactly as before, legacy values included: `isValidRole` is untouched, so `member` is
+   * still refused and no write can put it back into the column.
+   */
+  role?: string;
   jobTitle: string;
+  /**
+   * Time off spec 01 REQ-01-042 / REQ-01-043 — the member's holiday country. **Presence
+   * decides**: a body without the key changes nothing, so every caller that predates this
+   * field keeps working unchanged. `null` and `''` both store `null`.
+   */
+  countryCode?: unknown;
 }
 
 interface CallerMembership {
@@ -357,6 +379,7 @@ export class MembersService {
       status: targetStatus,
       joinedAt: target.joinedAt.toISOString(),
       jobTitle: target.jobTitle,
+      countryCode: target.countryCode,
       timezone: target.account.timezone,
       avatarInitials: getAvatarInitials(target.account.firstName, target.account.lastName),
       isLastAdmin,
@@ -416,14 +439,38 @@ export class MembersService {
         });
       }
 
-      if (!isValidRole(input.role)) {
+      // PATCH-006 — the key's presence, not its value, decides whether a role is being
+      // assigned. An admin editing a job title on a member whose column still holds the
+      // legacy `member` used to have that value submitted back at them and refused here,
+      // which put the country and the job title behind a role change nobody asked for.
+      const wantsRole = input !== null && typeof input === 'object' && 'role' in input;
+      if (wantsRole && !isValidRole(input.role as string)) {
         throw new BadRequestException({ error: 'invalid_role', message: MESSAGES.role.invalid });
       }
-      const newRole = input.role;
+      const newRole = wantsRole ? (input.role as Role) : (target.role as Role);
 
       const jobTitleResult = validateJobTitle(input.jobTitle ?? '');
       if (!jobTitleResult.valid) {
         throw new BadRequestException({ errors: { jobTitle: jobTitleResult.error } });
+      }
+
+      // Time off spec 01 REQ-01-042 / REQ-01-043 / REQ-01-051. The key's presence — not
+      // its value — decides whether the column is touched, because `null` is a meaningful
+      // submission ("use the organization's country") and an absent key is not a
+      // submission at all. `400`, the status this route already refuses an invalid role
+      // and an invalid job title with, in the `{ errors }` shape it already uses for the
+      // job title; not the `422` the organization country write answers.
+      // Validation Rule 9, the same two tests the organization write runs: the uppercase
+      // shape and membership of the assigned alpha-2 list, so `pl` and `XX` are both
+      // refused rather than stored for REQ-01-026 to discard on every read.
+      const wantsCountry = input !== null && typeof input === 'object' && 'countryCode' in input;
+      let countryCode: string | null = null;
+      if (wantsCountry) {
+        const result = validateStatedCountryCode(input.countryCode);
+        if (!result.valid) {
+          throw new BadRequestException({ errors: { countryCode: result.error } });
+        }
+        countryCode = result.value;
       }
 
       const currentRole = target.role as Role;
@@ -456,7 +503,16 @@ export class MembersService {
 
       await tx.membership.update({
         where: { id: target.id },
-        data: { role: newRole, jobTitle: jobTitleResult.value.length > 0 ? jobTitleResult.value : null },
+        data: {
+          // PATCH-006 — written only when a role was submitted, so a body without the key
+          // leaves the column as it found it rather than rewriting it with itself.
+          ...(wantsRole ? { role: newRole } : {}),
+          jobTitle: jobTitleResult.value.length > 0 ? jobTitleResult.value : null,
+          // Written by the same statement as the role and the job title, inside the
+          // transaction and the organization-row lock this route already holds — no lock
+          // of its own (REQ-01-042).
+          ...(wantsCountry ? { countryCode } : {}),
+        },
       });
 
       return { success: true };

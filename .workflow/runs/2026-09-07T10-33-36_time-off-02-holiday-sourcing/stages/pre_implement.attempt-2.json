@@ -1,0 +1,61 @@
+{
+  "status": "pass",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "ok",
+    "H-14": "ok",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok"
+  },
+  "addressed": [
+    {
+      "key": "spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`",
+      "disposition": "fixed in the spec — no code",
+      "how": "Commit 384d8c6 replaced the Message cell's note '(shipped, unchanged)' with the shipped text 'Something went wrong. Please try again.', which is what every other carried-over row does. The gate's probe is now a message: it exists at packages/validation/src/holiday-messages.ts:29 and is re-exported from packages/validation/src/index.ts, so spec/message-not-implemented cannot fire; and `git grep -lF -- \"Something went wrong. Please try again.\" -- apps` returns nothing, so spec/message-duplicated cannot fire either. `git diff 9ad9fd8...HEAD -- packages/validation/src/holiday-messages.ts` is empty, so the row's New column 'no' is still true. The handoff's `messages` entry for the row now records the module, both greps and the emitter."
+    }
+  ],
+  "findings": [
+    {
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Boundary values — Identity / TC-02-INT-01",
+      "claim": "the amendment reverses the reading attempt 1 planned and this branch implements: `{provider}` is now the answering driver's own name, so the double must write `fake:DE:{date}` and `HolidayImport.provider` reads 'fake' locally, while the branch writes 'nager' from both drivers",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The contracts file now reads \"`{provider}` is the name of the driver that answered — `nager` in a deployed environment, `fake` under the local double\" and TC-02-INT-01 requires `fake:DE:{date}`, \"never `nager`, which is the deployed driver's name\". apps/api/src/holidays/provider/fake-holiday.provider.ts:29 currently declares `readonly name = 'nager'`, apps/api/test/holiday-sourcing.spec.ts:303 asserts `nager:DE:${date}` and :318 asserts `provider: 'nager'`. Under the amended spec those three lines are wrong and nothing else is: `git grep \"'nager'\" -- apps/api/src packages e2e` returns only the two drivers, the config's driver union and its two guards, and packages/validation/src/holiday-sourcing.test.ts:197, which passes the provider name in as an argument and is unaffected.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md"
+      },
+      "suggestedFix": "Not a blocker — the spec is unambiguous now and the plan carries the change: handoff T2 changes the driver's name, T8 changes the two assertions, and handoff.replan.codeThatMustChange lists all three lines. Recorded so the reviewer reads the reversal as deliberate rather than as a regression."
+    },
+    {
+      "id": "P6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/02-holiday-sourcing.contracts.md",
+      "symbol": "Data Model — HolidayImport.provider",
+      "claim": "the HolidayImport.provider row still reads 'The driver that answered, e.g. `nager`', which agrees with the amended Boundary values row but names only the deployed value",
+      "witness": {
+        "kind": "scenario",
+        "detail": "With the fake driver named 'fake', a HolidayImport row written locally or under the integration suite carries provider 'fake' and one written in a deployed environment carries 'nager'. The column's description gives only the deployed value as its example. No shipping path reads the column and only the integration suite observes it, so nothing is ambiguous about what to write — only about what a reader of that table expects to see locally.",
+        "source": "specs/time-off/02-holiday-sourcing.contracts.md"
+      },
+      "suggestedFix": "Nothing to implement. The plan writes the answering driver's own name into the column, which is what the row says. Recorded because the same sentence in a later spec should name both values, as the Boundary values row now does."
+    }
+  ]
+}

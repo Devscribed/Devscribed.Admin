@@ -1,0 +1,16 @@
+{
+  "stage": "review",
+  "status": "pass",
+  "reviewedUpTo": "d81fb036befd0c9521c67fa91860ff498f90dc36",
+  "base": "ed3586556efaac1fc2f18bd5b5e6d827021de008",
+  "covered": {
+    "scope": 3,
+    "read": [
+      "apps/api/src/holidays/holidays.service.ts",
+      "apps/api/src/kanban/activity.service.ts",
+      "apps/api/src/kanban/comments.service.ts"
+    ],
+    "unreached": []
+  },
+  "findings": []
+}

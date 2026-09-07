@@ -79,7 +79,10 @@ export default function CandidateCardPage({
    * to ask a question the card does not answer. It arrives with the shell's `/api/me`,
    * which the whole frame already blocks on, so the menu never appears and withdraws.
    */
-  const canManage = canManageHiring(useSession().role);
+  // `role` is `null` for a client contact (REQ-03-016), who holds none. The empty string
+  // is what every role-keyed helper answers from the viewer set, which is the refusal
+  // this screen wants: a contact is answered 404 by hiring's routes anyway.
+  const canManage = canManageHiring(useSession().role ?? '');
   const deepLinkedId = search.get('application');
   /**
    * The board's drop into `Didn't pass` or `Offer` arrives here (05 §06.20). It is the

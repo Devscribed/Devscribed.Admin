@@ -84,6 +84,8 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
       firstName?: string;
       lastName?: string;
       phoneCountryCode?: string | null;
+      /** Time off spec 01 REQ-01-026 — the holiday country, now on the MEMBERSHIP. */
+      countryCode?: string | null;
       timezone?: string;
     },
   ): Promise<Signed> => {
@@ -107,6 +109,7 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
         organizationId,
         role: opts.role,
         status: 'active',
+        countryCode: opts.countryCode ?? null,
       },
     });
     const cookies = (await login(opts.email, password)).headers[
@@ -577,7 +580,10 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
       role: 'user',
       firstName: 'Anna',
       lastName: 'Ivanovna',
-      phoneCountryCode: 'BY',
+      // The membership says BY and the phone says US: the BY holiday row this case
+      // expects disappears if the roster ever resolves from the phone again.
+      phoneCountryCode: 'US',
+      countryCode: 'BY',
     });
     await seedFinancials(admin, by.membershipId, { clientHourlyRate: 50 });
     await seedHoliday(admin, {
@@ -611,7 +617,11 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
       role: 'user',
       firstName: 'Uma',
       lastName: 'Stone',
-      phoneCountryCode: 'US',
+      // The mirror of the case above: the membership says US and the phone says BY, so a
+      // resolution that read the phone would pay this member the BY holiday and this
+      // case — which expects no rows at all — would fail.
+      phoneCountryCode: 'BY',
+      countryCode: 'US',
     });
     await seedFinancials(admin, us.membershipId, { clientHourlyRate: 50 });
     await seedHoliday(admin, {

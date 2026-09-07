@@ -69,6 +69,44 @@ const add = (f) => findings.push({ id: `S${++seq}`, severity: 'blocker', target:
 const isTest = (p) => /\.(spec|test)\.(ts|tsx|js|mjs)$/.test(p);
 const isSource = (p) => /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(p);
 
+/* ── 0. the work is committed ────────────────────────────────────────────── */
+
+/* Every gate downstream reads `git diff <base>...HEAD`. Work left in the working tree is
+   invisible to all of them, so a run whose implementation was never committed reaches the
+   reviewer as an empty change and the reviewer judges nothing. This is the first rule
+   because a diff with nothing in it makes every rule below vacuous — they all pass, and
+   the run advances on a branch that carries no work. */
+
+/* `base...HEAD`, not `base` — the two-dot form against a working tree counts uncommitted
+   edits as present, which is the very thing this rule exists to catch. Three dots is also
+   exactly what the reviewer and QA read, so the gate asks their question and not a
+   neighbouring one. */
+const carried = git('diff', '--name-only', `${base}...HEAD`, '--', '.', ':(exclude).workflow')
+  .split('\n').filter(Boolean);
+
+if (carried.length === 0) {
+  const uncommitted = git('status', '--short', '--', '.', ':(exclude).workflow')
+    .split('\n').filter(Boolean);
+  add({
+    rule: 'pipeline/work-uncommitted',
+    file: uncommitted[0]?.slice(3) ?? '(nothing on disk either)',
+    claim: uncommitted.length
+      ? `no commit on this branch carries the implementation; ${uncommitted.length} file(s) are modified in the working tree and invisible to every gate that reads the diff`
+      : 'no commit on this branch carries an implementation, and the working tree is empty too',
+    witness: {
+      kind: 'command',
+      detail: `\`git diff --name-only ${base}...HEAD -- . ':(exclude).workflow'\` prints nothing.`
+        + (uncommitted.length
+          ? ` \`git status --short\` shows: ${uncommitted.join(', ')}.`
+          : ' `git status --short` shows nothing either.'),
+      source: `git diff ${base}...HEAD`,
+    },
+    suggestedFix: uncommitted.length
+      ? 'commit the working-tree changes onto this branch in one commit, naming the attempt, then re-run the gate'
+      : 'implement the document; nothing has been written',
+  });
+}
+
 /* ── 1. the contract is not the implementation's to edit ─────────────────── */
 
 for (const file of git('diff', '--name-only', runStart, '--', 'specs').split('\n').filter(Boolean)) {
@@ -206,10 +244,25 @@ for (const [project, scope] of TS_PROJECTS) {
 
 /* ── 4 and 5. the spec's own tables, against the repository ──────────────── */
 
+/**
+ * The whole bundle, not the behaviour file alone.
+ *
+ * A spec is one document in three files, and the tables this gate checks against live in the
+ * other two: the `data-testid` list and the routes are in `<name>.contracts.md`, the cases in
+ * `<name>.cases.md`. Reading only `<name>.md` made every id the spec names in its contracts
+ * read as named nowhere — seventeen blockers on one run, of which fourteen were the gate not
+ * having opened the file that names them, and the implementer was sent to delete ids the spec
+ * requires.
+ */
 const specText = (() => {
   if (!run?.spec) return null;
-  const p = join(ROOT, run.spec);
-  return existsSync(p) ? readFileSync(p, 'utf8') : null;
+  const base = run.spec.replace(/\.md$/, '');
+  const members = [run.spec, `${base}.contracts.md`, `${base}.cases.md`, `${base}.design.md`];
+  const found = members
+    .map((m) => join(ROOT, m))
+    .filter((p) => existsSync(p))
+    .map((p) => readFileSync(p, 'utf8'));
+  return found.length ? found.join('\n') : null;
 })();
 
 /* Split rather than match: a multiline `$` ends at the first newline, so an end-of-section
@@ -234,11 +287,29 @@ const seamless = (s) => s.replace(/["'`+]/g, '').replace(/\s+/g, ' ');
 const validationText = seamless(gitQuiet('grep', '-h', '', '--', 'packages/validation'));
 const present = (text) => validationText.includes(seamless(text));
 
-for (const line of section('Error Messages').split('\n')) {
-  if (!line.startsWith('|') || /^\|\s*-+/.test(line)) continue;
+/* The column holding the message, found by its heading rather than by its position. The table
+   has carried a `Route` column since specs began naming the route that emits each message, so
+   cell 2 is a URL — and a rule that searches `packages/validation` for a URL path reports every
+   row as unimplemented, which is what it did on a spec whose messages were all in place. */
+/* A spec that WITHDRAWS a message tabulates it under `### Withdrawn` in this same section,
+   and the whole content of such a row is that the string must no longer exist anywhere. Read
+   as a live row it is a promise that is deliberately false, and every spec that removes a
+   message is blocked for keeping its own word. The rows checked are the ones above that
+   heading. */
+const messageRows = section('Error Messages')
+  .split(/\n###\s+Withdrawn/)[0]
+  .split('\n')
+  .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l));
+const messageCol = (() => {
+  const header = messageRows[0]?.split('|').map((c) => c.trim().toLowerCase()) ?? [];
+  const i = header.indexOf('message');
+  return i === -1 ? 2 : i;
+})();
+
+for (const line of messageRows) {
   const cells = line.split('|').map((c) => c.trim());
-  const message = cells[2];
-  if (!message || message === 'Message') continue;
+  const message = cells[messageCol];
+  if (!message || message.toLowerCase() === 'message') continue;
 
   /* A row carrying a placeholder cannot be matched whole. The longest literal run either side
      of the substitution is what the code must contain, and a short one says too little to
@@ -279,8 +350,13 @@ for (const line of section('Error Messages').split('\n')) {
 /* 5. The id list is a contract in both directions: an id the spec requires and nothing renders
    makes its E2E case unfalsifiable, and an id the diff invents is a selector no spec names. */
 
-const specIds = [...section('Required data-testid Attributes').matchAll(/`([^`]+)`/g)]
-  .map((m) => m[1])
+/* The table's first cell, not every backtick in the section. The prose around the table talks
+   about ids too — including the sentence naming the ones this spec *removes* — and harvesting
+   those asks the implementer to render an id the spec has just retired. */
+const specIds = section('Required data-testid Attributes')
+  .split('\n')
+  .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l))
+  .flatMap((l) => [...(l.split('|')[1] ?? '').matchAll(/`([^`]+)`/g)].map((m) => m[1]))
   .filter((id) => /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(id));
 
 /* An id the screen composes — `` data-testid={`signing-provider-option-${key}`} `` — never

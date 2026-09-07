@@ -1,5 +1,7 @@
 # 0002 — Review coverage is a worklist with provenance, not the reviewer's judgement
 
+> **Renamed by [ADR 15](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md).** The agents this record names still exist under the current names; the rules they duplicated now live once, in `.claude/agents/references/`. The decision below is unchanged.
+
 **Decided** 2026-08-30. **Superseded the same day by [0003](0003-commit-slice-not-journal-ledger.md)** — the
 rule it establishes is right and the mechanism it chose to enforce it was not. Kept because
 the measurements below still stand and 0003 rests on them.

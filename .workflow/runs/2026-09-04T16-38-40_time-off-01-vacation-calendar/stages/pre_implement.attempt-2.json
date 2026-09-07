@@ -1,0 +1,72 @@
+{
+  "status": "pass",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "n/a",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok"
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Screens - /org/{orgId}/settings/holidays",
+      "line": 333,
+      "claim": "the settled Validation Rule 9 refuses three codes the picker the spec tells both screens to reuse still offers, so a control offers a value its own save cannot store. Planned, not halted on: the document nowhere states that every option must be storable, so both statements hold and the choice is a plan's to make.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An admin opens Settings > Holidays, picks 'Ascension Island' in org-country-select and clicks org-country-save. The option exists because HOLIDAY_COUNTRY_OPTIONS (apps/web/app/org/[orgId]/settings/holidays/country-options.ts:17) is built from COUNTRY_OPTIONS (apps/web/src/account-data.ts:58), which is libphonenumber's getCountries(). Rule 9 now tests membership of COUNTRY_NAMES (packages/validation/src/autofill.ts:717), which does not carry AC. Counted: getCountries() returns 245 codes, COUNTRY_NAMES carries 249, and exactly AC, TA and XK are offered but not assigned. Before 40eedaa all three saved; after it all three answer 422 PROFILE_MESSAGES.country.invalid. The same three reach member-country-select, which builds its list from the same array (MemberDetailScreen.tsx:42).",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md (Screens) and Validation Rule 9"
+      },
+      "suggestedFix": "planned in T8 - both country Selects list only options the assigned-list test accepts, while the holiday form's picker and the holiday list's country filter keep the full list. If the document wants to say which list each country control offers, that is one sentence in Screens."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "PUT /api/organizations/{orgId}/settings/country",
+      "line": 130,
+      "claim": "neither the requirements nor the contracts say what an absent countryCode key means on either country write, and the two routes have been given opposite answers by their shipped implementations",
+      "witness": {
+        "kind": "scenario",
+        "detail": "PUT /api/organizations/{orgId}/settings/country with body {} today clears Organization.countryCode (organization-country.service.ts:69 hands undefined to the validator, which normalizes it to null and writes it). PUT /api/organizations/{orgId}/members/{memberId} with no countryCode key deliberately leaves Membership.countryCode alone (members.service.ts:451, the 'countryCode' in input idiom). REQ-01-034 is triggered by 'submits an empty country' and REQ-01-042 by 'submits an ISO 3166-1 alpha-2 country'; neither says what submitting nothing at all does. No case in the bundle sends a body without the key to either route, so nothing observes the difference.",
+        "source": "REQ-01-034, REQ-01-042, REQ-01-043"
+      },
+      "suggestedFix": "planned in T4 and T5 with both rules stated and the reason for the asymmetry - the organization route is a one-field settings resource whose GET and PUT carry the same representation, the member route carries three fields and a caller that ignores the new one must change nothing. A sentence in the contracts would settle it for good."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "UI Description",
+      "line": 349,
+      "claim": "the document assigns no message to a calendar read that does not complete, and the screen must say something",
+      "witness": {
+        "kind": "rule",
+        "detail": "The Error Messages table routes seven strings to the endpoint's 422s and gives emptyStateBody, emptyStateTitle, orgCountryHint and memberCountryDefaultOption no route at all; the UI Description's only failure row is 'Refused (422)', and the required-testid table describes calendar-error-banner as 'present on any 422'. A fetch that rejects, or a 500, is described by no row - which is how the first implementation came to draw 'No active member matches this scope.' over a populated grid.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md, Error Messages and UI Description"
+      },
+      "suggestedFix": "planned in T7 with HOLIDAY_MESSAGES.toastServerError, the string the Holidays page this same change edits already uses for a failed read. If the calendar should carry a message of its own, it is a row in the Error Messages table and a line in the UI Description."
+    }
+  ]
+}

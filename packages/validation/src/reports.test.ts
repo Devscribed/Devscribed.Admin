@@ -9,6 +9,8 @@ import {
   isHolidayApplicableToMember,
   isZeroTotal,
   pdfReportFilename,
+  resolveMemberHolidayCountry,
+  resolveCurrencyAtDate,
   resolveRateAtDate,
   validateBillableFilter,
   validateCuidList,
@@ -239,6 +241,49 @@ describe('TC-01-UNIT-07..10: resolveRateAtDate (spec §Rate lookup)', () => {
   });
 });
 
+/**
+ * Time off spec 02 REQ-02-015 — the currency in force on a date, chosen by exactly the
+ * selection the rate is chosen by. The two are asserted against the SAME snapshot list so
+ * a divergence between them is what fails, not a difference between two fixtures.
+ */
+describe('resolveCurrencyAtDate (time off spec 02 REQ-02-015)', () => {
+  const snapshots = [
+    { effectiveFrom: new Date('2026-01-01'), currency: 'USD' },
+    { effectiveFrom: new Date('2026-06-01'), currency: 'EUR' },
+  ];
+
+  it('picks the newest snapshot on or before the date', () => {
+    expect(resolveCurrencyAtDate(snapshots, { currency: 'EUR' }, new Date('2026-03-15'))).toBe('USD');
+    expect(resolveCurrencyAtDate(snapshots, { currency: 'EUR' }, new Date('2026-07-15'))).toBe('EUR');
+  });
+
+  it('falls back to the live row when no snapshot precedes the date', () => {
+    expect(
+      resolveCurrencyAtDate(
+        [{ effectiveFrom: new Date('2026-04-01'), currency: 'EUR' }],
+        { currency: 'USD' },
+        new Date('2026-03-15'),
+      ),
+    ).toBe('USD');
+  });
+
+  it('answers null for a member with no financial settings at all (REQ-02-018)', () => {
+    expect(resolveCurrencyAtDate([], null, new Date('2026-03-15'))).toBeNull();
+    expect(resolveCurrencyAtDate([], { currency: '  ' }, new Date('2026-03-15'))).toBeNull();
+  });
+
+  it('selects the same snapshot the rate does, on both sides of a mid-year change', () => {
+    const rates = [
+      { effectiveFrom: new Date('2026-01-01'), clientHourlyRate: 45, monthlySalary: 5000 },
+      { effectiveFrom: new Date('2026-06-01'), clientHourlyRate: 55, monthlySalary: 6000 },
+    ];
+    for (const date of [new Date('2026-03-15'), new Date('2026-06-01'), new Date('2026-07-15')]) {
+      const usedNewer = resolveRateAtDate(rates, null, date).billRate === 55;
+      expect(resolveCurrencyAtDate(snapshots, null, date)).toBe(usedNewer ? 'EUR' : 'USD');
+    }
+  });
+});
+
 describe('TC-01-UNIT-15: weightedAverageRate (spec requirement 14)', () => {
   it('weighted average: 10h @50 + 30h @55 → total 40h / €2150 / rate 53.75', () => {
     const w = weightedAverageRate([
@@ -336,6 +381,50 @@ describe('TC-01-UNIT-16: buildHolidayRow (spec requirement 18)', () => {
 
   it('isHolidayApplicableToMember: country-scoped holiday needs a member country', () => {
     expect(isHolidayApplicableToMember({ countryCode: 'BY' }, { countryCode: null })).toBe(false);
+  });
+});
+
+/**
+ * The member's holiday country, and the predicate it feeds. It replaces
+ * `Account.phoneCountryCode` as the source everywhere; these are the branches that decide
+ * who is paid a country-scoped holiday.
+ *
+ * PATCH-012 — the organization's country was the second argument and the fallback for a
+ * member who stated none. Both are gone: a member states their country or receives the
+ * global holidays alone. The cases that asserted the fallback (`[null, 'BY'] -> 'BY'`,
+ * `['XX', 'PL'] -> 'PL'`) are **retired** with the rule; what remains asserts that a
+ * member who states nothing usable now resolves to `null`.
+ */
+describe('TC-01-UNIT-01: resolveMemberHolidayCountry', () => {
+  const cases: Array<[string | null, string | null]> = [
+    ['US', 'US'],
+    [null, null],
+    // Two letters and no country, an empty string, a legacy value: none of them is a
+    // country and none of them is handed back raw (REQ-01-040).
+    ['XX', null],
+    ['', null],
+    // The read upcases what it finds, which the write refuses to store in the first place.
+    ['pl', 'PL'],
+    ['xx', null],
+  ];
+
+  for (const [membership, expected] of cases) {
+    it(`(${JSON.stringify(membership)}) -> ${JSON.stringify(expected)}`, () => {
+      expect(resolveMemberHolidayCountry(membership)).toBe(expected);
+    });
+  }
+});
+
+describe('TC-01-UNIT-03: which holidays reach a member, given a resolved country', () => {
+  it('a global holiday reaches everyone, a country-scoped one only its own', () => {
+    expect(isHolidayApplicableToMember({ countryCode: null }, { countryCode: 'PL' })).toBe(true);
+    expect(isHolidayApplicableToMember({ countryCode: null }, { countryCode: null })).toBe(true);
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: 'PL' })).toBe(true);
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: 'US' })).toBe(false);
+    // REQ-01-029 — a country-scoped holiday reaches nobody without a country.
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: null })).toBe(false);
+    // REQ-01-028 is case-insensitive, which is what makes a stored `pl` still match.
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: 'pl' })).toBe(true);
   });
 });
 

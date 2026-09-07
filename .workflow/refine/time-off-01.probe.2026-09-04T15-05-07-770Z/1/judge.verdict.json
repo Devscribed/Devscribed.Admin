@@ -1,0 +1,288 @@
+{
+  "status": "blocked",
+  "admitted": false,
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "request": "A vacation calendar based on holidays and vacation requests, viewable for the whole organization, for several teams, or for specific people, drawn as a horizontal timeline where each row is a member and each column is a day. Holidays follow a country a manager states on the member, falling back to a country stated on the organization; the phone country code is not a source.",
+  "shardDecision": "Read in full by the judge, no shard dispatched. The bundle is 1338 lines across three files and the four member-answerable families (currency, conventions, self-sufficiency, testability) all turn on the same small set of facts — the two country columns, one capability, one shipped member route and one shipped holidays gate — so splitting it would have made three readers re-establish the same facts and would have hidden the two findings that only appear when the behaviour file, the contracts file and the mock are held together (the MemberCapability contradiction, and the band tokens the mock defines but no DS-gaps row records). Verification was done directly against the code instead: schema, roles.ts, MemberCapability, members.service.ts, holidays.service.ts, reports.service.ts, the ds barrel and token files, the e2e helper line numbers.",
+  "shards": [],
+  "read": {
+    "specs": [
+      "specs/time-off/01-vacation-calendar.md",
+      "specs/time-off/01-vacation-calendar.contracts.md",
+      "specs/time-off/01-vacation-calendar.cases.md",
+      "specs/time-off/01-vacation-calendar.mock.html",
+      "specs/time-off/README.md",
+      ".claude/skills/spec-review/references/admission-criteria.md",
+      "CLAUDE.md"
+    ],
+    "files": [
+      "apps/api/prisma/schema.prisma",
+      "apps/api/src/members/members.service.ts",
+      "apps/api/src/holidays/holidays.service.ts",
+      "apps/api/src/reports/reports.service.ts",
+      "apps/api/src/account/account.service.ts",
+      "apps/api/src/invitations/invitations.service.ts",
+      "apps/api/src/organizations/signing-settings.controller.ts",
+      "apps/api/src/test-support/fixture-gate.ts",
+      "apps/api/src/test-support/envelope-expiry.controller.ts",
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/index.ts",
+      "packages/validation/src/holiday-messages.ts",
+      "packages/validation/src/reports.ts",
+      "packages/ds/src/index.ts",
+      "packages/ds/src/tokens/spacing.css",
+      "packages/ds/src/tokens/colors.css",
+      "packages/ds/src/components/forms/Select.tsx",
+      "packages/ds/src/components/reports/ReportControls.tsx",
+      "apps/web/src/layout/Sidebar.tsx",
+      "apps/web/app/org/[orgId]/settings/holidays/country-options.ts",
+      "e2e/tests/helpers.ts",
+      "e2e/tests/reports-time-off.spec.ts"
+    ]
+  },
+  "sweeps": {
+    "currency": 41,
+    "contradiction": 33,
+    "consequence": 18,
+    "obligations": 47,
+    "scope": 9
+  },
+  "criteria": {
+    "S-01": "clear",
+    "S-02": "clear",
+    "S-03": "clear",
+    "S-04": "clear",
+    "S-05": "note",
+    "S-06": "clear",
+    "S-07": "clear",
+    "S-08": "clear",
+    "S-09": "blocked",
+    "S-10": "clear",
+    "S-11": "clear",
+    "S-12": "clear",
+    "S-13": "clear",
+    "S-14": "blocked",
+    "S-15": "clear",
+    "S-16": "clear",
+    "S-17": "note",
+    "S-18": "clear",
+    "S-19": "clear",
+    "S-20": "clear",
+    "S-21": "clear",
+    "S-22": "blocked",
+    "S-23": "clear",
+    "S-24": "clear",
+    "S-25": "clear",
+    "S-26": "clear",
+    "S-27": "clear",
+    "S-28": "clear",
+    "S-29": "clear",
+    "S-30": "clear",
+    "S-31": "clear",
+    "S-32": "clear",
+    "S-33": "clear",
+    "S-34": "clear",
+    "S-35": "n/a",
+    "S-36": "blocked",
+    "S-37": "clear",
+    "S-38": "clear",
+    "S-39": "n/a",
+    "S-40": "note",
+    "S-41": "clear",
+    "S-42": "clear",
+    "S-43": "clear",
+    "S-44": "note",
+    "S-45": "clear",
+    "S-46": "note",
+    "S-47": "clear",
+    "S-48": "clear",
+    "S-49": "clear",
+    "S-50": "clear",
+    "S-51": "clear",
+    "S-52": "n/a",
+    "S-53": "clear",
+    "S-54": "n/a",
+    "S-55": "clear",
+    "S-56": "clear",
+    "S-57": "clear",
+    "S-58": "note"
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "criterion": "S-09",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "Roles & Permission Matrix against the contracts' Shared code table",
+      "line": 96,
+      "claim": "the behaviour file says only `Capability` gains a member from this spec; the contracts file and the area README say `MemberCapability` gains `view-time-off-calendar` as well. No implementation does both, and the two answers pick different capability checks in the calendar service.",
+      "witness": {
+        "kind": "rule",
+        "detail": "01-vacation-calendar.md (Roles & Permission Matrix): 'Both unions ship, both grant admin and manager here, and only `Capability` gains a member from this spec.' 01-vacation-calendar.contracts.md (Shared code, `ViewTimeOffCalendar`): 'One new member of `Capability`, and its lowercase-dashed twin `view-time-off-calendar` in `MemberCapability`, matching every capability that came before it.' README.md (Blast Radius): '`packages/validation/src/roles.ts` gains one capability, `ViewTimeOffCalendar`, and its lowercase-dashed twin.' The two unions are checked by different helpers — `hasCapability(role, 'ViewTimeOffCalendar')` reads `ROLE_CAPABILITIES` (packages/validation/src/roles.ts:131), `can(role, 'view-time-off-calendar')` reads `MEMBER_CAPABILITIES` (packages/validation/src/index.ts:663 onward), and the contracts' route table only says 'ViewTimeOffCalendar checked in the service' without naming which. `MEMBER_CAPABILITIES` is a per-role record with an explicit boolean for every member of the union, so this is not a free addition: the twin either exists in all four role rows or in none.",
+        "source": "specs/time-off/01-vacation-calendar.md Roles & Permission Matrix against specs/time-off/01-vacation-calendar.contracts.md §Shared code and specs/time-off/README.md §Blast Radius"
+      },
+      "suggestedFix": "Decide one and state it in both places. If the twin is added, correct the matrix sentence and correct the Shared code row's file — `MemberCapability` and `MEMBER_CAPABILITIES` live in `packages/validation/src/index.ts`, not in `roles.ts` — and name `can(role, 'view-time-off-calendar')` as the service check. If it is not, drop the twin from the contracts row and from README's Blast Radius and name `hasCapability(role, 'ViewTimeOffCalendar')`. Either way drop 'matching every capability that came before it': `ViewMemberProfilePii` has no lowercase twin."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "criterion": "S-22",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Screens / the absence band",
+      "line": 280,
+      "claim": "the visual acceptance target defines three colour tokens that the design system does not have and says they are 'Recorded as the DS gap in the spec', and no member of the bundle has a `## DS gaps` section at all — so the band colour reaches the implementer as three oklch literals on one screen.",
+      "witness": {
+        "kind": "rule",
+        "detail": "01-vacation-calendar.mock.html:14-22 declares them locally with the comment 'The two tokens this spec asks the design system for … Recorded as the DS gap in the spec': `--surface-timeoff-band: oklch(0.90 0.06 285)`, `--border-timeoff-band: oklch(0.55 0.14 285)`, `--text-timeoff-band: oklch(0.38 0.12 285)`. Diffing every `var(--…)` in the mock against `packages/ds/src/tokens/*.css`, `packages/ds/src/base.css`, `packages/ds/src/styles.css` and `apps/web/app/globals.css`, those three are the only colour names with no definition anywhere in the repository (the fourth, `--name-col: 264px`, is the mock's own layout variable). No `## DS gaps` heading exists in 01-vacation-calendar.md, .contracts.md or .cases.md, and the bundle names the design system only once, for `ReportControls`. The precedent the mock is pointing at is the table in specs/requests/01-requests.md:718 and specs/requests/02-request-topics.contracts.md:450, both of which carry Gap / Where it bites / What ships instead / What closes it. CLAUDE.md — Design system: 'Anything missing goes *into* the design system and is recorded in that spec's \"DS gaps\" table, never improvised per screen.'",
+        "source": "specs/time-off/01-vacation-calendar.mock.html:14-22 against packages/ds/src/tokens/colors.css and the bundle's missing `## DS gaps` section"
+      },
+      "suggestedFix": "Add a `## DS gaps` table to the contracts file with one row for the time-off band: the three token names, where they bite (the approved and pending bands and their hatch on the calendar grid), what ships instead until they enter `@ds`, and what closes it. The same table is the place to record the sticky member column's width, which the mock carries as a local `--name-col: 264px` rather than a token."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "criterion": "S-14",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-007 — the unassigned bucket",
+      "line": 126,
+      "claim": "REQ-01-007's `none` sentinel has no control anywhere on the screen that carries the rule, so the unassigned bucket is reachable only by hand-writing a query string, while an edge case describes a reader ticking it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-01-007: 'WHERE `scope=teams` and `projectIds` contains the sentinel `none`, THE SYSTEM SHALL also return one row for every `active` membership holding no `ProjectMember` row on any non-archived project.' Edge case 6 (contracts): '`scope=teams` ticks `none` and a project | Both sets are returned, duplicates collapsed to one row each' — 'ticks' is a control. But the Screens section describes the filter bar as 'Scope [ All | Teams | People ]   Teams ▾   Window […]' and says nothing about an unassigned entry; the Required data-testid table has `calendar-teams-picker` with no option-level id and no note about the entry; the mock draws the picker as a closed button reading 'Acme Redesign, Internal Tools' (01-vacation-calendar.mock.html:611) with no unassigned row; and no case opens the picker to select it — TC-01-INT-04 reaches the bucket through the query string only, and TC-01-E2E-02 ticks projects. The rule is therefore a documented API branch with no user path, and an implementer building the picker from the Screens section alone ships one that cannot produce it.",
+        "source": "specs/time-off/01-vacation-calendar.md:126 against specs/time-off/01-vacation-calendar.contracts.md §Screens, §Required data-testid Attributes, edge case 6, and specs/time-off/01-vacation-calendar.mock.html:611"
+      },
+      "suggestedFix": "State in §Screens that `calendar-teams-picker` offers an **Unassigned** entry above the projects which submits `projectIds=none`, and say whether it may be the only entry ticked (REQ-01-009 refuses an empty selection, and `none` alone is not empty). Alternatively place the sentinel out of scope for the screen in one line and say the bucket is API-only — but then edge case 6's 'ticks' has to go."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "criterion": "S-36",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-19",
+      "line": 379,
+      "claim": "the case's first step is an instant no test can arrange — the API offers no clock control and this spec adds none — and its expected result pins the two calendar dates that instant produces, so the case can only pass on one day of 2026.",
+      "witness": {
+        "kind": "rule",
+        "detail": "TC-01-INT-19 Steps: 'At an instant that is 2026-09-05 in `Pacific/Auckland` and still 2026-09-04 in `America/Los_Angeles`, read the calendar as a caller in each zone, and as one whose `Account.timezone` is unset.' Expected Result: '`range.today` is `2026-09-05`, `2026-09-04`, and the UTC day respectively.' REQ-01-018 resolves today from the caller's timezone against the wall clock, and nothing in this repository can move that clock: apps/api/src/test-support/fixture-gate.ts:12 and apps/api/src/test-support/envelope-expiry.controller.ts:31 both record that 'a test cannot advance the clock', which is why an expiry fixture route exists at all; no `useFakeTimers`/`setSystemTime` appears anywhere under apps/api/test; and this spec adds no fixture route and names none in its Verification Plan. The third assertion is already written relatively ('the UTC day'); the first two are not.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md TC-01-INT-19 against apps/api/src/test-support/fixture-gate.ts:12 and apps/api/src/test-support/envelope-expiry.controller.ts:31"
+      },
+      "suggestedFix": "Write the two assertions relative to the run's own instant, as the third already is: read as a caller in a far-eastern zone and one in a far-western zone and assert each `range.today` is that zone's calendar date at the moment of the read, with `days[]` identical across all three. Or add the clock fixture this case needs and name it in the Verification Plan alongside the helpers the spec already owes."
+    },
+    {
+      "id": "R5",
+      "severity": "note",
+      "criterion": "S-05",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Routes — the note under the table",
+      "line": 14,
+      "claim": "the exemplar the contracts point at for a service-level capability check is the one holiday gate that answers 403, not 404.",
+      "witness": {
+        "kind": "code",
+        "detail": "Contracts: 'the calendar must answer `404` when the caller lacks its capability, so the check runs in the service instead — the shape `HolidaysService.deleteHoliday` already uses'. `deleteHoliday` (apps/api/src/holidays/holidays.service.ts:197-204) does run its check in the service, but throws `ForbiddenException` with `HOLIDAY_MESSAGES.deleteForbidden` — a 403. The 404 shape the calendar wants is `requireViewCapability` / `requireManageCapability` (same file, lines 239-255), both of which throw a bare `NotFoundException`. The claim as written is true of where the check runs and misleading about what it returns; the sentence beside it ('`view-holidays` and `manage-holidays` already answer 404 on the holiday list, create and edit') is exact.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md §Routes against apps/api/src/holidays/holidays.service.ts:197,239,249"
+      },
+      "suggestedFix": "Name `HolidaysService.requireViewCapability` / `requireManageCapability` as the shape, and leave `deleteHoliday` out of it."
+    },
+    {
+      "id": "R6",
+      "severity": "note",
+      "criterion": "S-17",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "GET .../time-off/calendar — days[].weekday",
+      "line": 41,
+      "claim": "`weekday` has two readings that agree on both sample values and disagree on Sunday, and no rule pins either.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The payload shows `{ \"date\": \"2026-09-01\", \"weekday\": 2, … }` (a Tuesday) and `{ \"date\": \"2026-09-05\", \"weekday\": 6, … }` (a Saturday). ISO numbering (Monday 1 … Sunday 7) and JavaScript `getDay()` (Sunday 0 … Saturday 6) both produce 2 and 6 for those two dates and differ on Sunday, which is 7 under one and 0 under the other. No requirement, case or edge case reads `weekday` — the weekend rule (REQ-01-032) is carried by `isWeekend` — so nothing else settles it, and a header that labels columns from the number gets Sunday wrong under the wrong choice.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md §GET /api/organizations/{orgId}/time-off/calendar"
+      },
+      "suggestedFix": "One clause under the payload: `weekday` is ISO 1–7, Monday 1. Or drop the field, since `date` and `isWeekend` carry every rule the spec states."
+    },
+    {
+      "id": "R7",
+      "severity": "note",
+      "criterion": "S-44",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "PUT /api/organizations/{orgId}/members/{memberId}",
+      "line": 12,
+      "claim": "the spec gives the shipped member update a 422 for the new field while its existing fields answer 400, and no case exercises the new one.",
+      "witness": {
+        "kind": "code",
+        "detail": "The Routes table gives `PUT .../members/{memberId}` a `422 HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036), and Validation Rule 9 applies to 'either PUT body'. Today that route answers 400 for every field failure: `BadRequestException({ error: 'invalid_role', … })` and `BadRequestException({ errors: { jobTitle } })` (apps/api/src/members/members.service.ts:419-426), with 400 for `member_removed` and 409 for the zero-admin guard. So one form's three fields would refuse in two shapes, on a route whose own contracts note argues that 'one route does not get two refusal shapes because a field was added to it'. No case covers it either — TC-01-INT-21 exercises the 422 on `PUT .../settings/country` only, and TC-01-INT-26 covers the 403.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md §Routes and Validation Rule 9 against apps/api/src/members/members.service.ts:419-426"
+      },
+      "suggestedFix": "Say which status the member route answers for an invalid `countryCode` in the same breath as noting what the route answers for its other fields today, and give it a case — an extension to TC-01-INT-25 is enough."
+    },
+    {
+      "id": "R8",
+      "severity": "note",
+      "criterion": "S-58",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-042 / REQ-01-043 against the restore paths",
+      "line": 300,
+      "claim": "two shipped writers reset a restored membership's stated fields and the spec does not say what either does with the new country column.",
+      "witness": {
+        "kind": "code",
+        "detail": "`MembersService.restore` writes `{ status: 'active', joinedAt: new Date(), jobTitle: null }` (apps/api/src/members/members.service.ts:275) and invitation re-acceptance writes `{ status: 'active', role: record.role, joinedAt: now, jobTitle: null }` (apps/api/src/invitations/invitations.service.ts:531) — both deliberately clear the other person-stated membership field. `Membership.countryCode` is a person-stated field on the same row, so a removed-and-restored member silently keeps a country stated before they left while losing their job title. README's Backward Compatibility says 'nothing writes either column but an admin or a manager', which is consistent with keeping it, but no document says so and no case pins it.",
+        "source": "specs/time-off/01-vacation-calendar.md REQ-01-042/043 against apps/api/src/members/members.service.ts:275 and apps/api/src/invitations/invitations.service.ts:531"
+      },
+      "suggestedFix": "One line saying a restored membership keeps its stated country (and why it differs from `jobTitle`), or that it is cleared with it."
+    },
+    {
+      "id": "R9",
+      "severity": "note",
+      "criterion": "S-46",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-E2E-03 — the range navigation",
+      "line": 464,
+      "claim": "what `calendar-prev`, `calendar-next` and `calendar-today` do is stated only inside a test case's expected result, in no requirement.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The Required data-testid table demands `calendar-prev`, `calendar-next`, `calendar-today` and `calendar-range-label`, and the Screens section places the range navigation in the page header. REQ-01-019 defines the three window presets and nothing else; no requirement says what pressing prev or next does. The only statement is TC-01-E2E-03's expected result: '`calendar-range-label` names the window at each step, `calendar-next` and `calendar-prev` move it by one whole window, and `calendar-today` returns it to the window containing today.' An implementer working from the requirements ships three controls with no rule.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md TC-01-E2E-03 against specs/time-off/01-vacation-calendar.md §The screen and its gate"
+      },
+      "suggestedFix": "Promote the sentence into a requirement beside REQ-01-019, and let the case observe it rather than define it."
+    },
+    {
+      "id": "R10",
+      "severity": "note",
+      "criterion": "S-40",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "Verification Plan — Bringing it up, and Rehearsal",
+      "line": 13,
+      "claim": "the Verification Plan carries port numbers in its commands.",
+      "witness": {
+        "kind": "rule",
+        "detail": "'`E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<probe>.spec.ts --workers=1 --retries=0`' appears in the Bringing it up table and again in the Rehearsal block. The plan's prose is careful — 'on the spec run's own ports and the E2E database', 'globalSetup migrated the E2E database it chose' — and it names no database and no connection string, which is the half of this criterion that carries a consequence. Reported for the record: the same command appears in several admitted specs (specs/requests/01-requests.md:832 names a database and a port), so the fix is a convention question rather than this bundle's alone.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md §Verification Plan"
+      },
+      "suggestedFix": "Nothing is required for this bundle to be implementable. If the convention is to be held, write the command as `CI=1 npx playwright test tests/<probe>.spec.ts` and let the note about the harness claiming its own pair carry the rest."
+    },
+    {
+      "id": "R11",
+      "severity": "note",
+      "criterion": null,
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "meta.memberCount, and edge case 18's 'no Account.timezone'",
+      "line": 60,
+      "claim": "two small values are left to the implementer: what `meta.memberCount` counts, and whether an empty-string timezone is 'no timezone'.",
+      "witness": {
+        "kind": "rule",
+        "detail": "`\"meta\": { \"scope\": \"all\", \"memberCount\": 8 }` appears in the payload and no requirement or case reads it, so whether it is the rows returned or the rows the cap was measured against is undecided (they differ only in the refusal case, where REQ-01-013 returns no body at all — which is the reading that makes it rows returned). Separately, edge case 18 and TC-01-INT-19 speak of a caller who 'has no `Account.timezone`', while the Verification Plan records that 'an invited member's `timezone` is `\"\"`' — `Account.timezone` is `String?` in the schema, so both `null` and `\"\"` reach the resolver and only one of them is named.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md §GET /api/organizations/{orgId}/time-off/calendar and edge case 18 against specs/time-off/01-vacation-calendar.cases.md §Reaching the states the cases need"
+      },
+      "suggestedFix": "Say `memberCount` is the number of rows in `members[]`; say the today fallback fires when the timezone is absent, empty or unrecognised."
+    }
+  ]
+}

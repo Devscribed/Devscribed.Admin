@@ -1,0 +1,55 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1434,
+      "failed": 0,
+      "files": 35
+    },
+    "int": {
+      "passed": 35,
+      "failed": 0,
+      "files": [
+        "test/time-off-calendar.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 24,
+      "failed": 0,
+      "files": [
+        "tests/time-off-calendar.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "findings": [],
+  "walkthrough": [
+    "Admin: Scope=Teams with nothing ticked draws the full member roster, placeholder reads 'All', no error banner (REQ-03-001, REQ-03-004, REQ-03-016).",
+    "Admin: ticking a project narrows the Teams picker to that project's members, Unassigned offered as an option (REQ-03-006).",
+    "Admin: Scope=People with nothing ticked draws the full roster with placeholder 'All' (REQ-03-002).",
+    "Admin: Range window seeds from the active Month preset (Sep 01-30, 2026), the DateRangePicker renders only while Range is active (REQ-03-008, REQ-03-017).",
+    "Manager reaches the same calendar successfully.",
+    "Viewer: no 'Time off > Calendar' nav row rendered, and navigating the route directly renders the app's not-found screen (time-off-calendar-page absent) rather than the calendar."
+  ],
+  "acceptanceCriteria": {
+    "verified": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "notes": "All 15 criteria map to live TC-* cases (TC-03-UNIT-11/12/13, TC-03-INT-21/22/23/24, TC-03-E2E-11/12/13), all present in the diff and passing."
+  }
+}

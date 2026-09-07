@@ -1,0 +1,40 @@
+{
+  "status": "pass",
+  "reviewedUpTo": "626a64903c82bd020a9de6c254f5aec5870bfb7c",
+  "sweeps": {
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 10,
+    "6": 0,
+    "7": 0,
+    "8": 13,
+    "9": 5,
+    "10": 6,
+    "11": 1
+  },
+  "covered": {
+    "scope": 4,
+    "read": [
+      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "e2e/tests/client-participants.spec.ts",
+      "e2e/tests/requests.spec.ts",
+      "e2e/tests/request-topics.spec.ts"
+    ],
+    "unreached": []
+  },
+  "findings": [],
+  "notes": [
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "sweep": 11,
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "fieldsDisabled",
+      "claim": "The `Description` textarea's disabled visual treatment (`cursor: 'not-allowed'`, `opacity: 0.55`) is hand-written CSS rather than a `@ds` component, because the textarea is already a documented DS gap (spec's DS-gaps table, `1_DS for dev` has no textarea primitive). The `0.55` opacity and `not-allowed` cursor exactly match every disabled `@ds` control (`Input.jsx`, `Select.jsx`, `Checkbox.jsx`, `Button.jsx` all use `opacity: disabled ? 0.55 : 1`), so this is not an improvised value — it mirrors the design system's own convention for the one native element the spec already excuses. Not a blocker under CR-11."
+    }
+  ],
+  "summary": "PATCH-003 implemented in the single file the spec names. Verified against the rule text: To renders first with no value and placeholder 'Choose a recipient'; About/Title/Description/Project/For are disabled while unset and enabled once a kind is chosen; Priority, Needed by, the blocking checkbox, Cancel and Create request stay enabled throughout and the submit control is never disabled for validation (CR-09); submitting with an unset kind short-circuits before validateNewRequest, sets only `request-new-error-assignee-kind` with REQUEST_MESSAGES.assigneeInvalid ('Choose who this request is for', matches packages/validation/src/index.ts:1885), and moves focus to the To control, matching the existing querySelector('button') focus pattern used by every other Select in this file. No topic/contact read is issued while the kind is unset. Project now filters to `clientId !== null` for the client kind; For filters contacts by the selected project's clientId, offers nothing and reads 'Choose a project first' until a project is picked, and clears on project change. Colleague-kind behaviour for Project/For is untouched. Needed by is seeded with `todayInTimeZone` and bounded by `requestNeededByMax` from packages/validation (PATCH-002, already merged). All data-testids in the contracts table are present and wired as specified. The three e2e files add the addressee-kind choice everywhere PATCH-003 requires it and correctly leave TC-01-E2E-02 submitting with the kind unset first (spec's stated exception), before choosing it to continue exercising the rest of the field errors. Ran the diff's own test files (`requests.spec.ts`, `client-participants.spec.ts`, `request-topics.spec.ts`, `regressions.spec.ts`) on ports 3100/4100: 34 passed, 0 failed. No blocking findings."
+}

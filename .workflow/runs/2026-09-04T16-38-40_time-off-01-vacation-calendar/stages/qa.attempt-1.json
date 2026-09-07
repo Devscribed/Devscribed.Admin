@@ -1,0 +1,50 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1430,
+      "failed": 0,
+      "ms": 1490
+    },
+    "int": {
+      "passed": 91,
+      "failed": 0,
+      "skipped": 4,
+      "ms": 26338,
+      "files": [
+        "test/time-off-calendar.spec.ts",
+        "test/holidays.spec.ts",
+        "test/reports-amounts-owed.spec.ts",
+        "test/reports-time-off.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 25,
+      "failed": 0,
+      "ms": 84000,
+      "files": [
+        "tests/time-off-calendar.spec.ts",
+        "tests/holidays.spec.ts",
+        "tests/reports-time-off.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "walkthrough": {
+    "ran": true,
+    "areas": [
+      "user opens the calendar (scope=all) and sees an approved solid band and a pending hatched band",
+      "admin/manager scopes the calendar to a named person and reads the org holidays settings",
+      "member detail screen shows the stored (not resolved) country, Poland, for a member overriding the org's DE",
+      "a country-scoped (PL) holiday cell is present and visible on the member it applies to inside an approved band's span",
+      "a viewer gets no Calendar nav row and the route renders no calendar page"
+    ],
+    "findings": []
+  },
+  "findings": [],
+  "notes": [
+    "Static gate and review already passed (review.verdict.json: status pass, 0 blockers, 7 notes carried forward — N1 organization-country read has no failure/in-flight state, N2 an e2e clock-mixing edge case on non-UTC runners, N3 calendar-scope-all id unasserted, N4 unit blocks not labelled with a TC id though the assertions exist under different describe names, N5 MultiFilter 'All' placeholder on Teams/People pickers, N6 minWidth:220 literal, N7 duplicate of N5). None of these are blockers and none were contradicted by this QA pass.",
+    "Live TC-01-UNIT-01/03/04 exist and pass, but not in packages/validation/src/time-off-calendar.test.ts as first assumed — resolveMemberHolidayCountry and isHolidayApplicableToMember are covered under those ids in packages/validation/src/reports.test.ts (shared helper, per the spec's country-resolution consolidation), and TC-01-UNIT-04 (capability matrix) is in packages/validation/src/roles.test.ts. All cases.md-declared TC-01-* ids were confirmed present across the two split files."
+  ]
+}

@@ -50,3 +50,25 @@ export interface ClientDetailResponse {
   client: ClientSummary;
   projects: ClientProjectRow[];
 }
+
+/* ------------------------------------------------------------------ *
+ * Requests spec 03 — the client's contacts.
+ * ------------------------------------------------------------------ */
+
+/** `invited` while a pending invitation exists with no row of its own; then `active`
+ * once accepted, and `removed` after a removal. */
+export type ClientContactStatus = 'invited' | 'active' | 'removed';
+
+/** One row of `GET /api/organizations/{orgId}/clients/{clientId}/contacts`. */
+export interface ClientContactRow {
+  id: string;
+  email: string;
+  displayName: string | null;
+  status: ClientContactStatus;
+  invitedAt: string | null;
+  joinedAt: string | null;
+}
+
+export interface ClientContactsResponse {
+  contacts: ClientContactRow[];
+}

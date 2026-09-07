@@ -76,7 +76,7 @@ if (!existsSync(runPath)) {
 writeFileSync(join(ROOT, '.workflow', 'current'), runId);
 
 const run = JSON.parse(readFileSync(runPath, 'utf8'));
-const stage = flag('--stage', agent === 'code-reviewer' ? 'review' : agent === 'qa' || agent === 'qa-lab' ? 'qa' : agent);
+const stage = flag('--stage', agent.startsWith('code-reviewer') ? 'review' : agent === 'qa' || agent === 'qa-lab' ? 'qa' : agent);
 
 /* Count attempts by their start record, not their log. An attempt that crashes never writes a
    log, so counting logs makes the next run reuse the same number and overwrite the evidence of

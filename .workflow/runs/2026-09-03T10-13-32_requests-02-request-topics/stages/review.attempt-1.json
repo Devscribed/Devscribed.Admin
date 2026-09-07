@@ -1,0 +1,280 @@
+{
+  "status": "blocked",
+  "reviewedUpTo": "90e412f15581bc9aa5a3781a9183050db98eecf1",
+  "covered": {
+    "slice": 36,
+    "read": [
+      "apps/api/test/request-topics.spec.ts",
+      "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "apps/api/src/requests/request-topics.service.ts",
+      "e2e/tests/request-topics.spec.ts",
+      "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "packages/validation/src/request-topics.test.ts",
+      "packages/validation/src/request-topics.ts",
+      "apps/api/test/requests.spec.ts",
+      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "apps/api/src/requests/request-topics.controller.ts",
+      "packages/validation/src/index.ts",
+      "packages/validation/src/requests.ts",
+      "apps/api/src/requests/request-topics.seed.ts",
+      "apps/api/prisma/schema.prisma",
+      "e2e/tests/requests.spec.ts",
+      "apps/api/src/requests/requests.service.ts",
+      "e2e/tests/helpers.ts",
+      "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
+      "apps/api/prisma/migrations/20260903120000_requests_02_request_topics/migration.sql",
+      "apps/api/prisma/migrations/20260903120100_requests_02_request_topics_backfill/migration.sql",
+      "apps/api/src/requests/request-topics.dto.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "apps/api/src/requests/requests.serializer.ts",
+      "apps/api/src/requests/requests.dto.ts",
+      "apps/web/src/layout/Sidebar.tsx",
+      "apps/web/app/org/[orgId]/requests/types.ts",
+      "apps/web/app/org/[orgId]/settings/request-topics/types.ts",
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/requests.test.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "apps/api/src/signup/signup.service.ts",
+      "packages/validation/src/roles.test.ts",
+      "apps/api/src/app.module.ts",
+      "apps/api/src/requests/requests.controller.ts",
+      "e2e/tests/requests-page.spec.ts"
+    ],
+    "unreached": []
+  },
+  "shards": [
+    {
+      "shard": 1,
+      "findings": 7,
+      "kept": 7,
+      "blockersKept": 1,
+      "scope": "apps/api server side — controller, service wiring, schema, both migrations, seed, serializer, DTOs, signup"
+    },
+    {
+      "shard": 2,
+      "findings": 8,
+      "kept": 8,
+      "blockersKept": 1,
+      "scope": "apps/web screens plus request-topics.service.ts"
+    },
+    {
+      "shard": 3,
+      "findings": 6,
+      "kept": 6,
+      "blockersKept": 0,
+      "scope": "packages/validation, e2e suite, requests integration spec"
+    }
+  ],
+  "sweep5": {
+    "requirements": 31,
+    "artefacts": 130,
+    "missing": [],
+    "detail": "Walked the spec, the contracts bundle and the cases bundle in order. Routes: 5 new topic routes registered in request-topics.controller.ts (grep '@Get|@Post|@Patch' = 5) and 3 amended requests routes; no @Delete anywhere under apps/api/src/requests (REQ-02-014). Messages: all 12 REQUEST_TOPIC_MESSAGES keys and all 4 new REQUEST_MESSAGES keys present in packages/validation/src/index.ts with text verbatim from the Error Messages table, pickerEmpty included. Status labels: REQUEST_STATUS_LABELS, 5 stored statuses with the 2 closure sub-labels. data-testid: all 31 ids in the Required data-testid table resolve in apps/web (23 literal, 8 templated in RequestRow.tsx and settings/request-topics/page.tsx); request-new-type and request-new-access-kind are gone from the web and asserted absent in e2e. Test cases: all 34 TC-02-* ids from the cases bundle appear, each in the file its level demands (UNIT in packages/validation, INT in apps/api/test/request-topics.spec.ts, E2E in e2e/tests/request-topics.spec.ts); the 9 extra TC-02-* matches in the tree belong to specs/documents/02 and specs/user-management/02. Data model: RequestTopic table with all 12 columns, the composite index, the functional LOWER(name) unique index, 3 FKs with explicit delete behaviour, and the 2 nullable Request columns — schema.prisma and migration.sql agree field for field. Seed: 11 rows, identical in request-topics.seed.ts and the backfill VALUES clause, audience/type/name/sortOrder matching the Seed Data table exactly. Capabilities: registered in both unions (manage-request-topics in MemberCapability, ManageRequestTopics in Capability) with admin/manager true and user/viewer false in all four matrices. Screens: both routes exist; both DS gaps shipped as committed (up/down Buttons, two aria-pressed Buttons for the audience switch). Sections contributing no artefact: Summary, Out of Scope, Known Gaps — each legitimately narrative or an explicit non-build. Nothing the spec names is implemented nowhere or in the wrong place."
+  },
+  "sweep9": {
+    "pairs": 22,
+    "disagreeing": [],
+    "detail": "Checked: (1) topics controller -> service, session.organizationId passed, path orgId never a selector; (2) REQUEST_TOPIC_MESSAGES strings vs the contracts Error Messages table, 12/12 verbatim; (3) the 4 new REQUEST_MESSAGES keys vs the same table; (4) schema.prisma RequestTopic vs the create migration DDL; (5) REQUEST_TOPIC_SEED (TS) vs the backfill VALUES clause, 11/11 rows; (6) REQUEST_STATUS_LABELS vs its four required consumers — list row (RequestRow.tsx), detail header and history entry (via statusLabelOf), filter control (page.tsx STATUS_OPTIONS); (7) expandRequestStatusQuery vs REQUEST_STATUS_QUERIES, 'closed' in both; (8) vacationStatusesFor('closed') vs edge case 9; (9) the web reorder arithmetic (neighbour.sortOrder + direction, clamped) vs the Screens section's 'above minus one / below plus one'; (10) topic filter read status=all vs picker read status=active (REQ-02-031); (11) the capability in both unions; (12) Sidebar hasCapability vs the settings page can() gate vs the service requireCurator; (13) spec testids vs web render vs e2e selectors; (14) spec case ids vs test files and levels; (15) NewRequestValue's new shape vs both call sites (requests.service.ts, NewRequestModal.tsx) — neither still reads type/accessKind; (16) REQUEST_ROW_INCLUDE vs RequestWithRelations vs all 6 toRequestRow call sites; (17) the removed REQUEST_STATUS_META vs its former consumers — no dangling reference; (18) var(--text-faint) vs the DS token set; (19) the changed status filter labels vs every other e2e suite's option names — no stale 'Open'/'Granted' selector survives; (20) compareRequestTopics vs REQ-02-009's case-insensitive tiebreak; (21) seedRequestTopics vs the only organization.create site in the tree; (22) accessKind's surviving consumers vs the Out of Scope commitment to keep the column. None disagree.",
+    "blastRadius": "Contained. helpers.ts, roles.ts and validation/index.ts changes are additive; the one contract change to shared code — NewRequestValue dropping type/accessKind — has exactly two call sites and both were updated. The only cross-feature break by design is the status filter's option labels, and the one other suite that selected by them (requests-page.spec.ts) was updated. Migrations are additive: a new table, two nullable columns, no rename, no drop, no new NOT NULL, so the previously deployed code keeps serving through the migrate-then-apply window.",
+    "roleTransition": "Clean. The topics service reads the live Membership row and passes it through normalizeRole before can(), so legacy 'member' maps to 'user' and is refused manage-request-topics; the Sidebar uses hasCapability, which normalizes internally; the settings page normalizes before can(). No new authorization code handles only one of the two role vocabularies."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-26",
+      "rule": "blocking-criteria.md CR-26 — \"a test cannot fail — an assertion about a value nothing produces, a selector nothing renders, a mechanism that throws before the assertion runs\"",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-17",
+      "line": 982,
+      "claim": "The vacation half of TC-02-INT-17 asserts over an array that is always empty, so it cannot fail; combined with the missing unit assertion, the status=closed -> vacation ['rejected','cancelled'] mapping has no witness at any level.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-02-INT-17. apps/api/test/request-topics.spec.ts:982-989 asserts (closedWithVacation.body.vacation.requests as {status:string}[]).every(v => ['rejected','cancelled'].includes(v.status)) is true. `grep -n vacationRequest apps/api/test/request-topics.spec.ts` returns exactly one line — the `prisma.vacationRequest.deleteMany()` in beforeEach at line 208 — so no vacation request is ever created in the file and the array under assertion is [] in every run. [].every(...) is true, so the assertion holds identically if vacationStatusesFor('closed') returned null (every vacation row), [] , or ['approved']. The spec's Steps require the opposite state: \"repeat status=closed in an organization that also has a rejected and a cancelled vacation request\", with Expected Result \"In the vacation section closed returns the rejected and cancelled rows and no pending one\" (specs/requests/02-request-topics.cases.md:409-417) — and the 'no pending one' half is never checked at all. The new branch in packages/validation/src/requests.ts (vacationStatusesFor, case 'closed') is also unasserted in packages/validation/src/requests.test.ts:317-325, which enumerates the other six query values, so this integration case is the only coverage the branch has and it is vacuous.",
+        "source": "specs/requests/02-request-topics.cases.md:409"
+      },
+      "suggestedFix": "Create three vacation requests in that organization (pending, rejected, cancelled) before the status=closed read, then assert the returned vacation ids are exactly the rejected and the cancelled one and that the pending one is absent — the shape the request half of the same case already uses. Adding expect(vacationStatusesFor('closed')).toEqual(['rejected','cancelled']) to the unit file is a cheap second witness but does not by itself close this."
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-16",
+      "rule": "blocking-criteria.md CR-16 — \"a failure — timeout, 4xx, 5xx, unparseable body — is swallowed, reported as success, or leaves stored state claiming something that did not happen\"",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 113,
+      "claim": "Every write the catalogue screen issues — archive, restore and each reorder press — discards the response entirely: response.ok is never read and the body is never parsed, so a 409, a 403 or a 5xx produces no banner, no message and no signal of any kind. Only a thrown fetch sets the error state.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Two curators have Settings > Request topics open. Curator A archives 'VPN'. Curator B presses Archive on the same row. The service takes the row lock, re-reads status 'archived', and answers 409 with REQUEST_TOPIC_MESSAGES.statusUnchanged — the exact refusal REQ-02-013, edge case 12 and AC-13 exist to produce. In write() at apps/web/app/org/[orgId]/settings/request-topics/page.tsx:113-127 the await fetch(...) resolves normally, response.ok is never read, the body is never parsed, catch never fires, error stays false, and load() re-reads the catalogue. Curator B sees the row move to Archived (A's write) with no indication their own press was refused. The same silence covers 403 REQUEST_TOPIC_MESSAGES.manageForbidden for a curator demoted mid-session, and any 5xx on a reorder press, where the row simply does not move and nothing says why. The read path in the same file at lines 74-81 does branch on response.ok and raises the banner the spec's UI Description requires (\"Error (catalogue) | An inline banner with a retry control; the last good list stays on screen behind it\"), so the screen has a failure surface and these writes are the only calls that bypass it. statusUnchanged and manageForbidden are user-facing strings the contracts table publishes for these routes and no screen ever renders either.",
+        "source": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx:113"
+      },
+      "suggestedFix": "Mirror the read path: branch on response.ok in write(); on failure parse the body and surface its message (409 statusUnchanged, 403 manageForbidden) through the InfoBanner that already exists on this screen. Keep the load() re-read so the list still settles on the true state behind the banner."
+    },
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/prisma/migrations/20260903120100_requests_02_request_topics_backfill/migration.sql",
+      "symbol": "backfill",
+      "line": 1,
+      "claim": "Deploy-window gap. infra/deploy.sh runs migrate.sh and only then tf apply (verified at infra/deploy.sh:183-191), so between the backfill and the rollout the previous code is still serving signup — and that code has no seed. An organization signed up in that window is created with zero RequestTopic rows and the backfill has already run, so it stays empty permanently. Not a violation of REQ-02-015 or REQ-02-016 as written, and REQ-02-017 makes the resulting empty picker a readable state rather than a failure. Recorded because nothing in the change notices it."
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "createRequest",
+      "line": 363,
+      "claim": "REQ-02-020's guard is written as topic.audience !== 'staff' rather than as a comparison against the addressee kind the body carries. Correct today only because 'member' is the only addressee kind, which the spec's decision table fixes; the moment spec 03 admits a client addressee this line silently keeps refusing every client topic and nothing fails to compile. Deriving the expected audience from input.assigneeKind through a total mapping would make the next spec break loudly instead."
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/signup/signup.service.ts",
+      "symbol": "signup",
+      "line": 69,
+      "claim": "The transaction's catch maps any Prisma P2002 to duplicateEmail(). Seeding eleven RequestTopic rows now runs inside that transaction and is a second possible source of P2002 via the functional unique index. Unreachable today — the organization id is fresh inside the transaction — but a fault there would be reported to the caller as 'email already registered'. Narrowing the mapping to the Account.email target would keep any other unique violation surfacing as itself."
+    },
+    {
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/prisma/schema.prisma",
+      "symbol": "Request.accessKind",
+      "line": 1138,
+      "claim": "The doc comment still reads \"Required when type = 'access', absent otherwise\", which REQ-02-021 has just made false for every new row — accessKind is now written null even under an access topic. The topicId and topicLabel comments were added in the same diff, so the stale sentence sits directly beside its own correction."
+    },
+    {
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/requests/request-topics.service.ts",
+      "symbol": "refuseDuplicateName",
+      "line": 404,
+      "claim": "The uniqueness pre-check folds with toLocaleLowerCase() while the arbiter — the functional unique index — folds with Postgres LOWER(). The two disagree on locale-sensitive pairs, so a name the index rejects can pass the pre-check. Behaviour stays correct because the P2002 path answers the same 409 nameDuplicate. Recorded so nobody later removes the P2002 catch on the grounds that the pre-check covers it."
+    },
+    {
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/requests/request-topics.service.ts",
+      "symbol": "updateTopic",
+      "line": 239,
+      "claim": "validateTopicSortOrder maps null and '' to 'absent'. On POST that is right — absent means compute the default. On PATCH there is no default, so PATCH {\"sortOrder\": null} passes validation, writes nothing, and answers 200 with the order unchanged. The contracts table names no outcome for it either way; a gap in the contract rather than a defect against a stated rule."
+    },
+    {
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 126,
+      "claim": "setBusy(false) runs before await load(), so every row control re-enables while the catalogue re-read is still in flight. A second press in that window issues a PATCH computed from the pre-reload active array, i.e. from stale neighbour sortOrder values. Bounded by the Known Gaps entry that already accepts a press leaving the order as it was; moving the line after the reload closes the window."
+    },
+    {
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "the picker's catalogue read",
+      "line": 168,
+      "claim": "The picker's read does `if (!response.ok) return;` leaving topics at null, so a 5xx draws the About Select with no options, an enabled submit, and nothing saying the read failed. The code does correctly distinguish null (not yet read) from [] (genuinely empty), so REQ-02-017 itself is met; what is missing is any statement when the read never lands. The open-effect also never resets topics to null, so a failed read on a later open leaves the previous session's list on offer. The members read three lines above has the identical pre-existing shape."
+    },
+    {
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "the name field's error",
+      "line": 205,
+      "claim": "The duplicate/blank-name message renders twice: Input error={errors.name} makes the DS component draw its own message node, and NameError draws a second copy carrying the spec's request-topic-error-name. getByTestId still resolves so no case fails, but the user reads the message twice. NewRequestModal already had this shape before the change, so this is the pattern being propagated rather than introduced; an errorId prop on the DS Input is the standing gap that closes it."
+    },
+    {
+      "id": "N10",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "layout literals",
+      "line": 366,
+      "claim": "Raw pixel literals in the new screen — minHeight: 56, width: 84, width: 96, and 16 in the skeleton. Colours, spacing and type are all tokenized correctly. I measured the idiom before judging it: 174 such numeric layout literals across apps/web, in roughly twenty files, most untouched by this diff (settings/holidays, clients, projects, members). CR-11 reads on 'a colour, size or spacing literal', but blocking here would apply a rule the repository applies nowhere else, so this is a note. Either the rule or the practice should move, and that is a person's call."
+    },
+    {
+      "id": "N11",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/request-topics.spec.ts",
+      "symbol": "TC-02-E2E-01",
+      "line": 149,
+      "claim": "The case asserts the first active row draws no up control but never asserts the last active row draws no down one, though its own comment and the testid table name both halves (\"absent on the last row of the audience\"). The behaviour is implemented — canMoveDown={index < active.length - 1} at page.tsx:266 — so this is a missing assertion, not a missing control. One line beside the existing first-row assertion closes it."
+    },
+    {
+      "id": "N12",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/helpers.ts",
+      "symbol": "requestTopicIdViaApi",
+      "line": 1189,
+      "claim": "The fixture reads the catalogue with the default ?status=all and returns the first topic matching the name, so it can hand back an archived topic; every caller uses the result to build a POST .../requests body, where an archived topic is a 400 topicUnavailable and the caller then throws 'Precondition failed'. No current caller archives before creating, so it does not bite today. Passing ?status=active from this helper removes the trap while leaving the status=all default on listRequestTopicsViaApi for the archiving case."
+    },
+    {
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "file": "packages/validation/src/requests.test.ts",
+      "symbol": "vacationStatusesFor",
+      "line": 317,
+      "claim": "vacationStatusesFor gained a 'closed' branch and the unit test that enumerates that mapping was left at the six pre-existing values. See F1: the integration case that was supposed to be its witness asserts over an empty array, so between them the branch is unasserted everywhere."
+    },
+    {
+      "id": "N14",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/requests-page.spec.ts",
+      "symbol": "TC-10 vacation review case",
+      "line": 112,
+      "claim": "The selected option changed from 'Open' to 'Pending' at line 147, but three comments still name the control by the retired word — 'the case picks Open' at 112, 'on the Open view' at 160 and 168 — so the file's prose describes a label the screen no longer draws."
+    },
+    {
+      "id": "N15",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/request-topics.spec.ts",
+      "symbol": "TC-02-E2E-01",
+      "line": 100,
+      "claim": "The rendered order is compared against the order GET .../request-topics returned rather than against an independent expectation, so an API that ordered wrongly and a page that faithfully rendered it would both pass. REQ-02-009 is independently pinned by TC-02-UNIT-04 and TC-02-INT-22, so the case is not load-bearing for the rule; recorded because it is the assertion a reader would take as the ordering witness."
+    },
+    {
+      "id": "N16",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-02",
+      "line": 297,
+      "claim": "runSqlFile(BACKFILL_MIGRATION) executes the unscoped INSERT ... FROM \"Organization\" o WHERE NOT EXISTS (...), so it inserts eleven topics for every organization in the shared test database that currently holds none — including organizations belonging to other Jest workers. It cannot fail this case and every suite truncates in beforeEach, but it is a cross-worker write the case does not intend."
+    },
+    {
+      "id": "N17",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/prisma/schema.prisma",
+      "symbol": "Request.topicId",
+      "line": 1170,
+      "claim": "GET .../requests now filters on Request.topicId (REQ-02-026) and no index covers the column; Postgres creates none for a foreign key. Consistent with projectId, which the same route already filters unindexed, and one organization's request set is small. @@index([organizationId, topicId]) is additive if the list ever gets slow."
+    },
+    {
+      "id": "N18",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/request-topics.spec.ts",
+      "symbol": "TC-02-E2E-01",
+      "line": 152,
+      "claim": "page.locator('[draggable=\"true\"]') is the only non-data-testid attribute locator in the e2e suite. CR-27 makes non-testid selection blocking, but this one asserts an absence — an element that is not drawn cannot carry a testid — so it is a note. Expressing the DS-gap commitment as the presence of the up/down testids instead would remove the exception."
+    }
+  ]
+}

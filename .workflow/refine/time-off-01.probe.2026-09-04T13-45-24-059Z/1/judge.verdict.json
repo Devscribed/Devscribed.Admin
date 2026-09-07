@@ -1,0 +1,320 @@
+{
+  "status": "blocked",
+  "spec": "specs/time-off/01-vacation-calendar.md",
+  "request": "A vacation calendar based on holidays and vacation requests, viewable for the whole organization, for several teams, or for specific people, drawn as a horizontal timeline where each row is a member and each column is a day; holidays must resolve automatically from the employee's country or the company's.",
+  "mode": "full",
+  "admitted": false,
+  "profile": "sharded",
+  "shardDecision": "Three members, 1,125 lines, and a code surface that reaches the schema, packages/validation, the guard stack, the holidays module and the reports service — more than one pass should hold while also walking forty requirements against three tables. I dispatched one spec-reviewer child per member (the slice's split), each carrying its files, the text of its criteria quoted, what to enumerate and a path to write to; none read the register. I held the sixteen criteria the slice marks as needing the whole bundle — the contradiction family, scope, the obligations that can only be answered across members, divergence and S-58 — and read all three members in full myself for them, plus specs/time-off/README.md and specs/organization/03-holidays.md. I opened every file a shard's claim or dismissal rested on: packages/validation/src/roles.ts, packages/validation/src/reports.ts, packages/validation/src/holiday-messages.ts, packages/validation/src/holidays.ts, apps/api/src/auth/capability.guard.ts, apps/api/src/auth/require-capability.decorator.ts, apps/api/src/holidays/holidays.controller.ts, apps/api/src/holidays/holidays.service.ts, apps/api/prisma/schema.prisma. Two of the four blockers came back from a shard; two are mine. Worth a person's attention outside the findings: shard 2 established that apps/web/src/ds.ts does not exist in this repository — @ds surfaces from packages/ds/src/index.ts as @devscribed/ds — so S-06's own text names a path that is gone. That is a defect of the register, not of this spec, and no finding may name a path outside the spec, so it is recorded here instead.",
+  "shards": [
+    {
+      "shard": 1,
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "enumerated": 51,
+      "claims": 4,
+      "kept": 2,
+      "overturned": ["S-34", "S-02", "S-30"],
+      "reason": "S-34 (S1-C1): overturned. The claim is that REQ-01-018 resolves 'today' from a nullable Account.timezone with no stated fallback. The fallback is stated twice, in the two members shard 1 was not given — contracts Edge case 18 ('Today's marker falls back to UTC') and TC-01-INT-19, which reads as a caller whose timezone is unset and expects the UTC day. This is exactly the defect a child cannot see and the lead answers. S-02 (S1-C4): overturned, and the shard said itself it was low confidence. HOLIDAY_MESSAGES.countryForbidden does not exist today, but the contracts Error Messages table marks it New: yes, so the spec never claims it exists and S-02 has no subject there. S-30 (S1-C3): the observation holds — organization/03 says only 'Excluding holidays from working-day counts is a separate future amendment to spec 09' (:22) and 'Holiday-aware workingDays computation' (:359), and names nothing about resolving the holiday set at submit time — but S-30 is the wrong criterion and is cleared: cover the reference and the sentence still carries what an implementer would need. Demoted to note N6, which is also where the missing criterion is proposed. S-56 (S1-C2) kept as note N5; the register marks it note-only."
+    },
+    {
+      "shard": 2,
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "enumerated": 22,
+      "claims": 3,
+      "kept": 3,
+      "overturned": ["S-27", "S-05"],
+      "reason": "S2-C1 kept verbatim as R2 and re-checked: packages/validation/src/holiday-messages.ts:20 reads 'Country code must be 2 uppercase letters.' against the row's 'Enter a valid 2-letter country code.', and the row is marked New: no with prose calling it 'reused unchanged'. S-27 (S2-C3): substance kept, criterion overturned and scope widened. The routes do name their guard and their capability, so S-27 is clear; the defect is that the named guard cannot produce the named status, which is S-09, and it is not confined to the GET route as the shard had it — the PUT row names RequireCapability('ViewHolidays') and demands 404 in the same cell. Filed as R1. S-05 (S2-C2): criterion overturned. The spec never claims the shipped validator normalizes lowercase; it states a new constraint, so nothing about today's code is stale. The real defect is that the same value is given two incompatible constraints while the document insists it is one rule — S-09, filed as R3. I also overturned one of shard 2's dismissals: it marked the PUT route row ok on the strength of a grep for 'delete-holidays', which does not check the symbol the sentence names. HolidaysService has listHolidays, createHoliday, updateHoliday and deleteHoliday; remove is the controller's handler. Filed as R5."
+    },
+    {
+      "shard": 3,
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "enumerated": 51,
+      "claims": 2,
+      "kept": 1,
+      "overturned": ["S-40"],
+      "reason": "S3-C1 kept as R4 and promoted from the shard's low confidence. The shard hedged because an already-admitted sibling carries the same pattern; precedent in another document does not clear a criterion, and the checklist source (.claude/skills/spec/references/checklist.md:124) marks it blocks and names the consequence. I narrowed the witness to the Observed cells — the database name and the port mappings — and away from the command form, which CLAUDE.md itself documents with those env vars, so the repair is the shortest one that clears the criterion. S3-C2 (S-40, the missing 'Observing each criterion' table): overturned and dismissed. The shard said plainly it could not see whether the mapping lived in a member it was not given, and it does: the Acceptance Criteria table at specs/time-off/01-vacation-calendar.md:380-398 gives all seventeen criteria an 'Observed by' column naming their cases."
+    }
+  ],
+  "read": {
+    "specs": [
+      "specs/time-off/01-vacation-calendar.md",
+      "specs/time-off/01-vacation-calendar.contracts.md",
+      "specs/time-off/01-vacation-calendar.cases.md",
+      "specs/time-off/README.md",
+      "specs/organization/03-holidays.md"
+    ],
+    "files": [
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/reports.ts",
+      "packages/validation/src/holiday-messages.ts",
+      "packages/validation/src/holidays.ts",
+      "apps/api/src/auth/capability.guard.ts",
+      "apps/api/src/auth/require-capability.decorator.ts",
+      "apps/api/src/holidays/holidays.controller.ts",
+      "apps/api/src/holidays/holidays.service.ts",
+      "apps/api/prisma/schema.prisma",
+      ".claude/skills/spec/references/checklist.md",
+      ".claude/skills/spec-review/references/admission-criteria.md"
+    ]
+  },
+  "unreached": [],
+  "sweeps": {
+    "currency": 18,
+    "conventions": 12,
+    "selfSufficiency": 7,
+    "testability": 49,
+    "dataAndState": 24,
+    "obligations": 65,
+    "contradiction": 40,
+    "scope": 9
+  },
+  "criteria": {
+    "S-01": "blocked",
+    "S-02": "blocked",
+    "S-03": "clear",
+    "S-04": "clear",
+    "S-05": "clear",
+    "S-06": "clear",
+    "S-07": "clear",
+    "S-08": "clear",
+    "S-09": "blocked",
+    "S-10": "clear",
+    "S-11": "clear",
+    "S-12": "clear",
+    "S-13": "clear",
+    "S-14": "clear",
+    "S-15": "clear",
+    "S-16": "clear",
+    "S-17": "clear",
+    "S-18": "clear",
+    "S-19": "clear",
+    "S-20": "clear",
+    "S-21": "clear",
+    "S-22": "clear",
+    "S-23": "clear",
+    "S-24": "clear",
+    "S-25": "clear",
+    "S-26": "clear",
+    "S-27": "clear",
+    "S-28": "clear",
+    "S-29": "clear",
+    "S-30": "clear",
+    "S-31": "clear",
+    "S-32": "clear",
+    "S-33": "clear",
+    "S-34": "clear",
+    "S-35": "n/a",
+    "S-36": "clear",
+    "S-37": "clear",
+    "S-38": "clear",
+    "S-39": "n/a",
+    "S-40": "blocked",
+    "S-41": "clear",
+    "S-42": "clear",
+    "S-43": "clear",
+    "S-44": "note",
+    "S-45": "note",
+    "S-46": "note",
+    "S-47": "clear",
+    "S-48": "clear",
+    "S-49": "clear",
+    "S-50": "clear",
+    "S-51": "n/a",
+    "S-52": "n/a",
+    "S-53": "clear",
+    "S-54": "n/a",
+    "S-55": "clear",
+    "S-56": "note",
+    "S-57": "note",
+    "S-58": "clear"
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-09",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Routes",
+      "line": 10,
+      "claim": "Both route rows name RequireCapability(...) as the guard that gates the capability and 404 as the answer when the caller lacks it. RequireCapability is metadata read by CapabilityGuard, which throws ForbiddenException on every refusing path — 403, by a decision the guard documents as deliberate. No implementation that applies the named guard returns the named status. The prose immediately under the table compounds it by placing the check 'inside the service', which is a different mechanism from the one the Guards column names.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Contracts :10 — 'GET /api/organizations/{orgId}/time-off/calendar | SessionGuard, OrgScopeGuard, RequireCapability('ViewTimeOffCalendar') | 200 | 404 (no capability, REQ-01-002; wrong organization, REQ-01-039)'. Contracts :11 does the same for the PUT with RequireCapability('ViewHolidays') and '404 (no ViewHolidays; wrong organization)'. Against apps/api/src/auth/capability.guard.ts:22-24 — '403 rather than 404 here, deliberately: the caller has already been proven a member of this organization, so refusing them leaks nothing about what exists inside it' — and :56, 'if (!membership || !hasCapability(membership.role, required)) throw this.forbidden();', where forbidden() at :61-66 returns a ForbiddenException. No exception filter in apps/api/src converts it: the only two @Catch filters are WebhookHashRejectedFilter and WebhookRateLimitedFilter. The repository already met this exact combination and could not use the guard for it — apps/api/src/holidays/holidays.controller.ts:23-25: 'Capability checks live in the service because this resource answers 404 for a missing view capability and 403 for a missing delete one — CapabilityGuard can express neither combination', and that controller is @UseGuards(SessionGuard, OrgScopeGuard) only. Three cases assert the 404 the guard cannot give: TC-01-INT-02 (cases :127), TC-01-INT-15 for the user (cases :268), TC-01-INT-18 (cases :296), as do REQ-01-002 (:95), REQ-01-039 (:332) and the Security section (contracts :279).",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:10 against apps/api/src/auth/capability.guard.ts:22"
+      },
+      "suggestedFix": "404 is the side to keep — it is the repository's convention, the Security section's whole point, and what three cases assert. Say in the Guards column that both capability checks run in the service, as the holidays resource does, and drop RequireCapability from both rows."
+    },
+    {
+      "id": "R2",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-02",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "HOLIDAY_MESSAGES.countryCodeInvalid",
+      "line": 108,
+      "claim": "The Error Messages table quotes HOLIDAY_MESSAGES.countryCodeInvalid as 'Enter a valid 2-letter country code.', marks the row New: no, and the note beneath says it already ships and 'is reused unchanged'. The export that ships reads something else, so the screen and the 422 body will carry wording this table does not contain.",
+      "witness": {
+        "kind": "command",
+        "detail": "sed -n '20p' packages/validation/src/holiday-messages.ts prints \"  countryCodeInvalid: 'Country code must be 2 uppercase letters.',\". The contracts row at :108 reads '| HOLIDAY_MESSAGES.countryCodeInvalid | PUT /api/organizations/{orgId}/settings/country | Enter a valid 2-letter country code. | no |', and :110-113 reads 'HOLIDAY_MESSAGES.countryCodeInvalid already ships (packages/validation/src/holiday-messages.ts) and is reused unchanged'.",
+        "source": "packages/validation/src/holiday-messages.ts:20"
+      },
+      "suggestedFix": "Quote the string that ships — 'Country code must be 2 uppercase letters.' — or mark the row New: yes and say the wording changes, which then also changes it for every holiday row that emits it."
+    },
+    {
+      "id": "R3",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-09",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Validation Rules row 9",
+      "line": 162,
+      "claim": "The bundle insists the organization country is the same value the holiday rows carry, governed by one rule with one wording, and then gives that one value two constraints that no implementation satisfies at once: lowercase pl is accepted and normalized to PL here, and refused there. The implementer must either change the shipped holiday validator — which this spec never asks for and whose refusal exists to keep the uniqueness index honest — or refuse pl and fail TC-01-INT-21.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Contracts :162 — '| 9 | countryCode | Empty, or exactly 2 letters normalizing to uppercase alpha-2 | HOLIDAY_MESSAGES.countryCodeInvalid | no |'. Cases :326-328 — 'Steps: Submit POL, then 1, then pl. Expected Result: 422 carrying countryCodeInvalid for the first two; 200 for pl, which normalizes and is stored as PL.' Against contracts :111-113 — 'the country field on this page is the same value the holiday rows carry, so a second wording for one rule would be the drift this table exists to prevent' — and packages/validation/src/holidays.ts:88-91, the doc of the function that owns that value and that message: 'Anything present must be exactly two uppercase letters — lowercase is rejected rather than upcased, because the stored value is what the uniqueness index compares', enforced at :101 by COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/, which returns { valid: false } for 'pl'.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:162 against packages/validation/src/holidays.ts:88"
+      },
+      "suggestedFix": "A person decides which. Either the organization country normalizes, and it says so as its own rule with its own message rather than claiming to reuse one — the note at :110-113 goes with it; or it rejects lowercase like the holiday rows, and TC-01-INT-21's third input expects 422 instead of 200."
+    },
+    {
+      "id": "R4",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-40",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "Verification Plan / Bringing it up",
+      "line": 12,
+      "claim": "The Verification Plan's Observed column pins the rig: two docker port mappings, a host and port, and the database name. Those are the harness's to choose — under CI the suite kills stale servers, steps both ports by 100 until a free pair answers and writes the choice to e2e/.last-ports.json — so a plan that records one sends the next run at a server this repository does not publish.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Cases :12 — '| Database | docker compose ps | devscribed-postgres up 5 days, healthy, 0.0.0.0:5433->5432 and 0.0.0.0:5434->5432. |'. Cases :13 — 'globalSetup reported Datasource \"db\": PostgreSQL database \"devscribed_e2e\" ... at localhost:5434' and 'Next reported Local: http://localhost:3100'. The criterion's source, .claude/skills/spec/references/checklist.md:124-126, is 'The Verification Plan records routes, states and observers — never a port, a database name or a connection string. The harness chooses those, and a spec that pins one sends the next run at a server this repository does not publish.'",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:12"
+      },
+      "suggestedFix": "Rewrite the two Observed cells in route/state/observer terms — that the E2E database migrated cleanly with no pending migrations, and that both servers came up and answered — and leave the ports out. The Command column may keep the documented E2E_WEB_PORT/E2E_API_PORT form, which is CLAUDE.md's own."
+    },
+    {
+      "id": "R5",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-01",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "HolidaysService.remove",
+      "line": 13,
+      "claim": "The sentence that tells the implementer which shape to copy for the 404/403 split names a symbol that does not exist. HolidaysService has no remove; remove is the controller's handler, and the service method is deleteHoliday. This is the sentence R1's repair makes load-bearing, so the wrong name outlives that repair.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n '^  async ' apps/api/src/holidays/holidays.service.ts lists listHolidays (:82), createHoliday (:132), updateHoliday (:163), deleteHoliday (:197) — no remove. apps/api/src/holidays/holidays.controller.ts:60 is 'async remove(', the @Delete('holidays/:holidayId') handler, which delegates to this.holidays.deleteHoliday. The contracts sentence at :13-15 reads 'which is the shape HolidaysService.remove already uses for DELETE /holidays/{id}'.",
+        "source": "apps/api/src/holidays/holidays.service.ts:197"
+      },
+      "suggestedFix": "Name HolidaysService.deleteHoliday."
+    },
+    {
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "S-44",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "TIME_OFF_CALENDAR_MESSAGES.scopeInvalid",
+      "line": 101,
+      "claim": "Two rules would survive being implemented backwards. (a) scopeInvalid is declared by the Routes table, the Error Messages table and Validation Rule 5, but no functional requirement states what an unknown scope does and no case exercises it — every other message in the table has one. (b) REQ-01-030 has two halves, 'shade the whole day column' and 'name the holiday in its column header'; TC-01-E2E-04 asserts only the marker's presence, so a column header that names nothing passes.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Contracts :101 ('| TIME_OFF_CALENDAR_MESSAGES.scopeInvalid | ... | Choose All, Teams, or People. | yes |'), :10 (the Routes cell) and :158 (Validation Rule 5, server-only). No REQ in specs/time-off/01-vacation-calendar.md:84-332 states the rule, and no case in the cases member names scopeInvalid — against rangeRequired, rangeInverted and rangeTooWide (TC-01-UNIT-02, TC-01-INT-16), teamsRequired (TC-01-INT-06), peopleRequired (TC-01-INT-08) and tooManyMembers (TC-01-INT-17), which all have one. For (b): REQ-01-030 at :272-275 against TC-01-E2E-04's expected result and selectors, cases :393-397.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:101"
+      },
+      "suggestedFix": "A requirement for the unknown scope, and a case; and one clause in TC-01-E2E-04 asserting the header carries the holiday's name."
+    },
+    {
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "S-46",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Edge Cases",
+      "line": 249,
+      "claim": "Eight of the twenty edge cases have no case and no line saying they have none and why: 2 (a vacation covering the whole window, both edge flags true), 3 (a vacation entirely outside the window), 5 (scope=teams naming only archived projects), 9 (two holidays on one date, one global and one PL), 13 (a holiday deleted between two fetches), 15 (a window crossing a year boundary), 16 (two adjacent bands), 17 (two overlapping requests drawn stacked). Edge case 2 is the one worth a second look on its own: read as 'extends beyond the window in both directions' it agrees with REQ-01-022, and read as 'spans exactly the window' it contradicts it, since neither edge then falls outside.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Contracts :254, :255, :257, :261, :265, :267, :268, :269 carry no case reference, and no case in the cases member reaches their state: TC-01-INT-10 covers edge 1 only (one edge flag true, one false); TC-01-INT-12 seeds three holidays on distinct dates, not two on one; TC-01-INT-09's four requests are all inside the window. The twelve that are covered mostly say so in their own text — edges 4, 7, 11, 12, 18, 19 name their case or requirement inline.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:249"
+      },
+      "suggestedFix": "Name the case for each, or one line per row saying it has none and why. Several are genuinely not worth a case and saying so is the cheaper half."
+    },
+    {
+      "id": "N3",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "S-45",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Screens — /org/{orgId}/settings/holidays",
+      "line": 233,
+      "claim": "The organization country control's hint is quoted verbatim as copy the screen must render, and no Error Messages row names its export. It is the one string on the new control that explains what the field does, and without a row it is invented in the screen — which is the drift the same table's own note two sections earlier exists to prevent.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Contracts :232-233 — 'a Select labelled Organization country, with the hint \"Members without a country of their own get this country's holidays.\"'. The Error Messages table at :96-108 carries the screen copy that does have exports — TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle and .emptyStateBody, both with '—' in the Route column — so the table is already the home for non-route copy, and this string is absent from it.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:233"
+      },
+      "suggestedFix": "One row, naming its export and the screen that shows it."
+    },
+    {
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "S-57",
+      "rule": "spec/divergence",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-026",
+      "line": 241,
+      "claim": "This spec replaces the member-country rule that organization/03 and reports/01 describe — Account.phoneCountryCode alone — with a three-link chain, at all four call sites that resolve it today, and the consequence is a finance-facing number: a member who resolves to a country for the first time gains that country's paid holiday rows in Amounts Owed. The spec records this properly and nothing is missing; it is raised only so a person confirms the change was meant, which is all this criterion is for. The newest spec governs.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-01-026 at :241-250, 'This replaces the Account.phoneCountryCode-only rule everywhere it is used today — the holidays scope=mine read and both reports — so that one question has one answer.' Recorded in the Summary (:50-54), in specs/time-off/README.md:31-34 ('Spec 01 here supersedes that spec's member-country rule (its §14-15, Account.phoneCountryCode alone)') and measured in that README's Blast Radius at :111-117: in the probe's fixture the PL day produced one holiday row (320.00) and the global day five (1280.00), and setting an organization country moves the first shape to the second. Neither older document is edited or marked, which is the rule.",
+        "source": "specs/time-off/README.md:111"
+      },
+      "suggestedFix": "None. Confirm the payable is meant to move, and that admin-gated and inert-until-set is the right guard on it."
+    },
+    {
+      "id": "N5",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "S-56",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-033",
+      "line": 292,
+      "claim": "The organization-country write says nothing about two admins setting or clearing it at once — neither a lock nor the line saying none is needed. Kept from shard 1 and worth little: the write is a single column with no read-modify-write, so last-write-wins is almost certainly right and the missing artefact is the sentence, not the mechanism. The register marks this criterion note-only.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-01-033 (:292-295) and REQ-01-034 (:297-300) state the write and the clear; neither they nor the contracts' PUT section (:86-92) mention a concurrent writer. The bundle does answer the read side — Edge case 12 (contracts :264) and Edge case 19 (:271) both turn on the chain being evaluated on read.",
+        "source": "specs/time-off/01-vacation-calendar.md:292"
+      },
+      "suggestedFix": "One line: two admins racing is last-write-wins and no lock is added."
+    },
+    {
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "S-30",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "Known Gaps",
+      "line": 373,
+      "claim": "The first Known Gaps row attributes a design to organization/03 that organization/03 does not contain: that spec defers holiday-aware working days and names no mechanism, while this row says it 'already names' resolving the holiday set at submit time and storing which holidays the request counted. Demoted from shard 1's blocker: S-30 is cleared, because covering the reference leaves a sentence that still carries what an implementer would need, and no criterion in the register carries 'a claim about another specification that the specification refutes'. Recording it here is how that criterion gets proposed. The same text is in specs/time-off/README.md:164.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n -i 'amendment' specs/organization/03-holidays.md returns exactly two lines: :22, 'Excluding holidays from working-day counts is a separate future amendment to spec 09', and :359, 'Holiday-aware workingDays computation — a separate future amendment to spec 09.' Neither names submit-time resolution nor storing the counted set. Against specs/time-off/01-vacation-calendar.md:373, 'The amendment organization/03 already names: resolve the holiday set at submit time and store which holidays the request counted'.",
+        "source": "specs/organization/03-holidays.md:22"
+      },
+      "suggestedFix": "State the closing plan as this spec's own proposal — 'resolve the holiday set at submit time and store which holidays the request counted' — and drop 'organization/03 already names'."
+    }
+  ]
+}

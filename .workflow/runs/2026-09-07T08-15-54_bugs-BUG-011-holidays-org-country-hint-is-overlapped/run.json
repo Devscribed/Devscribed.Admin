@@ -1,0 +1,154 @@
+{
+  "runId": "2026-09-07T08-15-54_bugs-BUG-011-holidays-org-country-hint-is-overlapped",
+  "spec": "specs/bugs/BUG-011-holidays-org-country-hint-is-overlapped.md",
+  "specSha": "514504a23efe754be5aeed23dd2ab4fae795312c7705fa97e034a25a6a7c1b2b",
+  "task": "bugs-BUG-011-holidays-org-country-hint-is-overlapped",
+  "branch": "fix/holidays-org-country-hint",
+  "baseRef": "5a39442732496de355ff9961825e25ab4b60b2e7",
+  "headAtInit": "5a39442732496de355ff9961825e25ab4b60b2e7",
+  "status": "ready",
+  "track": "bug",
+  "shapes": {
+    "implement": "single",
+    "static_gate": "script",
+    "review": "solo-open",
+    "qa": "targeted"
+  },
+  "unrefined": null,
+  "createdAt": "2026-09-07T08:15:54.962Z",
+  "updatedAt": "2026-09-07T08:23:28.320Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:15:55.141Z",
+      "lastVerdict": "skipped"
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:15:55.236Z",
+      "endedAt": "2026-09-07T08:20:47.567Z",
+      "lastVerdict": "pass"
+    },
+    "static_gate": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:20:47.775Z",
+      "endedAt": "2026-09-07T08:20:48.019Z",
+      "lastVerdict": "pass"
+    },
+    "review": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:20:48.224Z",
+      "endedAt": "2026-09-07T08:21:32.482Z",
+      "lastVerdict": "pass"
+    },
+    "qa": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:21:32.663Z",
+      "endedAt": "2026-09-07T08:23:28.264Z",
+      "lastVerdict": "pass"
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [],
+  "notes": [],
+  "halt": null,
+  "preflight": {
+    "at": "2026-09-07T08:15:55.095Z",
+    "checks": [
+      {
+        "name": "config-valid",
+        "ok": true,
+        "detail": ".claude/ai-workflow.config.json parses and every track resolves"
+      },
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"fix/holidays-org-country-hint\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-available",
+        "ok": true,
+        "detail": "the suite would take 3000/4000"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "31 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260825130709_hiring_vacancies_candidates_applications",
+      "20260826094500_application_cv_size",
+      "20260826121829_add_invitations_and_job_title",
+      "20260826150000_hiring_categories",
+      "20260826170000_hiring_criteria",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_manage_booking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260828170000_application_cv",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_candidate_soft_delete",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants",
+      "20260904120000_time_off_01_vacation_calendar"
+    ]
+  }
+}

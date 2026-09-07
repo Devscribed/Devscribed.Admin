@@ -43,6 +43,9 @@ export class InvitationsController {
       organizationId: result.organizationId,
       securityStamp: result.securityStamp,
     });
-    return { accountId: result.accountId, redirectTo: '/members' };
+    // The destination is the service's, not this route's: a client contact lands on the
+    // requests screen (REQ-03-015) and a member of staff on the members one, and only
+    // the service knows which principal the token just created.
+    return { accountId: result.accountId, redirectTo: result.redirectTo };
   }
 }
