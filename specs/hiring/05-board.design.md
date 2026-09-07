@@ -291,12 +291,18 @@ until they break:
 >
 > Keyboard drag is untouched at every width and under every pointer — it is reached by `Space` on a `role="button"` card and lives in the caller, not behind the `draggable` attribute.
 
-The first row is about the viewport, but the columns live inside the shell: with the system's 290px
-sidebar and `AppShell`'s own 25px padding, five columns at their 220px minimum need roughly
-**1510px of viewport** before they all fit. Between 1200px and that, the group still scrolls. This
-is deliberate rather than a breakpoint to add — the invariant that matters is the one the middle row
-states, and it holds at every width: the group scrolls inside its own container and the page body
-never does.
+The first row is about the viewport, but the columns live inside the shell, and every pixel between
+the two is accounted for. Five columns at their 220px minimum with four `--space-5` gaps need
+**1148px of well**. The shell spends **291** to the left of that well — the 290px
+`--layout-sidebar-width` rail and the 1px `--border-subtle` hairline `.ds-app-shell-nav` draws
+beside it (`base.css:121`) — and `--space-9` on each side of it, so the group needs
+**1489px of viewport** before it stops scrolling: `1489 − 291 − 25 − 25 = 1148`. Measured, not
+derived: at 1488 the scroller reports `clientWidth 1147` against a `scrollWidth` of 1148 and
+scrolls; at 1489 the two are both 1148 and it does not. Between 1200px and that, the group still
+scrolls — the rail arrives at 1200 and takes its 291 back, so the well is *narrower* at 1400 than
+it is at 1199. This is deliberate rather than a breakpoint to add: the invariant that matters is
+the one the middle row states, and it holds at every width — the group scrolls inside its own
+container and the page body never does.
 
 **The columns have no `max-height` any more.** They used to carry
 `100vh - var(--layout-navbar-height-desktop) - 2 * var(--space-9) - 120px`, with the mobile navbar
@@ -312,13 +318,37 @@ itself. The one thing to keep in mind is that the group's horizontal scroller mu
 `overflow-y: hidden` explicitly: `overflow-x: auto` alone computes the other axis to `auto` too,
 and the columns already scroll themselves.
 
-Below 768px, drag-and-drop is deliberately not attempted: a touch drag across a horizontally
-scrolling container is unreliable, and the card's own status control does the same job.
+> ~~Below 768px, drag-and-drop is deliberately not attempted: a touch drag across a horizontally
+> scrolling container is unreliable, and the card's own status control does the same job.~~
+>
+> **Overruled by [design-system 01 §08.40–43](../design-system/01-responsive.md).** The conclusion
+> was right and the test was wrong: what cannot drag is a **thumb**, not a narrow window.
+> `BoardCard` drags with the native HTML5 `draggable` attribute, which does nothing on a touch
+> screen at any width and everything on a mouse at any width, so the guard belongs on the pointer.
+> The width test was wrong in both directions — a touch tablet at 900px was handed a drag that
+> cannot work, and a mouse at 700px was refused one that would. The second half of the sentence
+> survives intact: the card's own status control is still the route that works with any pointer at
+> any size, and it is what a coarse pointer uses.
 
-**The narrow column keeps its head.** It duplicates the chosen tab, which looks redundant and is
-not: the tab strip is the control that *chooses*, the head is the column's own identity, and it
-carries the count in the position it holds at every other width. Dropping it would leave a scrolled
-board showing a list of names with nothing saying which column they are in.
+> ~~**The narrow column keeps its head.** It duplicates the chosen tab, which looks redundant and is
+> not: the tab strip is the control that *chooses*, the head is the column's own identity, and it
+> carries the count in the position it holds at every other width. Dropping it would leave a scrolled
+> board showing a list of names with nothing saying which column they are in.~~
+>
+> **Struck by [§The column](#the-column)'s `Head, narrow` row**, which reversed this the following
+> day and is what ships. The two statements stood together in this document for a week; the
+> decision is recorded here rather than left to whoever reads the two of them next.
+>
+> The reason above describes a state this board cannot reach. **The strip is not in a scrolling
+> box.** The screen is a flex column of definite height, the tab strip is a sibling *above*
+> `.board-single`, and the only thing that scrolls is the column's own body (`overflow-y: auto`).
+> Measured at 360 with eight cards: the page does not scroll vertically at all
+> (`scrollHeight − clientHeight = 0`), and the strip sits at `top: 293` both before and after the
+> body is scrolled to its end, with the chosen tab reading `Scheduled 8`. There is no scroll
+> position at which a reader sees the cards and not the label — so the head under it would be the
+> same two facts twice, 8px apart, and the count is not lost either way: `BoardColumn` puts it in
+> the region's own `aria-label` (`"Scheduled, 8 cards"`), which is where a screen reader needs it
+> and where the visible count never was.
 
 ## Accessibility
 

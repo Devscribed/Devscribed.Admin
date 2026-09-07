@@ -288,7 +288,7 @@ Errors:
 - Drag is pointer and keyboard operable: a card can be picked up with `Space`, moved with arrow
   keys, and dropped with `Space`, with the current target announced.
 - Required `data-testid` attributes:
-  - `board`, `board-timezone`
+  - `board`, `board-timezone`, `board-scroll`
   - `board-column-{status}`, `board-column-count-{status}`, `board-column-empty-{status}`
   - `board-card-{applicationId}`, `board-card-name-{applicationId}`,
     `board-card-when-{applicationId}`,
@@ -449,3 +449,23 @@ Errors:
   1. The pick-up, the current target, and the drop are each announced.
   2. The card lands in the target column and the change persists.
 - **Selectors:** `board-card-{applicationId}`, `board-column-maybe`.
+
+### TC-H05-E2E-05: The column group scrolls inside its own container, and the page never does
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; a board with a card in `Scheduled`.
+- **Steps:**
+  1. At 900, read the group container's `scrollWidth` against its `clientWidth`, and the
+     document's against its own.
+  2. Scroll the container to its end and read where the fifth column lands.
+  3. Repeat both at 1400.
+- **Expected Result:**
+  1. At both widths the container scrolls horizontally — five 220px columns and four 12px gaps
+     need 1148px of well, and neither width supplies it — and the page body does not.
+  2. The container's computed `overflow-y` is `hidden` at both. `overflow-x: auto` alone would
+     compute the other axis to `auto` as well, and the columns already scroll themselves.
+  3. At scroll end the fifth column is whole inside the container at both widths — the group
+     scrolls to its end rather than being clipped at it.
+- **Why E2E:** the assertion is which box owns a scrollbar, which only a laid-out page has. The
+  two widths are the band the design's middle row is about, and 1400 is the one that would be
+  missed by a test at 900 alone: the rail appears at 1200 and takes 291px back.
+- **Selectors:** `board`, `board-scroll`, `board-column-offer`.
