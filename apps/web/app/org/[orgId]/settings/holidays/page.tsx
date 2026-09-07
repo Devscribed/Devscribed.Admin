@@ -38,6 +38,7 @@ import type {
   HolidaysResponse,
   HolidaySummaryResponse,
   SourcingBlock,
+  SyncResponse,
 } from './types';
 
 /**
@@ -171,6 +172,9 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryFailed, setSummaryFailed] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  /* The year whose sync came back with a country still unsourced (REQ-02-009). Held as a
+     year rather than a flag so a sentence about 2026 cannot be read under the 2027 tab. */
+  const [syncLeftUnsourced, setSyncLeftUnsourced] = useState<number | null>(null);
   const [includeOrgCountry, setIncludeOrgCountry] = useState(true);
   const [savingSetting, setSavingSetting] = useState(false);
   /* REQ-02-012 issues ONE sync per year. A country the provider will never cover reads
@@ -355,6 +359,12 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
           return;
         }
+        const result = (await response.json()) as SyncResponse;
+        if (options.signal?.aborted) return;
+        // A country the provider could not answer for comes back `unsourced` on a 200.
+        setSyncLeftUnsourced(
+          result.countries.some((entry) => entry.state === 'unsourced') ? result.year : null,
+        );
         await Promise.all([load(options.signal), loadSummary(options.signal)]);
       } catch (err) {
         if ((err as Error)?.name === 'AbortError') return;
@@ -668,6 +678,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
             includeOrgCountry={includeOrgCountry}
             savingSetting={savingSetting}
             syncing={syncing}
+            failedSome={!syncing && syncLeftUnsourced === year}
             onToggleIncludeOrgCountry={(next) => void handleToggleIncludeOrgCountry(next)}
             onRefresh={() => void runSync({ refresh: true })}
           />

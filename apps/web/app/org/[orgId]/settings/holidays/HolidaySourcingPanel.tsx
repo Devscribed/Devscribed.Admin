@@ -20,6 +20,7 @@ export function HolidaySourcingPanel({
   includeOrgCountry,
   savingSetting,
   syncing,
+  failedSome,
   onToggleIncludeOrgCountry,
   onRefresh,
 }: {
@@ -27,6 +28,8 @@ export function HolidaySourcingPanel({
   includeOrgCountry: boolean;
   savingSetting: boolean;
   syncing: boolean;
+  /** A sync answered `200` and left at least one country unsourced (REQ-02-009). */
+  failedSome: boolean;
   onToggleIncludeOrgCountry: (next: boolean) => void;
   onRefresh: () => void;
 }) {
@@ -79,6 +82,14 @@ export function HolidaySourcingPanel({
               whole screen. This waits beside a line of text. */}
           <Preloader size={8} margin={5} />
           <span>{HOLIDAY_SOURCING_MESSAGES.syncing}</span>
+        </div>
+      )}
+
+      {/* The sync came back and some country is still unsourced. The banner above the
+          summary names which ones; this says that the run itself was partial. */}
+      {failedSome && !syncing && (
+        <div style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
+          {HOLIDAY_SOURCING_MESSAGES.syncFailedSome}
         </div>
       )}
     </div>
