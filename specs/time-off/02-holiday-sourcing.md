@@ -66,8 +66,7 @@ holiday country of every active membership — `Membership.countryCode` falling 
 WHERE the include-organization-country setting is on, THE SYSTEM SHALL add
 `Organization.countryCode` to the sourced country set even when no member resolves to it.
 
-**Decided:** it defaults to **on** — an organization states a country because its holidays are
-paid.
+**Decided:** defaults to **on** — a stated country is one whose holidays are paid.
 
 ### Importing
 
@@ -82,14 +81,17 @@ WHEN a provider call answers, THE SYSTEM SHALL write an import record naming the
 moment, and **how many entries the provider offered** for that country and year once REQ-02-005
 has discarded the regional ones.
 
-**Decided:** what the provider *had*, not what this import *wrote* — the two diverge on every
-refresh of a country already stored. The reasoning is in the area README.
+**Decided:** what the provider *had*, not what this import *wrote*; they diverge on every refresh of a country already stored. Reasoning in the area README.
 
 #### REQ-02-004 — what an imported holiday becomes
 
 WHEN an import writes a holiday, THE SYSTEM SHALL create a `Holiday` row carrying the provider's
 English name, its date, the country's alpha-2 code, `paidHours` of `8.00`, `source` of
-`imported`, and the provider's stable key for that holiday.
+`imported`, the provider's stable key, and `createdByAccountId` of the account whose sync wrote
+it.
+
+**Decided:** attributed to whoever triggered the sync — `createdByAccountId` is `NOT NULL`
+behind a foreign key and the caller is the only account the import knows.
 
 #### REQ-02-005 — only nationwide public holidays
 
@@ -132,7 +134,7 @@ report that country as unsourced.
 IF the provider offers no nationwide entry for a country and year, THEN THE SYSTEM SHALL write
 an import record for it carrying a count of zero.
 
-**Decided:** recorded rather than retried, so the provider is not re-asked forever.
+**Decided:** recorded, not retried — the provider is not re-asked forever.
 
 #### REQ-02-023 — an empty country is reported as covered
 

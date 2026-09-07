@@ -111,7 +111,7 @@ warning exist for. No file was written and none needed deleting.
   entries, 10 of them `global: false`. Sync the current year as an admin.
 - **Expected Result:** `200`. The `DE` row reports `written: 10`, `discarded: 10`, `skipped: 0`.
   Ten `Holiday` rows exist, each with `source: "imported"`, `paidHours` of `8.00`, `countryCode`
-  of `DE`, an `externalKey` of `nager:DE:{date}` and a non-null `importedAt`. No row exists for
+  of `DE`, an `externalKey` of `{the driver's own name}:DE:{date}` — `fake:DE:{date}` under the double this case runs against, never `nager`, which is the deployed driver's name — a non-null `importedAt`, and `createdByAccountId` of the admin who synced. No row exists for
   any of the ten regional dates. One `HolidayImport` row exists with `holidayCount: 10`.
 
 ### TC-02-INT-02

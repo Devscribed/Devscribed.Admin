@@ -48,7 +48,7 @@ country, so no row of this table names one.
 ```json
 {
   "holidays": [
-    { "id": "…", "name": "Independence Day", "date": "2026-11-11", "paidHours": "8.00", "countryCode": "PL", "source": "imported" }
+    { "id": "…", "name": "Independence Day", "date": "2026-11-11", "paidHours": 8, "countryCode": "PL", "source": "imported" }
   ],
   "sourcing": {
     "year": 2026,
@@ -60,6 +60,11 @@ country, so no row of this table names one.
   }
 }
 ```
+
+`paidHours` here is a JSON **number** — the type `HolidayRowDto` declares in
+`apps/api/src/holidays/holidays.service.ts` and the one `HolidayRow` parses in the holidays
+screen's `types.ts`. It is not the two-decimal string the *summary* route sends; that route is
+new and follows the reports' money shape. No existing field of the list route changes.
 
 `state` is one of `sourced`, `empty`, `unsourced`. `sourcing.countries` is the sourced country
 set of REQ-02-001 and REQ-02-002 — a country with no import record appears here as `unsourced`,
@@ -139,7 +144,7 @@ Both bodies: `{ "includeOrgCountry": true }`. `PUT` accepts that one field and n
 | `HOLIDAY_SOURCING_MESSAGES.syncing` | — | Fetching public holidays… | yes |
 | `HOLIDAY_SOURCING_MESSAGES.summaryUnavailable` | — | The day and cost totals could not be loaded. | yes |
 | `HOLIDAY_MESSAGES.deleteForbidden` | `DELETE /api/organizations/{orgId}/holidays/{holidayId}` | You don't have permission to delete holidays. | no |
-| `HOLIDAY_MESSAGES.toastServerError` | every route above | (shipped, unchanged) | no |
+| `HOLIDAY_MESSAGES.toastServerError` | every route above | Something went wrong. Please try again. | no |
 
 The four `—` rows are screen text, emitted by no route. They are tabulated here because a screen
 that invents a sentence is a screen whose wording nothing governs — the rule
@@ -400,7 +405,7 @@ covered by REQ-02-006, which skips a date that already carries a row whatever pu
 | Nationwide vs regional | Not modelled; every stored holiday applies to its whole country | `global: boolean` and `counties: string[] \| null` | The driver, keeping `global === true` only | REQ-02-005; the `discarded` count is the observable |
 | Holiday type | Not modelled | `types: string[]` | The driver, requiring `types` to contain `Public` | The `discarded` count |
 | Paid hours | `Decimal(4,2)`, `8.00` for an import | Not supplied | Defaulted in the driver | An admin's edit, which REQ-02-006 then protects |
-| Identity | `externalKey`, `{provider}:{countryCode}:{date}` | No id of any kind is supplied | Composed in the driver | The unique index on `(organizationId, date, countryCode)` |
+| Identity | `externalKey`, `{provider}:{countryCode}:{date}`, where `{provider}` is the name of the driver that answered — `nager` in a deployed environment, `fake` under the local double | No id of any kind is supplied | Composed in the driver | The unique index on `(organizationId, date, countryCode)` |
 
 ### What the double must reproduce
 
