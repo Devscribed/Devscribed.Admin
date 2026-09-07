@@ -6,7 +6,7 @@
   "branch": "spec/holiday-sourcing",
   "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
   "headAtInit": "384d8c604e528f5edbe852b8999816a9ca0d8b05",
-  "status": "implement",
+  "status": "static_gate",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T10:33:36.868Z",
-  "updatedAt": "2026-09-07T11:50:20.111Z",
+  "updatedAt": "2026-09-07T11:55:22.972Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,10 +34,11 @@
       "endedAt": "2026-09-07T11:50:20.061Z"
     },
     "implement": {
-      "status": "pending",
-      "attempts": 2,
-      "startedAt": "2026-09-07T11:33:05.110Z",
-      "lastVerdict": "pass"
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-07T11:50:20.263Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-07T11:55:22.919Z"
     },
     "static_gate": {
       "status": "pending",
