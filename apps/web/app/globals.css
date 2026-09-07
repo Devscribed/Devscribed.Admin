@@ -885,10 +885,75 @@
   --day-col-min: 32px;
 }
 
+/* PATCH-025 — the window's controls at the end of the filter row. `margin-left: auto` in a
+   wrapping flex row puts them against the right edge while there is room and lets them wrap
+   onto their own line when there is not. */
+.time-off-calendar-nav-slot {
+  margin-left: auto;
+}
+
 .time-off-calendar-nav {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+/* PATCH-025 — the grid while the next window is in flight. It stays, dimmed, rather than
+   being replaced by a placeholder of another width: three layouts in a blink is what one
+   press of an arrow used to draw. */
+.time-off-calendar-scroll.is-busy {
+  opacity: 0.55;
+}
+
+.time-off-calendar-scroll {
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+/* PATCH-025 — the new window arrives from the side the reader travelled. The transform is on
+   the grid rather than on the scroller around it: the scroller clips it, so the slide can
+   never reach the page and give the body a scrollbar for a frame.
+   @literal 16px — far enough to read as movement at this duration, short enough that the
+   columns never leave the frame they are sliding into.
+
+   The duration is `--duration-fast`, the system's only one. A slide wants a step longer than
+   a border's colour change, and inventing `--duration-slow` here would name a token on one
+   screen; it is a real gap and belongs in the design system, not in this file. */
+@keyframes time-off-calendar-enter-next {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes time-off-calendar-enter-prev {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes time-off-calendar-enter-still {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.time-off-calendar-enter-next {
+  animation: time-off-calendar-enter-next var(--duration-fast) var(--ease-standard);
+}
+
+.time-off-calendar-enter-prev {
+  animation: time-off-calendar-enter-prev var(--duration-fast) var(--ease-standard);
+}
+
+.time-off-calendar-enter-still {
+  animation: time-off-calendar-enter-still var(--duration-fast) var(--ease-standard);
+}
+
+/* Movement is a preference, and this is the whole of what this screen animates. */
+@media (prefers-reduced-motion: reduce) {
+  .time-off-calendar-enter-next,
+  .time-off-calendar-enter-prev,
+  .time-off-calendar-enter-still,
+  .time-off-calendar-scroll {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* PATCH-024 — the window's name, between the two arrows that move it. Its width is

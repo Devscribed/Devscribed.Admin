@@ -179,6 +179,9 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
 
   const [data, setData] = useState<TimeOffCalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  /* PATCH-025 — -1, 0 or 1: which side the window on screen was reached from. Only the
+     animation reads it. */
+  const [travel, setTravel] = useState<-1 | 0 | 1>(0);
   const [error, setError] = useState<string | null>(null);
 
   const [projects, setProjects] = useState<{ id: string; label: string }[]>([]);
@@ -354,12 +357,18 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
    * which is the one arithmetic an anchor cannot express.
    */
   const step = (direction: -1 | 1): void => {
+    // PATCH-025 — which way the new window arrives from. Held for the animation and for
+    // nothing else, so it never decides what is fetched.
+    setTravel(direction);
     if (windowChoice === 'range') setCustomRange(stepTimeOffCalendarRange(customRange, direction));
     else setAnchor(stepTimeOffCalendarAnchor(windowChoice, anchor, direction));
   };
 
   /** REQ-03-012 — **Today** keeps a custom range's length and starts it on the caller's today. */
   const goToToday = (): void => {
+    // A jump, not a step: it fades in place rather than sliding from a side it did not
+    // come from.
+    setTravel(0);
     if (windowChoice === 'range') setCustomRange(timeOffCalendarRangeToday(customRange, today()));
     else setAnchor(today());
   };
@@ -381,40 +390,6 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
       <PageHeader
         title="Time off calendar"
         subtitle="Who is away, and when."
-        action={
-          /* PATCH-024 — the window's name sits BETWEEN the arrows that move it, and Today
-              stands apart as the one control here that is not a step. It used to read
-              `‹ Today › September 2026`, which puts the label the arrows change on the far
-              side of them and the button that jumps somewhere else in the middle of the
-              pair. The label keeps its reserved width, so stepping a month still moves
-              nothing but the text. */
-          <div className="time-off-calendar-nav">
-            <IconButton
-              label="Previous window"
-              onClick={() => step(-1)}
-              data-testid="calendar-prev"
-            >
-              <ChevronLeftIcon />
-            </IconButton>
-            <span className="time-off-calendar-range" data-testid="calendar-range-label">
-              {rangeLabel(windowChoice, range.startDate, range.endDate)}
-            </span>
-            <IconButton
-              label="Next window"
-              onClick={() => step(1)}
-              data-testid="calendar-next"
-            >
-              <ChevronRightIcon />
-            </IconButton>
-            <Button
-              className="time-off-calendar-today"
-              onClick={goToToday}
-              data-testid="calendar-today"
-            >
-              Today
-            </Button>
-          </div>
-        }
       />
 
       <ReportControls
@@ -474,6 +449,45 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
             onChange={([from, to]) => setCustomRange({ startDate: from, endDate: to })}
           />
         )}
+
+        <div className="time-off-calendar-nav-slot">
+          {/* PATCH-025 — the window's controls sit in the filter row, at its end, because
+            they are controls of the same kind: everything that decides what the grid shows is
+            now on one line. They stood in the page header, a row above and a different size.
+
+            PATCH-024 — the window's name sits BETWEEN the arrows that move it, and Today
+            stands apart as the one control here that is not a step. It used to read
+            `‹ Today › September 2026`, which puts the label the arrows change on the far
+            side of them and the button that jumps somewhere else in the middle of the
+            pair. The label keeps its reserved width, so stepping a month still moves
+            nothing but the text. */}
+        <div className="time-off-calendar-nav">
+          <IconButton
+            label="Previous window"
+            onClick={() => step(-1)}
+            data-testid="calendar-prev"
+          >
+            <ChevronLeftIcon />
+          </IconButton>
+          <span className="time-off-calendar-range" data-testid="calendar-range-label">
+            {rangeLabel(windowChoice, range.startDate, range.endDate)}
+          </span>
+          <IconButton
+            label="Next window"
+            onClick={() => step(1)}
+            data-testid="calendar-next"
+          >
+            <ChevronRightIcon />
+          </IconButton>
+          <Button
+            className="time-off-calendar-today"
+            onClick={goToToday}
+            data-testid="calendar-today"
+          >
+            Today
+          </Button>
+        </div>
+        </div>
       </ReportControls>
 
       {/* PATCH-022 — what the window costs, for the people the filter left on screen. The
@@ -517,18 +531,35 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         </div>
       )}
 
-      {!isCurrentWindow && (loading || data !== null) ? (
+      {/* PATCH-025 — the window on screen stands until the next one has arrived. Stepping
+          used to replace the grid with the skeleton the moment `isCurrentWindow` went false,
+          so one press of an arrow drew three different layouts in a blink: the month, a
+          fourteen-column placeholder of another width, then the next month. The skeleton
+          belongs to the first load, when there is nothing to keep — the rule PATCH-015 put
+          on the Holidays screen, arrived at here the hard way.
+
+          While the answer is in flight the grid is dimmed and `aria-busy`, and when it lands
+          it is keyed by its own range, so React replaces it and the animation runs: in from
+          the side the reader travelled, or a fade in place for a jump. */}
+      {data === null ? (
         <GridSkeleton />
-      ) : data && isCurrentWindow && !hasRows ? (
+      ) : !hasRows && isCurrentWindow ? (
         <div className="time-off-calendar-empty" data-testid="calendar-empty-state">
           <div className="time-off-calendar-empty-title">
             {TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle}
           </div>
           <div>{TIME_OFF_CALENDAR_MESSAGES.emptyStateBody}</div>
         </div>
-      ) : data && isCurrentWindow ? (
-        <div className="time-off-calendar-scroll">
-          <div className="time-off-calendar-grid" data-testid="calendar-grid">
+      ) : (
+        <div
+          className={`time-off-calendar-scroll${isCurrentWindow ? '' : ' is-busy'}`}
+          aria-busy={!isCurrentWindow || undefined}
+        >
+          <div
+            key={`${data.range.startDate}-${data.range.endDate}`}
+            className={`time-off-calendar-grid time-off-calendar-enter-${travel > 0 ? 'next' : travel < 0 ? 'prev' : 'still'}`}
+            data-testid="calendar-grid"
+          >
             <div className="time-off-calendar-row" style={{ gridTemplateColumns: gridColumns }}>
               <div className="time-off-calendar-who time-off-calendar-corner" style={{ gridColumn: 1 }}>
                 Member
@@ -686,7 +717,7 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
             ))}
           </div>
         </div>
-      ) : null}
+      )}
 
       {/* PATCH-024 — the legend belongs to the grid, so it sits under it. Above, between the
           filters and the figures, it separated the two things that answer the reader's
