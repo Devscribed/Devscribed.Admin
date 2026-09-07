@@ -29,8 +29,17 @@ export class HolidaySourcingController {
     return this.sourcing.sync(req.session!, body);
   }
 
+  /**
+   * PATCH-018 — `projectIds` narrows the summary to the members on those teams, and is
+   * repeatable (`projectIds=a&projectIds=b`) exactly as the calendar's own team filter is.
+   * Absent or empty means every active member, which is what the screen shows unfiltered.
+   */
   @Get('holidays/summary')
-  summary(@Req() req: AuthenticatedRequest, @Query('year') year?: string) {
-    return this.summaries.summary(req.session!, { year });
+  summary(
+    @Req() req: AuthenticatedRequest,
+    @Query('year') year?: string,
+    @Query('projectIds') projectIds?: string | string[],
+  ) {
+    return this.summaries.summary(req.session!, { year, projectIds });
   }
 }

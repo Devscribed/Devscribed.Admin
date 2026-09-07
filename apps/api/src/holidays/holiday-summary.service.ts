@@ -1,5 +1,6 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import {
+  TIME_OFF_CALENDAR_UNASSIGNED,
   can,
   isHolidayApplicableToMember,
   normalizeRole,
@@ -79,7 +80,10 @@ export class HolidaySummaryService {
    * `view-holidays` without `view-amounts-owed`, so REQ-02-017 cannot be observed through
    * a session at all, and the rule has to exist before a role splits the two.
    */
-  async summary(session: SessionPayload, input: { year?: unknown }): Promise<HolidaySummaryView> {
+  async summary(
+    session: SessionPayload,
+    input: { year?: unknown; projectIds?: unknown },
+  ): Promise<HolidaySummaryView> {
     const caller = await this.sourcing.requireCapability(session, 'view-holidays');
     const year = validateSyncYear(input?.year);
     if (!year.valid) {
@@ -88,9 +92,69 @@ export class HolidaySummaryService {
         fields: { year: year.error },
       });
     }
+    // PATCH-018 — the team filter. An id naming no project of this organization narrows
+    // to nobody rather than being refused: the filter is a selector over a list the
+    // screen was given, and a stale id there is not a malformed request.
+    const membershipIds = await this.membershipsOnTeams(
+      caller.organizationId,
+      idList(input?.projectIds),
+    );
     return this.buildSummary(caller.organizationId, year.value, {
       includeAmounts: can(normalizeRole(caller.role), 'view-amounts-owed'),
+      membershipIds,
     });
+  }
+
+  /**
+   * PATCH-018 — the membership ids on a set of teams, or `null` for "no narrowing".
+   *
+   * An EMPTY selection is `null` and not the empty list, which is the same sentinel the
+   * calendar uses for its own team scope and for the same reason: `id: { in: [] }` answers
+   * zero rows, so an untouched filter would empty the screen instead of leaving it whole.
+   *
+   * `Unassigned` is a member on no NON-ARCHIVED project — archiving a project hides it from
+   * the selector without unassigning anybody, so somebody whose only project was archived
+   * has nobody to stand with and belongs in that bucket. A member on two ticked teams is
+   * one id, because the ids are collected into a set.
+   *
+   * The calendar states this same rule over its own query for its `teams` scope. Two copies
+   * of one rule is a thing this repository warns about; the extraction that would leave one
+   * is named in the patch note and is not part of it.
+   */
+  private async membershipsOnTeams(
+    organizationId: string,
+    projectIds: string[],
+  ): Promise<string[] | null> {
+    if (projectIds.length === 0) return null;
+
+    const named = projectIds.filter((id) => id !== TIME_OFF_CALENDAR_UNASSIGNED);
+    const ids = new Set<string>();
+
+    if (named.length > 0) {
+      const assignments = await this.prisma.projectMember.findMany({
+        where: {
+          projectId: { in: named },
+          project: { organizationId },
+          membership: { organizationId, status: 'active' },
+        },
+        select: { membershipId: true },
+      });
+      for (const row of assignments) ids.add(row.membershipId);
+    }
+
+    if (projectIds.includes(TIME_OFF_CALENDAR_UNASSIGNED)) {
+      const unassigned = await this.prisma.membership.findMany({
+        where: {
+          organizationId,
+          status: 'active',
+          projectMemberships: { none: { project: { status: { not: 'archived' } } } },
+        },
+        select: { id: true },
+      });
+      for (const row of unassigned) ids.add(row.id);
+    }
+
+    return [...ids];
   }
 
   /**
@@ -102,14 +166,23 @@ export class HolidaySummaryService {
   async buildSummary(
     organizationId: string,
     year: number,
-    options: { includeAmounts: boolean },
+    options: { includeAmounts: boolean; membershipIds?: string[] | null },
   ): Promise<HolidaySummaryView> {
+    /* PATCH-018 — the roster the whole summary is computed over. `null` is every active
+       member; a list narrows both tables, because `memberCount` and every figure below is
+       counted from this set. The `Days` column is untouched by it: how many paid days a
+       country has is a fact about the holidays, not about who is looking. */
+    const teamMembershipIds = options.membershipIds ?? null;
     const start = new Date(Date.UTC(year, 0, 1));
     const end = new Date(Date.UTC(year + 1, 0, 1));
 
     const [memberships, holidays, sourcedCountries] = await Promise.all([
       this.prisma.membership.findMany({
-        where: { organizationId, status: 'active' },
+        where: {
+          organizationId,
+          status: 'active',
+          ...(teamMembershipIds === null ? {} : { id: { in: teamMembershipIds } }),
+        },
         select: {
           id: true,
           countryCode: true,
@@ -290,6 +363,15 @@ export class HolidaySummaryService {
 
     return { year, countries, members: memberRows, totals };
   }
+}
+
+/** `projectIds=a&projectIds=b`, `projectIds[]=a`, or a single value — one shape out. */
+function idList(input: unknown): string[] {
+  const values = Array.isArray(input) ? input : input === undefined || input === null ? [] : [input];
+  return values
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
 }
 
 /** A currency map as the response's list, ordered so two reads never disagree. */

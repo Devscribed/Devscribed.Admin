@@ -17,6 +17,14 @@ export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
  * list is a fact, not an occasion.
  *
  * `message` and `children` are the same slot. Children win when both are given.
+ *
+ * PATCH-018 — the message used to be pushed down by a 150px top margin, on the reasoning that
+ * it should land where a full-page list's rows would have been. It made the state a different
+ * shape everywhere the empty block is not a whole page: inside a modal, and under a screen that
+ * has already drawn two tables above it, where the sentence ended up against the bottom of the
+ * viewport with nothing near it. The state now centres in the box its caller gives it, with the
+ * same vertical padding a loading block carries — the wait and the emptiness are the same box,
+ * so replacing one with the other moves nothing.
  */
 export function EmptyState({
   message = 'No data to display', children,
@@ -25,8 +33,8 @@ export function EmptyState({
   style, ...rest
 }: EmptyStateProps) {
   return (
-    <div {...rest} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', ...style }}>
-      <div style={{ /* @literal 150px drops the message into the space a list would have filled; 0.8px is this one line's tracking */ marginTop: 150, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-xl)', color: 'var(--text-secondary)', letterSpacing: '0.8px', textAlign: 'center' }}>
+    <div {...rest} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-9) 0', ...style }}>
+      <div style={{ /* @literal 0.8px is this one line's tracking */ fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-xl)', color: 'var(--text-secondary)', letterSpacing: '0.8px', textAlign: 'center' }}>
         {children != null && children !== '' ? children : message}
       </div>
     </div>

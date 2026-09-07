@@ -24,14 +24,10 @@ import type { HolidaySummaryResponse, SummaryCountryRow, SummaryMemberRow } from
  * because a zero is an amount and withholding is not.
  */
 export function HolidaySummary({
-  year,
   summary,
-  loading,
   failed,
 }: {
-  year: number;
   summary: HolidaySummaryResponse | null;
-  loading: boolean;
   failed: boolean;
 }) {
   if (failed) {
@@ -42,10 +38,16 @@ export function HolidaySummary({
     );
   }
 
-  // A summary for another year is not this year's summary: the two reads are separate
-  // requests and the year tab can move between them, so the block waits rather than
-  // labelling last year's figures with this year's heading.
-  if (loading || summary === null || summary.year !== year) {
+  /* PATCH-018 — the block used to wait whenever the summary it held was for another year,
+     which is every moment between a year tab being pressed and its figures arriving. Two
+     tables were replaced by a preloader card a fraction of their height, so pressing a year
+     threw the page's whole length around.
+
+     A summary for another year is still not this year's summary, and the fix for that is
+     not a wait: every heading below is labelled from `summary.year` — the year of the
+     figures in hand — rather than from the year the tab is on. Nothing is ever mislabelled,
+     nothing moves, and the heading changes when the figures do. */
+  if (summary === null) {
     return (
       <div data-testid="holiday-summary" style={{ marginBottom: 'var(--space-6)' }}>
         <Card>
@@ -167,12 +169,12 @@ export function HolidaySummary({
       <Card padded={false} style={{ marginBottom: 'var(--space-5)' }}>
         <div style={{ overflowX: 'auto' }}>
           <table
-            aria-label={`Paid public days by country, ${year}`}
+            aria-label={`Paid public days by country, ${summary.year}`}
             style={{ width: '100%', borderCollapse: 'collapse' }}
           >
             <ReportTableHead columns={countryColumns} />
             <ReportGroupBody<SummaryCountryRow>
-              title={`Paid public days, ${year}`}
+              title={`Paid public days, ${summary.year}`}
               columns={countryColumns}
               rows={summary.countries}
               rowTestId={(row) => `holiday-summary-country-${countryKey(row.countryCode)}`}
@@ -184,7 +186,7 @@ export function HolidaySummary({
       <Card padded={false}>
         <div style={{ overflowX: 'auto' }}>
           <table
-            aria-label={`Paid public days by person, ${year}`}
+            aria-label={`Paid public days by person, ${summary.year}`}
             style={{ width: '100%', borderCollapse: 'collapse' }}
           >
             <ReportTableHead columns={memberColumns} />

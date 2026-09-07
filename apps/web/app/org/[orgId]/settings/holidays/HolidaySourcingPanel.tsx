@@ -4,29 +4,35 @@ import { Button, Preloader } from '@devscribed/ds';
 import { HOLIDAY_SOURCING_MESSAGES } from '@devscribed/validation';
 
 /**
- * Time off spec 02 §Screens — the sourcing panel, at the end of the control row.
+ * Time off spec 02 §Screens — sourcing: the Refresh button and the line that says what a
+ * sync is doing.
  *
- * One control and one status line. Refresh is REQ-02-008's explicit instruction to re-ask
- * the provider for the year on screen; it is not disabled for validation, the only
- * disabling here being the in-flight guard on a request already sent.
+ * Refresh is REQ-02-008's explicit instruction to re-ask the provider for the year on
+ * screen; it is not disabled for validation, the only disabling here being the in-flight
+ * guard on a request already sent.
+ *
+ * PATCH-018 — one horizontal strip, sitting on the year tabs' own line. It was a titled
+ * column below them, which left a band of empty screen between the tabs and the summary
+ * wide enough to read as a mistake. The `Sourcing` heading went with the column: a heading
+ * over a single button names a section that no longer exists.
  *
  * PATCH-012 — the `Include organization country` checkbox stood beside it and is gone with
  * the organization country itself. The set this screen sources is the countries its people
  * are in.
  *
  * The status line carries `syncing` for the whole of a sync **and the re-read that
- * follows it**, so the year tabs and the list stay interactive while it is up and the
- * summary's own wait ends at the same moment this does.
+ * follows it**, so the year tabs and the list stay interactive while it is up.
  */
+
 /**
- * PATCH-016 — the panel's own width, fixed.
+ * PATCH-016 — the status slot's own width, fixed.
  *
- * It was `minWidth: 220` and the panel is at the end of a row with `margin-left: auto`, so
- * a status line wider than 220 grew the box leftwards and carried the Refresh button inside
- * it sideways and back. Wide enough for the longer of the two lines the slot can hold —
- * `syncFailedSome`, at 35 characters — so neither of them can resize it.
+ * The strip is at the end of a row with `margin-left: auto`, so a status line that sizes
+ * itself grows the strip leftwards and carries the Refresh button sideways and back. Wide
+ * enough for the longer of the two lines the slot can hold — `syncFailedSome`, at 35
+ * characters — so neither of them can resize it.
  */
-const PANEL_WIDTH = 300;
+const STATUS_WIDTH = 300;
 
 export function HolidaySourcingPanel({
   year,
@@ -45,43 +51,29 @@ export function HolidaySourcingPanel({
       data-testid="holiday-sourcing-panel"
       style={{
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: 'var(--space-3)',
-        width: PANEL_WIDTH,
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 'var(--space-5)',
       }}
     >
-      <div
-        style={{
-          fontSize: 'var(--font-size-s)',
-          fontWeight: 'var(--font-weight-medium)',
-          color: 'var(--text-primary)',
-        }}
-      >
-        Sourcing
-      </div>
-
-      <Button onClick={onRefresh} disabled={syncing} data-testid="holiday-sourcing-refresh-btn">
-        {`Refresh ${year}`}
-      </Button>
-
       {/* PATCH-009 — one slot, reserved whether or not there is anything in it. Both lines
-          used to render conditionally, so starting a sync grew the panel by a line and the
-          row above — which aligns its children on their bottom edges — moved the picker and
-          the Save button down and back up again. The slot holds the height; only its
-          contents come and go, and `holiday-sourcing-status` is still present exactly while
-          a sync is in flight. */}
+          used to render conditionally, so starting a sync resized the block and moved what
+          stood beside it. The slot holds the box; only its contents come and go, and
+          `holiday-sourcing-status` is still present exactly while a sync is in flight.
+
+          PATCH-016 — a fixed width and a fixed height rather than minimums, and the line
+          does not wrap: a minimum holds only until the content exceeds it, which is the
+          moment the box was supposed to survive. `--line-height-m` is a length, and the
+          token whose stated purpose is exactly this — a box whose height must not move
+          when the text inside it does. `--line-height-base` is a ratio and would not
+          resolve here at all. */}
       <div
         style={{
-          /* `--line-height-m` is a length, and the token whose stated purpose is exactly
-             this: a box whose height must not move when the text inside it does. It clears
-             both the 14px line and the inline preloader's row. `--line-height-base` is a
-             ratio and would not resolve here at all.
-
-             PATCH-016 — a height rather than a minimum, and the line below does not wrap.
-             A minimum holds only until the content exceeds it, which is the moment the box
-             was supposed to survive. */
+          width: STATUS_WIDTH,
           height: 'var(--line-height-m)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
           fontSize: 'var(--font-size-s)',
           color: 'var(--text-secondary)',
           whiteSpace: 'nowrap',
@@ -104,6 +96,10 @@ export function HolidaySourcingPanel({
           <span>{HOLIDAY_SOURCING_MESSAGES.syncFailedSome}</span>
         ) : null}
       </div>
+
+      <Button onClick={onRefresh} disabled={syncing} data-testid="holiday-sourcing-refresh-btn">
+        {`Refresh ${year}`}
+      </Button>
     </div>
   );
 }

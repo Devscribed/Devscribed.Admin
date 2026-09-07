@@ -21,7 +21,15 @@ import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
-import { HOLIDAY_MESSAGES, HOLIDAY_SOURCING_MESSAGES, can, type Role } from '@devscribed/validation';
+import {
+  HOLIDAY_MESSAGES,
+  HOLIDAY_SOURCING_MESSAGES,
+  TIME_OFF_CALENDAR_UNASSIGNED,
+  can,
+  type Role,
+} from '@devscribed/validation';
+import { MultiFilter } from '@/reports/ReportFilters';
+import type { ProjectsResponse } from '../../projects/types';
 import { HolidayModal, type HolidayModalMode } from './HolidayModal';
 import { HolidaySourcingPanel } from './HolidaySourcingPanel';
 import { HolidaySummary } from './HolidaySummary';
@@ -153,7 +161,6 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
      beside it, and the sync in flight. */
   const [sourcing, setSourcing] = useState<SourcingBlock | null>(null);
   const [summary, setSummary] = useState<HolidaySummaryResponse | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryFailed, setSummaryFailed] = useState(false);
   const [syncing, setSyncing] = useState(false);
   /* The year whose sync came back with a country still unsourced (REQ-02-009). Held as a
@@ -165,6 +172,30 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   /* Which sync owns the status line. An abandoned run must not clear a line the run that
      replaced it put up, and a run that was abandoned must not leave one up forever. */
   const syncRun = useRef(0);
+
+  /* PATCH-018 — the team filter, and the catalogue it ticks. Empty is every member, which
+     is the same reading the calendar's own team picker has. */
+  const [teamIds, setTeamIds] = useState<string[]>([]);
+  const [teams, setTeams] = useState<{ id: string; label: string }[]>([]);
+
+  useEffect(() => {
+    if (!authorized) return undefined;
+    let cancelled = false;
+    void (async () => {
+      // The same catalogue the calendar's Teams picker reads: active projects, which is
+      // what a team is in this product.
+      const response = await fetch(`/api/organizations/${orgId}/projects?status=active`, {
+        credentials: 'same-origin',
+      });
+      if (!response.ok || cancelled) return;
+      const body = (await response.json()) as ProjectsResponse;
+      if (cancelled) return;
+      setTeams(body.projects.map((project) => ({ id: project.id, label: project.name })));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authorized, orgId]);
 
   /**
    * PATCH-015 — the list read, and it no longer holds a flag saying it is in flight.
@@ -218,11 +249,14 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   const loadSummary = useCallback(
     async (options: { signal?: AbortSignal } = {}): Promise<void> => {
       const { signal } = options;
-      setSummaryLoading(true);
       setSummaryFailed(false);
+      // PATCH-018 — the team filter rides on this read and on no other: the list of
+      // holidays below belongs to countries, not to teams.
+      const query = new URLSearchParams({ year: String(year) });
+      for (const id of teamIds) query.append('projectIds', id);
       try {
         const response = await fetch(
-          `/api/organizations/${orgId}/holidays/summary?year=${year}`,
+          `/api/organizations/${orgId}/holidays/summary?${query.toString()}`,
           { credentials: 'same-origin', signal },
         );
         if (signal?.aborted) return;
@@ -239,10 +273,8 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         setSummary(null);
         setSummaryFailed(true);
       }
-      if (signal?.aborted) return;
-      setSummaryLoading(false);
     },
-    [orgId, year],
+    [orgId, year, teamIds],
   );
 
   useEffect(() => {
@@ -509,43 +541,59 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         }
       />
 
-      {/* §45 — a tab chooses what is shown, so these are `role="tab"` buttons in a named
-          `tablist` rather than the anchors the previous strip drew. */}
-      <PageTabs
-        tabs={yearTabs(thisYear).map((y) => ({
-          value: String(y),
-          label: String(y),
-          testId: `holidays-year-tab-${y}`,
-        }))}
-        active={String(year)}
-        onChange={(value) => setYear(Number(value))}
-        label="Holiday year"
-        style={{ marginBottom: 'var(--space-5)' }}
-      />
+      {/* PATCH-018 — the year tabs and sourcing share one line. Sourcing was a titled
+          column on a row of its own below them, and with the organization country picker
+          gone from that row it left a band of empty screen between the tabs and the
+          summary. Both act on the year, so both belong on the year's line.
 
-      {/* PATCH-012 — the organization country picker and its Save button stood here. Both
-          are gone with the rule they served: a member with no country of their own is
-          counted for the global holidays alone, so there is no organization country for
-          anybody to inherit and nothing for this control to set. */}
+          §45 — a tab chooses what is shown, so these are `role="tab"` buttons in a named
+          `tablist` rather than the anchors the previous strip drew. */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-end',
-          gap: 'var(--space-3)',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 'var(--space-5)',
           marginBottom: 'var(--space-6)',
           flexWrap: 'wrap',
         }}
       >
-        {/* Time off spec 02 §Screens — sourcing, alone in the row under the year tabs: it
-            is the only control on this screen that acts on the whole year. */}
-        <div style={{ marginLeft: 'auto' }}>
-          <HolidaySourcingPanel
-            year={year}
-            syncing={syncing}
-            failedSome={!syncing && syncLeftUnsourced === year}
-            onRefresh={() => void runSync({ refresh: true })}
-          />
-        </div>
+        <PageTabs
+          tabs={yearTabs(thisYear).map((y) => ({
+            value: String(y),
+            label: String(y),
+            testId: `holidays-year-tab-${y}`,
+          }))}
+          active={String(year)}
+          onChange={(value) => setYear(Number(value))}
+          label="Holiday year"
+          style={{ marginBottom: 0 }}
+        />
+
+        <HolidaySourcingPanel
+          year={year}
+          syncing={syncing}
+          failedSome={!syncing && syncLeftUnsourced === year}
+          onRefresh={() => void runSync({ refresh: true })}
+        />
+      </div>
+
+      {/* PATCH-018 — the team filter, over the summary it narrows. `Teams` here is what
+          `Teams` is on the calendar: the organization's active projects, plus the
+          `Unassigned` bucket, ticked in a `MultiFilter`. An untouched filter is every
+          member, and the list of holidays below is not narrowed by it at all — a holiday
+          belongs to a country, not to a team. */}
+      <div style={{ marginBottom: 'var(--space-5)' }}>
+        <MultiFilter
+          label="Teams"
+          testId="holidays-teams-filter"
+          options={[
+            { id: TIME_OFF_CALENDAR_UNASSIGNED, label: 'Unassigned' },
+            ...teams.map((team) => ({ id: team.id, label: team.label })),
+          ]}
+          selected={teamIds}
+          onChange={setTeamIds}
+        />
       </div>
 
       {/* REQ-02-009/ §UI Description — an InfoBanner, not the error banner: the screen is
@@ -571,16 +619,11 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           asked, and the list is the evidence for it. It counts every country, and the
           filter below does not reach it — the filter chooses which of the evidence to
           read, not what the year adds up to. */}
-      <HolidaySummary
-        year={year}
-        summary={summary}
-        /* PATCH-015 — the wait is drawn when there is nothing to draw. Figures already on
-           screen are last moment's answer to the same question and they stand until the
-           new ones arrive; a year change still waits, because the block below refuses to
-           label one year's figures with another year's heading. */
-        loading={summaryLoading && summary === null}
-        failed={summaryFailed}
-      />
+      {/* PATCH-015 — the wait is drawn when there is nothing to draw: figures already on
+          screen stand until the new ones arrive. PATCH-018 — including across a year
+          change, which the block now survives by labelling its headings from the year of
+          the figures it holds. */}
+      <HolidaySummary summary={summary} failed={summaryFailed} />
 
       {/* PATCH-014 — the country filter, directly above the table it filters. It stood in
           the control row at the top of the screen, beside a picker that governed the whole
@@ -625,9 +668,15 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           </InfoBanner>
         </div>
       ) : isEmpty && isCountryFiltered ? (
-        <EmptyState data-testid="holidays-empty-state">
-          {HOLIDAY_MESSAGES.emptyStateCountry(holidayCountryLabel(country), year)}
-        </EmptyState>
+        /* PATCH-018 — in the card the table would have filled, so the sentence explaining
+           why there are no rows sits where the rows would have been. Bare, it was a line of
+           text alone on the page, pushed down the screen by the empty state's own offset
+           and landing against the bottom of the viewport. */
+        <Card>
+          <EmptyState data-testid="holidays-empty-state">
+            {HOLIDAY_MESSAGES.emptyStateCountry(holidayCountryLabel(country), year)}
+          </EmptyState>
+        </Card>
       ) : isEmpty ? (
         /* §65 — the way out of an empty state belongs *in* it, so the CTA is a child rather
            than a sibling. The mock's emoji is a line-drawn glyph: the design system forbids
