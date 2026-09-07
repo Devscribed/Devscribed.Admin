@@ -16,7 +16,8 @@ import type { ProviderHolidays } from '../src/holidays/provider/holiday-provider
  *
  * It extends the shipped local driver rather than restating it: the shapes the double has
  * to reproduce are the ones §External Contracts measured, and a second copy of Germany's
- * twenty entries would be a second fixture the moment one of them changed.
+ * twenty entries would be a second fixture the moment one of them changed. It therefore
+ * reports that driver's name, `fake`, which is what every row written under it records.
  */
 export class StubHolidayProvider extends FakeHolidayProvider {
   /** How many times each country was asked, keyed by uppercase code. */

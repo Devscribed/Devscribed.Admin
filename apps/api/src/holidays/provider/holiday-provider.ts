@@ -23,11 +23,10 @@ export interface ProviderHolidays {
 
 export abstract class HolidayProvider {
   /**
-   * The **service** being spoken to, not the driver speaking to it. It is `nager` on
-   * both drivers: the local driver is a double OF Nager.Date, and `HOLIDAY_PROVIDER`
-   * selects which driver answers rather than which provider is being doubled. It is what
+   * The **name of the driver that answered** — `nager` in a deployed environment, `fake`
+   * under the local double (§Boundary values, Identity). It is what
    * `HolidayImport.provider` records and what `externalKey` is composed from, so a row
-   * written under the double is the row the real driver would have written.
+   * says which driver produced it rather than which service it was meant to come from.
    */
   abstract readonly name: string;
 

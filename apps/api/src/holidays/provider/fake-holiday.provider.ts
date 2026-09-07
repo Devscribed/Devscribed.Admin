@@ -3,9 +3,13 @@ import { acceptProviderEntries, type RawProviderEntry } from '@devscribed/valida
 import { HolidayProvider, type ProviderHolidays } from './holiday-provider';
 
 /**
- * The local driver — a double **of Nager.Date**, which is why it reports the same
- * `name`. It answers from memory, reaches no network, and is what a fresh clone and the
- * E2E suite run against.
+ * The local driver — a double of Nager.Date that answers from memory, reaches no network,
+ * and is what a fresh clone and the E2E suite run against.
+ *
+ * It reports its **own** name, `fake`, not the service it doubles: `externalKey` and
+ * `HolidayImport.provider` then say which driver wrote a row (§Boundary values, Identity),
+ * which is the difference between a row somebody can trace and one that claims to have
+ * come from a service nothing called.
  *
  * Its table reproduces every behaviour §External Contracts requires of a double, because
  * an E2E run reaches this driver only through the running API and can seed nothing:
@@ -26,7 +30,7 @@ import { HolidayProvider, type ProviderHolidays } from './holiday-provider';
  * on which day of the week a holiday falls on.
  */
 export class FakeHolidayProvider extends HolidayProvider {
-  readonly name = 'nager';
+  readonly name = 'fake';
 
   private readonly log = new Logger(FakeHolidayProvider.name);
 

@@ -300,7 +300,9 @@ describe('Holiday sourcing (spec time-off/02)', () => {
       expect(holiday.source).toBe('imported');
       expect(holiday.paidHours.toString()).toBe('8');
       expect(holiday.countryCode).toBe('DE');
-      expect(holiday.externalKey).toBe(`nager:DE:${date}`);
+      // The driver's OWN name, never `nager` — that is the deployed driver's, and this
+      // case runs against the double.
+      expect(holiday.externalKey).toBe(`fake:DE:${date}`);
       expect(holiday.importedAt).not.toBeNull();
       expect(holiday.createdByAccountId).toBe(admin.accountId);
     }
@@ -315,7 +317,13 @@ describe('Holiday sourcing (spec time-off/02)', () => {
       where: { organizationId: admin.organizationId },
     });
     expect(imports).toHaveLength(1);
-    expect(imports[0]).toMatchObject({ countryCode: 'DE', year: YEAR, holidayCount: 10, provider: 'nager' });
+    expect(imports[0]).toMatchObject({
+      countryCode: 'DE',
+      year: YEAR,
+      holidayCount: 10,
+      // The column records the driver that answered, so under the double it reads `fake`.
+      provider: 'fake',
+    });
   });
 
   // TC-02-INT-02
