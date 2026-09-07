@@ -330,7 +330,12 @@ export function Select({
       >
         {/* The value area carries the padding; the control itself has none, so the gap at the
            right edge comes only from the indicator's own padding below. */}
-        <span style={{ /* @literal 2px, below the scale: the value area's own inset, so a chip sits clear of the border */ display: 'flex', flexWrap: 'wrap', alignItems: 'center', padding: '2px var(--space-3)', overflow: 'hidden', flex: 1, position: 'relative' }}>
+        {/* PATCH-010 — wrapping belongs to the multi-select, where the chips need it. A single
+           select has one value and one search input, and a second line there is never
+           deliberate: it is the search input's own 20-character intrinsic width pushing itself
+           onto a line of its own, which makes the control taller than `--control-height` and
+           leaves the value sitting against its top edge. */}
+        <span style={{ /* @literal 2px, below the scale: the value area's own inset, so a chip sits clear of the border */ display: 'flex', flexWrap: isMulti ? 'wrap' : 'nowrap', alignItems: 'center', padding: '2px var(--space-3)', overflow: 'hidden', flex: 1, position: 'relative' }}>
           {isMulti && selectedList.map((o) => (
             <Chip
               key={keyOf(o)}
@@ -360,8 +365,15 @@ export function Select({
               value={query}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(-1); }}
               /* No border, no background: the control around it is the field. It inherits the
-                 type and grows to fill whatever the value and the chips leave. */
-              style={{ /* @literal 2px, matching the chips it grows between */ flex: '1 1 auto', minWidth: 2, margin: 2, border: 0, padding: 0, outline: 0, background: 'transparent', font: 'inherit', color: N.n80, boxSizing: 'border-box' }}
+                 type and grows to fill whatever the value and the chips leave.
+
+                 PATCH-010 — a single select gives it a flex basis of zero, so "grows to fill
+                 what is left" is what it actually does. An `<input>`'s own basis is its
+                 20-character default size, and a flex line is broken on the basis before
+                 anything is allowed to shrink: with a long value beside it the input carried
+                 the line past the control's width and wrapped. Zero also stops it competing
+                 with the value for the room, which shrank a label that had space for it. */
+              style={{ /* @literal 2px, matching the chips it grows between */ flex: isMulti ? '1 1 auto' : '1 1 0', minWidth: 2, margin: 2, border: 0, padding: 0, outline: 0, background: 'transparent', font: 'inherit', color: N.n80, boxSizing: 'border-box' }}
             />
           )}
         </span>

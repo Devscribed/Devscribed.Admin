@@ -107,11 +107,7 @@ export class HolidaySummaryService {
     const start = new Date(Date.UTC(year, 0, 1));
     const end = new Date(Date.UTC(year + 1, 0, 1));
 
-    const [organization, memberships, holidays, sourcedCountries] = await Promise.all([
-      this.prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { countryCode: true },
-      }),
+    const [memberships, holidays, sourcedCountries] = await Promise.all([
       this.prisma.membership.findMany({
         where: { organizationId, status: 'active' },
         select: {
@@ -129,13 +125,13 @@ export class HolidaySummaryService {
       this.sourcing.sourcedCountrySet(organizationId),
     ]);
 
-    const organizationCountry = organization?.countryCode ?? null;
     const members = memberships.map((m) => ({
       id: m.id,
       displayName: `${m.account.firstName} ${m.account.lastName}`.trim(),
-      // The chain time off spec 01 REQ-01-026 states, and the roster a country-scoped
-      // holiday is paid to.
-      countryCode: resolveMemberHolidayCountry(m.countryCode, organizationCountry),
+      // PATCH-012 — the member's own stated country and nothing else. Somebody who has
+      // stated none is counted for the global holidays alone; the organization's country
+      // is no longer read on their behalf.
+      countryCode: resolveMemberHolidayCountry(m.countryCode),
     }));
 
     /* ---- countries (REQ-02-013) -------------------------------------------------- */

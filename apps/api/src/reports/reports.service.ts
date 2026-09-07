@@ -66,13 +66,11 @@ interface Caller {
   organizationName: string;
   timezone: string;
   /**
-   * The caller's RESOLVED holiday country — time off spec 01 REQ-01-026's chain, never
-   * `Account.phoneCountryCode`, which a foreign SIM makes wrong and which this product no
-   * longer resolves a holiday from anywhere.
+   * The caller's RESOLVED holiday country — the country stated on their own membership,
+   * never `Account.phoneCountryCode`, which a foreign SIM makes wrong and which this
+   * product no longer resolves a holiday from anywhere.
    */
   countryCode: string | null;
-  /** The organization's stated country — the chain's second link, for every other row. */
-  organizationCountryCode: string | null;
   displayName: string;
 }
 
@@ -540,7 +538,7 @@ export class ReportsService {
         account: {
           select: { timezone: true, firstName: true, lastName: true },
         },
-        organization: { select: { name: true, countryCode: true } },
+        organization: { select: { name: true } },
       },
     });
     if (
@@ -557,11 +555,7 @@ export class ReportsService {
       organizationId: membership.organizationId,
       organizationName: membership.organization.name,
       timezone: membership.account.timezone ?? 'UTC',
-      countryCode: resolveMemberHolidayCountry(
-        membership.countryCode,
-        membership.organization.countryCode,
-      ),
-      organizationCountryCode: membership.organization.countryCode,
+      countryCode: resolveMemberHolidayCountry(membership.countryCode),
       displayName: `${membership.account.firstName} ${membership.account.lastName}`.trim(),
     };
   }
@@ -1056,10 +1050,10 @@ export class ReportsService {
     return memberships.map((m) => ({
       id: m.id,
       displayName: `${m.account.firstName} ${m.account.lastName}`.trim(),
-      // Time off spec 01 REQ-01-026 — the country stated on the membership, else the
-      // organization's. This is the roster a country-scoped holiday is paid to, so the
-      // source it resolves from is what decides who receives that row.
-      countryCode: resolveMemberHolidayCountry(m.countryCode, caller.organizationCountryCode),
+      // PATCH-012 — the country stated on the membership, and nothing behind it. This is
+      // the roster a country-scoped holiday is paid to, so the source it resolves from is
+      // what decides who receives that row.
+      countryCode: resolveMemberHolidayCountry(m.countryCode),
     }));
   }
 
@@ -1896,12 +1890,9 @@ export class ReportsService {
             rows.map((r) => ({
               id: r.id,
               displayName: '',
-              // The same chain every other reader uses (REQ-01-026); the union of what
-              // these resolve to is what the organization-wide holiday group covers.
-              countryCode: resolveMemberHolidayCountry(
-                r.countryCode,
-                caller.organizationCountryCode,
-              ),
+              // The same resolution every other reader uses; the union of what these
+              // resolve to is what the organization-wide holiday group covers.
+              countryCode: resolveMemberHolidayCountry(r.countryCode),
             })),
           );
 

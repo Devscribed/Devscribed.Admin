@@ -112,30 +112,26 @@ export function validateRefreshFlag(input: unknown): FlagResult {
 export interface SourcedCountrySetInput {
   /** Every ACTIVE membership's stated country, in a stable order. Raw column values. */
   memberCountries: readonly (string | null | undefined)[];
-  /** `Organization.countryCode`, the chain's second link. */
-  organizationCountry: string | null | undefined;
-  /** REQ-02-002 — the stored checkbox. A missing settings row reads as `true`. */
-  includeOrgCountry: boolean;
 }
 
 /**
- * REQ-02-001 and REQ-02-002 — the organization's **sourced country set**.
+ * The organization's **sourced country set**: every country an active member states, and
+ * no other.
  *
- * Every active member's resolved holiday country, through the chain
- * {@link resolveMemberHolidayCountry} already implements (membership, then organization,
- * first valid alpha-2 winning, the null resolution dropped), then the organization's own
- * where the setting is on. Distinct and order-stable: the members in the order given,
- * the organization's own appended last and only when it is not already there.
+ * Distinct and order-stable — the members in the order given — so a set read twice never
+ * repaints the screen for no reason.
  *
  * Rule 7 — a code that fails `validateCountryCode` is **dropped** from the set rather
  * than refusing the whole read: a legacy or mistyped value on one membership must not
- * stop the other countries being sourced.
+ * stop the other countries being sourced. A member who states nothing usable adds
+ * nothing, which is now the only thing that happens to them: there is no organization
+ * country left for them to fall back to.
  *
- * Edge case 4 — a country a member resolves to stays in the set whatever the flag says.
- * The flag governs REQ-02-002's *addition* and nothing else.
+ * PATCH-012 — the organization's own country, and the stored checkbox that added it, are
+ * both gone. Holidays are sourced for the countries the people in the organization are
+ * actually in.
  */
 export function buildSourcedCountrySet(input: SourcedCountrySetInput): string[] {
-  const organization = input.organizationCountry ?? null;
   const set: string[] = [];
   const add = (code: string | null): void => {
     if (code === null || code.length === 0) return;
@@ -145,10 +141,7 @@ export function buildSourcedCountrySet(input: SourcedCountrySetInput): string[] 
   };
 
   for (const member of input.memberCountries) {
-    add(resolveMemberHolidayCountry(member, organization));
-  }
-  if (input.includeOrgCountry) {
-    add(organization);
+    add(resolveMemberHolidayCountry(member));
   }
   return set;
 }

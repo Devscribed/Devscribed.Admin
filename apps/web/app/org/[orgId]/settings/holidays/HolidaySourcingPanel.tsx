@@ -1,15 +1,18 @@
 'use client';
 
-import { Button, Checkbox, Preloader } from '@devscribed/ds';
+import { Button, Preloader } from '@devscribed/ds';
 import { HOLIDAY_SOURCING_MESSAGES } from '@devscribed/validation';
 
 /**
- * Time off spec 02 §Screens — the sourcing panel, beside the organization country picker.
+ * Time off spec 02 §Screens — the sourcing panel, at the end of the control row.
  *
- * Two controls and one status line. The checkbox is the stored setting of REQ-02-002, read
- * from and written to `.../settings/holiday-sourcing`; Refresh is REQ-02-008's explicit
- * instruction to re-ask the provider for the year on screen. Neither is disabled for
- * validation — the only disabling here is the in-flight guard on a request already sent.
+ * One control and one status line. Refresh is REQ-02-008's explicit instruction to re-ask
+ * the provider for the year on screen; it is not disabled for validation, the only
+ * disabling here being the in-flight guard on a request already sent.
+ *
+ * PATCH-012 — the `Include organization country` checkbox stood beside it and is gone with
+ * the organization country itself. The set this screen sources is the countries its people
+ * are in.
  *
  * The status line carries `syncing` for the whole of a sync **and the re-read that
  * follows it**, so the year tabs and the list stay interactive while it is up and the
@@ -17,20 +20,14 @@ import { HOLIDAY_SOURCING_MESSAGES } from '@devscribed/validation';
  */
 export function HolidaySourcingPanel({
   year,
-  includeOrgCountry,
-  savingSetting,
   syncing,
   failedSome,
-  onToggleIncludeOrgCountry,
   onRefresh,
 }: {
   year: number;
-  includeOrgCountry: boolean;
-  savingSetting: boolean;
   syncing: boolean;
   /** A sync answered `200` and left at least one country unsourced (REQ-02-009). */
   failedSome: boolean;
-  onToggleIncludeOrgCountry: (next: boolean) => void;
   onRefresh: () => void;
 }) {
   return (
@@ -53,14 +50,6 @@ export function HolidaySourcingPanel({
       >
         Sourcing
       </div>
-
-      <Checkbox
-        label="Include organization country"
-        checked={includeOrgCountry}
-        disabled={savingSetting}
-        onChange={(event) => onToggleIncludeOrgCountry(event.target.checked)}
-        data-testid="holiday-sourcing-include-org-country"
-      />
 
       <Button onClick={onRefresh} disabled={syncing} data-testid="holiday-sourcing-refresh-btn">
         {`Refresh ${year}`}

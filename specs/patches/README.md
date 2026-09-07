@@ -44,8 +44,23 @@ spec, and writing it as a patch only moves where the run stops.
 | [003](PATCH-003-new-request-addressee-first.md) | The addressee is chosen first, and the project chooses the contact | requests/03 | TC-03-E2E-06, TC-01-E2E-01 |
 | [004](PATCH-004-holiday-country-pickers-searchable.md) | The holiday country pickers are searched by typing | organization/03 | TC-03-E2E-10, TC-01-E2E-09 |
 | [005](PATCH-005-member-country-picker-searchable.md) | The member's country picker is searched by typing | time-off/01 | TC-01-E2E-13 |
+| [006](PATCH-006-member-role-submitted-only-when-chosen.md) | A member's role is submitted only when it is chosen | user-management/05 | none |
+| [007](PATCH-007-the-double-answers-an-unseeded-country.md) | The holiday double answers an unseeded country with holidays | time-off/02 | none |
+| [008](PATCH-008-a-field-label-and-its-message-share-one-left-edge.md) | A field's label and its message share one left edge | design-system | none |
+| [009](PATCH-009-the-holidays-control-row-holds-still.md) | The Holidays control row holds its width and its position | time-off/02 | none |
+| [010](PATCH-010-a-single-select-is-one-line-tall.md) | A searchable single select is one line tall | design-system | none |
+| [011](PATCH-011-a-re-read-does-not-blank-the-screen.md) | A re-read of the Holidays screen does not blank it first | time-off/02 | none |
+| [012](PATCH-012-a-member-states-their-own-country-or-none.md) | A member states their own holiday country, or none | time-off/01, time-off/02 | none |
+| [013](PATCH-013-a-refresh-replaces-what-it-imported-before.md) | A refresh replaces what a previous import wrote | time-off/02 | none |
 
 PATCH-001 is the mock fixture the track was built against and is not indexed as product work.
+
+**006 to 013 carry no cases and were not shipped through the pipeline.** Each was written,
+implemented and committed in one sitting at the user's direction, with the regression waived —
+the `Cases` section of each note says so and names the case it would have carried. PATCH-012 is
+also **wider than the entry condition above allows**, at nine product files, and says so in its
+own text: a change that decides what people are paid is owed a spec bundle, and it was taken as
+a patch deliberately rather than by mistake.
 
 **003 depends on 002 being merged**, not merely written: it reads `requestNeededByMax` from
 `packages/validation` and puts no bound on a control that the server does not also hold. That is

@@ -537,24 +537,25 @@ export interface HolidayMemberInput {
   displayName: string;
   /**
    * The member's **resolved** holiday country, as {@link resolveMemberHolidayCountry}
-   * answers it (time off spec 01 REQ-01-026): the country stated on their membership,
-   * else the one stated on the organization, else `null`. Never a phone country.
+   * answers it: the country stated on their own membership, else `null`. Never a phone
+   * country, and never a country borrowed from the organization.
    */
   countryCode: string | null;
 }
 
 /**
- * Time off spec 01 REQ-01-026, REQ-01-027 and REQ-01-040 — a member's holiday country,
- * resolved from the two columns a person states and from nothing else.
+ * A member's holiday country — the country stated on their own membership, and nothing
+ * else.
  *
- * The membership's value wins whenever it normalizes to a real ISO 3166-1 alpha-2 code;
- * one that does not — `''`, `'XX'`, a legacy value — is **skipped** rather than fatal, and
- * the organization's is read in its place. With neither usable the answer is `null`, which
- * is a member who receives global holidays only, not a member who receives the raw
- * unusable string.
+ * The value wins whenever it normalizes to a real ISO 3166-1 alpha-2 code. One that does
+ * not — `''`, `'XX'`, a legacy value — resolves to `null`, which is a member who receives
+ * global holidays only, not a member who receives the raw unusable string.
  *
- * Both arguments are required and neither has a default: a call site that forgets the
- * organization's country must fail to compile rather than silently resolve half the chain.
+ * PATCH-012 — the organization's country was the second link of this chain and is gone.
+ * A member who states no country of their own is now counted for nothing but the holidays
+ * that reach everybody: the product no longer decides on a person's behalf where they are.
+ * That is why this takes one argument where it took two, so no call site can keep passing
+ * a fallback that no longer exists.
  *
  * The read is deliberately more forgiving than the write. `validateCountryCode` upcases
  * (`'pl'` → `'PL'`) and tests membership of the assigned alpha-2 list, while the write
@@ -564,14 +565,11 @@ export interface HolidayMemberInput {
  */
 export function resolveMemberHolidayCountry(
   membershipCountry: string | null | undefined,
-  organizationCountry: string | null | undefined,
 ): string | null {
-  for (const candidate of [membershipCountry, organizationCountry]) {
-    if (candidate === null || candidate === undefined || candidate.trim().length === 0) continue;
-    const result = validateCountryCode(candidate);
-    if (result.valid && result.value.length > 0) return result.value;
-  }
-  return null;
+  if (membershipCountry === null || membershipCountry === undefined) return null;
+  if (membershipCountry.trim().length === 0) return null;
+  const result = validateCountryCode(membershipCountry);
+  return result.valid && result.value.length > 0 ? result.value : null;
 }
 
 export interface AmountRow {

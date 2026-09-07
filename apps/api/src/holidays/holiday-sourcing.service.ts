@@ -80,35 +80,23 @@ export class HolidaySourcingService {
   ) {}
 
   /**
-   * REQ-02-001 and REQ-02-002 — every active member's resolved holiday country, plus the
-   * organization's own where the stored checkbox is on.
+   * REQ-02-001 — every active member's stated holiday country.
    *
-   * A missing `OrganizationHolidaySourcing` row reads as `true`, resolved here rather
-   * than by a backfill, so no organization changes behaviour before somebody touches the
-   * control.
+   * PATCH-012 — and nothing else. The organization's own country, and the stored
+   * checkbox that used to add it, are both gone: holidays are sourced for the countries
+   * the people in the organization are in.
    */
   async sourcedCountrySet(organizationId: string): Promise<string[]> {
-    const [organization, memberships] = await Promise.all([
-      this.prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: {
-          countryCode: true,
-          holidaySourcing: { select: { includeOrgCountry: true } },
-        },
-      }),
-      this.prisma.membership.findMany({
-        where: { organizationId, status: 'active' },
-        select: { countryCode: true },
-        // Order-stable: the set is rendered as a list of countries, and a set whose
-        // order changed between two reads would repaint the summary for no reason.
-        orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
-      }),
-    ]);
+    const memberships = await this.prisma.membership.findMany({
+      where: { organizationId, status: 'active' },
+      select: { countryCode: true },
+      // Order-stable: the set is rendered as a list of countries, and a set whose
+      // order changed between two reads would repaint the summary for no reason.
+      orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
+    });
 
     return buildSourcedCountrySet({
       memberCountries: memberships.map((m) => m.countryCode),
-      organizationCountry: organization?.countryCode ?? null,
-      includeOrgCountry: organization?.holidaySourcing?.includeOrgCountry ?? true,
     });
   }
 
@@ -159,7 +147,8 @@ export class HolidaySourcingService {
 
     // Validation Rule 3 carries no message, so a value that is neither absent nor a
     // boolean cannot be refused with one. It is logged and read as "no refresh": a
-    // refresh re-asks a third party and rewrites rows an admin deleted on purpose.
+    // refresh re-asks a third party, replaces every row a previous import wrote and
+    // brings back rows an admin deleted on purpose.
     const flag = validateRefreshFlag(body.refresh);
     if (!flag.valid) {
       this.logger.warn(
@@ -200,9 +189,16 @@ export class HolidaySourcingService {
       if (answer === null) {
         // REQ-02-009 — no import record, no holiday, the country reported unsourced.
         // Under a refresh the existing record stands: it is not deleted and not aged.
+        // Neither are the rows: the clearance below happens only once an answer is in
+        // hand, so a provider that failed never empties a year it cannot refill.
         results.push({ countryCode, state: 'unsourced', written: 0, skipped: 0, discarded: 0 });
         continue;
       }
+
+      // PATCH-013 — a refresh REPLACES what a previous import left. Without this a row
+      // whose date or name moved upstream stayed on the screen for good, because the
+      // stale row itself occupied the date the corrected one wanted.
+      if (refresh) await this.clearImported(caller.organizationId, countryCode, year.value);
 
       const { written, skipped } = await this.writeEntries(
         caller,
@@ -317,8 +313,9 @@ export class HolidaySourcingService {
    * does not reach anybody here, so the date is free and the pair is distinct under the
    * unique index (Edge case 7b).
    *
-   * A sync never deletes a row and never modifies one, whatever its `source` — the only
-   * statement made here is an insert (invariants 1 and 2).
+   * PATCH-013 — a sync never modifies a row, and deletes one only through
+   * {@link clearImported}, which a refresh runs first and which can reach nothing a person
+   * wrote. Everything this method itself states is an insert (invariants 1 and 2).
    */
   private async writeEntries(
     caller: CallerMembership,
@@ -383,6 +380,36 @@ export class HolidaySourcingService {
       }
     }
     return { written, skipped };
+  }
+
+  /**
+   * PATCH-013 — everything a previous import wrote for one country and year, removed so
+   * the answer in hand can be written whole.
+   *
+   * The `source` column is the whole gate. A row a person added by hand is `manual` and is
+   * never touched, whatever its date and whatever country it names; it also still occupies
+   * its date afterwards, so the import that follows skips that day exactly as it did
+   * before. What this can reach is only what a sync itself wrote.
+   *
+   * The consequence worth stating: an admin who EDITED an imported row still holds an
+   * `imported` row, and a refresh replaces it with the provider's own text. Editing a row
+   * is not the same as adding one, and the flag that would separate them does not exist.
+   */
+  private async clearImported(
+    organizationId: string,
+    countryCode: string,
+    year: number,
+  ): Promise<void> {
+    await this.prisma.holiday.deleteMany({
+      where: {
+        organizationId,
+        countryCode,
+        source: HOLIDAY_SOURCE_IMPORTED,
+        // A half-open year: `@db.Date` stores UTC midnight, so the first day of the next
+        // year is the first value outside this one.
+        date: { gte: asUtcDate(`${year}-01-01`), lt: asUtcDate(`${year + 1}-01-01`) },
+      },
+    });
   }
 
   /**

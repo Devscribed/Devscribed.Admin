@@ -109,11 +109,10 @@ export class HolidaysService {
 
     let countryFilter: Prisma.HolidayWhereInput = {};
     if (scope === 'mine') {
-      const organization = await this.prisma.organization.findUnique({
-        where: { id: caller.organizationId },
-        select: { countryCode: true },
-      });
-      const mine = resolveMemberHolidayCountry(caller.countryCode, organization?.countryCode ?? null);
+      // PATCH-012 — the caller's own stated country. A caller who states none sees the
+      // global rows only, rather than the ones the organization's country would have
+      // lent them.
+      const mine = resolveMemberHolidayCountry(caller.countryCode);
       countryFilter = mine
         ? { OR: [{ countryCode: mine }, { countryCode: null }] }
         : { countryCode: null };

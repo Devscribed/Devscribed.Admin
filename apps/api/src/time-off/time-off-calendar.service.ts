@@ -126,18 +126,10 @@ export class TimeOffCalendarService {
       throw this.refusal('scope', TIME_OFF_CALENDAR_MESSAGES.tooManyMembers);
     }
 
-    const [organization, account] = await Promise.all([
-      // Loaded ONCE per request rather than per member: the second link of the chain is a
-      // property of the organization, and re-reading it per row would be the same answer N times.
-      this.prisma.organization.findUnique({
-        where: { id: caller.organizationId },
-        select: { countryCode: true },
-      }),
-      this.prisma.account.findUnique({
-        where: { id: caller.accountId },
-        select: { timezone: true },
-      }),
-    ]);
+    const account = await this.prisma.account.findUnique({
+      where: { id: caller.accountId },
+      select: { timezone: true },
+    });
 
     const membershipIds = memberships.map((row) => row.id);
     const [requests, holidayRows] = await Promise.all([
@@ -170,10 +162,9 @@ export class TimeOffCalendarService {
     }));
 
     const members: CalendarMember[] = memberships.map((row) => {
-      const countryCode = resolveMemberHolidayCountry(
-        row.countryCode,
-        organization?.countryCode ?? null,
-      );
+      // PATCH-012 — the member's own stated country, with no organization country behind
+      // it: a member who states none is marked for the global holidays alone.
+      const countryCode = resolveMemberHolidayCountry(row.countryCode);
       return {
         membershipId: row.id,
         displayName: row.displayName,

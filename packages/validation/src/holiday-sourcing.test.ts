@@ -26,79 +26,34 @@ const entry = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe('TC-02-UNIT-01: the sourced country set is every active member’s resolved country', () => {
-  it('TC-02-UNIT-01: four memberships against an organization stating US, flag off', () => {
+describe('TC-02-UNIT-01: the sourced country set is every active member’s stated country', () => {
+  it('TC-02-UNIT-01: four memberships, one of them stating nothing', () => {
     // REQ-02-001 — one stating PL, one stating US, one stating PL again, one stating
-    // nothing, against an organization stating US.
-    const set = buildSourcedCountrySet({
-      memberCountries: ['PL', 'US', 'PL', null],
-      organizationCountry: 'US',
-      includeOrgCountry: false,
-    });
-    // Distinct and order-stable. The member stating nothing contributes US through the
-    // fallback chain — not a null, and not a fourth entry.
+    // nothing.
+    const set = buildSourcedCountrySet({ memberCountries: ['PL', 'US', 'PL', null] });
+    // Distinct and order-stable. PATCH-012 — the member stating nothing contributes
+    // NOTHING: there is no organization country behind them any more.
     expect(set).toEqual(['PL', 'US']);
   });
 
   it('drops a code that names no country rather than refusing the set (Rule 7)', () => {
-    expect(
-      buildSourcedCountrySet({
-        memberCountries: ['XX', 'PL'],
-        organizationCountry: null,
-        includeOrgCountry: false,
-      }),
-    ).toEqual(['PL']);
+    expect(buildSourcedCountrySet({ memberCountries: ['XX', 'PL'] })).toEqual(['PL']);
   });
 
-  it('an organization with no country and no member country makes an empty set (Edge case 3)', () => {
-    expect(
-      buildSourcedCountrySet({
-        memberCountries: [null, ''],
-        organizationCountry: null,
-        includeOrgCountry: true,
-      }),
-    ).toEqual([]);
-  });
-});
-
-describe('TC-02-UNIT-02: the organization’s country joins the set only while the setting is on', () => {
-  it('TC-02-UNIT-02: flag off, then on, then a member who resolves to it', () => {
-    // REQ-02-002 — one membership stating PL, an organization stating GB.
-    expect(
-      buildSourcedCountrySet({
-        memberCountries: ['PL'],
-        organizationCountry: 'GB',
-        includeOrgCountry: false,
-      }),
-    ).toEqual(['PL']);
-
-    expect(
-      buildSourcedCountrySet({
-        memberCountries: ['PL'],
-        organizationCountry: 'GB',
-        includeOrgCountry: true,
-      }),
-    ).toEqual(['PL', 'GB']);
-
-    // Edge case 4 — a country a member resolves to stays in the set whatever the flag
-    // says: the flag governs REQ-02-002's addition and nothing else.
-    expect(
-      buildSourcedCountrySet({
-        memberCountries: ['GB'],
-        organizationCountry: 'GB',
-        includeOrgCountry: false,
-      }),
-    ).toEqual(['GB']);
+  it('no member country makes an empty set (Edge case 3)', () => {
+    expect(buildSourcedCountrySet({ memberCountries: [null, ''] })).toEqual([]);
   });
 
-  it('does not repeat the organization’s country when a member already resolves to it', () => {
-    expect(
-      buildSourcedCountrySet({
-        memberCountries: ['GB'],
-        organizationCountry: 'GB',
-        includeOrgCountry: true,
-      }),
-    ).toEqual(['GB']);
+  /**
+   * PATCH-012 — TC-02-UNIT-02 asked whether the organization's country joined the set
+   * while the `includeOrgCountry` setting was on. **Retired**: neither the setting nor
+   * the organization's country exists, and the case below is what replaces it — the set
+   * is the members' own countries, and an organization column could not put one in it
+   * even if it held one.
+   */
+  it('a member who states nothing adds nothing, whoever else states what', () => {
+    expect(buildSourcedCountrySet({ memberCountries: [null] })).toEqual([]);
+    expect(buildSourcedCountrySet({ memberCountries: ['GB', null, 'gb'] })).toEqual(['GB']);
   });
 });
 

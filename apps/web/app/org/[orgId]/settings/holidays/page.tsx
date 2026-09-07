@@ -21,14 +21,7 @@ import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
-import {
-  HOLIDAY_MESSAGES,
-  HOLIDAY_SOURCING_MESSAGES,
-  TIME_OFF_CALENDAR_MESSAGES,
-  can,
-  type Role,
-} from '@devscribed/validation';
-import { STATED_COUNTRY_OPTIONS } from '@/stated-country-options';
+import { HOLIDAY_MESSAGES, HOLIDAY_SOURCING_MESSAGES, can, type Role } from '@devscribed/validation';
 import { HolidayModal, type HolidayModalMode } from './HolidayModal';
 import { HolidaySourcingPanel } from './HolidaySourcingPanel';
 import { HolidaySummary } from './HolidaySummary';
@@ -36,7 +29,6 @@ import { ALL_COUNTRIES, HOLIDAY_COUNTRY_OPTIONS, holidayCountryLabel } from './c
 import type {
   HolidayRow,
   HolidaysResponse,
-  HolidaySourcingSettings,
   HolidaySummaryResponse,
   SourcingBlock,
   SourcingState,
@@ -44,25 +36,13 @@ import type {
 } from './types';
 
 /**
- * The organization country picker's list: the option meaning *no country*, which submits
- * `null` (REQ-01-034), then the 249 assigned codes Validation Rule 9 accepts. The empty
- * value is the same one `ALL_COUNTRIES` carries, but it means something else here — not
- * "applies everywhere", which is the holiday form's reading, but "this organization states
- * none", so it is labelled from this spec's own export.
+ * PATCH-009 — the width the country filter is drawn at, whatever is chosen in it. A
+ * `minWidth` let the control grow to its own value, so picking `Algeria` and picking
+ * `All countries` gave two differently sized boxes and moved whatever sat beside them.
+ * Sized for the longest option the list carries. No design-system token names a control
+ * width — `MultiFilter` carries its own literal for the same reason.
  */
-/**
- * PATCH-009 — the width both country selects are drawn at, whatever is chosen in them. A
- * `minWidth` let each control grow to its own value, so picking `Algeria` and picking
- * `No country — global holidays only` gave two differently sized boxes and moved the Save
- * button beside them. Sized for the longest option either list carries. No design-system
- * token names a control width — `MultiFilter` carries its own literal for the same reason.
- */
-const ORG_COUNTRY_WIDTH = 300;
-
-const ORG_COUNTRY_OPTIONS = [
-  { value: '', label: TIME_OFF_CALENDAR_MESSAGES.orgCountryNoneOption },
-  ...STATED_COUNTRY_OPTIONS,
-];
+const COUNTRY_FILTER_WIDTH = 300;
 
 /** The year tabs: last year, this year, next year — enough to plan and to correct. */
 function yearTabs(current: number): number[] {
@@ -166,18 +146,12 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Time off spec 01 REQ-01-046 — the organization's holiday country, the second link of
-  // the chain. Read beside the holiday list the page already fetches, so the picker paints
-  // with a value rather than with an invented one.
-  const [orgCountry, setOrgCountry] = useState<string>(ALL_COUNTRIES);
-  const [savingCountry, setSavingCountry] = useState(false);
-
   const [modalMode, setModalMode] = useState<HolidayModalMode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<HolidayRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   /* Time off spec 02 — what the list read says about the year's countries, the summary
-     beside it, the sync in flight, and the stored include-organization-country setting. */
+     beside it, and the sync in flight. */
   const [sourcing, setSourcing] = useState<SourcingBlock | null>(null);
   const [summary, setSummary] = useState<HolidaySummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -186,8 +160,6 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   /* The year whose sync came back with a country still unsourced (REQ-02-009). Held as a
      year rather than a flag so a sentence about 2026 cannot be read under the 2027 tab. */
   const [syncLeftUnsourced, setSyncLeftUnsourced] = useState<number | null>(null);
-  const [includeOrgCountry, setIncludeOrgCountry] = useState(true);
-  const [savingSetting, setSavingSetting] = useState(false);
   /* REQ-02-012 issues ONE sync per year. A country the provider will never cover reads
      `unsourced` after the sync too, and without this the re-read would issue another. */
   const autoSynced = useRef<Set<number>>(new Set());
@@ -195,9 +167,18 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
      replaced it put up, and a run that was abandoned must not leave one up forever. */
   const syncRun = useRef(0);
 
+  /**
+   * PATCH-011 — `quiet` is a re-read of what is already on screen, and it does not raise
+   * the wait. A read that answers a NEW question (the year tab, the country filter) draws
+   * the preloader, because what is on screen is then an answer to something else; a read
+   * that follows a write of this screen's own leaves the table standing until the newer
+   * rows replace it, which is the difference between a screen settling and a screen
+   * blinking.
+   */
   const load = useCallback(
-    async (signal?: AbortSignal): Promise<void> => {
-      setLoading(true);
+    async (options: { signal?: AbortSignal; quiet?: boolean } = {}): Promise<void> => {
+      const { signal, quiet } = options;
+      if (!quiet) setLoading(true);
       setError(false);
       const query = new URLSearchParams({ year: String(year) });
       if (country !== ALL_COUNTRIES) query.set('country', country);
@@ -234,64 +215,17 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
     [orgId, year, country, router],
   );
 
-  useEffect(() => {
-    if (!authorized) return undefined;
-    let cancelled = false;
-    void (async () => {
-      const response = await fetch(`/api/organizations/${orgId}/settings/country`, {
-        credentials: 'same-origin',
-      });
-      if (!response.ok || cancelled) return;
-      const body = (await response.json()) as { countryCode: string | null };
-      if (cancelled) return;
-      setOrgCountry(body.countryCode ?? ALL_COUNTRIES);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authorized, orgId]);
-
-  async function handleSaveCountry(): Promise<void> {
-    if (savingCountry) return;
-    setSavingCountry(true);
-    try {
-      const response = await fetch(`/api/organizations/${orgId}/settings/country`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ countryCode: orgCountry.length > 0 ? orgCountry : null }),
-      });
-      if (response.ok) {
-        // The picker repaints from what is now STORED, which is the confirmation: no
-        // toast, because this spec names neither an id for one nor a line for it to
-        // carry, and a message invented here is a message nothing governs.
-        const body = (await response.json()) as { countryCode: string | null };
-        setOrgCountry(body.countryCode ?? ALL_COUNTRIES);
-      } else {
-        // The same closed set the calendar's banner draws from: the 422's own field
-        // message when it carries one, else the generic. Never `body.message`, which on a
-        // 404 or a 500 is Nest's own words and is in no table of this spec.
-        const body = await response.json().catch(() => null);
-        const fields = body?.fields as Record<string, string> | undefined;
-        showToast(
-          'toast-server-error',
-          fields?.countryCode ?? HOLIDAY_MESSAGES.toastServerError,
-          'error',
-        );
-      }
-    } catch {
-      showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
-    }
-    setSavingCountry(false);
-  }
-
   /**
    * Time off spec 02 REQ-02-013/14/15 — the summary. Its own read and its own wait, so a
    * slow summary never holds the list back and a failed one never blanks it.
    */
   const loadSummary = useCallback(
-    async (signal?: AbortSignal): Promise<void> => {
-      setSummaryLoading(true);
+    async (options: { signal?: AbortSignal; quiet?: boolean } = {}): Promise<void> => {
+      const { signal, quiet } = options;
+      // PATCH-011 — the same rule the list follows, for the same reason. The figures on
+      // screen are last moment's answer to the same question and they stand until the
+      // new ones arrive.
+      if (!quiet) setSummaryLoading(true);
       setSummaryFailed(false);
       try {
         const response = await fetch(
@@ -323,28 +257,10 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
     // Abort the in-flight read on every year/country change so a slow earlier reply
     // cannot clobber the newer one.
     const controller = new AbortController();
-    void load(controller.signal);
-    void loadSummary(controller.signal);
+    void load({ signal: controller.signal });
+    void loadSummary({ signal: controller.signal });
     return () => controller.abort();
   }, [authorized, load, loadSummary]);
-
-  /** REQ-02-002 — the stored checkbox, read once beside the list. */
-  useEffect(() => {
-    if (!authorized) return undefined;
-    let cancelled = false;
-    void (async () => {
-      const response = await fetch(`/api/organizations/${orgId}/settings/holiday-sourcing`, {
-        credentials: 'same-origin',
-      });
-      if (!response.ok || cancelled) return;
-      const body = (await response.json()) as HolidaySourcingSettings;
-      if (cancelled) return;
-      setIncludeOrgCountry(body.includeOrgCountry);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authorized, orgId]);
 
   /**
    * The sync itself. The status line stays up for the request AND the re-reads that
@@ -377,7 +293,13 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         setSyncLeftUnsourced(
           result.countries.some((entry) => entry.state === 'unsourced') ? result.year : null,
         );
-        await Promise.all([load(options.signal), loadSummary(options.signal)]);
+        // PATCH-011 — quiet: the sync has its own status line, and blanking the table and
+        // the summary under it made pressing Refresh throw the whole screen away and
+        // rebuild it. The rows are replaced when the new ones are in hand.
+        await Promise.all([
+          load({ signal: options.signal, quiet: true }),
+          loadSummary({ signal: options.signal, quiet: true }),
+        ]);
       } catch (err) {
         // A sync that was abandoned — the year tab moved (Edge case 18) — or that never
         // reached the API leaves the year unsourced, so the year must not stay marked as
@@ -424,45 +346,6 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
     return () => controller.abort();
   }, [authorized, canManage, needsSync, year]);
 
-  /** REQ-02-002 — the checkbox is stored, so the set it changes survives a reload. */
-  async function handleToggleIncludeOrgCountry(next: boolean): Promise<void> {
-    if (savingSetting) return;
-    const previous = includeOrgCountry;
-    // The box moves when it is clicked and the write reconciles it: a control that waits
-    // for a round trip before it moves reads as a control that did not take the click.
-    // A refusal puts it back, which is why the previous value is held rather than
-    // recomputed from the response.
-    setIncludeOrgCountry(next);
-    setSavingSetting(true);
-    try {
-      const response = await fetch(`/api/organizations/${orgId}/settings/holiday-sourcing`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ includeOrgCountry: next }),
-      });
-      if (response.ok) {
-        const body = (await response.json()) as HolidaySourcingSettings;
-        setIncludeOrgCountry(body.includeOrgCountry);
-        // The set changed, so both the sourcing block and the summary did.
-        await Promise.all([load(), loadSummary()]);
-      } else {
-        setIncludeOrgCountry(previous);
-        const body = await response.json().catch(() => null);
-        const fields = body?.fields as Record<string, string> | undefined;
-        showToast(
-          'toast-server-error',
-          fields?.includeOrgCountry ?? HOLIDAY_MESSAGES.toastServerError,
-          'error',
-        );
-      }
-    } catch {
-      setIncludeOrgCountry(previous);
-      showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
-    }
-    setSavingSetting(false);
-  }
-
   async function handleDeleteConfirm(): Promise<void> {
     if (!deleteTarget || deleting) return;
     setDeleting(true);
@@ -475,7 +358,9 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         setDeleteTarget(null);
         setModalMode(null);
         showToast('toast-holiday-deleted', HOLIDAY_MESSAGES.toastDeleted);
-        await load();
+        // PATCH-011 — quiet. The toast is the confirmation; the row leaving the table is
+        // the evidence. Neither needs the table to disappear first.
+        await load({ quiet: true });
       } else {
         // A 403 carries the tabulated wording in `message`; anything else is generic.
         const body = await response.json().catch(() => null);
@@ -634,83 +519,24 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         style={{ marginBottom: 'var(--space-5)' }}
       />
 
-      {/* Time off spec 01 §Screens — the organization country, ABOVE the list's own country
-          filter and clearly not it: this one is what every member without a country of
-          their own is paid holidays for. Admin and manager both set it; a user and a
-          viewer never reach this page at all, so there is no read-only rendering to draw. */}
+      {/* PATCH-012 — the organization country picker and its Save button stood here. Both
+          are gone with the rule they served: a member with no country of their own is
+          counted for the global holidays alone, so there is no organization country for
+          anybody to inherit and nothing for this control to set. */}
       <div
         style={{
           display: 'flex',
           alignItems: 'flex-end',
           gap: 'var(--space-3)',
-          /* BUG-011 — the `dropdown` Select's hint hangs 20px below the control's own box and
-             adds no height for it (Select.tsx:480). `--space-6` (16px) let the filter row below
-             paint over the hint's descenders; `--space-8` (24px) clears the hint's 20px plus a
-             4px gap. */
-          marginBottom: 'var(--space-8)',
-          flexWrap: 'wrap',
-        }}
-      >
-        {/* The same width the country filter directly below it carries: two selects in one
-            column that measured differently would read as two unrelated controls. */}
-        <div style={{ width: ORG_COUNTRY_WIDTH }} data-testid="org-country-select">
-          {/* The list the WRITE accepts, and not the holiday form's: that one is built from
-              the phone list and offers AC, TA and XK, which rule 9 refuses. Above it, the
-              option that submits `null` — what REQ-01-034 clears through, and without it
-              the rule has no control behind it: a single Select is cleared only by picking
-              another option, and an organization that stated a country could never unstate
-              one. It is also what a stored `null` renders as.
-
-              PATCH-004 — searchable, so `org-country-select` moves onto this wrapper (§21
-              puts the control's own attributes, `data-testid` included, on the inner
-              `<input>` once a `Select` is searchable, and the chosen value then sits in a
-              sibling span the wrapper still contains). The input takes its own id. */}
-          <Select
-            label="Organization country"
-            hint={TIME_OFF_CALENDAR_MESSAGES.orgCountryHint}
-            value={optionFor(ORG_COUNTRY_OPTIONS, orgCountry)}
-            options={ORG_COUNTRY_OPTIONS}
-            onChange={(option) => setOrgCountry(valueOf(option))}
-            isSearchable
-            data-testid="org-country-select-input"
-          />
-          <HiddenSelectedLabel label={selectedLabel(ORG_COUNTRY_OPTIONS, orgCountry)} />
-        </div>
-        <Button
-          onClick={() => void handleSaveCountry()}
-          preloader={savingCountry}
-          disabled={savingCountry}
-          data-testid="org-country-save"
-        >
-          Save country
-        </Button>
-
-        {/* Time off spec 02 §Screens — sourcing sits beside the country it may add, because
-            the two answer one question: which countries' holidays this organization pays. */}
-        <div style={{ marginLeft: 'auto' }}>
-          <HolidaySourcingPanel
-            year={year}
-            includeOrgCountry={includeOrgCountry}
-            savingSetting={savingSetting}
-            syncing={syncing}
-            failedSome={!syncing && syncLeftUnsourced === year}
-            onToggleIncludeOrgCountry={(next) => void handleToggleIncludeOrgCountry(next)}
-            onRefresh={() => void runSync({ refresh: true })}
-          />
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          gap: 'var(--space-3)',
           marginBottom: 'var(--space-6)',
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ width: ORG_COUNTRY_WIDTH }} data-testid="holidays-country-filter">
-          {/* PATCH-004 — searchable; `holidays-country-filter` moves onto this wrapper for
-              the same reason as the organization picker above. */}
+        <div style={{ width: COUNTRY_FILTER_WIDTH }} data-testid="holidays-country-filter">
+          {/* PATCH-004 — searchable, so `holidays-country-filter` sits on this wrapper: §21
+              puts the control's own attributes, `data-testid` included, on the inner
+              `<input>` once a `Select` is searchable, and the chosen value then sits in a
+              sibling span the wrapper still contains. */}
           <Select
             value={optionFor(HOLIDAY_COUNTRY_OPTIONS, country)}
             options={HOLIDAY_COUNTRY_OPTIONS}
@@ -720,9 +546,20 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           />
           <HiddenSelectedLabel label={selectedLabel(HOLIDAY_COUNTRY_OPTIONS, country)} />
         </div>
+
+        {/* Time off spec 02 §Screens — sourcing sits at the end of the row that says which
+            countries this screen is showing. */}
+        <div style={{ marginLeft: 'auto' }}>
+          <HolidaySourcingPanel
+            year={year}
+            syncing={syncing}
+            failedSome={!syncing && syncLeftUnsourced === year}
+            onRefresh={() => void runSync({ refresh: true })}
+          />
+        </div>
       </div>
 
-      {/* REQ-02-009 / §UI Description — an InfoBanner, not the error banner: the screen is
+      {/* REQ-02-009/ §UI Description — an InfoBanner, not the error banner: the screen is
           working and the data is partial. `holidays-error-banner` stays absent. */}
       {uncovered.length > 0 && (
         <div data-testid="holiday-sourcing-uncovered" style={{ marginBottom: 'var(--space-5)' }}>
@@ -856,7 +693,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           orgId={orgId}
           canDelete={canDelete}
           onClose={() => setModalMode(null)}
-          onSaved={() => void load()}
+          onSaved={() => void load({ quiet: true })}
           onRequestDelete={(holiday) => setDeleteTarget(holiday)}
         />
       )}

@@ -385,32 +385,32 @@ describe('TC-01-UNIT-16: buildHolidayRow (spec requirement 18)', () => {
 });
 
 /**
- * Time off spec 01 — the holiday-country chain, and the predicate it feeds. The chain
- * replaces `Account.phoneCountryCode` as the source everywhere; these are the branches
- * that decide who is paid a country-scoped holiday.
+ * The member's holiday country, and the predicate it feeds. It replaces
+ * `Account.phoneCountryCode` as the source everywhere; these are the branches that decide
+ * who is paid a country-scoped holiday.
+ *
+ * PATCH-012 — the organization's country was the second argument and the fallback for a
+ * member who stated none. Both are gone: a member states their country or receives the
+ * global holidays alone. The cases that asserted the fallback (`[null, 'BY'] -> 'BY'`,
+ * `['XX', 'PL'] -> 'PL'`) are **retired** with the rule; what remains asserts that a
+ * member who states nothing usable now resolves to `null`.
  */
 describe('TC-01-UNIT-01: resolveMemberHolidayCountry', () => {
-  const cases: Array<[string | null, string | null, string | null]> = [
-    ['US', 'BY', 'US'],
-    [null, 'BY', 'BY'],
-    [null, null, null],
-    ['US', null, 'US'],
-    // `XX` is two letters and no country: skipped, and the organization's is read in its
-    // place rather than the chain terminating on it (REQ-01-027).
-    ['XX', 'PL', 'PL'],
-    ['', 'PL', 'PL'],
+  const cases: Array<[string | null, string | null]> = [
+    ['US', 'US'],
+    [null, null],
+    // Two letters and no country, an empty string, a legacy value: none of them is a
+    // country and none of them is handed back raw (REQ-01-040).
+    ['XX', null],
+    ['', null],
     // The read upcases what it finds, which the write refuses to store in the first place.
-    ['pl', 'BY', 'PL'],
-    ['US', 'xx', 'US'],
-    // The branch that matters most: with nothing usable left the chain REJECTS rather
-    // than handing back the raw unusable string (REQ-01-040).
-    [null, 'xx', null],
-    ['XX', 'YY', null],
+    ['pl', 'PL'],
+    ['xx', null],
   ];
 
-  for (const [membership, organization, expected] of cases) {
-    it(`(${JSON.stringify(membership)}, ${JSON.stringify(organization)}) -> ${JSON.stringify(expected)}`, () => {
-      expect(resolveMemberHolidayCountry(membership, organization)).toBe(expected);
+  for (const [membership, expected] of cases) {
+    it(`(${JSON.stringify(membership)}) -> ${JSON.stringify(expected)}`, () => {
+      expect(resolveMemberHolidayCountry(membership)).toBe(expected);
     });
   }
 });
