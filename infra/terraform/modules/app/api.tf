@@ -83,6 +83,32 @@ locals {
     # affecting, so it is identical in both environments: an environment that converges on a
     # different schedule from production is not a test of production.
     PROVIDER_SYNC_STALE_SECONDS = "120"
+
+    # ---------------------------------------------------------------------------------
+    # The public-holiday port — time off spec 02, PATCH-029.
+    # ---------------------------------------------------------------------------------
+
+    # This was correct before it was written: the config resolver falls through to `nager`
+    # whenever NODE_ENV is production, which it is one screen above. It is written out for
+    # the reason every other port on this list is — a driver arrived at by default is one
+    # nobody can read off the environment that runs it.
+    #
+    # The same value in both environments, and inline rather than through a tfvars, for the
+    # reason SIGNWELL_TEST_MODE gives: a knob per environment is what lets them differ by
+    # accident. And the dev stand *should* call the real service. Mail and the calendar are
+    # faked there because they reach real people and need a tenant nobody has; this provider
+    # needs no credential, costs nothing and sends nothing to anybody, so it is the one third
+    # party a stand can exercise for real — and a stand that fakes it is not a rehearsal.
+    HOLIDAY_PROVIDER = "nager"
+
+    # Pinned here so that the day the public service moves, this file is what has to know
+    # rather than a default in application source. No credential of any kind.
+    HOLIDAY_PROVIDER_BASE_URL = "https://date.nager.at"
+
+    # REQ-02-011's call bound. Behaviour affecting — a country whose call has not answered
+    # inside it is reported unsourced rather than failed — so it is identical in both
+    # environments and stated rather than inherited, exactly like the sync staleness above.
+    HOLIDAY_PROVIDER_TIMEOUT_MS = "8000"
   }
 
   api_secrets = merge(
