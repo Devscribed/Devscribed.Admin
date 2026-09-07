@@ -6,7 +6,7 @@
   "branch": "spec/holiday-sourcing",
   "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
   "headAtInit": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
-  "status": "static_gate",
+  "status": "implement",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T10:33:36.868Z",
-  "updatedAt": "2026-09-07T11:32:55.545Z",
+  "updatedAt": "2026-09-07T11:33:04.930Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,15 +34,18 @@
       "lastVerdict": "pass"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-07T10:50:17.014Z",
       "endedAt": "2026-09-07T11:32:55.490Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "blocked",
+      "attempts": 1,
+      "startedAt": "2026-09-07T11:32:55.722Z",
+      "endedAt": "2026-09-07T11:33:04.873Z",
+      "lastVerdict": "blocked"
     },
     "review": {
       "status": "pending",
@@ -54,11 +57,13 @@
     }
   },
   "budget": {
-    "codeAttempts": 0,
+    "codeAttempts": 1,
     "handoffReplans": 0,
     "infra": 0
   },
-  "findingHistory": {},
+  "findingHistory": {
+    "spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`": 1
+  },
   "carriedFindings": [],
   "carriedFrom": null,
   "contested": [],
