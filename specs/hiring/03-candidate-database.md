@@ -698,6 +698,14 @@ candidates sit in a list they cannot see.
 - Rows link to the card; the whole row is the target, **except** the actions menu inside it.
 - The `Interview date` cell is the date over the time, centred; the `Vacancy` cell is the title
   over its interviewer. Both are two-line cells in a table whose row grows to hold them.
+- **Below `md` the list is a column of cards rather than a table**, and every value the table
+  showed is on the card exactly once: the name and its application count as the title, the email
+  as the subtitle, the vacancy, its interviewer and the interview date as facts, the status and
+  the kebab on the service line, and the assessments as a strip capped at two with a `+N` whose
+  accessible name spells the whole list out. Between `md` and `lg` the table drops `Email`, which
+  the card is what gives back. Both are the design's
+  ([design](03-candidate-database.design.md#responsive)); the rules on this page do not move with
+  the width, and neither does the page strip.
 - Required `data-testid` attributes:
   - `candidates-list`, `candidates-search-input`, `candidates-timezone`
   - `candidates-filters-open`, `candidates-filters`, `candidates-filters-close`,
@@ -712,6 +720,8 @@ candidates sit in a list they cannot see.
     `candidate-vacancy-{id}`, `candidate-interviewer-{id}`, `candidate-latest-{id}`,
     `candidate-status-{id}`, `candidate-app-count-{id}`,
     `candidate-criterion-{id}-{criterionId}`
+  - `candidate-criteria-{id}`, `candidate-criteria-more-{id}` — the card's capped strip and its
+    `+N`, drawn below `md` only
   - `candidate-actions-{id}`, `candidate-action-calendar-{id}`,
     `candidate-action-reschedule-{id}`, `candidate-action-cancel-{id}`,
     `candidate-action-open-{id}`, `candidate-action-delete-{id}`, `toast-calendar-{id}`
@@ -802,6 +812,16 @@ candidates sit in a list they cannot see.
 - **Expected Result:**
   1. Three clauses, one per kind — never folded into one, so each is satisfied by any of the candidate's applications.
   2. `invalid_filter` both times: the five statuses are a closed set, and an unknown id is refused rather than dropped.
+
+### TC-H03-UNIT-07: The capped assessment strip is spelled out in full
+- **Level:** Unit
+- **Preconditions:** the card's strip draws two chips and a `+N` for the rest ([design §Responsive](03-candidate-database.design.md#responsive)).
+- **Steps:**
+  1. Describe four assessments.
+  2. Describe one.
+- **Expected Result:**
+  1. `Assessments: English: B1, .NET: 4, Culture: Yes, Notice: 2 weeks` — every one of them, in the order the row carries, not the two that were drawn.
+  2. `Assessments: English: B1`, with no separator and no bubble to account for.
 
 ### TC-H03-INT-01: The headline query
 - **Level:** Integration
@@ -1182,4 +1202,30 @@ candidates sit in a list they cannot see.
   2. The no-results sentence stands in the same place, the `All` tab reads `All (0)`, and the state holds the one control that empties the filters **and** the search.
   3. Every filter and the search are gone, and the `All` tab reads `All (3)`.
 - **Selectors:** `candidates-empty-state`, `candidates-no-results`, `candidates-clear-all`, `candidates-scope-all`, `candidates-list`.
+
+### TC-H03-E2E-13: Below `md` a candidate is a card, and every value is on it exactly once
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one candidate with two applications and four assessments, on a categorised vacancy with a scheduled interview.
+- **Steps:**
+  1. At 1280 read the row.
+  2. Narrow to 360 and read it again.
+  3. Read the assessment strip.
+- **Expected Result:**
+  1. An `<a>` row inside the list's card, carrying no card class.
+  2. The same node is a `RecordCard` — still an anchor, still one node — and the name, the application count, the email, the vacancy, the interviewer, the interview date, the status and the kebab are each present exactly once, each under its own id. The facts keep the headings the columns had.
+  3. Two chips and a `+2`; the two folded assessments are absent as chips and present in the strip's accessible name, which spells all four out. The page does not scroll horizontally at 360.
+- **Selectors:** `candidate-row-{id}`, `candidate-name-{id}`, `candidate-app-count-{id}`, `candidate-email-{id}`, `candidate-vacancy-{id}`, `candidate-interviewer-{id}`, `candidate-latest-{id}`, `candidate-status-{id}`, `candidate-actions-{id}`, `candidate-criteria-{id}`, `candidate-criteria-more-{id}`, `candidate-criterion-{id}-{criterionId}`, `candidates-list`.
+
+### TC-H03-E2E-14: The table drops `Email` below `lg`, and never the floor
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one candidate with a scheduled interview.
+- **Steps:**
+  1. At 1500 read the `Email` column.
+  2. At 900 read it again.
+  3. At the same width, read the name, the status and the kebab.
+- **Expected Result:**
+  1. The heading and the cell are both drawn, and the address is in it.
+  2. Still a table row and not a card — 900 is above `md`. Both nodes are still in the tree, neither is drawn, and the word `Email` is not on the screen: the column is gone header and cells together, which is what keeps the remaining five under their own headings.
+  3. All three are drawn. The first column, the status and the actions are the floor no `hideBelow` may reach.
+- **Selectors:** `candidate-row-{id}`, `candidate-email-{id}`, `candidate-name-{id}`, `candidate-status-{id}`, `candidate-actions-{id}`, `candidates-list`.
 

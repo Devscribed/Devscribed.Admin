@@ -130,6 +130,7 @@ link, so a vacancy has exactly one booking link. Multiple links per vacancy woul
 | Interviewer reassigned | 01 | Existing applications keep the interviewer they were booked with, and reschedule against **that** mailbox | 07 |
 | The list gains a card form | 01 | The two library lists take the same two forms, and `06`'s "One layout." is overruled | 06 |
 | `Table` gains `hideBelow` | 01 | A column may leave the table below a rung, header and cells together — the floor (first column, status, actions) never may | 03, 06 |
+| The page strip wraps | 03 | `Pagination`'s [§53](../design-system/decisions.md) is amended: its widest form measures 331px against the 328 a 360px screen leaves, so one row becomes two rather than pushing the page sideways. This list is its only consumer today and every future one inherits it | design-system `decisions.md` |
 
 ## Dependency Graph
 

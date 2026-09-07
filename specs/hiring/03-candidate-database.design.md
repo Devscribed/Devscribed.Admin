@@ -34,6 +34,17 @@ the [status palette](#status-badges) stops being a five-tone scale, and the
 The table itself is six columns and a kebab, and every one of them is a fact somebody scans for:
 who, how to reach them, what for, when, where they got to, and what can be done about it.
 
+> **Amended by the responsive pass — the list has a second form, and the hand-rolled fold is
+> gone.** Below `md` a candidate is a `RecordCard` and not a table row; between `md` and `lg` the
+> table drops `Email`. The list is a `RecordList` ([§98](../design-system/decisions.md)), which is
+> the only object that knows there are two forms. [Responsive](#responsive) is rewritten and the
+> row it overrules is struck inside its own table; [The columns](#the-columns) gains the card slot
+> each column fills; [Component map](#component-map) gains three rows. This is the screen
+> `renderCard` and `cardOnly` were designed against — its `Name` cell is the composite that made
+> a cell-shaped `render` insufficient. Nothing about the filters, the drawer, the page strip, the
+> copy or the actions changed, and the suite runs at 1280, where the table is what it has always
+> been.
+
 ## Layout — candidates
 
 ```
@@ -91,14 +102,16 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 
 ## The columns
 
-| Column | `flex` | Holds |
-|---|---|---|
-| Name | 1.5 | the name, the application count beside it, the assessed-criteria chips beneath |
-| Email | 1.2 | one line, ellipsised |
-| Vacancy | 1.1 | the title over its interviewer, `All` scope only |
-| Interview date | 1 | the date over the time, **centred** |
-| Status | fixed 120px | the badge, or the outlined `Cancelled` |
-| Actions | the system's own last column | the row kebab |
+| Column | `flex` | Holds | Card slot (< `md`) |
+|---|---|---|---|
+| Name | 1.5 | the name, the application count beside it, the assessed-criteria chips beneath | `title` — the name line alone, through `renderCard` |
+| — | — | the chips out of the name cell | `badges`, through a `cardOnly` column |
+| Email | 1.2 | one line, ellipsised; `hideBelow: 'lg'` | `subtitle` |
+| Vacancy | 1.1 | the title over its interviewer, `All` scope only | a fact — the title alone |
+| — | — | the interviewer out of the vacancy cell | a fact, through a `cardOnly` column |
+| Interview date | 1 | the date over the time, **centred** | a fact — date and time on one line |
+| Status | fixed 120px | the badge, or the outlined `Cancelled` | `status` |
+| Actions | the system's own last column | the row kebab | `actions` |
 
 - **Vacancy and Interview date are two columns, not one stacked cell.** They are scanned for
   different reasons — *what for* and *when* — and they want different alignment: a title reads from
@@ -253,8 +266,11 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 | Value | `Select` \| `TextInput` | by type | `criteria-filter-value-{index}` |
 | Archived marker | `Badge` | `status="inactive"`, `outlined` | `criteria-filter-archived-{index}` |
 | Show results / Clear filters | `Button` | `variant="primary"` / default | `candidates-filters-apply` · `candidates-clear-filters` |
-| List | `Card padded={false}` > `Table` — **drawn only around rows** | `columns`, `rows`, **`busy`** | `candidates-list` |
+| List | **`RecordList`** ([§98](../design-system/decisions.md)) — **drawn only around rows** | `columns`, `rows`, **`busy`** | `candidates-list` |
+| List surface ≥ `md` | `Card padded={false}` > `Table`, drawn by `RecordList` in its table form | — | — |
+| A row < `md` | `RecordCard` ([§97](../design-system/decisions.md)) | `status`, `title`, `subtitle`, `badges`, `facts`, `actions` | `candidate-row-{id}` |
 | Assessed-criteria labels on a row | **`Badge status="neutral" size="s"`** ([§59](../design-system/decisions.md)), name in `--text-secondary` and value in `--text-primary` | — | `candidate-criterion-{id}-{criterionId}` |
+| The card's capped assessment strip | the same `Badge`s, two of them, then a `Badge` reading `+N`; the strip is `aria-hidden` and the whole list is spelled out beside it | — | `candidate-criteria-{id}` · `candidate-criteria-more-{id}` |
 | Vacancy + interviewer | native two-line cell | — | `candidate-vacancy-{id}` · `candidate-interviewer-{id}` |
 | Interview date | native two-line cell | `align: 'center'` (§18) | `candidate-latest-{id}` |
 | Status | `Badge` | `status`, `outlined` — four of the five outlined, `Offer` alone filled | `candidate-status-{id}` |
@@ -620,11 +636,95 @@ slot for one, so the call stands on its own second reason.
 
 ## Responsive
 
+The rungs are the system's — `xs < 576 · sm ≥ 576 · md ≥ 768 · lg ≥ 992 · xl ≥ 1200 · xxl ≥ 1440`,
+minimum supported width 360 ([design-system 01 §01](../design-system/01-responsive.md)). This
+screen introduces none of its own.
+
 | Width | Layout |
 |---|---|
-| ≥ 1200px | As drawn |
-| < 1200px | The drawer hangs from the 60px navbar instead of the 80px one (§51); the toolbar wraps, search and `Filters` below the tabs |
-| 768–1023px | The `Email` column folds under `Name`; the other five are unchanged |
+| ≥ `xl` | As drawn: the rail is in view and the list is a `Table` with all six columns |
+| `lg` – `xl` | The shell switches to hamburger + drawer, so the filter panel hangs from the 60px navbar instead of the 80px one (§51); the toolbar wraps, search and `Filters` below the tabs. The list is unchanged |
+| `md` – `lg` | The list keeps the table and **drops `Email`** — `hideBelow: 'lg'` ([§96](../design-system/decisions.md)) |
+| < `md` | **Each row is a `RecordCard`** ([§97](../design-system/decisions.md)), and the email is its subtitle |
+| < `sm` | The filter panel is a sheet rather than a side drawer (below) |
+| ~~768–1023px~~ | ~~The `Email` column folds under `Name`; the other five are unchanged~~ |
+
+> **The fold is overruled by the two rows above it and by [§96](../design-system/decisions.md) /
+> [§97](../design-system/decisions.md) / [§98](../design-system/decisions.md).** It was hand-rolled
+> — `useMediaQuery('(max-width: 1023px)')` on the screen, a second `candidate-email-{id}` inside
+> the name cell and a conditionally spread column — and it is deleted. Two things replace it, at
+> the ladder's two numbers rather than at one number of this screen's own:
+>
+> **Below `md` the email is the card's subtitle**, which is the fold done properly: the value moves
+> to a line of its own on a surface that has one.
+>
+> **Between `md` and `lg` the `Email` column is dropped**, and a dropped column is not a folded one
+> ([01 design §Responsive](01-vacancies.design.md)) — the value is gone from the table, not moved
+> into a neighbour. The measurement is why the fold cannot survive there either. At 768 the well is
+> 718px; the list card's hairline and the row's own 16px sides leave 684, of which the actions cell
+> takes its 96 cap and the status its 120, and 12px of cell padding goes to each of the six. The
+> four flexible columns divide 468 by `1.5 / 1.2 / 1.1 / 1`, so `Name` holds **134px** of content
+> and `Email` **105** — about fifteen characters of a 14px address, drawn `jane.doe@exa…`. The fold
+> put the same address on a second line **inside that 134px cell**, so it truncated there too: the
+> band the fold was written for is the band it stopped working in. Dropping `Email` gives the four
+> survivors `183 / 131 / 118` instead, and the address is one press away on the card, still
+> matched by the search, and back in its own column from `lg`. It is the value on this row nobody
+> *decides* anything from in a list — the same argument that drops `Length` from the vacancies
+> table one rung lower.
+
+**The candidate card**, below `md`:
+
+```
+┌────────────────────────────────────┐
+│ ⟨Scheduled⟩                     ⋮  │  ← service line: status left, kebab right
+│ Jane Doe            3 applications │  ← title, 14/20 — the name line, unchanged
+│ jane.doe@example.com               │  ← subtitle, one line
+│ ⟨English: B1⟩ ⟨.NET: 4⟩ ⟨+2⟩       │  ← assessments, one line, capped at two
+│ Vacancy       Senior React Engineer│  ← facts
+│ Interviewer                Sam Rowe│
+│ Interview date     26 Aug 26, 14:00│
+└────────────────────────────────────┘
+```
+
+- **Every value the table showed appears exactly once.** The status and the kebab take the service
+  line, the name and its application count the title, the email the subtitle; `Vacancy`,
+  `Interviewer` and `Interview date` become facts under the headings they had in the table.
+- **`Name` is the composite this whole mechanism exists for.** Its cell holds a name, an
+  application count and a strip of assessment chips, and the card puts those in three different
+  places — so the column declares `renderCard` and hands the card the name line alone
+  ([§98](../design-system/decisions.md)). Handing it the cell would put the chips under a two-line
+  clamp meant for a person's name. The name line the card gets is the table's own, unchanged — the
+  name and its count share one baseline and the name ellipsises on that line, so `RecordCard`'s
+  two-line clamp is a ceiling this slot never reaches rather than the treatment it uses.
+- **Two things reach the card through `cardOnly` columns**, the mirror of `hideBelow`: the
+  assessment chips, which live inside the name cell and have no column of their own, and the
+  **interviewer**, which is the second line of the `Vacancy` cell. Both are columns the card draws
+  and the table folds into a neighbour; `RecordList` removes them before `Table` is handed the
+  columns, so the table still has six.
+- **The assessments are capped at two, with a `+N`** — a fixed cap and not a measured fit, so
+  nothing observes its own width and a test asserts `+2` rather than asserting against whatever
+  happened to fit. The strip is one line and the `+N` is a `Badge`, the same treatment the
+  vacancies card gives its categories. Its accessible name spells every assessment out, so nothing
+  a reader needs is only inside the bubble. **The table is unchanged**: its chips wrap under the
+  name and the row grows to hold them ([§48](../design-system/decisions.md)), which is what a cell
+  with a whole line to itself can afford and a card in a scanned column cannot.
+- **The interviewer fact is absent in `Assigned to me`**, exactly as its second line is in the
+  table: there it is the viewer on every row ([03 §09.48](03-candidate-database.md)).
+- **A row's `data-testid` is on exactly one node at every width** — the `<a>` above `md`, the card
+  below it, never both. That is why the switch is JavaScript reading the pre-paint stamp and not a
+  pair of CSS-hidden trees.
+- `busy` dims the cards and sets `aria-busy` exactly as it dims the rows, so a refilter looks the
+  same in both forms; the first load's `Preloader`, both empty states and the failure state still
+  stand on the page's own ground with no card around them
+  ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
+- **The page strip is the same control at every width**, and every control in it is present and
+  the same size on a phone. A list's whole query lives in its address, and neither a load-more row
+  nor a width-dependent page size can honour that — `?page=3` has to mean the same twenty-five
+  records on a phone as on a desktop. It gained one thing here: **it wraps**
+  ([§53](../design-system/decisions.md)). Its widest form, `‹ 1 … 4 5 6 … 20 ›`, measures 331px
+  against the 328 a 360px screen leaves, so at that width and that page count it becomes two rows
+  rather than pushing the page sideways. Nothing else changes at any other width, because a flex
+  row only wraps when it has run out of room.
 
 The drawer is 340px at every width and `max-width: 100%` below it; its fields are full width and
 the criterion chip wraps its controls onto a second line rather than overflowing. Nothing in it
@@ -678,6 +778,11 @@ scrolls horizontally.
 - `ToastHost` is one polite live region and each `Toast` is a plain node inside it, so an arriving
   message is announced once. Nothing in a toast takes focus, and its dismiss is a real button.
 - Status badges carry their meaning in text; the hue repeats it.
+- **The card's assessment strip is hidden from a reader and the whole list is beside it.** The
+  `+N` is a count, not a list, so without that sentence the third assessment is on the screen and
+  nowhere a reader can reach. It is a visually hidden `<span>` rather than an `aria-label` on the
+  strip, because a label on a `<span>` is a label on a `generic` role and no standard requires a
+  browser to expose it. The table draws every chip and needs none of this.
 - Every day cell, slot and dialog control inside the two dialogs follows the two control specs
   ([calendar](controls/calendar-control.md), [slots](controls/time-slot-picker-control.md)).
 
