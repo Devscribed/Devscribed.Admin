@@ -6,7 +6,7 @@
   "branch": "fix/holidays-org-country-hint",
   "baseRef": "5a39442732496de355ff9961825e25ab4b60b2e7",
   "headAtInit": "5a39442732496de355ff9961825e25ab4b60b2e7",
-  "status": "review",
+  "status": "qa",
   "track": "bug",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-07T08:15:54.962Z",
-  "updatedAt": "2026-09-07T08:20:48.070Z",
+  "updatedAt": "2026-09-07T08:21:32.531Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -43,8 +43,11 @@
       "lastVerdict": "pass"
     },
     "review": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:20:48.224Z",
+      "endedAt": "2026-09-07T08:21:32.482Z",
+      "lastVerdict": "pass"
     },
     "qa": {
       "status": "pending",
