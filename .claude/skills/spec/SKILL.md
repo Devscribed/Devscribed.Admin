@@ -440,3 +440,7 @@ second as something not to reproduce.
   spec may not overrule. Write to the checklist; expect to be judged on the register.
 - `.claude/skills/spec-review/SKILL.md` — how a pass is split and what a judge may return a
   spec for.
+- `.claude/skills/ui-invariants/` — the eight mechanisms a drawn screen fails by, with a worked
+  example of each. Read it before writing `## Geometry & motion`, the states of a question, or
+  the borrowed row. A rule written about the control in front of you closes one control; the
+  register is how one is written about the mechanism instead.

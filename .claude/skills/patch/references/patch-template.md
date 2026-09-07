@@ -49,10 +49,31 @@ no rows; never omit a row because it already exists.
 |---|---|---|
 | `Choose a recipient first` | — | `packages/validation` |
 
+### `## Geometry & motion`
+
+Required when the patch draws or moves anything. One row per element this patch changes whose
+**content varies** — in length, in count, or in presence.
+
+| Element | What varies | What holds it | What moves if it does not |
+|---|---|---|---|
+| the organization country picker | 250 labels, `Algeria` to `No country — global holidays only` | a fixed width, set from the control's slot rather than its value | the Save button beside it, on every change of selection |
+
+A patch that changes nothing drawn writes `Nothing drawn changes.` and moves on. A patch that
+draws and leaves this table out has not been checked against the mechanism most screen defects
+are: `.claude/skills/ui-invariants/`.
+
+`min-width` and `min-height` do not hold anything — they hold until the content exceeds them,
+which is the case they were written for.
+
 ### `## Cases`
 
 Numbered into the owning spec's scheme. Preconditions, steps, expected result, and for E2E the
 selectors. State for each that it fails against the current code.
+
+A patch that draws carries at least one case that **measures**: a box that did not move, a
+scroll box that did not grow, a message counted once. The probes are in
+`e2e/tests/ui-invariants.ts`. Waiving the regression is a decision a person makes in writing,
+in this section, naming what is left unheld.
 
 ### `## Blast radius`
 

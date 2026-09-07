@@ -36,6 +36,7 @@ likely to be re-litigated.
 | [0018](0018-the-refine-judge-reads-alone-and-more-than-once.md)        | The refine judge reads alone and more than once, and the union of its passes is what the fixer answers | current, amends 0013 |
 | [0019](0019-a-prompt-lives-in-a-definition-and-a-script-hands-over-data.md) | A prompt lives in a definition; a script hands over data, and a tool prints facts rather than advice | current, extends 0015 |
 | [0020](0020-a-rule-an-agent-must-follow-is-a-field-a-script-reads.md) | A rule an agent must follow is a field a script reads; what a script can enumerate, a script must enumerate | current, extends 0019 |
+| [0021](0021-a-screen-defect-is-a-mechanism-with-an-id.md) | A screen defect is a mechanism with an id, and it is held by a measurement | current |
 
 Measurements that led to these, including the hypotheses that did not survive, are in
 [docs/research/](../research/).

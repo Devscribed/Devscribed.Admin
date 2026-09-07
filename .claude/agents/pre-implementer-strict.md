@@ -63,6 +63,9 @@ from the map was not run**, and a verdict with no map is not a compile.
 | H-15 | Every control the spec needs that `@ds` does not export is in `dsGaps`. |
 | H-16 | Tasks number between three and roughly ten; each carries `files`, `requirements` and `dependsOn`. |
 | H-17 | `node scripts/handoff-coverage.mjs` comes back clean. |
+| H-18 | Every row of `## Geometry & motion` is a line of the task that draws that element — what varies, what holds it, and the measurement that proves it. A spec that draws and carries no such table, or an empty one, is a `spec` finding; so is a row whose "what holds it" is a `min-width` or a `min-height`. |
+| H-19 | Every box the spec draws outside its own flow — absolute, transformed, portalled, a slot below its wrapper — is listed with the ancestor that scrolls around it and how it is kept out of that ancestor's overflow. The spec saying nothing is a `spec` finding. |
+| H-20 | Every Error Messages row names the single element that draws it, and the case that counts it rather than asserting it is visible. |
 
 **H-07 is the one that is easy to answer with a list and hard to answer honestly.** Listing the
 call sites is not the answer; saying what each one does with the new kind of row is. Where the

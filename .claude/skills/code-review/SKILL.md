@@ -152,6 +152,14 @@ rest.** Look for what hides it: an optional parameter only one caller passes, a 
 default that stands in when the real value is absent, a wrapper applied at one entry point of
 three. A mechanism with a graceful default fails silently at every site that forgot it.
 
+**Also enumerate** every route that accepts a partial body, and every field of each. **For
+each field**, does the route decide on the **presence of the key** or on its value.
+**Blocks when it decides on the value** (CR-35): a field the caller never sent is then
+validated, refused, or written back as whatever the absent value coerces to — and a form that
+submits the whole body every time makes a stored legacy value unsaveable through a field
+nobody touched. The two questions "was this sent" and "what was sent" are different, and a
+body without the key answers only the first.
+
 ## 12. Freshness sweep
 
 **Enumerate** every control that changes what a screen asks the server — a filter, a range, a
@@ -165,6 +173,36 @@ hides it: an early return that sets an error and leaves the previous answer in p
 skeleton chosen on "have I ever loaded" rather than "does what I hold answer what I am
 asking"; a label computed on the client beside a body computed on the server, so the two move
 independently. A stale view that is mostly right is read as right.
+
+## 13. Geometry sweep
+
+Run it on any diff that touches `apps/web` or `packages/ds`.
+
+**Enumerate** every element the change draws or moves whose content varies — in **length** (a
+label, a name, a sum, a message), in **count** (a chip per selection, a row per result), or in
+**presence** (an optional second line, a status that appears, a hint replaced by an error) —
+and every box the change draws outside its own flow: absolutely positioned, transformed,
+portalled, or a slot offset below its wrapper.
+
+**For each varying element**, what fixes its box, and what is beside and below it. **Blocks
+when** the element's own content decides its width or height and something else moves as a
+result, or when a control is repositioned by the value it changes (CR-37). `min-width` and
+`min-height` do not fix a box — they hold until the content exceeds them, which is the case
+they were written for.
+
+**For each out-of-flow box**, which ancestor scrolls, and whether the box is counted in that
+ancestor's scrollable overflow or clipped by it. **Blocks when** it is (CR-38). A transformed
+box contributes its *transformed* rectangle, so an animation that nudges a grid sideways widens
+the scroller for the length of it.
+
+**Also enumerate** every user-facing message the change can draw, and count the nodes that draw
+each. **Blocks when** one message has two — a component given the message *and* a line rendered
+beside it — or when the test asserts visibility rather than a count (CR-34).
+
+Read the spec's `## Geometry & motion` table as the answer key: a row there is a promise about
+a rectangle, and an element that varies with no row is the spec's finding rather than the
+code's. The mechanisms and their worked examples are in
+[.claude/skills/ui-invariants/](../ui-invariants/SKILL.md).
 
 ## Clearing an item
 

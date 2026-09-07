@@ -31,6 +31,21 @@ saying so costs a sentence — discovering it at review costs the run.
 - **No new design-system component.** A DS gap is a spec's DS-gaps table, never an improvisation.
 - **The rule fits in one screen of text.** If stating it needs a table of interactions, the
   interactions are the spec.
+- **The rule closes the mechanism, not the control it was found on.** A rule written as *this
+  picker holds its width* closes one control and leaves every other control with the same
+  defect open — and each of those becomes a patch of its own. State it as the mechanism —
+  *no box has a size its own content decides* — and check every place that mechanism reaches
+  before calling the patch complete. Where stating it that way is more than this track can
+  carry, the mechanism is a spec.
+
+**"Not in this patch" may not hold the same mechanism.** Naming a second control that has the
+defect and deferring it — because no screen shows it today — schedules the same work again for
+the first screen that does. Either the rule covers the mechanism or the document is the wrong
+weight. Deferring a genuinely *different* question is what that section is for.
+
+The mechanisms a drawn screen fails by, with worked examples of each, are in
+[.claude/skills/ui-invariants/](../ui-invariants/SKILL.md). Read it before writing a patch that
+draws.
 
 Batch what belongs together. Four adjustments to one form are one patch, one run, one branch —
 three separate runs review the same diff three times.
@@ -78,3 +93,6 @@ QA are unchanged — they are what keeps a patch honest, and neither is ever ski
 - Several patches for one form.
 - A case that would pass before the change.
 - A patch used to skip refine on work that is a spec.
+- A rule written about the control the defect was found on rather than the mechanism.
+- A patch repairing what an earlier patch left half-closed, where the earlier one named the
+  remainder and deferred it.

@@ -245,6 +245,41 @@ That it exports, or that something already lives there, is not a row.
 A screen this spec changes and does not draw is named here as undrawn, with the risk that
 leaves open.
 
+## `## Geometry & motion`
+
+Required of every bundle that draws a screen. One row per element whose **content varies** —
+in length, in count, or in presence.
+
+```
+| Element | What varies | What holds it | What moves if it does not |
+|---|---|---|---|
+| `calendar-range-label` | a month name, a same-month range, a range crossing a year | a width reserved for the longest label the four window presets produce | `‹`, Today and `›`, far enough that the arrow leaves the pointer that just clicked it |
+| the day column header | a holiday name, up to three lines in a 40px column | a fixed-size marker drawn out of the header's flow, the name given on hover | the header row of the whole grid, and every row below it |
+| the sourcing panel | a status line present or absent, two possible strings | a fixed width sized for the longer string, and a status slot of one line that does not wrap | the Refresh button, sideways, whenever a sync starts or ends |
+```
+
+Three things make a row, and every screen has at least one of them:
+
+- **length** — a label, a name, a sum, a count, a translated string;
+- **count** — a chip per selection, a row per result, a badge per state;
+- **presence** — an optional second line, a status that appears, a hint that is replaced.
+
+**An empty table is a finding, not an omission.** A screen with genuinely nothing that varies
+says so in one row and names why.
+
+Two rules the column "What holds it" is judged against:
+
+- `min-width` and `min-height` are not reservations. They hold until the content exceeds
+  them, which is the case they were written for. A reserved slot has a **fixed** size and the
+  content inside it is stopped from wrapping.
+- A box drawn outside its own flow — absolutely positioned, transformed, portalled — still
+  counts toward the scrollable overflow of an ancestor that scrolls, and is clipped by it.
+  Where this spec puts such a box inside such an ancestor, the row says how it is kept out of
+  that ancestor's layout.
+
+The invariants these rows answer, and the worked examples of each, are in
+`.claude/skills/ui-invariants/`.
+
 ## `## Edge Cases`
 
 One of the six coverage obligations, and the one a reader reaches for first. A numbered table of

@@ -40,13 +40,20 @@ const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
   const [key, inline] = process.argv[i].split('=', 2);
   if (!key.startsWith('--')) continue;
-  args.set(key.slice(2), inline ?? process.argv[++i]);
+  // A flag with no value must not swallow the next one: `--absences-only --as x` set
+  // `absences-only` to "--as" and then skipped it, so the run built a new organization
+  // instead of the one named.
+  const next = process.argv[i + 1];
+  const takesValue = inline === undefined && next !== undefined && !next.startsWith('--');
+  args.set(key.slice(2), inline ?? (takesValue ? process.argv[++i] : ''));
 }
 
 const BASE = (args.get('url') ?? process.env.SEED_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 const TOKEN = args.get('token') ?? process.env.SEED_FIXTURE_TOKEN ?? '';
 const PASSWORD = args.get('password') ?? 'Teammerly2026';
 const AS = args.get('as') ?? '';
+/* Absences against people an earlier run already added, without adding a second set. */
+const ABSENCES_ONLY = args.has('absences-only');
 /* Seconds, not minutes: two runs a minute apart is a normal thing to do while trying
    something out, and signup is irreversible. */
 const STAMP = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
@@ -226,6 +233,159 @@ async function createProject(admin, { name, key, membershipIds }) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Absences
+ *
+ * Through the product's own lifecycle, which is the only way an absence can be made from
+ * outside the database — and the reason this takes four calls per person rather than one
+ * insert:
+ *
+ *   1. an admin writes the member's financials, because `submit` refuses a member who has
+ *      none (`financials_not_configured`);
+ *   2. a reserve credit, because available days are derived from the reserve and a member
+ *      with an empty one can request nothing. The accrual engine only produces
+ *      formula-derived amounts over time, so this is the one step that uses a fixture
+ *      route — `POST /api/test/vacation/seed-credit`, the same one spec 09's E2E uses to
+ *      state a precise balance;
+ *   3. the member submits **for themselves**, signed in as themselves. Submission is
+ *      self-only, so an admin cannot do this on anyone's behalf and the seeder holds every
+ *      person's session for exactly this;
+ *   4. the admin reviews, for the ones that end up approved. Approving your own is
+ *      refused, which is why the admin is never one of the people below.
+ * ------------------------------------------------------------------ */
+
+/** 4000 a month over 260 working days is ~184.62 a day; 8000 of reserve covers the 28. */
+const SALARY = 4000;
+const DAYS_PER_YEAR = 28;
+const CREDIT = 8000;
+
+const ymd = (date) => date.toISOString().slice(0, 10);
+
+/** Offsets from today, so the absences always land in the window the calendar opens on. */
+function dayFromToday(offset) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date;
+}
+
+/**
+ * Chosen to overlap: two people are away in the same week, so the calendar has a column
+ * with more than one absence in it and the metrics strip has something to subtract.
+ * `approved` and `pending` in equal measure, because the two are drawn differently and a
+ * screen with only one of them tests half the legend.
+ */
+const ABSENCES = [
+  { local: 'anna', from: 7, to: 11, decision: 'approved' },
+  { local: 'piotr', from: 9, to: 18, decision: 'pending' },
+  { local: 'james', from: 14, to: 25, decision: 'approved' },
+  { local: 'lena', from: 2, to: 4, decision: 'pending' },
+  { local: 'marina', from: 28, to: 32, decision: 'approved' },
+  { local: 'alex', from: 21, to: 23, decision: 'pending' },
+];
+
+async function prepareBalance(admin, person) {
+  await expect(
+    `financials for ${person.name}`,
+    call(`/api/organizations/${admin.orgId}/members/${person.membershipId}/vacation/financials`, {
+      method: 'PUT',
+      cookies: admin.cookies,
+      body: {
+        monthlySalary: SALARY,
+        clientHourlyRate: 60,
+        vacationDaysPerYear: DAYS_PER_YEAR,
+        currency: 'USD',
+        isReservePercentManual: false,
+      },
+    }),
+  );
+
+  await expect(
+    `reserve credit for ${person.name}`,
+    call('/api/test/vacation/seed-credit', {
+      method: 'POST',
+      fixture: true,
+      body: { email: person.email, amount: CREDIT },
+    }),
+  );
+}
+
+async function addAbsence(admin, person, { from, to, decision }) {
+  const startDate = ymd(dayFromToday(from));
+  const endDate = ymd(dayFromToday(to));
+
+  // A request may not cross a year end (validation rule 3). Late in December the offsets
+  // above would, so the range is pulled back to the last day of the year it starts in
+  // rather than silently producing a 400 nobody reads.
+  const year = startDate.slice(0, 4);
+  const bounded = endDate.slice(0, 4) === year ? endDate : `${year}-12-31`;
+  if (bounded < startDate) {
+    step(`${person.name} — skipped, no room left in ${year}`);
+    return;
+  }
+
+  await prepareBalance(admin, person);
+
+  const self = await signIn(person.email);
+  const created = await expect(
+    `request for ${person.name}`,
+    call(`/api/organizations/${self.orgId}/members/${person.membershipId}/vacation/requests`, {
+      method: 'POST',
+      cookies: self.cookies,
+      body: { startDate, endDate: bounded },
+    }),
+  );
+  const requestId = created.json.id;
+
+  if (decision === 'approved') {
+    await expect(
+      `approval for ${person.name}`,
+      call(
+        `/api/organizations/${admin.orgId}/members/${person.membershipId}/vacation/requests/${requestId}/review`,
+        { method: 'PUT', cookies: admin.cookies, body: { decision: 'approved' } },
+      ),
+    );
+  }
+
+  step(`${person.name} — ${startDate} → ${bounded} — ${decision}`);
+}
+
+async function seedAbsences(admin, personOf) {
+  process.stdout.write('\nAbsences\n');
+  for (const absence of ABSENCES) {
+    const person = personOf(absence.local);
+    if (!person) {
+      step(`${absence.local} — not in this organization, skipped`);
+      continue;
+    }
+    await addAbsence(admin, person, absence);
+  }
+}
+
+/**
+ * `--absences-only`: the people are already here from an earlier run, and running the whole
+ * seeder again would add a second set of them. Members are matched by the local part of the
+ * address this script mints — `alex.<stamp>@…` — and where a run has been repeated the most
+ * recently joined wins, which is the set whose teams and countries are on screen.
+ */
+async function findSeededPeople(admin) {
+  const listed = await expect(
+    'members',
+    call(`/api/organizations/${admin.orgId}/members`, { cookies: admin.cookies }),
+  );
+  const members = listed.json.members ?? listed.json;
+
+  const newest = new Map();
+  for (const member of members) {
+    const local = String(member.email).split('.')[0];
+    if (!String(member.email).endsWith(`@${DOMAIN}`)) continue;
+    const seen = newest.get(local);
+    if (!seen || member.joinedAt > seen.joinedAt) {
+      newest.set(local, { membershipId: member.id, name: member.fullName, email: member.email, joinedAt: member.joinedAt });
+    }
+  }
+  return (local) => newest.get(local);
+}
+
+/* ------------------------------------------------------------------ *
  * The people
  * ------------------------------------------------------------------ */
 
@@ -273,6 +433,13 @@ async function main() {
     step(`${admin.name} — ${adminEmail} — admin`);
   }
 
+  if (ABSENCES_ONLY) {
+    if (!AS) throw new Error('--absences-only needs --as: there is nobody in a brand new organization.');
+    await seedAbsences(admin, await findSeededPeople(admin));
+    process.stdout.write('\nDone.\n\n');
+    return;
+  }
+
   process.stdout.write('\nPeople\n');
   const people = [];
   for (const person of PEOPLE) {
@@ -300,6 +467,8 @@ async function main() {
     membershipIds: [by('james'), by('priya')],
   });
 
+  await seedAbsences(admin, (local) => people[PEOPLE.findIndex((p) => p.local === local)]);
+
   process.stdout.write('\nDone.\n');
   if (!AS) {
     process.stdout.write(`\n  Sign in: ${adminEmail} / ${PASSWORD}\n`);
@@ -307,7 +476,8 @@ async function main() {
   process.stdout.write(
     '\n  Settings › Holidays sources BY, PL, US, DE and IN — IN is the one the provider' +
     '\n  does not cover. Sam Okafor states no country and receives the global days only.' +
-    '\n  Time off › Calendar has three teams to filter by, and one person on none of them.\n\n',
+    '\n  Time off › Calendar has three teams to filter by, one person on none of them,' +
+    '\n  and six absences — three approved, three pending — two of which overlap.\n\n',
   );
 }
 
