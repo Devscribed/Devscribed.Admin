@@ -419,7 +419,9 @@ export function VacancyBoard({
           <div className="board-single">{renderColumn(visibleColumn, true)}</div>
         </>
       ) : (
-        <div className="board-scroll">
+        // The one container that may scroll sideways on this screen. Tagged because the
+        // rule is about *which* box scrolls, and a class is not a selector a test may use.
+        <div className="board-scroll" data-testid="board-scroll">
           <div className="board-columns">
             {BOARD_COLUMNS.map((status) => renderColumn(status))}
           </div>

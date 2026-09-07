@@ -463,4 +463,60 @@ test.describe('Board', () => {
     await page.waitForURL(`**/hiring/candidates/${only.candidateId}**`);
     await expect(page.getByTestId('candidate-card')).toBeVisible();
   });
+
+  /* ---------------------------------------------------------------- *
+   * TC-H05-E2E-05
+   * ---------------------------------------------------------------- */
+
+  test('scrolls the column group inside its own container, and never the page', async ({
+    page,
+    request,
+  }) => {
+    const seeded = await seed(request, 'board-scroll');
+
+    await signIn(page, seeded.org.email);
+
+    /*
+     * The band the design's middle row is about. 1400 is the width a test at 900 alone would
+     * miss: the rail appears at 1200 and takes 291px back — the 290px `--layout-sidebar-width`
+     * and the 1px hairline beside it — so the well is *narrower* at 1400 than it is at 1199.
+     */
+    for (const width of [900, 1400]) {
+      await page.setViewportSize({ width, height: 900 });
+      await openBoard(page, seeded);
+
+      const scroller = page.getByTestId('board-scroll');
+      await expect(scroller).toBeVisible();
+
+      const shape = await scroller.evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        overflowY: getComputedStyle(el).overflowY,
+      }));
+
+      // 1 — five 220px columns and four 12px gaps need 1148px of well; neither width has it.
+      expect(shape.scrollWidth, `group scrolls at ${width}`).toBeGreaterThan(shape.clientWidth);
+
+      // 2 — and only sideways. `overflow-x: auto` alone computes the other axis to `auto`
+      // too, which would put a second vertical scrollbar around columns that already scroll.
+      expect(shape.overflowY, `one vertical scrollbar at ${width}`).toBe('hidden');
+
+      // 3 — the page body is not the box that scrolled.
+      const page_ = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(page_, `page is still at ${width}`).toBeLessThanOrEqual(0);
+
+      // 4 — and the group scrolls *to its end*, rather than being clipped at it.
+      await scroller.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+      const last = await page.getByTestId('board-column-offer').evaluate((column) => {
+        const box = column.getBoundingClientRect();
+        const rail = (column.closest('[data-testid="board-scroll"]') as HTMLElement)
+          .getBoundingClientRect();
+        return { over: Math.round(box.right - rail.right), width: Math.round(box.width) };
+      });
+      expect(last.over, `fifth column is whole at ${width}`).toBeLessThanOrEqual(0);
+      expect(last.width, `fifth column keeps its minimum at ${width}`).toBeGreaterThanOrEqual(220);
+    }
+  });
 });
