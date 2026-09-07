@@ -102,8 +102,12 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-select-style
    a real option's value. */
 const CREATE = '__ds_create__';
 
-/* The message slot: absolute, under the control, and the same one a hint takes (§21). */
-const messageSlot: React.CSSProperties = { position: 'absolute', left: 0, whiteSpace: 'nowrap' };
+/* The message slot: absolute, under the control, and the same one a hint takes (§21).
+   PATCH-008 — inset to match the label above it, in both variants: two lines describing one
+   field that do not share a left edge read as two unrelated pieces of text. */
+const messageSlot: React.CSSProperties = {
+  position: 'absolute', left: 'var(--space-4)', whiteSpace: 'nowrap',
+};
 
 /* Both dispatch on what they are handed at runtime — a bare string, a record, or nothing. */
 const labelOf = (o: any): string => (o == null ? '' : typeof o === 'string' ? o : o.label);

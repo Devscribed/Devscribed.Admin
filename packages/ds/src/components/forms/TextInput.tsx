@@ -40,7 +40,9 @@ const messageSlot: React.CSSProperties = {
   /* @literal 8px is deliberately off the type scale. It is the smallest text in the product and
      the only thing set at this size; putting it on the scale would invite something else to
      reach for it. */
-  position: 'absolute', fontSize: 8, bottom: -16, left: 0, whiteSpace: 'nowrap',
+  /* PATCH-008 — the same inset the label above carries, so the two lines that describe one
+     field share a left edge. Pinned at 0 they read as unrelated pieces of text. */
+  position: 'absolute', fontSize: 8, bottom: -16, left: 'var(--space-4)', whiteSpace: 'nowrap',
 };
 
 /**

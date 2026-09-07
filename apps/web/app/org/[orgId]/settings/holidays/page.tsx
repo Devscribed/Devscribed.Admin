@@ -50,6 +50,15 @@ import type {
  * "applies everywhere", which is the holiday form's reading, but "this organization states
  * none", so it is labelled from this spec's own export.
  */
+/**
+ * PATCH-009 — the width both country selects are drawn at, whatever is chosen in them. A
+ * `minWidth` let each control grow to its own value, so picking `Algeria` and picking
+ * `No country — global holidays only` gave two differently sized boxes and moved the Save
+ * button beside them. Sized for the longest option either list carries. No design-system
+ * token names a control width — `MultiFilter` carries its own literal for the same reason.
+ */
+const ORG_COUNTRY_WIDTH = 300;
+
 const ORG_COUNTRY_OPTIONS = [
   { value: '', label: TIME_OFF_CALENDAR_MESSAGES.orgCountryNoneOption },
   ...STATED_COUNTRY_OPTIONS,
@@ -642,10 +651,9 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           flexWrap: 'wrap',
         }}
       >
-        {/* The same 220 the country filter directly below it carries: two selects in one
-            column that measured differently would read as two unrelated controls. No token
-            names a control width — `MultiFilter`'s own 200 is the same literal. */}
-        <div style={{ minWidth: 220 }} data-testid="org-country-select">
+        {/* The same width the country filter directly below it carries: two selects in one
+            column that measured differently would read as two unrelated controls. */}
+        <div style={{ width: ORG_COUNTRY_WIDTH }} data-testid="org-country-select">
           {/* The list the WRITE accepts, and not the holiday form's: that one is built from
               the phone list and offers AC, TA and XK, which rule 9 refuses. Above it, the
               option that submits `null` — what REQ-01-034 clears through, and without it
@@ -700,7 +708,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ minWidth: 220 }} data-testid="holidays-country-filter">
+        <div style={{ width: ORG_COUNTRY_WIDTH }} data-testid="holidays-country-filter">
           {/* PATCH-004 — searchable; `holidays-country-filter` moves onto this wrapper for
               the same reason as the organization picker above. */}
           <Select
