@@ -50,6 +50,10 @@ export function ScopeToggle({
  * `closeMenuOnSelect={false}` is §36's documented opt-out, and this is the case it is written
  * for: picking three members is one act, and a menu that shuts after each of them makes it
  * three. Nothing sits under the panel but the table it is filtering.
+ *
+ * PATCH-020 — and `summariseSelection`, which is the same argument about the same act: the
+ * control says `Marketing +2` on one line and the ticks live in the menu, so picking a fourth
+ * thing does not push the page down and unpicking one does not require finding its chip.
  */
 export function MultiFilter({
   label,
@@ -85,6 +89,11 @@ export function MultiFilter({
       label={label}
       placeholder="All"
       isMulti
+      /* PATCH-020 — a filter states its selection on one line and ticks it in the menu. The
+         chip list was as tall as the number of ticks, so every third team pushed the whole
+         page down a line, and once everything was ticked the menu had nothing left in it to
+         untick. */
+      summariseSelection
       closeMenuOnSelect={false}
       isDisabled={disabled}
       options={rows}

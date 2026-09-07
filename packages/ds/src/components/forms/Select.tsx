@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { RequiredMark } from './FormField';
-import { CrossIcon } from '../icons/Icon';
+import { CheckIcon, CrossIcon } from '../icons/Icon';
 import { Chip } from '../core/Chip';
 
 export interface SelectOption {
@@ -36,6 +36,20 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLElement>, 'on
   isDisabled?: boolean;
   /** Renders the selection as removable `Chip`s. */
   isMulti?: boolean;
+  /**
+   * PATCH-020 — an `isMulti` control that states its selection instead of drawing it.
+   *
+   * A chip list is as tall as the number of things chosen, so a filter grows a line every
+   * few ticks and everything under it moves. This mode draws one line that never changes
+   * height — the first label and `+n` for the rest — and moves the choosing into the menu,
+   * which then **keeps** the chosen rows and marks them with a tick, so a row is untickable
+   * where it was ticked. Without it a control with everything chosen has an empty menu and
+   * no way back but the chips.
+   *
+   * For a filter over a catalogue. A control whose selection is the thing being edited —
+   * a project's roster, a candidate's tags — wants the chips.
+   */
+  summariseSelection?: boolean;
   /** §36 — the menu closes when an option is chosen, for `isMulti` as much as for single.
    *  Pass `false` to keep it open for a control whose whole job is picking several at once. */
   closeMenuOnSelect?: boolean;
@@ -119,6 +133,8 @@ export function Select({
   /* Three periods, not an ellipsis character: this string is compared against in tests and
      copied into specs, and the two are indistinguishable on screen and not in a file. */
   label, placeholder = 'Select...', value, options = [], onChange, isSearchable, isDisabled, isMulti,
+  /* PATCH-020 — one line stating the selection, and a menu that keeps what is chosen. */
+  summariseSelection,
   /* §36 — the menu closes on select, for multi as much as for single. Left open, a
      multi-select covers whatever sits under it with a list that has often just emptied —
      the filter bar picks a position and the category row below it disappears behind
@@ -201,10 +217,16 @@ export function Select({
   const hasValue = isMulti ? selectedList.length > 0 : !!value;
 
   /* A multi-select hides what is already chosen; the search then narrows what is left, on a
-     case-insensitive substring of the label. */
+     case-insensitive substring of the label.
+
+     PATCH-020 — `summariseSelection` keeps them. That mode draws no chips, so the menu is
+     the only place a choice can be undone, and a row that vanished when it was ticked could
+     not be unticked: a control with everything chosen answered `No options`. */
+  const summarised = Boolean(isMulti && summariseSelection);
+  const isChosen = (opt: SelectOptionLike) => selectedList.some((s) => keyOf(s) === keyOf(opt));
   const matches = (opt: SelectOptionLike) => labelOf(opt).toLowerCase().includes(query.trim().toLowerCase());
   const visible = options
-    .filter((opt) => !isMulti || !selectedList.some((s) => keyOf(s) === keyOf(opt)))
+    .filter((opt) => !isMulti || summarised || !isChosen(opt))
     .filter((opt) => !isSearchable || !query || matches(opt));
   /* §29 — the row appears when the query matches **no option at all**, not when it matches no
      option *exactly*. The looser test offers `Create "Eng"` while `English` is sitting in the
@@ -233,7 +255,12 @@ export function Select({
     if (keyOf(opt) === CREATE) {
       onCreate && onCreate(query.trim());
     } else if (isMulti) {
-      onChange && onChange(selectedList.concat([opt]));
+      /* PATCH-020 — in the summarised mode the row is a toggle, because it is the only
+         control the selection has. With chips, a chosen row is not in the list to click. */
+      const next = summarised && isChosen(opt)
+        ? selectedList.filter((s) => keyOf(s) !== keyOf(opt))
+        : selectedList.concat([opt]);
+      onChange && onChange(next);
     } else {
       onChange && onChange(opt);
     }
@@ -336,7 +363,19 @@ export function Select({
            onto a line of its own, which makes the control taller than `--control-height` and
            leaves the value sitting against its top edge. */}
         <span style={{ /* @literal 2px, below the scale: the value area's own inset, so a chip sits clear of the border */ display: 'flex', flexWrap: isMulti ? 'wrap' : 'nowrap', alignItems: 'center', padding: '2px var(--space-3)', overflow: 'hidden', flex: 1, position: 'relative' }}>
-          {isMulti && selectedList.map((o) => (
+          {/* PATCH-020 — the selection stated rather than drawn: the first label and a count
+              for the rest, on one line that cannot grow. `+2` is deliberately not the two
+              labels — a summary whose length depends on what is in it is the chip list
+              again, in prose. */}
+          {summarised && hasValue && !query && (
+            <span style={{ /* @literal 2px matches the chips it replaces; the 8px is the arrow's own clearance */ marginLeft: 2, marginRight: 2, maxWidth: 'calc(100% - 8px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isDisabled ? N.n40 : N.n80 }}>
+              {labelOf(selectedList[0])}
+              {selectedList.length > 1 && (
+                <span style={{ color: 'var(--text-secondary)' }}>{` +${selectedList.length - 1}`}</span>
+              )}
+            </span>
+          )}
+          {isMulti && !summarised && selectedList.map((o) => (
             <Chip
               key={keyOf(o)}
               label={labelOf(o)}
@@ -447,6 +486,10 @@ export function Select({
             /* A row with a two-line description is never highlighted: a solid fill under two
                lines of type is unreadable, which is what `withDescription` is for. */
             const selected = !isMulti && !withDescription && hasValue && keyOf(value) === keyOf(opt);
+            /* PATCH-020 — chosen, in the summarised mode: a tick at the end of the row, and
+               the row's own ink left alone. The single select's full blue fill says "this is
+               the value"; over eight ticked rows it says nothing and reads as a wall. */
+            const chosen = summarised && isChosen(opt);
             /* The keyboard-focused row takes the same tint the pointer already gets, rather
                than a colour of its own: arrowing to a row and hovering it are the same act. */
             const tinted = !selected && !disabled && (i === activeIndex || i === hovered);
@@ -455,7 +498,7 @@ export function Select({
                 key={keyOf(opt) || l}
                 id={`${controlId}-option-${i}`}
                 role="option"
-                aria-selected={selected}
+                aria-selected={selected || chosen}
                 aria-disabled={disabled || undefined}
                 data-testid={keyOf(opt) === CREATE ? createTestId : (typeof opt !== 'string' ? opt.testId : undefined)}
                 onClick={() => commit(opt)}
@@ -482,6 +525,14 @@ export function Select({
                     is part of the option's accessible name rather than something only seen. */}
                 {typeof opt !== 'string' && opt.hint && (
                   <span style={{ flexShrink: 0, fontSize: 'var(--font-size-xs)', color: selected ? 'var(--text-on-accent)' : 'var(--text-secondary)' }}>{opt.hint}</span>
+                )}
+                {/* PATCH-020 — the tick. It is the whole state of the row in this mode, so it
+                    keeps the emphasis colour and a fixed slot: a mark that appears and
+                    disappears must not move the label beside it. */}
+                {summarised && (
+                  <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', width: 16, color: 'var(--color-blue)' }}>
+                    {chosen && <CheckIcon />}
+                  </span>
                 )}
               </div>
             );
