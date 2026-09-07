@@ -153,7 +153,12 @@ export function MenuDrawer({
           {children}
         </div>
         {actions && (
-          <div className="ds-sheet-actions" data-testid="sheet-actions">{actions}</div>
+          /* §10.51 — `.ds-menu-drawer-actions` carries the panel's own padding above `sm`, where
+             this is the last block in the panel rather than a pinned footer. The panel is
+             `padding: 0` so that the sheet's footer can reach the edges, which left this slot
+             outside the inset every other child has. Both classes, and `base.css` decides which
+             padding applies at which width. */
+          <div className="ds-sheet-actions ds-menu-drawer-actions" data-testid="sheet-actions">{actions}</div>
         )}
       </div>
     </React.Fragment>

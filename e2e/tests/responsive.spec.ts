@@ -37,7 +37,7 @@ test.describe('the shell below xl', () => {
     const closed = await rail.boundingBox();
     expect(closed!.x + closed!.width).toBeLessThanOrEqual(0);
 
-    // 2 — open: flush left, 340 wide, over a scrim that is painted and clears the navbar.
+    // 2 — open: flush left, 340 wide, over a scrim that is painted and covers the navbar.
     await burger.click();
     await page.waitForTimeout(400);
     const open = await rail.boundingBox();
@@ -50,15 +50,54 @@ test.describe('the shell below xl', () => {
       return { background: s.backgroundColor, top: s.top };
     });
     expect(paint.background).toBe('rgba(0, 0, 0, 0.6)');
-    expect(paint.top).toBe('60px'); // the navbar, not 0 — focus returns to a control up there
+    /* §03.13 §03.18 — both start at the top of the screen. They used to hang from the navbar,
+       on the argument that focus returns to the hamburger and a control handed focus must not
+       sit under the wash — but focus returns *when the drawer closes*, and the same `menuOpen`
+       unmounts the scrim in that render. What the exemption bought was a live-looking bar above
+       an inert page. */
+    expect(paint.top).toBe('0px');
+    expect(Math.round(open!.y)).toBe(0);
+
+    // 2b — and that is what is actually painted across the bar: the panel on its left, the wash
+    // to the right of it. A `top` of 0 that something else covered would say nothing.
+    const overBar = await page.evaluate(() => {
+      const bar = document.querySelector('.ds-navbar')!.getBoundingClientRect();
+      const at = (x: number) => {
+        const node = document.elementFromPoint(x, bar.top + bar.height / 2) as HTMLElement | null;
+        const owner = node && node.closest('.ds-app-shell-nav, .ds-app-shell-scrim');
+        return owner ? owner.className : node && node.tagName;
+      };
+      return { left: at(bar.left + 8), right: at(bar.right - 8) };
+    });
+    expect(overBar.left).toContain('ds-app-shell-nav');
+    expect(overBar.right).toContain('ds-app-shell-scrim');
+
+    /* 2c — §03.19: the drawer's close control draws a close mark, not the hamburger's own three
+       bars. Two controls with opposite jobs shared one glyph, on the one pair that are both on
+       screen within the 300ms of a slide. The comparison is the assertion — a viewBox equal to
+       the opener's is the defect, whatever the numbers are. */
+    const glyphs = await page.evaluate(() => ({
+      close: document.querySelector('.ds-sidebar-close svg')?.getAttribute('viewBox') ?? null,
+      opener: document.querySelector('.ds-navbar-menu svg')?.getAttribute('viewBox') ?? null,
+    }));
+    expect(glyphs.close).not.toBe(glyphs.opener);
+    expect(glyphs.close).toBe('0 0 14 14'); // CloseIcon, the mark the other three overlays close with
+
+    /* 2d — §03.17: the page behind the drawer does not scroll. "Inert" is what the wash claims,
+       and a page that still answers the thumb is a second scroller under the same finger as the
+       drawer's own. */
+    const behind = () =>
+      page.evaluate(() => getComputedStyle(document.querySelector('.ds-app-shell-scroller')!).overflowY);
+    expect(await behind()).toBe('hidden');
 
     // 3 — focus moved into the drawer.
     expect(await page.evaluate(() => document.querySelector('.ds-app-shell-nav')!.contains(document.activeElement))).toBe(true);
 
-    // 4 — Escape returns it to the hamburger.
+    // 4 — Escape returns it to the hamburger, and gives the page its scroll back.
     await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
     expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Open navigation');
+    expect(await behind()).toBe('auto');
 
     // 5 — the scrim closes it too.
     await burger.click();
@@ -78,6 +117,10 @@ test.describe('the shell below xl', () => {
     await page.waitForTimeout(300);
     expect(await page.locator('[data-testid="nav-item-members"]').count()).toBeLessThanOrEqual(1);
     await expect(scrim).toBeHidden();
+    /* And the scroll comes back with it. The lock is a media query for exactly this: `menuOpen`
+       is still true up here, and a lock taken in an effect would have left the well shut on a
+       screen that has no drawer. */
+    expect(await behind()).toBe('auto');
 
     // 7 — at xl the hamburger and the scrim are not visible; at 360 they are.
     await expect(burger).toBeHidden();
@@ -349,11 +392,19 @@ test.describe('the strip and the page', () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await signIn(page, email);
 
+    /* The candidate card is reached rather than constructed — it is the one screen long enough
+       to scroll at 360, which is what makes it the screen the second scrollbar showed up on. */
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
+    await page.getByText('Jane Doe').first().click();
+    await page.waitForURL('**/hiring/candidates/**');
+    const cardRoute = new URL(page.url()).pathname;
+
     const routes: [string, string][] = [
       [`/org/${org.orgId}/members`, 'page-title'],
       [`/org/${org.orgId}/hiring/vacancies`, 'page-title'],
       [`/org/${org.orgId}/hiring/vacancies/${vacancy.id}`, 'page-title'],
       [`/org/${org.orgId}/hiring/candidates`, 'page-title'],
+      [cardRoute, 'page-title'],
       [`/org/${org.orgId}/hiring/settings`, 'page-title'],
     ];
 
@@ -364,6 +415,32 @@ test.describe('the strip and the page', () => {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
       expect(overflow, `horizontal overflow on ${route}`).toBeLessThanOrEqual(0);
+
+      /* §04.25 — and the well, which the document cannot see. On a screen inside `AppShell` the
+         document never scrolls: the well does, and it takes the page header and the toolbar
+         sideways with the content when it does. It was 357px wider than its box on candidates
+         while the measurement above read 0, because the closed `MenuDrawer` parks a 340px panel
+         off the right edge and only the axis being shut keeps it out of the scroll. */
+      const well = await page.evaluate(() => {
+        const box = document.querySelector<HTMLElement>('.ds-app-shell-well')?.parentElement;
+        if (!box) return null;
+        return {
+          over: box.scrollWidth - box.clientWidth,
+          axis: getComputedStyle(box).overflowX,
+        };
+      });
+      expect(well, `the well is the scroller on ${route}`).not.toBeNull();
+      expect(well!.over, `the well scrolls sideways on ${route}`).toBeLessThanOrEqual(0);
+      expect(well!.axis, `the well's horizontal axis on ${route}`).toBe('hidden');
+
+      /* §04.25 — and the well is the **only** scroller: the document does not scroll either way.
+         An `absolute` box that escapes the well stretches the document down to reach its static
+         position, and the reader gets two scrollbars side by side. The candidate card's
+         visually-hidden live region did exactly that — 1px of box, 80px of document. */
+      const document_ = await page.evaluate(
+        () => document.documentElement.scrollHeight - document.documentElement.clientHeight,
+      );
+      expect(document_, `the document scrolls behind the well on ${route}`).toBeLessThanOrEqual(0);
     }
 
     // The public booking page renders outside AppShell and gets the same promise.
@@ -466,6 +543,13 @@ test.describe('overlay panels below sm', () => {
     await expect(panel).toHaveAttribute('aria-modal', 'true');
     await expect(page.getByTestId('sheet-actions')).toBeVisible();
 
+    /* §10.54 — and the list behind it stops scrolling, which is the same claim as the trap:
+       a panel holding focus over 92% of the screen says there is nothing behind it to work in.
+       Without this a phone has two scrollers under one finger. */
+    const behind = () =>
+      page.evaluate(() => getComputedStyle(document.querySelector('.ds-app-shell-scroller')!).overflowY);
+    expect(await behind()).toBe('hidden');
+
     // 2 — focus is trapped: tabbing past the last control comes back inside.
     for (let i = 0; i < 25; i += 1) await page.keyboard.press('Tab');
     expect(await page.evaluate(() => document.querySelector('[data-testid="candidates-filters"]')!.contains(document.activeElement))).toBe(true);
@@ -474,6 +558,7 @@ test.describe('overlay panels below sm', () => {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
     expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('candidates-filters-open');
+    expect(await behind()).toBe('auto');
 
     // 4 — above sm it is the right-edge drawer again, and it does not trap.
     await page.setViewportSize({ width: 992, height: 800 });
@@ -484,5 +569,30 @@ test.describe('overlay panels below sm', () => {
     await expect(panel).not.toHaveAttribute('aria-modal', 'true');
     const drawer = await panel.evaluate((node) => Math.round(node.getBoundingClientRect().width));
     expect(drawer).toBe(340);
+    /* §55 — and the list behind it goes on scrolling, deliberately: up here this is a panel
+       beside live content, which is the whole reason it does not trap either. */
+    expect(await behind()).toBe('auto');
+
+    /* 5 — §10.51: above `sm` the actions are the last block *in* the panel, which means inside
+       the panel's own padding. `MenuDrawer` is `padding: 0` so its sheet footer can reach the
+       edges below `sm`, and the slot was the one child left outside the inset every other child
+       has — `Show results` sat flush against the left edge, the right edge and the bottom of the
+       screen while the fields above it were inset by 20. The footer's sides line up with the
+       body's, which is the whole claim. */
+    const inset = await page.evaluate(() => {
+      const box = (selector: string) => document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      const shell = box('[data-testid="candidates-filters"]');
+      const apply = box('[data-testid="candidates-filters-apply"]');
+      const field = box('[data-testid="candidates-filter-status"]');
+      return {
+        left: Math.round(apply.left - shell.left),
+        right: Math.round(shell.right - apply.right),
+        bottom: Math.round(shell.bottom - apply.bottom),
+        field: Math.round(field.left - shell.left),
+      };
+    });
+    expect(inset.left).toBe(inset.field);
+    expect(inset.right).toBe(inset.field);
+    expect(inset.bottom).toBeGreaterThan(0);
   });
 });

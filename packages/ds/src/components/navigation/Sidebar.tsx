@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  TimesheetsIcon, ProjectManagementIcon, PeopleIcon, ReportsIcon, TimeOffIcon, OrgIcon, MenuIcon, ArrowIcon,
+  TimesheetsIcon, ProjectManagementIcon, PeopleIcon, ReportsIcon, TimeOffIcon, OrgIcon, CloseIcon, ArrowIcon,
 } from '../icons/Icon';
 import { useHoverState } from '../../useViewport';
 
@@ -250,8 +250,17 @@ export function Sidebar({
           style={{ display: 'flex', alignItems: 'center' }}><Wordmark /></a>
         {/* §14 — the drawer's close control. It is hidden above the breakpoint, where the rail
            is always in view and there is nothing to close; `.ds-sidebar-close` in `base.css`
-           is the rule that reveals it, because a breakpoint cannot be an inline style. */}
-        <button type="button" className="ds-sidebar-close" aria-label="Close sidebar" onClick={onClose} style={{ color: 'var(--text-secondary)' }}><MenuIcon /></button>
+           is the rule that reveals it, because a breakpoint cannot be an inline style.
+
+           §03.19 — a **close mark**, which is what the other three dismissable overlays close
+           with. It drew `MenuIcon` — the hamburger's own three bars — so the mark that means
+           *open this* was doing duty as *close this*, on the one pair of controls that are both
+           on screen within the 300ms of a slide. The name has always said `Close sidebar`; only
+           the drawing disagreed. `CloseIcon` also takes `currentColor`, so the button's
+           `--text-secondary` finally reaches the glyph instead of being overruled by a fill. No
+           `display` inline: `.ds-sidebar-close` is `display: none` above the breakpoint, and an
+           inline `display` would beat the rule that hides it. */}
+        <button type="button" className="ds-sidebar-close" aria-label="Close sidebar" onClick={onClose} style={{ color: 'var(--text-secondary)' }}><CloseIcon aria-hidden /></button>
       </div>
       <nav aria-label={label} style={{ flexGrow: 1, padding: 'var(--space-11) var(--space-8)', backgroundColor: 'var(--surface-card)', overflowY: 'auto' }}>
         <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>

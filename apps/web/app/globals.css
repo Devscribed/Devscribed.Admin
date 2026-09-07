@@ -490,6 +490,14 @@
   white-space: nowrap;
 }
 
+/* The status badge does not shrink; the title is what gives. Both are flex children and only the
+   title was told it could give, so at 360 the badge was squeezed to `O…` — a word that is five
+   characters long and has nothing in it to clamp. A title cut short still names the vacancy;
+   `Open` cut short names nothing, and reads as a rendering fault rather than a status. */
+.vacancy-screen-heading > * + * {
+  flex-shrink: 0;
+}
+
 .vacancy-screen-actions {
   display: flex;
   align-items: center;

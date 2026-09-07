@@ -122,6 +122,43 @@ input, textarea, select { font: inherit; }
   background-color: var(--surface-card);
 }
 
+/* The one scroller a signed-in screen has. All three rules are here rather than inline on
+   `AppShell` because two media queries below have to reach them, and an inline style beats a
+   class outright.
+
+   §04.25 — **vertically, and only vertically.** It was `overflowY: 'auto'` alone, which leaves
+   the other axis `visible`, which CSS resolves to `auto`: the frame has been a horizontal
+   scroller nobody chose, and anything wider than the well took the page header and the toolbar
+   sideways with the content. The closed `MenuDrawer` is one way in — `translateX(105%)` parks
+   340px of panel 357px past this edge — but a wide table or one unbroken string is another,
+   which is why the axis is shut rather than the panel moved. Fixed descendants are untouched:
+   the nav drawer, every `Modal` and `Popover`'s portalled menu hang from the viewport, not from
+   here. The board keeps its own `.board-scroll`, which is what a screen that really is wider
+   than its box is supposed to do.
+
+   `scrollbar-gutter` reserves the track, so the two locks below can take the scrollbar away
+   without the content jumping sideways by its width. A no-op where scrollbars are overlays,
+   which is why that jump only ever showed on Windows and Linux. */
+.ds-app-shell-scroller {
+  /* §04.25 — **the page's coordinate space.** Without it the scroller is `static`, so anything a
+     screen positions `absolute` resolves against the initial containing block instead: it is not
+     clipped by the overflow above, it is not carried by the scroll, and it stretches the
+     *document* to reach its static position. A signed-in screen then has two scrollbars side by
+     side — the well's, and the document's — which is what a reader sees rather than the 1px box
+     that caused it.
+
+     What causes it is the visually-hidden live region, `position: absolute` with a 1px box and a
+     `clip`, and there are eighteen files carrying that pattern. One of them lands below the fold
+     on any page long enough to scroll, which is why the candidate card showed it and a short
+     screen did not. Fixing them one at a time is the same bug eighteen times; a containing block
+     here answers all of them and every one written after. `fixed` descendants are unaffected —
+     they hang from the viewport, which is what the drawer, `Modal` and `Popover`'s portal need. */
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 /* Both controls exist at every size and are revealed only below the breakpoint, where there is
    something to open and close. */
 .ds-navbar-menu, .ds-sidebar-close { display: none; }
@@ -133,10 +170,18 @@ input, textarea, select { font: inherit; }
      arrives from the opposite edge to its control makes the reader cross the screen to find what
      they just asked for. `-105%` rather than `-100%` so the panel's own shadow is off-screen too
      while it is closed, and `--shadow-drawer-left` because the shadow must fall away from the
-     edge the panel hangs on. */
+     edge the panel hangs on.
+
+     §03.13 — **`top: 0`, over the navbar**, not `--layout-navbar-height-mobile` under it. That
+     number was `MenuDrawer`'s geometry borrowed because both are panels, and they are not the
+     same panel: `MenuDrawer` opens beside a screen that stays live, and the rail *replaces* the
+     screen — every route in it leaves the page you are on. Stopping 60px short left the bar of
+     the screen being replaced standing above its replacement. `bottom: 0` then gives the panel
+     the whole height rather than the height minus a bar. `.ds-menu-drawer` below keeps the
+     navbar offset, deliberately, for the reason this one gives it up. */
   .ds-app-shell-nav {
     position: fixed;
-    top: var(--layout-navbar-height-mobile);
+    top: 0;
     left: 0;
     bottom: 0;
     z-index: 2002;
@@ -154,13 +199,26 @@ input, textarea, select { font: inherit; }
   .ds-app-shell-nav .ds-sidebar { width: 100%; }
 
   .ds-navbar-menu, .ds-sidebar-close { display: flex; }
+
+  /* §03.17 — while the drawer is open the page behind it does not scroll. The scrim says that
+     page is inert; a page that still answers the wheel and the thumb is not, and on a phone the
+     result is two scrollers under one finger — the panel's own, and the screen it is covering.
+     Inside this media query on purpose: above `xl` the rail is in the flow, `menuOpen` may still
+     be true, and there is nothing to lock. */
+  .ds-app-shell[data-menu-open] .ds-app-shell-scroller { overflow-y: hidden; }
 }
 
 /* §03.17-18 — painted, not a transparent click target: without a wash a reader on a phone gets no
-   signal that the page behind the drawer is inert. It hangs from the navbar rather than covering
-   it, because focus returns to the hamburger when the drawer closes (§03.20) and a control handed
-   focus must not sit under 60% black. Same geometry as `.ds-menu-drawer-scrim` below, for the
-   same reason.
+   signal that the page behind the drawer is inert.
+
+   §03.18 — it **covers the navbar**, `top: 0`. It used to hang from the bar, on the argument that
+   focus returns to the hamburger when the drawer closes and a control handed focus must not sit
+   under 60% black. The argument was sound and its premise was false: focus returns *when the
+   drawer closes*, and the same `menuOpen` that closes it unmounts this. There is no moment where
+   the hamburger is both focused and washed — and under §03.13 the hamburger is under the panel
+   anyway. What the exemption bought was a strip of live-looking chrome above an inert page, which
+   is the one thing a scrim exists to deny. `.ds-menu-drawer-scrim` below keeps the offset, because
+   the list behind that panel is still live and so is the bar above it.
 
    §03.21 — above `xl` it is **not visible** rather than not rendered. `AppShell` keeps rendering
    it on `menuOpen` alone, so width alone decides the switch and the server and the hydrated
@@ -168,7 +226,7 @@ input, textarea, select { font: inherit; }
 .ds-app-shell-scrim {
   display: none;
   position: fixed;
-  top: var(--layout-navbar-height-desktop);
+  top: 0;
   right: 0;
   bottom: 0;
   left: 0;
@@ -177,7 +235,7 @@ input, textarea, select { font: inherit; }
 }
 
 @media (max-width: 1199px) {
-  .ds-app-shell-scrim { display: block; top: var(--layout-navbar-height-mobile); }
+  .ds-app-shell-scrim { display: block; }
 }
 
 /* §51 — `MenuDrawer`'s geometry. The panel hangs from **whatever the navbar currently is**,
@@ -225,6 +283,18 @@ input, textarea, select { font: inherit; }
   .ds-menu-drawer,
   .ds-menu-drawer-scrim { top: var(--layout-navbar-height-mobile); }
 }
+
+/* §10.51 — the panel's own padding, on the actions slot.
+   `Modal` and `ConfirmDialog` pad the panel itself, so a block moved into their slot is already
+   inside that padding. `MenuDrawer` sets `padding: 0` and hands the padding down to the head and
+   the body — which is what lets the sheet's footer reach the edges below `sm` — so the slot was
+   the one child left outside it, and its buttons sat flush against three edges of the panel while
+   every field above them was inset by 20px.
+   The same two steps the body takes, so the footer's sides line up with what it follows. It is a
+   class rather than an inline style because `.ds-sheet-actions`'s own `var(--space-6)` has to win
+   below `sm`, and it does that on source order at equal specificity — this rule is above that
+   block, and an inline padding would have beaten it outright. */
+.ds-menu-drawer-actions { padding: 0 var(--space-10) var(--space-9); }
 
 /* §30 — `Calendar`'s day cell. The column is `1fr` rather than a fixed width: this grid is
    inline in a card that flexes, not in a popover of a known size, so the cells share the width
@@ -499,6 +569,17 @@ input, textarea, select { font: inherit; }
      `.ds-sheet` wherever they disagree, whatever the source order. */
   .ds-menu-drawer.ds-sheet { transform: translateY(100%) !important; }
   .ds-menu-drawer.ds-sheet[data-open] { transform: translateY(0) !important; }
+
+  /* §10.54 — the sheet is `aria-modal` and traps focus at this width, and the screen behind it
+     stops scrolling for the same reason: a panel at 92% of a 360px screen has nothing behind it
+     the reader is still working in. Without this a phone has two scrollers under one finger —
+     the panel's own body, and the list it is covering.
+
+     `:has` on the scroller rather than a flag the panel sets on something above it, because the
+     panel does not know what it was rendered into. Being a media query it also releases itself:
+     dragged past `sm` the drawer stops being a sheet and the page behind it scrolls again, with
+     nothing having to run. */
+  .ds-app-shell-scroller:has(.ds-menu-drawer[data-open]) { overflow-y: hidden; }
 
   .ds-sheet-actions {
     flex: 0 0 auto;

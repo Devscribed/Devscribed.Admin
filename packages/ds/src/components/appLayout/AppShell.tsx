@@ -45,7 +45,7 @@ export interface AppShellProps extends Omit<React.HTMLAttributes<HTMLDivElement>
 export function AppShell({
   section, sub, onSelect, onLogoClick,
   trackerCounter, onOpenTracker, userName, onAccountNavigate,
-  sidebar, navbar, menuOpen, onMenuClose, children, style, ...rest
+  sidebar, navbar, menuOpen, onMenuClose, children, className, style, ...rest
 }: AppShellProps) {
   const drawer = React.useRef<HTMLDivElement | null>(null);
   const opener = React.useRef<HTMLElement | null>(null);
@@ -73,7 +73,17 @@ export function AppShell({
   }, [menuOpen]);
 
   return (
-    <div {...rest} style={{ display: 'flex', height: '100vh', fontFamily: 'var(--font-family-base)', background: 'var(--surface-page)', ...style }}>
+    /* §03.17 — `data-menu-open` is what lets `base.css` stop the page behind the drawer from
+       scrolling, inside the same media query that makes the rail a drawer at all. It is an
+       attribute rather than a JavaScript scroll lock for §14's reason: a lock taken in an effect
+       is not released by a resize, so crossing `xl` with the drawer open would leave the well
+       shut on a screen that has no drawer. A media query re-evaluates itself. */
+    <div
+      {...rest}
+      className={['ds-app-shell', className].filter(Boolean).join(' ')}
+      data-menu-open={menuOpen ? '' : undefined}
+      style={{ display: 'flex', height: '100vh', fontFamily: 'var(--font-family-base)', background: 'var(--surface-page)', ...style }}
+    >
       <div ref={drawer} className="ds-app-shell-nav" data-open={menuOpen ? '' : undefined}>
         {sidebar !== undefined ? sidebar : (
           <Sidebar active={section} activeSub={sub} onSelect={onSelect} onLogoClick={onLogoClick} onClose={onMenuClose} />
@@ -81,9 +91,10 @@ export function AppShell({
       </div>
       {/* The scrim under the drawer. It **is** painted now — `--color-overlay-scrim`, 60% black,
           set in `base.css` (§03.17) — because without a wash a reader on a phone gets no signal
-          that the page behind is inert. It hangs from the navbar rather than covering it (§03.18):
-          focus returns to the hamburger up there when the drawer closes, and a control handed
-          focus must not sit under the wash.
+          that the page behind is inert. It covers the navbar too (§03.18): the bar is as inert as
+          the page while the drawer is open, and the exemption it used to have was written against
+          a moment that cannot happen — focus returns to the hamburger *when the drawer closes*,
+          and the `menuOpen` that closes it unmounts this in the same render.
 
           Still rendered on `menuOpen` alone. Above `xl` the stylesheet hides it, so width alone
           decides the switch and the server and the hydrated client agree at every size (§14) — a
@@ -93,7 +104,10 @@ export function AppShell({
         {navbar !== undefined ? navbar : (
           <Navbar trackerCounter={trackerCounter} onOpenTracker={onOpenTracker} userName={userName} onAccountNavigate={onAccountNavigate} />
         )}
-        <div style={{ flexGrow: 1, overflowY: 'auto', background: 'var(--surface-well)' }}>
+        {/* The page's scroller. Its overflow is in `.ds-app-shell-scroller` (`base.css`) rather
+            than here — §04.25 shuts the horizontal axis, and two media queries shut the vertical
+            one while a panel is over it, neither of which an inline style can be. */}
+        <div className="ds-app-shell-scroller" style={{ flexGrow: 1, background: 'var(--surface-well)' }}>
           {/* §04.22 — the padding steps 16 → 25 at `md`, so it is a class rather than an inline
               style: a media query cannot be inline, the same reason `.page-title` and `.ds-navbar`
               already reach for one. */}
