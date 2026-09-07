@@ -1,0 +1,36 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1455,
+      "failed": 0
+    },
+    "int": {
+      "passed": 20,
+      "failed": 0,
+      "files": [
+        "test/holiday-sourcing.spec.ts"
+      ],
+      "note": "Also ran the neighbouring suites the diff touches indirectly: test/holidays.spec.ts (19 passed, holidays.service.ts changed) and test/reports-amounts-owed.spec.ts (28 passed, 2 skipped pre-existing, resolveRateAtDate refactored in packages/validation/src/reports.ts)."
+    },
+    "e2e": {
+      "passed": 20,
+      "failed": 0,
+      "files": [
+        "tests/holidays.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "walkthrough": {
+    "spec": "e2e/tests/qa-look.spec.ts (deleted after the pass)",
+    "coverage": "Admin: opened /org/{id}/settings/holidays, auto-sync filled the table, holiday-summary visible with day counts and amounts. Manager: same day/amount figures, opened the edit modal for an imported holiday and confirmed no delete-btn is drawn. User and viewer: navigating directly to the route redirects to /members, and the sidebar's Time off group shows no Holidays row for either role (no dead link). Screenshots reviewed: admin-landing.png, manager-modal-no-delete.png, user-redirected.png, viewer-redirected.png — all matched the spec's expected states, no console errors or failed requests (fixtures guard)."
+  },
+  "acceptance": {
+    "checked": 20,
+    "total": 20,
+    "detail": "All 20 acceptance criteria map to a TC-* that exists and passes: TC-02-UNIT-01/02 (packages/validation/src/holiday-sourcing.test.ts), TC-02-INT-01..16 (apps/api/test/holiday-sourcing.spec.ts, all 16 present incl. 16a/16b/16c), TC-02-E2E-01..04 (e2e/tests/holidays.spec.ts). No TC-* is retired in this bundle. Walked the country-set rule, import/skip/discard accounting, sourced-year permanence, refresh, provider-failure and uncovered-country handling, the per-country/per-person/amounts summary, currency grouping, capability gating (view-holidays / view-amounts-owed / manage-holidays / delete-holidays) and cross-org 404s, all observed green in the suites above plus the live walkthrough."
+  },
+  "findings": []
+}
