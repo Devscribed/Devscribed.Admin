@@ -42,7 +42,10 @@ export function HolidaySummary({
     );
   }
 
-  if (loading || summary === null) {
+  // A summary for another year is not this year's summary: the two reads are separate
+  // requests and the year tab can move between them, so the block waits rather than
+  // labelling last year's figures with this year's heading.
+  if (loading || summary === null || summary.year !== year) {
     return (
       <div data-testid="holiday-summary" style={{ marginBottom: 'var(--space-6)' }}>
         <Card>
@@ -96,7 +99,10 @@ export function HolidaySummary({
       key: 'countryCode',
       label: 'Country',
       width: 160,
-      render: (row) => row.countryCode ?? holidayCountryLabel(null),
+      // A member with no resolved country states none and inherits none — they receive
+      // global holidays only. That is not "All", which is what a global HOLIDAY means, so
+      // the cell holds a dash rather than a word that means the opposite here.
+      render: (row) => row.countryCode ?? '—',
     },
     {
       key: 'holidayCount',
@@ -196,10 +202,11 @@ export function HolidaySummary({
 }
 
 /**
- * The global row is keyed `null` by the API — one row for the holidays that reach
- * everybody. On screen it takes the same value the list's own country filter uses for
- * "applies everywhere", so one word means one thing on this page.
+ * The id's `{countryCode}` is the value the API sent, and for the global row that value
+ * is `null` — one row for the holidays that reach everybody. Rendering the API's own
+ * value keeps the id an instantiation of the roster's pattern rather than a second
+ * vocabulary invented on the screen.
  */
 function countryKey(countryCode: string | null): string {
-  return countryCode ?? 'all';
+  return String(countryCode);
 }

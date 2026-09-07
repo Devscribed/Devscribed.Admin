@@ -36,8 +36,10 @@ import { ALL_COUNTRIES, HOLIDAY_COUNTRY_OPTIONS, holidayCountryLabel } from './c
 import type {
   HolidayRow,
   HolidaysResponse,
+  HolidaySourcingSettings,
   HolidaySummaryResponse,
   SourcingBlock,
+  SourcingState,
   SyncResponse,
 } from './types';
 
@@ -326,7 +328,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         credentials: 'same-origin',
       });
       if (!response.ok || cancelled) return;
-      const body = (await response.json()) as { includeOrgCountry: boolean };
+      const body = (await response.json()) as HolidaySourcingSettings;
       if (cancelled) return;
       setIncludeOrgCountry(body.includeOrgCountry);
     })();
@@ -356,6 +358,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         if (!response.ok) {
           // A provider failure is never a status (REQ-02-009), so anything but a 200 is
           // this application failing, and it takes the generic toast.
+          autoSynced.current.delete(year);
           showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
           return;
         }
@@ -367,6 +370,10 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         );
         await Promise.all([load(options.signal), loadSummary(options.signal)]);
       } catch (err) {
+        // A sync that was abandoned — the year tab moved (Edge case 18) — or that never
+        // reached the API leaves the year unsourced, so the year must not stay marked as
+        // one this page has already synced: coming back to it has to try again.
+        autoSynced.current.delete(year);
         if ((err as Error)?.name === 'AbortError') return;
         showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
       } finally {
@@ -426,7 +433,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         body: JSON.stringify({ includeOrgCountry: next }),
       });
       if (response.ok) {
-        const body = (await response.json()) as { includeOrgCountry: boolean };
+        const body = (await response.json()) as HolidaySourcingSettings;
         setIncludeOrgCountry(body.includeOrgCountry);
         // The set changed, so both the sourcing block and the summary did.
         await Promise.all([load(), loadSummary()]);
@@ -718,7 +725,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
                   key={entry.countryCode}
                   data-testid={`holiday-sourcing-uncovered-${entry.countryCode}`}
                 >
-                  {`${holidayCountryLabel(entry.countryCode)}: ${HOLIDAY_SOURCING_MESSAGES.countryNotCovered}`}
+                  {`${holidayCountryLabel(entry.countryCode)}: ${uncoveredMessage(entry.state)}`}
                 </span>
               ))}
             </div>
@@ -897,6 +904,20 @@ function HolidaysLoading() {
       </div>
     </Card>
   );
+}
+
+/**
+ * §UI Description — each line of the warning carries the message **its own state** names.
+ *
+ * `unsourced` is a country the provider could not answer for; `empty` is one it answered
+ * for and had nothing to list (REQ-02-023's covered-but-empty). Wording the second as the
+ * first tells an admin the service does not cover a country it does cover, and sends them
+ * looking for a provider that already replied.
+ */
+function uncoveredMessage(state: SourcingState): string {
+  return state === 'empty'
+    ? HOLIDAY_SOURCING_MESSAGES.countryNoHolidays
+    : HOLIDAY_SOURCING_MESSAGES.countryNotCovered;
 }
 
 /** Today as `YYYY-MM-DD` in the viewer's own zone. */

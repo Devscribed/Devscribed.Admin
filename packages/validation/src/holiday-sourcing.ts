@@ -28,9 +28,17 @@ export const HOLIDAY_SOURCING_MESSAGES = {
   includeOrgCountryInvalid: "Choose whether to include the organization's country.",
   /* Screen text — the sourcing panel, when a sync left a country unsourced. */
   syncFailedSome: 'Some countries could not be sourced.',
-  /* Screen text — one per uncovered country. */
+  /* Screen text — one per country the provider does not cover (`unsourced`). */
   countryNotCovered:
     'The holiday service does not cover this country. Add its holidays by hand.',
+  /*
+   * Screen text — one per country the provider DOES cover and offered nothing for
+   * (`empty`, REQ-02-023). A separate sentence because the two states are separate: the
+   * service answered for this one, and telling an admin it does not cover the country
+   * would send them looking for a provider that already replied.
+   */
+  countryNoHolidays:
+    'The holiday service lists no public holidays for this country this year. Add any by hand.',
   /* Screen text — a sync is in flight. */
   syncing: 'Fetching public holidays…',
   /* Screen text — the summary read failed; the list is unaffected. */
@@ -180,6 +188,16 @@ export interface AcceptedProviderEntries {
 const PROVIDER_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
+ * `YYYY-MM-DD` that names a day that exists. `Date.UTC` rolls a bad day forward —
+ * `2026-02-31` becomes 3 March — so the answer is whether the value survives the trip
+ * unchanged, not whether the constructor threw.
+ */
+function isRealCalendarDay(date: string): boolean {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
+/**
  * REQ-02-005 and Validation Rules 4 to 6 — one pure pass over a third party's payload.
  *
  * Accepted: `global === true`, `types` containing `Public`, a `YYYY-MM-DD` date inside
@@ -218,15 +236,14 @@ export function acceptProviderEntries(
     }
 
     // Rule 4 — the date, parsed as a calendar day and never through a zone-bearing Date.
+    //
+    // The shape is not enough: `2026-02-31` matches the pattern and names no day. It is
+    // checked by round-tripping through a UTC date and requiring the same string back, so
+    // a day the month does not have is discarded rather than stored — Postgres would
+    // refuse it on the insert, and one bad entry must cost its own row, not the import.
     const date = typeof value.date === 'string' ? value.date.trim() : '';
     const match = PROVIDER_DATE_PATTERN.exec(date);
-    if (!match || Number(match[1]) !== request.year) {
-      discarded += 1;
-      continue;
-    }
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
+    if (!match || Number(match[1]) !== request.year || !isRealCalendarDay(date)) {
       discarded += 1;
       continue;
     }

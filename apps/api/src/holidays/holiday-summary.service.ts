@@ -267,7 +267,12 @@ export class HolidaySummaryService {
         holidayCount,
         paidHours: toHours(paidHours),
       };
-      if (options.includeAmounts && byCurrency.size > 0) {
+      // REQ-02-018 decides this on **financial settings**, not on arithmetic: a member
+      // who has a live row or a snapshot carries the key, even where no holiday reached
+      // them and the list is therefore empty. Keying it on `byCurrency.size` would make a
+      // member with settings and no holidays indistinguishable from one with no settings
+      // at all, which is the single thing that rule exists to separate.
+      if (options.includeAmounts && (live !== null || history.length > 0)) {
         row.byCurrency = amountList(byCurrency);
       }
       return row;

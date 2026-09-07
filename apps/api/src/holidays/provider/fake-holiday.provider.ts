@@ -19,7 +19,7 @@ import { HolidayProvider, type ProviderHolidays } from './holiday-provider';
  * | `PL` | Poland's shape — 14 entries, all `global`, all `Public`, no two on one date |
  * | `DE` | Germany's shape — 20 entries of which 10 are regional and carry `counties` |
  * | `US` | A nationwide set of 11 |
- * | `MT` | Three entries of which one has a 200-character name and one is dated outside the requested year (Rules 4 and 6) |
+ * | `MT` | Four entries of which one has a 200-character name, one is dated outside the requested year and one names a day February does not have (Rules 4 and 6) |
  * | `VA` | An empty array — covered, and offering nothing (REQ-02-010) |
  * | `IN`, `AE` | A refused connection (REQ-02-009) — the two codes §External Contracts recorded as uncovered |
  * | `AQ` | A call that never answers (REQ-02-011) |
@@ -217,12 +217,17 @@ export function unitedStatesShape(year: number, countryCode = 'US'): RawProvider
   return UNITED_STATES.map(([md, name]) => nationwideEntry(year, countryCode, md, name));
 }
 
-/** Rules 4 and 6 — a 200-character name, and an entry dated outside the requested year. */
+/**
+ * Rules 4 and 6 — a 200-character name, an entry dated outside the requested year, and a
+ * date that matches `YYYY-MM-DD` and names no day. One entry of the four is clean, so a
+ * filter that discarded everything would fail this shape too.
+ */
 export function malformedShape(year: number, countryCode = 'MT'): RawProviderEntry[] {
   return [
     nationwideEntry(year, countryCode, '02-10', 'Feast of St. Paul'),
     nationwideEntry(year, countryCode, '03-19', 'A'.repeat(200)),
     nationwideEntry(year - 1, countryCode, '12-13', 'Republic Day'),
+    nationwideEntry(year, countryCode, '02-31', 'The Thirty-First of February'),
   ];
 }
 

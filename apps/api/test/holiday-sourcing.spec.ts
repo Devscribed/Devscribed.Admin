@@ -736,6 +736,36 @@ describe('Holiday sourcing (spec time-off/02)', () => {
     expect(totals[0]).toEqual({ currency: 'USD', amount: (14 * 8 * 50).toFixed(2) });
   });
 
+  // REQ-02-018 decides `byCurrency` on financial settings, not on arithmetic. Its
+  // boundary is the member who HAS settings and whom no holiday reached: absent means
+  // "no settings", so that member's key is present and their list is empty.
+  it('a member with settings and no holidays carries an empty byCurrency, not none', async () => {
+    const admin = await signupAdmin('admin@acme.com', 'Acme Inc', 'Alex', 'Kaminski');
+    await prisma.membership.update({ where: { id: admin.membershipId }, data: { countryCode: 'PL' } });
+    const elsewhere = await createMember(admin.organizationId, {
+      email: 'fr@acme.com',
+      role: 'user',
+      countryCode: 'FR',
+      firstName: 'Cha',
+      lastName: 'Petit',
+    });
+    await seedFinancials(admin, admin.membershipId, { clientHourlyRate: 50 });
+    await seedFinancials(admin, elsewhere.membershipId, { clientHourlyRate: 60 });
+    provider.answersPoland('PL');
+    // FR is in the sourced set and the provider offers nothing for it.
+    provider.answersEmpty('FR');
+    await sync(admin.cookies, admin.organizationId, { year: YEAR });
+
+    const view = await summary(admin.cookies, admin.organizationId);
+    expect(view.status).toBe(200);
+    const row = (view.body.members as Array<Record<string, unknown>>).find(
+      (m) => m.membershipId === elsewhere.membershipId,
+    )!;
+    expect(row.holidayCount).toBe(0);
+    expect('byCurrency' in row).toBe(true);
+    expect(row.byCurrency).toEqual([]);
+  });
+
   // TC-02-INT-13
   it('TC-02-INT-13: every route answers 404 without its capability, and across organizations', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
@@ -781,8 +811,10 @@ describe('Holiday sourcing (spec time-off/02)', () => {
     const elapsed = Date.now() - started;
 
     expect(response.status).toBe(200);
-    // The request comes back: the bound, plus room for one instant call and the writes.
-    expect(elapsed).toBeLessThan(provider.callBoundMs + 5000);
+    // "Within the bound plus a small margin". The margin is proportionate to the bound
+    // the case set — a fixed multi-second slack would pass against a service that ignored
+    // the bound entirely, which is the one thing this case exists to catch.
+    expect(elapsed).toBeLessThan(provider.callBoundMs * 4);
 
     const byCountry = Object.fromEntries(
       (response.body.countries as Array<{ countryCode: string }>).map((c) => [c.countryCode, c]),

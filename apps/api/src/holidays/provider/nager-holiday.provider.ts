@@ -39,6 +39,10 @@ export class NagerHolidayProvider extends HolidayProvider {
         signal: controller.signal,
       });
       if (!response.ok) {
+        // Read the body to completion before abandoning it. An unread body holds its
+        // socket open until the agent times it out, and this path runs once per uncovered
+        // country per page load — the failure path is the busy one.
+        await response.body?.cancel().catch(() => undefined);
         throw new Error(`holiday provider answered ${response.status} for ${code} ${year}`);
       }
       const body: unknown = await response.json();

@@ -102,6 +102,29 @@ describe('TC-02-UNIT-02: the organization’s country joins the set only while t
   });
 });
 
+describe('§Error Messages — the six rows, verbatim', () => {
+  it('carries each message exactly as the table states it', () => {
+    // The literal text of the document, not the constant the screen imports: asserting
+    // the constant would certify whatever the code happens to say.
+    expect(HOLIDAY_SOURCING_MESSAGES.yearInvalid).toBe('Choose a year between 2000 and 2100.');
+    expect(HOLIDAY_SOURCING_MESSAGES.includeOrgCountryInvalid).toBe(
+      "Choose whether to include the organization's country.",
+    );
+    expect(HOLIDAY_SOURCING_MESSAGES.syncFailedSome).toBe('Some countries could not be sourced.');
+    expect(HOLIDAY_SOURCING_MESSAGES.countryNotCovered).toBe(
+      'The holiday service does not cover this country. Add its holidays by hand.',
+    );
+    // Edge case 5a — `empty` is covered-but-empty and takes its own sentence.
+    expect(HOLIDAY_SOURCING_MESSAGES.countryNoHolidays).toBe(
+      'The holiday service lists no public holidays for this country this year. Add any by hand.',
+    );
+    expect(HOLIDAY_SOURCING_MESSAGES.syncing).toBe('Fetching public holidays…');
+    expect(HOLIDAY_SOURCING_MESSAGES.summaryUnavailable).toBe(
+      'The day and cost totals could not be loaded.',
+    );
+  });
+});
+
 describe('Validation Rule 1 — the sourced year', () => {
   it('accepts 2000 and 2100 and refuses either side of them', () => {
     expect(validateSyncYear(2000)).toEqual({ valid: true, value: 2000 });
@@ -182,6 +205,17 @@ describe('REQ-02-005 and Validation Rules 4–6 — the provider-entry filter', 
     );
     expect(result.accepted).toEqual([]);
     expect(result.discarded).toBe(7);
+  });
+
+  it('discards a day the month does not have rather than storing it', () => {
+    // `2026-02-31` matches YYYY-MM-DD and names no day; a Date built from it rolls
+    // forward to 3 March, which is not the day the provider sent.
+    const result = acceptProviderEntries(
+      [entry({ date: '2026-02-31' }), entry({ date: '2026-13-01' }), entry({ date: '2026-02-28' })],
+      { countryCode: 'PL', year: 2026 },
+    );
+    expect(result.accepted.map((e) => e.date)).toEqual(['2026-02-28']);
+    expect(result.discarded).toBe(2);
   });
 
   it('answers empty for a payload that is not an array at all', () => {

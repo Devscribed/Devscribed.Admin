@@ -483,10 +483,18 @@ test.describe('time-off/02 — Holiday sourcing', () => {
   }) => {
     const adminEmail = uniqueEmail('admin');
     const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    const year = new Date().getFullYear();
     // The organization states a country no member resolves to: every member states one of
     // their own, so only the checkbox can put GB in the set.
     await setOrganizationCountryViaApi(request, org.organizationId, 'GB');
     await stateCountry(request, org.organizationId, adminEmail, 'PL');
+
+    // The provider answers from memory, so the in-flight window would otherwise be a few
+    // milliseconds wide and the status assertion below would be a race rather than a check.
+    await page.route('**/holidays/sync', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.continue();
+    });
 
     await signInUi(page, adminEmail);
     await openHolidaysPage(page);
@@ -508,8 +516,33 @@ test.describe('time-off/02 — Holiday sourcing', () => {
     await page.getByTestId('holiday-sourcing-include-org-country').check();
     await expect(page.getByTestId('holiday-summary-country-GB')).toBeVisible();
 
-    await page.getByTestId('holiday-sourcing-refresh-btn').click();
+    // The refresh half. Every assertion here has to be able to fail if Refresh does
+    // nothing: the sync it sends is waited for by hand, the status is asserted to APPEAR
+    // before it is asserted to go, and the summary is re-read after the answer lands.
+    //
+    // The automatic sync of REQ-02-012 is allowed to finish first, and the wait names the
+    // refresh by its flag — otherwise both this wait and the status line could be
+    // satisfied by a request nobody clicked for, which is the whole thing being checked.
     await expect(page.getByTestId('holiday-sourcing-status')).toHaveCount(0, { timeout: 60_000 });
+    const refreshed = page.waitForResponse(
+      (response) =>
+        response.url().includes('/holidays/sync') &&
+        response.request().method() === 'POST' &&
+        response.request().postDataJSON()?.refresh === true,
+    );
+    await page.getByTestId('holiday-sourcing-refresh-btn').click();
+
+    const status = page.getByTestId('holiday-sourcing-status');
+    await expect(status).toBeVisible();
+    await expect(status).toContainText(HOLIDAY_SOURCING_MESSAGES.syncing);
+
+    const response = await refreshed;
+    expect(response.status()).toBe(200);
+    // REQ-02-008 — Refresh is the explicit instruction to re-ask, so the request carries
+    // the flag and the year on screen.
+    expect(response.request().postDataJSON()).toMatchObject({ refresh: true, year });
+
+    await expect(status).toHaveCount(0, { timeout: 60_000 });
     await expect(page.getByTestId('holiday-summary-country-GB')).toBeVisible();
   });
 
@@ -522,18 +555,31 @@ test.describe('time-off/02 — Holiday sourcing', () => {
     const adminEmail = uniqueEmail('admin');
     const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
     const indian = await addMember(request, adminEmail, 'user', 'Ishaan');
+    const vatican = await addMember(request, adminEmail, 'user', 'Vito');
     await stateCountry(request, org.organizationId, adminEmail, 'PL');
     // The provider does not cover India — one of the two codes the live probe recorded as
     // missing, and the reason the warning exists.
     await stateCountry(request, org.organizationId, indian, 'IN');
+    // …and it does cover VA, answering with an empty list: REQ-02-023's covered-but-empty.
+    await stateCountry(request, org.organizationId, vatican, 'VA');
 
     await signInUi(page, adminEmail);
     await openHolidaysPage(page);
 
     await expect(page.getByTestId('holiday-sourcing-uncovered')).toBeVisible({ timeout: 60_000 });
+    // The document's own wording, not the constant the screen imports — asserting the
+    // constant would certify whatever the screen happens to say.
     await expect(page.getByTestId('holiday-sourcing-uncovered-IN')).toContainText(
-      HOLIDAY_SOURCING_MESSAGES.countryNotCovered,
+      'The holiday service does not cover this country. Add its holidays by hand.',
     );
+
+    // Edge case 5a — the country the service DOES cover gets its own sentence, and must
+    // not be told it is uncovered.
+    const empty = page.getByTestId('holiday-sourcing-uncovered-VA');
+    await expect(empty).toContainText(
+      'The holiday service lists no public holidays for this country this year. Add any by hand.',
+    );
+    await expect(empty).not.toContainText('does not cover this country');
 
     // The country that answered is in the table, and the screen is not in an error state.
     await expect(page.getByTestId('holidays-table')).toBeVisible();
