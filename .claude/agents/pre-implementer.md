@@ -64,6 +64,18 @@ the same defect found after the code is written costs the code.
 - **Verification.** Every row of the spec's Verification Plan marked as not existing today is a
   task — a helper, a fixture route, an environment value. The cases that depend on it depend on
   that task.
+- **Geometry.** Every row of the spec's `## Geometry & motion` table becomes a line of the task
+  that draws that element: what varies, what holds it, and the measurement that proves it —
+  the box that must not move, driven by the extreme value. A spec that draws a screen and
+  carries no such table, or carries an empty one, is a `spec` finding. So is a row whose "what
+  holds it" is a `min-width` or a `min-height`, which reserve nothing.
+- **Out-of-flow boxes.** Every box the spec draws outside its own flow — absolute, transformed,
+  portalled, a slot hanging below its wrapper — is listed with the ancestor that scrolls around
+  it and how it is kept out of that ancestor's overflow. The spec saying nothing is a `spec`
+  finding.
+- **One node per message.** For every Error Messages row, name the single element that draws
+  it — the component's own slot or a line the screen renders, never both — and the case that
+  counts it.
 - **Sections.** Every `##` heading of the spec gets an entry in `sections` — the task that
   covers it, or the reason it needs none.
 

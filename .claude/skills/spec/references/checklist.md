@@ -109,8 +109,20 @@ governs** — it is what the loop enforces — and the disagreement is a defect 
       it demands of the caller: what a `@ds` component's own decision requires of where it is put,
       what a place does to what is put in it, how long a list is and how a member is reached, who
       fills a table the screen reads.
-- [ ] **(blocks)** Every element whose length varies names what moves when it does, and no control
-      moves as a consequence of being used.
+- [ ] **(blocks)** `## Geometry & motion` has a row for every element whose content varies — in
+      length, in count, or in presence — naming what holds it and what moves if nothing does. A
+      bundle that draws and carries no such table, or an empty one, is not answered. `min-width`
+      and `min-height` are not answers to "what holds it". *(UI-01)*
+- [ ] **(blocks)** No control moves as a consequence of being used. *(UI-02)*
+- [ ] **(blocks)** Every box drawn outside its own flow — absolute, transformed, portalled, a slot
+      hanging below its wrapper — says how it is kept out of the layout, the scrollable overflow
+      and the clipping of any ancestor that scrolls. *(UI-04)*
+- [ ] **(blocks)** Every asset the tokens name states what fetches it, in which weights, and which
+      scripts it covers against the data the product can hold. *(UI-06)*
+- [ ] **(blocks)** Every value drawn has one source; where a client derives what the server also
+      answers, the spec says which governs and what is drawn while they could disagree. *(UI-07)*
+- [ ] **(blocks)** Every message the screen can show is drawn by exactly one node, and its case
+      counts it rather than asserting it is visible. *(UI-05)*
 - [ ] **(note)** Every screen this spec changes is in the mock, or named as undrawn with the risk
       that leaves open.
 - [ ] **(note)** The mock is built from the components the product uses; where it is not, the

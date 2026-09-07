@@ -77,6 +77,24 @@ build step. **No hardcoded colors or sizes** — use tokens (`var(--space-3)`, `
 goes *into* the design system and is recorded in that spec's "DS gaps" table, never improvised per
 screen. Light theme only this release.
 
+**A drawn screen fails in eight ways, and they have ids.**
+[.claude/skills/ui-invariants/](.claude/skills/ui-invariants/SKILL.md) is the closed register —
+a box sized by its own content, a control that moves because it was used, a wait drawn over
+something worth keeping, a box outside its flow still counted in an ancestor's overflow, one
+message drawn twice, an asset a token names and nothing loads, one value with two sources, a
+list with no way through it. A spec that draws a screen carries a `## Geometry & motion` table
+answering the first two; the register says where each id is held.
+
+**Write the rule for the mechanism, never for the control it was found on.** *This picker holds
+its width* closes one picker. *No box has a size its own content decides* closes every control,
+including the ones not built yet — and a "not in this patch" that defers the same mechanism to
+another control is not a deferral, it is the next patch already written.
+
+**A screen defect is held by a measurement, not a screenshot.** A rectangle that did not move, a
+scroll box that did not grow, a message counted once — the probes are `e2e/tests/ui-invariants.ts`.
+**A `data-testid` proves presence, never uniqueness**: assert a user-facing message with a count,
+because a screen that draws it twice passes every id-based assertion.
+
 **Testing.** Selectors are `data-testid` only, and the ids are named in the specs. Test cases are
 numbered in the specs (`TC-01-E2E-03`) and the code references those ids. E2E reads sent mail from
 `GET /api/test/mail/latest?email=` — the in-memory mail sink, fenced off in production.

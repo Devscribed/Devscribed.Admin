@@ -71,6 +71,17 @@ state the property it holds: it must **fail before the fix and pass after**. A r
 that passes against the unfixed code is not a regression test, and writing one is how a bug
 comes back.
 
+**A defect on a drawn screen is held by a measurement, never by a screenshot.** A box that did
+not move, a scroll box that did not grow, a message counted once — the probes are in
+`e2e/tests/ui-invariants.ts`. A defect you can only describe leaves no test behind, and comes
+back on the next screen.
+
+**Name the mechanism, not just the control.** Before the verdict, say which of the eight in
+`.claude/skills/ui-invariants/` this is, and list every other place that mechanism reaches —
+the other call sites of the component, the other controls of the same kind. A report that
+names one control is answered by a fix that closes one control, and the same defect is filed
+again from the next screen.
+
 ## Severity
 
 `blocker` — data loss, a security or scoping failure, or the product unusable for a role.
