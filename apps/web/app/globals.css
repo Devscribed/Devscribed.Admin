@@ -991,8 +991,17 @@
   /* REQ-03-018 — at EVERY width, not below a breakpoint: the day columns take their own
      minimum (--day-col-min) and the container above scrolls once the sum of them is wider
      than the page. A 92-day range is wider than a desktop viewport, so a rule that applied
-     only below 1200px compressed exactly the window the floor exists for. */
-  min-width: max-content;
+     only below 1200px compressed exactly the window the floor exists for.
+
+     **`min-content`, and never `max-content`.** Under a min-content constraint a
+     `minmax(--day-col-min, 1fr)` track is its base size — the floor — so this is exactly the
+     sum the rule above describes: the name column plus one floor per day. `max-content`
+     instead asks what the widest CELL wants, and because every day track carries the same
+     flex factor, the answer sets the width of ALL of them: one whole-view holiday named in
+     one header made every column in a 30-day month 87px wide and put two thirds of the
+     reader's own month off the right edge. A day column is sized by the floor and by the
+     space available, never by what one day happens to hold. */
+  min-width: min-content;
 }
 
 .time-off-calendar-row {

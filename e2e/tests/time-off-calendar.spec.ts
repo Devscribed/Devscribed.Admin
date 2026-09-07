@@ -105,6 +105,16 @@ async function firstOfferedDay(picker: Locator): Promise<string> {
   return date;
 }
 
+/**
+ * The fifteenth of the month the calendar opens on. Mid-month on purpose: the screen reads
+ * today in the ACCOUNT's zone and this is read in the runner's, and only the days at a month
+ * boundary can disagree about which month they are in.
+ */
+function midMonthDay(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-15`;
+}
+
 /** Pages the open range panel forward until it renders `date`. */
 async function pageToDay(picker: Locator, date: string): Promise<void> {
   for (let step = 0; step < 6; step += 1) {
@@ -757,11 +767,56 @@ test.describe('time-off/01 — Vacation calendar', () => {
     request,
   }) => {
     const adminEmail = uniqueEmail('admin');
-    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    // A holiday that reaches every member in view, in the month the screen opens on: its
+    // name is the widest thing any day header holds, and a day column's width must not be
+    // one header's content.
+    const holiday = midMonthDay();
+    await createHolidayViaApi(request, org.organizationId, {
+      date: holiday,
+      name: 'Company Day',
+      countryCode: null,
+    });
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await signInUi(page, adminEmail);
     await openCalendar(page);
+
+    /** A custom property the screen declares, as a number. */
+    const declaredPx = async (property: string): Promise<number> => {
+      const raw = await page
+        .getByTestId('time-off-calendar-page')
+        .evaluate((el, name) => getComputedStyle(el).getPropertyValue(name).trim(), property);
+      const value = Number.parseFloat(raw);
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error(`expected ${property} to be declared on the calendar block`);
+      }
+      return value;
+    };
+    const floor = await declaredPx('--day-col-min');
+    const nameCol = await declaredPx('--name-col');
+
+    const box = async () =>
+      page.getByTestId('calendar-grid').evaluate((el) => {
+        const container = el.parentElement;
+        if (!container) throw new Error('expected the grid to sit inside its scroll container');
+        return { scrollWidth: container.scrollWidth, clientWidth: container.clientWidth };
+      });
+    const headers = page.locator('[data-testid^="calendar-day-header-"]');
+    const headerWidths = () =>
+      headers.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+
+    // Edge case 13, in the SHIPPED Month window — the one this spec did not set out to
+    // change and must not. The holiday is drawn in its header; the day columns are still
+    // each exactly the declared floor, and the grid is exactly the sum of those floors.
+    // Sized by the header's content instead, one holiday name would set the width of all
+    // thirty columns and the reader would scroll for two thirds of their own month.
+    await expect(page.getByTestId(`calendar-day-holiday-${holiday}`)).toBeVisible();
+    const monthDays = await headers.count();
+    const monthBox = await box();
+    expect(monthBox.scrollWidth).toBeGreaterThan(monthBox.clientWidth);
+    for (const width of await headerWidths()) expect(width).toBeCloseTo(floor, 0);
+    expect(monthBox.scrollWidth).toBeLessThanOrEqual(nameCol + monthDays * floor + 2);
 
     const todayControl = page.getByTestId('calendar-today');
     const xs: number[] = [];
@@ -779,6 +834,14 @@ test.describe('time-off/01 — Vacation calendar', () => {
       'calendar-window-range',
     ]) {
       await page.getByTestId(window).click();
+      if (window === 'calendar-window-week') {
+        // The other half of the same rule: seven columns fit the page, so they divide what
+        // is left and nothing scrolls. The floor is a minimum, not a fixed width.
+        await expect(headers).toHaveCount(7);
+        const weekBox = await box();
+        expect(weekBox.scrollWidth).toBeLessThanOrEqual(weekBox.clientWidth + 1);
+        for (const width of await headerWidths()) expect(width).toBeGreaterThan(floor);
+      }
       await record();
     }
 
@@ -807,16 +870,9 @@ test.describe('time-off/01 — Vacation calendar', () => {
     // REQ-03-015 — one position for `‹`, Today and `›`, across every window and every step.
     for (const x of xs) expect(x).toBe(xs[0]);
 
-    // REQ-03-014 — no day column is narrower than the minimum the screen declares.
-    const declared = await page
-      .getByTestId('time-off-calendar-page')
-      .evaluate((el) => getComputedStyle(el).getPropertyValue('--day-col-min').trim());
-    const floor = Number.parseFloat(declared);
-    expect(floor).toBeGreaterThan(0);
-    const widths = await dayHeaders.evaluateAll((els) =>
-      els.map((el) => el.getBoundingClientRect().width),
-    );
-    for (const width of widths) expect(width).toBeGreaterThanOrEqual(floor - 0.5);
+    // REQ-03-014 — no day column is narrower than the minimum the screen declares, and
+    // under 92 of them none is wider either: the floor is what sizes them.
+    for (const width of await headerWidths()) expect(width).toBeCloseTo(floor, 0);
 
     // REQ-03-018 — the grid scrolls inside its own container rather than compressing, AND
     // the member column survives that scroll. The second half is what makes the first half
