@@ -6,7 +6,7 @@
   "branch": "spec/calendar-range-and-scope",
   "baseRef": "c3abb8dc0a7f2bf6438dc6c569a7cea90fa04363",
   "headAtInit": "c3abb8dc0a7f2bf6438dc6c569a7cea90fa04363",
-  "status": "static_gate",
+  "status": "review",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-03.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T08:43:13.341Z",
-  "updatedAt": "2026-09-07T09:10:39.770Z",
+  "updatedAt": "2026-09-07T09:10:43.537Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -41,8 +41,11 @@
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T09:10:39.913Z",
+      "endedAt": "2026-09-07T09:10:43.487Z",
+      "lastVerdict": "pass"
     },
     "review": {
       "status": "pending",
