@@ -62,6 +62,7 @@ disagree, the source governs and the disagreement is a defect of this page.
 | S-06 | Every `@ds` export the spec relies on is exported from the package root, `packages/ds/src/index.ts`, and one that is not has a `## DS gaps` row. A deep import into a component file is not an export this spec may rely on. | `spec/stale-statement` | blocks | contracts | CLAUDE.md — Design system |
 | S-07 | Every premise about the pipeline, the deploy or the test rig is cited by file path rather than restated. | `spec/stale-statement` | blocks | any | checklist — Consistency |
 | S-08 | Every number the spec states about its own contents equals the thing it counts. | `spec/stale-statement` | blocks | any | spec-review |
+| S-61 | Every component, place, list and source the spec takes rather than defines is stated with what it demands of the caller — what a `@ds` component's own entry in `specs/design-system/decisions.md` requires of where it is put, what a place does to what is put in it, how long a list is and how a member is reached, who fills a table a screen reads. That it exports, or that something already occupies the place, settles none of these. | `spec/stale-statement` | blocks | contracts | spec-review |
 
 ## Contradiction and ambiguity
 
@@ -77,6 +78,7 @@ disagree, the source governs and the disagreement is a defect of this page.
 | S-16 | No rule makes another unreachable: a refusal that fires before the check it complements, an ordering that leaves a second answer unobservable, two numbers for one set. | `spec/contradiction` | blocks | judge | spec-review |
 | S-17 | No requirement has two readings that produce materially different implementations. | `spec/ambiguous-requirement` | blocks | judge | spec-review |
 | S-59 | Every set of values the spec states more than once agrees with itself. List each one and the places that state it — the values a control offers, the values a rule accepts, the values a message names, the values a case sends, the values a column may hold — and read them against each other. A value one place offers and another refuses is a contradiction whichever is right. | `spec/contradiction` | blocks | judge | spec-review |
+| S-64 | Every `Decided:` and `Rejected:` block holds under every rule of this spec. Name the condition under which its reason stops holding, and whether another rule here reaches that condition. A rule whose reason has an unstated precondition contradicts the rule that reaches it, whichever of the two is right. | `spec/contradiction` | blocks | judge | spec-review |
 | S-60 | A section this spec delegates to another document by pointing at it — blast radius and backward compatibility in the area `README.md`, and anything else the bundle owes and answers with a pointer — is this spec's section, and every claim in it is judged as if it stood here. List the documents the bundle points at that way and read them. A claim there the code refutes blocks under this id; one that disagrees with the bundle is S-09's. | `spec/stale-statement` | blocks | judge | spec-review |
 
 ## Repository conventions a spec may not overrule
@@ -110,6 +112,8 @@ opposite is a contradiction against the repository, and the repair is the spec's
 | S-34 | No "TBD", no "decide later", no requirement without stated behaviour. | `spec/incomplete-decision` | blocks | any | checklist — Prose |
 | S-35 | Every claim about an external system says how it was established and what it ran against, and no requirement rests on a row marked `Assumed`. | `spec/incomplete-decision` | blocks | contracts | checklist — External systems |
 | S-58 | Every already-shipping route and control that can act on a row this spec gives a new kind, state or addressee says here what it does with such a row — a rule in this document, or one line placing it out of scope. | `spec/incomplete-decision` | blocks | judge | spec-review |
+| S-62 | Every screen that asks the server names the question its answer depends on — the range, the scope, the filters, the row — and states what is drawn for each state that question can be in: loading, answered, empty, refused, failed, permission-limited. Per question, not once per screen. Content the spec leaves on screen after the question changes names which question it still answers. | `spec/incomplete-decision` | blocks | contracts | spec-review |
+| S-63 | Every element whose length varies — a label, a name, a count, a sum — names what moves when it does, and no control moves as a consequence of being used. | `spec/incomplete-decision` | blocks | contracts | spec-review |
 
 ## Testability
 
@@ -150,6 +154,7 @@ consequence falls under, not the missing row.
 | S-53 | Deploy-order independence is stated explicitly. | `spec/missing-artefact` | note | contracts | checklist — Data |
 | S-54 | Every boundary value shared with an external system names its unit and vocabulary on both sides, and what detects a mismatch. | `spec/missing-artefact` | note | contracts | checklist — External systems |
 | S-55 | No secret value appears in the spec or in any tracked file it adds. | `spec/missing-artefact` | note | any | checklist — Verification |
+| S-65 | Every screen this spec changes is drawn in the mock, or named as undrawn with the risk that leaves open; and where the mock is not built from the components the product uses, the difference is named. | `spec/missing-artefact` | note | contracts | spec-review |
 | S-56 | Where two writers of a row race in ordinary use, the spec states the lock and what is re-read inside the transaction; where they do not, one line says so and no lock is added. | `spec/missing-artefact` | note | behaviour | checklist — Correctness patterns |
 
 ## The one note-only rule

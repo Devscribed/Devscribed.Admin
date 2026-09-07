@@ -85,6 +85,12 @@ endpoint that gets there, or a fixture under `apps/api/src/test-support/` that t
 behind `assertFixturesOpen`. A state no route reaches is not a test case yet; it is a task this
 spec owes.
 
+**Then ask the other question about the same state: how does a customer reach it?** A fixture is
+a route for the suite, not for a person. Where the honest answer is "nobody has, yet" or "by hand,
+a row at a time", that is a Known Gaps row with what closes it, or the next spec named now — never
+a state the bundle quietly assumes is full. A feature whose mechanism is exercised only by seeded
+data ships with nothing in it.
+
 **Read each case back from what would produce it.** Take the expected result, name the rule, the
 column, the route or the fixture that has to yield each asserted value, and check that one fixture
 can yield them all at once. A case that seeds one row of an entity and asserts two values of a
@@ -282,6 +288,57 @@ rules go in the area README, not duplicated per spec.
 
 **The `data-testid` list is a contract.** Every id in the selectors section appears in an E2E case,
 and every selector an E2E case names appears in the list.
+
+**A `Decided:` block is a claim, and it is checked as one.** Name the condition under which its
+reason stops holding, and say whether another rule in this spec can reach that condition. A rule
+whose reason has an unstated precondition is a rule that is wrong somewhere you have not looked.
+
+### Rules of state
+
+**Every screen that asks the server answers a question, and the spec names the question.** The
+question is the set of values the answer depends on — the range, the scope, the filters, the row.
+Name it once; every rule below reads it.
+
+**Nothing on screen outlives the question it answered.** The moment the question changes, the
+previous answer describes something else. Say what is drawn in the gap — the new answer, a
+placeholder, or nothing — and never leave the previous answer standing without saying which
+question the reader is looking at.
+
+**A refusal and a failure are states of the question, not a layer over the answer.** A banner
+above stale content says nothing about the content. Where content is kept under a banner, state
+which question that content still answers.
+
+**Never draw a control whose effect the screen will not show.** A control that changes the
+question and moves nothing else is a control that lies. Where the effect cannot be drawn yet, say
+what stands in for it.
+
+**Every state a screen reaches is drawn from one list, per question.** Loading, empty, answered,
+refused, failed, permission-limited — for each question the screen can ask, not once for the
+screen.
+
+### Rules of what is drawn
+
+**A component is read by its decision, not by its name.** Before placing anything from `@ds`, read
+that component's entry in `specs/design-system/decisions.md` and state what it demands of the
+place it is put in. That it exports is not that it composes.
+
+**The place has a contract too.** A slot, a row, a header, a dialog. Name what the place does to
+what is put in it, and what the new occupant owes the place. Reusing a slot because something
+already lives there is not a reason; the reason is that both occupants share the property the
+place depends on.
+
+**Anything whose length varies names what moves when it does.** A label, a name, a count, a sum. A
+control that moves as a consequence of being used is a defect, not a variant.
+
+**A list is specified with its length and the way to reach a member.** Past a handful of rows, how
+a person finds one is part of the rule, not an implementation detail.
+
+**A source the screen reads names who fills it.** A table a feature draws from is a dependency
+like any other: say what puts rows in it, how often, and what the screen is on the day nobody has.
+
+**A screen this spec changes is drawn.** Prose is not a check on a composition. A screen left out
+of the mock is named as left out, with the risk that leaves open, and the mock is built from the
+components the product uses — where it is not, name every place the two differ.
 
 ## Depending on a system you do not own
 

@@ -109,6 +109,17 @@ declaration goes. Where the bundle has no such table, adding it with its rows is
 **`S-58` is repaired by a sentence or by one line in Out of Scope** — what the shipping path does
 with the new kind of row. Never by specifying the route that would do it.
 
+**`S-61`, `S-62` and `S-63` are repaired by stating what the bundle already relies on** — the
+demand a borrowed component or place makes of its caller, the question a screen's answer depends
+on and what is drawn for each of its states, what moves when a variable-length element changes.
+Each is a dependency the screen has whether or not the document admits it, so writing it down is
+not new surface. Where the answer is a control, a route or a component that does not exist, it
+goes to `left` with the question it turns on.
+
+**`S-65` is repaired by naming the screen as undrawn** and the risk that leaves open. Never by
+drawing a mock: a mock is an artefact the author walks a screen to produce, and one written from
+the document certifies the document against itself.
+
 ## The budget
 
 **A repair that leaves the bundle materially longer manufactured the next round.** Subtraction

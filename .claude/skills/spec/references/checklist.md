@@ -61,6 +61,9 @@ governs** — it is what the loop enforces — and the disagreement is a defect 
 - [ ] **(blocks)** No integration or E2E case seeds or asserts a calendar date; every date is
       derived from the run's own today, and a case needing another month names the control that
       navigates to it.
+- [ ] **(author)** Every state a case reaches through a fixture also has an answer to "how does a
+      customer reach it?" — and where that answer is "nobody has, yet" or "by hand, a row at a
+      time", a Known Gaps row or the next spec, named now.
 - [ ] **(author)** Every acceptance criterion names its observer.
 - [ ] **(author)** Every credential, account or tool the checking needs was obtained, used once
       against the live system, and left where the next agent finds it.
@@ -90,6 +93,28 @@ governs** — it is what the loop enforces — and the disagreement is a defect 
       states what runs between retry attempts.
 - [ ] **(author)** Partial failure rolls back — nothing is half-applied and no status claims
       something that did not happen.
+- [ ] **(blocks)** Every `Decided:` and `Rejected:` block names the condition under which its
+      reason stops holding, and whether another rule of this spec reaches that condition.
+
+## State and what is drawn
+
+- [ ] **(blocks)** Every screen that asks the server names the question its answer depends on —
+      the range, the scope, the filters, the row — once, before the states.
+- [ ] **(blocks)** Every state that question can be in is drawn: loading, answered, empty,
+      refused, failed, permission-limited. Per question, not once per screen.
+- [ ] **(blocks)** Nothing outlives the question it answered. Content left on screen after the
+      question changes names which question it still answers.
+- [ ] **(author)** No control changes the question without the screen showing the effect.
+- [ ] **(blocks)** Every component, place, list and source the screen borrows is stated with what
+      it demands of the caller: what a `@ds` component's own decision requires of where it is put,
+      what a place does to what is put in it, how long a list is and how a member is reached, who
+      fills a table the screen reads.
+- [ ] **(blocks)** Every element whose length varies names what moves when it does, and no control
+      moves as a consequence of being used.
+- [ ] **(note)** Every screen this spec changes is in the mock, or named as undrawn with the risk
+      that leaves open.
+- [ ] **(note)** The mock is built from the components the product uses; where it is not, the
+      difference is named.
 
 ## Security
 

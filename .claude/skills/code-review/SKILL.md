@@ -152,6 +152,20 @@ rest.** Look for what hides it: an optional parameter only one caller passes, a 
 default that stands in when the real value is absent, a wrapper applied at one entry point of
 three. A mechanism with a graceful default fails silently at every site that forgot it.
 
+## 12. Freshness sweep
+
+**Enumerate** every control that changes what a screen asks the server — a filter, a range, a
+tab, a row selection, a page — and every element drawn from the answer.
+
+**For each**, what is on screen between the change and the next answer, and what is on screen
+when the request is refused, fails, or is never made.
+
+**Blocks when a screen draws an answer to a question it is no longer asking.** Look for what
+hides it: an early return that sets an error and leaves the previous answer in place; a
+skeleton chosen on "have I ever loaded" rather than "does what I hold answer what I am
+asking"; a label computed on the client beside a body computed on the server, so the two move
+independently. A stale view that is mostly right is read as right.
+
 ## Clearing an item
 
 An item you enumerate and then wave past needs the same evidence as one you raise. Say what

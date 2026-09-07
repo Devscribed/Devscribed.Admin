@@ -66,6 +66,12 @@ here.
 | CR-21 | a migration renames, drops, or adds `NOT NULL` to an existing table, or the previously deployed code would stop serving against the new schema | CLAUDE.md — Watch out for; sweep 7 |
 | CR-22 | a new foreign key leaves its delete behaviour implicit, or an existing free-form or legacy value is silently redefined | checklist — Data |
 
+## What a screen shows
+
+| id | Blocks when | source |
+|---|---|---|
+| CR-33 | a screen draws an answer to a question it is no longer asking — content kept across a change of filter, range or selection, under a banner or otherwise, with nothing on screen saying which question it answers | sweep 12 |
+
 ## Tests
 
 | id | Blocks when | source |

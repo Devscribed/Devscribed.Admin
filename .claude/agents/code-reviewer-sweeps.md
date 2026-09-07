@@ -93,7 +93,7 @@ your sweep tables come first, then the JSON:
 { "status": "blocked",
   "reviewedUpTo": "<the sha of HEAD you reviewed>",
   "sweeps": { "1": 3, "2": 7, "3": 0, "4": 5, "5": 12, "6": 4,
-              "7": 1, "8": 6, "9": 18, "10": 9, "11": 2 },
+              "7": 1, "8": 6, "9": 18, "10": 9, "11": 2, "12": 4 },
   "covered": { "scope": 15, "read": ["apps/api/src/…"], "unreached": [] },
   "findings": [ { "…": "…", "sweep": 1 } ] }
 ```
