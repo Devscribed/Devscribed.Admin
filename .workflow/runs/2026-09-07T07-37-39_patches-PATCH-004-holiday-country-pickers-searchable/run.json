@@ -6,7 +6,7 @@
   "branch": "fix/holiday-country-pickers-searchable",
   "baseRef": "e659a5baa790c54e7c1e3c3c565385a2359450c6",
   "headAtInit": "e659a5baa790c54e7c1e3c3c565385a2359450c6",
-  "status": "qa",
+  "status": "ready",
   "track": "patch",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-07T07:37:39.764Z",
-  "updatedAt": "2026-09-07T08:09:37.485Z",
+  "updatedAt": "2026-09-07T08:15:02.777Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -50,8 +50,11 @@
       "lastVerdict": "pass"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:09:37.626Z",
+      "endedAt": "2026-09-07T08:15:02.728Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
