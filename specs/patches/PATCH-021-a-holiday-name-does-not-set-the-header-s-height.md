@@ -5,7 +5,7 @@ surface: ui
 supersedes: time-off/01
 requirement: null
 cases: []
-files: 2
+files: 3
 ---
 
 ## Why
@@ -31,6 +31,9 @@ the window contains.
 
 THE SYSTEM SHALL give that holiday's name on hover, and keep the name readable by a screen
 reader and findable in the header's text.
+
+THE SYSTEM SHALL draw a tooltip's bubble outside the page's layout — a portal, positioned
+against the trigger's rectangle — so that no ancestor of the trigger can clip it or size it.
 
 Unchanged: the column's shading, the legend, and the rule that a **partial** holiday names
 nothing in the header and marks only the cells of the members it reached.
@@ -65,6 +68,12 @@ without, and asserts they are equal.
 - **The tooltip opens downwards.** The scroller clips both axes — `overflow-x: auto` computes
   `overflow-y` to `auto` — and the header is its top edge, so a bubble drawn upwards is cut in
   half. Downwards it lands over the member rows, above the sticky name column's stacking order.
+- **Every tooltip in the product now portals.** Drawn inside its trigger's box the bubble
+  belonged to whatever the trigger sat in: this grid's scroller clipped it, and the 14px marker
+  it hangs off squeezed it — the first attempt at this patch drew `Independenc` and stopped.
+  It is `position: fixed` off the trigger's rectangle now, re-placed on scroll and resize, and
+  held inside the window when the trigger is against an edge. The same answer §95 already gives
+  `Select`'s listbox.
 - **The header row is now a constant height**, so the grid's own height changes only with the
   number of members.
 
