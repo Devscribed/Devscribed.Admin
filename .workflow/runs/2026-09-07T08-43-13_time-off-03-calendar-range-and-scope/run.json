@@ -1,0 +1,251 @@
+{
+  "runId": "2026-09-07T08-43-13_time-off-03-calendar-range-and-scope",
+  "spec": "specs/time-off/03-calendar-range-and-scope.md",
+  "specSha": "5eb0ebc73e366ac4efdc5d26549a49d082410c7e3af4c01b8e706353ca2f2ac8",
+  "task": "time-off-03-calendar-range-and-scope",
+  "branch": "spec/calendar-range-and-scope",
+  "baseRef": "c3abb8dc0a7f2bf6438dc6c569a7cea90fa04363",
+  "headAtInit": "c3abb8dc0a7f2bf6438dc6c569a7cea90fa04363",
+  "status": "implement",
+  "track": "spec",
+  "shapes": {
+    "pre_implement": "strict",
+    "implement": "single",
+    "static_gate": "script",
+    "review": "lead-open",
+    "qa": "targeted"
+  },
+  "unrefined": {
+    "reason": "the user chose to skip refine and to escalate only on a blocker; the bundle is spec-lint clean at 18 requirements, 10 cases, 18 testids",
+    "why": "no refine ledger at .workflow/refine/time-off-03.loop.json — this spec has not been judged"
+  },
+  "createdAt": "2026-09-07T08:43:13.341Z",
+  "updatedAt": "2026-09-07T08:55:13.957Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:43:13.509Z",
+      "endedAt": "2026-09-07T08:55:13.907Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "criterion": "REQ-03-009",
+      "file": "specs/time-off/03-calendar-range-and-scope.cases.md",
+      "symbol": "DS gaps",
+      "claim": "REQ-03-009 needs a bound the design system's DateRangePicker cannot express, and the bundle's DS-gaps table records only three custom properties while asserting that every new value is one of them",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-03-009: 'WHILE the Range window is active and a start has been armed, THE SYSTEM SHALL bound the picker so that no end more than 91 days after that start can be chosen.' In packages/ds/src/components/forms/DateRangePicker.tsx the armed start is private state (`const [pending, setPending] = React.useState<CalendarDate | null>(null)`, :87) and the selectable set is computed from the fixed props alone (`weeks.flat().filter(date => !!date && (!minDate || date >= minDate) && (!maxDate || date <= maxDate))`, :124-127). No prop narrows the panel after the first click, so the requirement cannot be met without changing the component. The cases file's DS gaps table lists only `--name-col`, `--day-col-min`, `--range-label-col` and the three band colours, and closes with 'No colour is written that the design system does not name, and this spec declares no @literal value: every new number is one of the three custom properties above' — which is true of the numbers and silent about the capability.",
+        "source": "specs/time-off/03-calendar-range-and-scope.cases.md:3-13"
+      },
+      "suggestedFix": "a DS-gaps row for the span bound. Planned as T4 regardless: one optional `maxSpanDays` prop on the component, narrowing `availableDates` only — never the minDate/maxDate that gate Calendar's month arrows — and undefined by default so the three shipped report consumers are unchanged."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "criterion": "REQ-03-015",
+      "file": "specs/time-off/03-calendar-range-and-scope.cases.md",
+      "symbol": "--range-label-col",
+      "claim": "the DS-gaps table asks for a new custom property to reserve the range label's width, and that reservation already ships under another name",
+      "witness": {
+        "kind": "rule",
+        "detail": "The cases file: '`--range-label-col` — no token carries a reserved width for a variable-width label in a control row | REQ-03-015 needs one.' apps/web/app/globals.css:872-878 already declares `--range-col: 26ch` on the `.time-off-calendar` block and :886-893 applies `width: var(--range-col)` to `.time-off-calendar-range`, added by commit 595fcf6 ('fix(time-off): reserve calendar range label width so nav controls hold still (BUG-013)'), which landed after the bundle was written in e659a5b. Declaring a second property would leave two names reserving one width.",
+        "source": "apps/web/app/globals.css:877"
+      },
+      "suggestedFix": "T5 widens the existing `--range-col` to cover the widest label the four windows now produce and records the decision in the block comment, rather than declaring a second property. The widest string the contracts file names, `28 Dec 2026 – 14 Mar 2027`, is the same length as the widest preset label BUG-013 measured."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "criterion": "REQ-03-003",
+      "file": "specs/time-off/03-calendar-range-and-scope.md",
+      "symbol": "Known Gaps — Edge case 1",
+      "claim": "the bundle both writes Edge case 1 off as an acceptable gap and calls its fixture a task this spec owes, and no numbered case consumes the fixture either way",
+      "witness": {
+        "kind": "rule",
+        "detail": "Known Gaps: 'No fixture can seed more than 100 active memberships, so Edge case 1 is unreachable | It is the refusal that replaces the one being withdrawn, and it is the one state this spec most needs to see | A seeding fixture under apps/api/src/test-support/, declared as a task this spec owes in the cases file.' The cases file: 'The one `no` is a task this spec owes: a seeding fixture for the over-100 case.' A gap listed as acceptable now and a task the spec owes are different obligations, and neither TC-03-INT-21…24 nor any E2E case names the fixture — so building it as written produces a file with no reader, which is what the review stage blocks on.",
+        "source": "specs/time-off/03-calendar-range-and-scope.md:216"
+      },
+      "suggestedFix": "planned as owed, with a consumer: T3 adds apps/api/src/test-support/seed-memberships.ts as a module (never a controller — the contracts file says no route is added) and uses it for one assertion marked `// Edge case 1` in apps/api/test/time-off-calendar.spec.ts, asserting 422 tooManyMembers for scope=teams with 101 active memberships and nothing ticked."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "criterion": "REQ-03-003",
+      "file": "specs/time-off/03-calendar-range-and-scope.contracts.md",
+      "symbol": "Withdrawn",
+      "claim": "three shipped test cases assert the two refusals this spec withdraws, and the bundle says nothing about what becomes of them",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-INT-06, TC-01-INT-08, TC-01-E2E-03",
+        "detail": "apps/api/test/time-off-calendar.spec.ts:427 asserts `{ error: 'validation_error', fields: { projectIds: 'Choose at least one team.' } }` with status 422 for scope=teams and nothing ticked; :466 asserts `fields.memberIds === 'Choose at least one person.'`; e2e/tests/time-off-calendar.spec.ts:335-342 clicks calendar-scope-teams and expects calendar-error-banner to hold TIME_OFF_CALENDAR_MESSAGES.teamsRequired with calendar-grid at count 0. REQ-03-003 makes all three false, and the deletion of the two exports (contracts §Withdrawn) stops the last one compiling. The bundle names none of them, and specs/time-off/01 may not be edited to record a retirement.",
+        "source": "apps/api/test/time-off-calendar.spec.ts:427"
+      },
+      "suggestedFix": "planned: T3 and T6 rewrite all three in place to assert the new rule, keeping their `// TC-01-INT-06` / `// TC-01-INT-08` / `// TC-01-E2E-03` markers so the ids stay traceable, and leave specs/time-off/01-*.md untouched."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "criterion": "TC-03-E2E-11",
+      "file": "specs/time-off/03-calendar-range-and-scope.cases.md",
+      "symbol": "Verification Plan — reaching the states the cases need",
+      "claim": "the plan names an E2E helper that does not exist",
+      "witness": {
+        "kind": "command",
+        "detail": "The cases file: 'An admin session in an organization with active members | `signInAsAdmin` in `e2e/tests/helpers.ts`, the same one `time-off-calendar.spec.ts` opens with | yes'. `grep -rn \"signInAsAdmin\" e2e/` returns nothing. e2e/tests/time-off-calendar.spec.ts imports `login`, `signupOrg` and `uniqueEmail` from ./helpers and reaches an admin session through `signupOrg` followed by the local `signInUi`.",
+        "source": "e2e/tests/time-off-calendar.spec.ts:3-22"
+      },
+      "suggestedFix": "no work: T6 follows the suite's own opening, which the file already establishes. Recorded because the Verification Plan's whole value is the route it hands the next agent."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P6",
+      "target": "self",
+      "severity": "note",
+      "rule": "agent/stale-reference",
+      "criterion": "H-15",
+      "file": ".claude/agents/pre-implementer-strict.md",
+      "symbol": "What you read",
+      "claim": "my own definition tells me to read a design-system document at a path that does not exist",
+      "witness": {
+        "kind": "command",
+        "detail": "The definition's 'What you read' item 4: \"`CLAUDE.md`, and `1_DS for dev/README.md` when the task touches UI.\" `ls '1_DS for dev/'` → 'No such file or directory'. The four normative design-system rules are in packages/ds/README.md, which is the file CLAUDE.md names ('the four normative rules are in packages/ds/README.md') and the one I read. The same stale path appears in packages/ds/README.md's own prose about `_adherence.oxlintrc.json` and in scripts/static-gate.mjs:24.",
+        "source": "packages/ds/README.md:20"
+      },
+      "suggestedFix": "point item 4 at packages/ds/README.md. This is a note for a person, not a halt — the correct document exists and was read."
+    }
+  ],
+  "halt": null,
+  "preflight": {
+    "at": "2026-09-07T08:43:13.460Z",
+    "checks": [
+      {
+        "name": "config-valid",
+        "ok": true,
+        "detail": ".claude/ai-workflow.config.json parses and every track resolves"
+      },
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/calendar-range-and-scope\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-available",
+        "ok": true,
+        "detail": "the suite would take 3000/4000"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "31 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260825130709_hiring_vacancies_candidates_applications",
+      "20260826094500_application_cv_size",
+      "20260826121829_add_invitations_and_job_title",
+      "20260826150000_hiring_categories",
+      "20260826170000_hiring_criteria",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_manage_booking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260828170000_application_cv",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_candidate_soft_delete",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants",
+      "20260904120000_time_off_01_vacation_calendar"
+    ]
+  }
+}
