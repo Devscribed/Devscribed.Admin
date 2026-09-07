@@ -368,7 +368,9 @@ export function ApplicationSection({
         )}
 
         {expanded && (
-          <div className="card-section-body">
+          // Tagged because the responsive rule is about *this* box's track count, and a
+          // class is not a selector a test may use.
+          <div className="card-section-body" data-testid={`application-body-${application.id}`}>
             {/* Everything the team writes during the interview. */}
             <div className="card-section-main">
               {criteria}
@@ -377,7 +379,10 @@ export function ApplicationSection({
             </div>
 
             {/* Everything the candidate sent, in the order it is asked for. */}
-            <div className="card-section-side">
+            <div
+              className="card-section-side"
+              data-testid={`application-side-${application.id}`}
+            >
               <div>
                 <SectionHeading>From the candidate</SectionHeading>
                 <CvRow orgId={orgId} application={application} />

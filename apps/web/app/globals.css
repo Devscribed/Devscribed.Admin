@@ -171,9 +171,19 @@
   margin-top: var(--space-4);
 }
 
+/*
+ * The glyph sits on the row's **first line**, not in the middle of however many the row
+ * turned out to need. Centred, it is right until the text wraps and then it is beside the
+ * wrong line: at 360 the clock line runs to three, and the clock lands against `· booked
+ * …`. One glyph per line is what makes these facts a list rather than a run (04 §03), and
+ * a glyph two lines below its fact is neither.
+ *
+ * `margin-top: 2px` is what centring was giving an unwrapped row anyway — an 18px glyph in
+ * a 22px line — so nothing moves at any width where nothing wrapped.
+ */
 .application-meta-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   margin: 0;
   min-width: 0;
@@ -184,6 +194,7 @@
 
 .application-meta-row > svg {
   flex-shrink: 0;
+  margin-top: 2px;
   color: var(--text-secondary);
 }
 
@@ -344,7 +355,14 @@
   flex: 1;
 }
 
-@media (max-width: 1023px) {
+/*
+ * Below `lg`. The screen's own three numbers were 1024 / 768 / 600 and the ladder's are
+ * 992 / 768 / 576, so this one moves and the other two do not: what was written as
+ * `max-width: 1023px` is `max-width: 991px`, and the 32px between them go back to the two
+ * columns. They are worth going back — at 1000 one column gave the notes field 900px of
+ * width for a paragraph, and two give it 553 beside a CV that stays in view.
+ */
+@media (max-width: 991px) {
   /* The status control drops below the title rather than squeezing it. */
   .card-section-head {
     flex-direction: column;
@@ -745,11 +763,6 @@
 }
 
 /*
- * The team's two actions on the candidate card, beneath the interview facts they change
- * (07 design, Screens). Reschedule leads and Cancel follows, in that order on every
- * width — the destructive one is never the first thing a thumb or a Tab reaches.
- */
-/*
  * The header's right-hand column: what this interview *is* on top — its status, and the
  * kebab holding what can be done to it — and where it goes underneath. The two are pushed
  * apart so the buttons sit on the header's baseline whatever the left column's height,
@@ -777,15 +790,45 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 1023px) {
-  /* Stacked under the facts rather than beside them, and the buttons take the full row. */
+@media (max-width: 991px) {
+  /*
+   * Stacked under the facts rather than beside them, and the buttons take the full row.
+   *
+   * `align-self: stretch` is the base rule and it is kept rather than cancelled, because
+   * the head has turned: stretch is full height while the head is a row and full width
+   * once it is a column, which is the same instruction meaning the right thing twice. It
+   * used to be cancelled here, and the aside then shrank to fit inside a head whose
+   * `align-items` is `flex-start` — which left `Open in calendar` wrapping its label onto
+   * two lines from 991 all the way down, on a row with 400px of space beside it.
+   */
   .card-section-aside {
     align-items: stretch;
-    align-self: auto;
   }
 
   .application-header-actions > * {
     flex: 1;
+  }
+}
+
+/*
+ * Below `sm` the header's two actions stack, full width, and `Open in calendar` is the
+ * lower of them: it is the primary and the one most often reached for during an interview
+ * (04 design §Layout), so it is the one nearest the thumb. Side by side there is not room
+ * for either label on one line — 288px of row splits into two 139px buttons and both of
+ * them wrap.
+ */
+@media (max-width: 575px) {
+  .application-header-actions {
+    flex-direction: column;
+  }
+
+  /*
+   * And they stop growing. `flex: 1` above shares the row between them, and the row is a
+   * column here — so the same declaration shares the aside's *height* instead, which is
+   * two 26px buttons where the system's control is 44.
+   */
+  .application-header-actions > * {
+    flex: 0 0 auto;
   }
 }
 

@@ -515,4 +515,101 @@ test.describe('Candidate card', () => {
     expect(await gap()).toBe(before);
     await expect(copy).toBeFocused();
   });
+
+  /**
+   * TC-H04-E2E-12 — the card folds at the ladder's three numbers.
+   *
+   * Read at the boundaries rather than in the middle of each band. 992 and 991 are the
+   * same pixel from either side, and that pair is the assertion: the screen's fold used
+   * to be written `1023`, and a test at 900 alone would pass against either number.
+   */
+  test('folds at 992, stacks its chips at 767 and its header actions at 360', async ({
+    page,
+    request,
+  }) => {
+    const { org, invite } = await seed(request, 'card-ladder');
+    const english = await createCriterion(request, org, {
+      name: 'English proficiency',
+      values: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+    });
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+    await expect(page.getByTestId('card-notes-input')).toBeVisible();
+
+    // A chip to measure at 767. The value is what writes the row, so it is set.
+    await page.getByTestId('card-criteria-add').click();
+    await page.getByTestId('card-criteria-autocomplete').fill('English');
+    await page.getByTestId(`card-criteria-option-${english.id}`).click();
+    const value = page.getByTestId(`card-criterion-value-${english.id}`);
+    await value.click();
+    await page.getByTestId(`card-criterion-option-${english.values[3].id}`).click();
+    await expect(value).toContainText('B2');
+
+    const applicationId = invite.applicationId;
+    const body = page.getByTestId(`application-body-${applicationId}`);
+    const title = page.getByTestId(`application-vacancy-${applicationId}`);
+    const status = page.getByTestId(`application-status-select-${applicationId}`);
+
+    /** How many tracks the grid resolved to, and which edge the rule is drawn on. */
+    const shape = () =>
+      body.evaluate((el, id) => {
+        const rule = el.querySelector(`[data-testid="application-side-${id}"]`)!;
+        return {
+          tracks: getComputedStyle(el).gridTemplateColumns.split(' ').length,
+          left: getComputedStyle(rule).borderLeftWidth,
+          top: getComputedStyle(rule).borderTopWidth,
+        };
+      }, applicationId);
+
+    // ≥ lg: as drawn. Two columns, the rule on the left of the candidate's, and the
+    // status control on the vacancy title's own line.
+    await page.setViewportSize({ width: 992, height: 900 });
+    await expect.poll(shape, { message: 'as drawn at 992' }).toEqual({
+      tracks: 2,
+      left: '1px',
+      top: '0px',
+    });
+    const wideTitle = (await title.boundingBox())!;
+    const wideStatus = (await status.boundingBox())!;
+    expect(Math.abs(wideStatus.y - wideTitle.y), 'status beside the title at 992').toBeLessThan(8);
+
+    // One pixel narrower: one column, and the same division turned through 90°.
+    await page.setViewportSize({ width: 991, height: 900 });
+    await expect.poll(shape, { message: 'folded at 991' }).toEqual({
+      tracks: 1,
+      left: '0px',
+      top: '1px',
+    });
+    const foldTitle = (await title.boundingBox())!;
+    const foldStatus = (await status.boundingBox())!;
+    expect(foldStatus.y, 'status below the title at 991').toBeGreaterThan(foldTitle.y + 40);
+
+    // Below md the chip stacks: it fills the list it sits in rather than wrapping
+    // mid-control. Measured against the list, because the grid track it is inside has the
+    // card body's own 20px padding on either side of it.
+    await page.setViewportSize({ width: 767, height: 900 });
+    const chipFillsList = () =>
+      page.getByTestId('card-criteria-list').evaluate((list, id) => {
+        const chip = list.querySelector(`[data-testid="card-criterion-${id}"]`)!;
+        return chip.getBoundingClientRect().width === list.getBoundingClientRect().width;
+      }, english.id);
+    await expect.poll(chipFillsList, { message: 'chip fills its list at 767' }).toBe(true);
+
+    // Below sm the header's two actions stack, full width, primary lower, and the field
+    // that the page exists for keeps every one of its twelve rows.
+    await page.setViewportSize({ width: 360, height: 900 });
+    const vacancy = page.getByTestId(`application-open-vacancy-${applicationId}`);
+    const calendar = page.getByTestId(`application-calendar-${applicationId}`);
+    await expect
+      .poll(async () => {
+        const a = (await vacancy.boundingBox())!;
+        const b = (await calendar.boundingBox())!;
+        return { sameX: a.x === b.x, sameWidth: a.width === b.width, lower: b.y > a.y };
+      }, { message: 'the two actions stack at 360' })
+      .toEqual({ sameX: true, sameWidth: true, lower: true });
+    // `flex: 1` shares the row above and would share the *height* here, at 26px each.
+    const heights = [(await vacancy.boundingBox())!.height, (await calendar.boundingBox())!.height];
+    expect(Math.min(...heights), 'neither is squashed').toBeGreaterThanOrEqual(44);
+    await expect(page.getByTestId('card-notes-input')).toHaveJSProperty('rows', 12);
+  });
 });
