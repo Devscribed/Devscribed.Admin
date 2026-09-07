@@ -212,7 +212,17 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
         credentials: 'same-origin',
         // One save, one body: the country rides the update this screen already submits
         // (REQ-01-042) rather than getting a form and a button of its own.
-        body: JSON.stringify({ role: role ?? detail.role, jobTitle, countryCode }),
+        //
+        // PATCH-006 — `role` goes only when the caller picked one. Sending back what was
+        // loaded made every save an assignment: on a member whose column still holds the
+        // legacy `member`, the form submitted that value and the route refused it with
+        // `Invalid role`, putting the country and the job title behind a role change
+        // nobody asked for.
+        body: JSON.stringify({
+          ...(role !== null && role !== detail.role ? { role } : {}),
+          jobTitle,
+          countryCode,
+        }),
       });
 
       if (response.ok) {

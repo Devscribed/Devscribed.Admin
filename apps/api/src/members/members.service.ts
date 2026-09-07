@@ -85,7 +85,14 @@ export interface MemberDetail {
 
 /** Spec 05 — `PUT /members/:memberId` request body. */
 export interface MemberDetailUpdateInput {
-  role: string;
+  /**
+   * PATCH-006 — **presence decides**, the rule `countryCode` below already carries. A body
+   * without the key asks for no role change, so nothing about the role is validated, no
+   * change authority is checked and no zero-admin count is run. A body with it is applied
+   * exactly as before, legacy values included: `isValidRole` is untouched, so `member` is
+   * still refused and no write can put it back into the column.
+   */
+  role?: string;
   jobTitle: string;
   /**
    * Time off spec 01 REQ-01-042 / REQ-01-043 — the member's holiday country. **Presence
@@ -432,10 +439,15 @@ export class MembersService {
         });
       }
 
-      if (!isValidRole(input.role)) {
+      // PATCH-006 — the key's presence, not its value, decides whether a role is being
+      // assigned. An admin editing a job title on a member whose column still holds the
+      // legacy `member` used to have that value submitted back at them and refused here,
+      // which put the country and the job title behind a role change nobody asked for.
+      const wantsRole = input !== null && typeof input === 'object' && 'role' in input;
+      if (wantsRole && !isValidRole(input.role as string)) {
         throw new BadRequestException({ error: 'invalid_role', message: MESSAGES.role.invalid });
       }
-      const newRole = input.role;
+      const newRole = wantsRole ? (input.role as Role) : (target.role as Role);
 
       const jobTitleResult = validateJobTitle(input.jobTitle ?? '');
       if (!jobTitleResult.valid) {
@@ -492,7 +504,9 @@ export class MembersService {
       await tx.membership.update({
         where: { id: target.id },
         data: {
-          role: newRole,
+          // PATCH-006 — written only when a role was submitted, so a body without the key
+          // leaves the column as it found it rather than rewriting it with itself.
+          ...(wantsRole ? { role: newRole } : {}),
           jobTitle: jobTitleResult.value.length > 0 ? jobTitleResult.value : null,
           // Written by the same statement as the role and the job title, inside the
           // transaction and the organization-row lock this route already holds — no lock
