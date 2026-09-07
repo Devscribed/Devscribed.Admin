@@ -969,16 +969,25 @@
 }
 
 /* The grid outgrows the page on a narrow viewport and under a wide window, and it scrolls
-   inside its own container rather than taking the page body sideways with it. */
+   inside its own container rather than taking the page body sideways with it.
+
+   **The frame is on the container that scrolls, and it is not decoration that it is.** A
+   sticky cell is pinned to its NEAREST scrollport ancestor, and any box between it and the
+   scroller carrying an `overflow` other than `visible` becomes that scrollport — one whose
+   own scroll offset never leaves 0, because its width is its content's width. The border,
+   the radius and the `overflow: hidden` that clips them therefore cannot sit on
+   `.time-off-calendar-grid`: with them there the member column below scrolled away with the
+   days, which is the one thing this whole arrangement exists to prevent. A scroll container
+   clips to its own rounded corners, so moving the frame here loses nothing and the frame
+   now stays put around the scrolling area instead of sliding off with it. */
 .time-off-calendar-scroll {
   overflow-x: auto;
-}
-
-.time-off-calendar-grid {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-l);
   background: var(--surface-page);
-  overflow: hidden;
+}
+
+.time-off-calendar-grid {
   /* REQ-03-018 — at EVERY width, not below a breakpoint: the day columns take their own
      minimum (--day-col-min) and the container above scrolls once the sum of them is wider
      than the page. A 92-day range is wider than a desktop viewport, so a rule that applied
@@ -1003,7 +1012,9 @@
 
 /* The names survive a horizontal scroll — the whole reason the grid scrolls rather than
    the page. `position: sticky` on a cell is the one thing an inline style cannot do here,
-   because it needs the `left: 0` and the stacking order together. */
+   because it needs the `left: 0` and the stacking order together. It holds only while
+   nothing between this cell and `.time-off-calendar-scroll` establishes a scrollport of its
+   own; see the note on that rule before adding an `overflow` to anything in between. */
 .time-off-calendar-who {
   display: flex;
   align-items: center;

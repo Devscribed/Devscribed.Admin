@@ -818,13 +818,34 @@ test.describe('time-off/01 — Vacation calendar', () => {
     );
     for (const width of widths) expect(width).toBeGreaterThanOrEqual(floor - 0.5);
 
-    // REQ-03-018 — the grid scrolls inside its own container rather than compressing.
+    // REQ-03-018 — the grid scrolls inside its own container rather than compressing, AND
+    // the member column survives that scroll. The second half is what makes the first half
+    // usable: 92 columns scrolled away from their names are 92 unlabelled columns, and a
+    // sticky cell is pinned to its nearest scrollport, which is not always the box that
+    // moves.
     const scroll = await page.getByTestId('calendar-grid').evaluate((el) => {
       const container = el.parentElement;
       if (!container) throw new Error('expected the grid to sit inside its scroll container');
-      return { scrollWidth: container.scrollWidth, clientWidth: container.clientWidth };
+      const row = el.querySelector('[data-testid^="calendar-member-row-"]');
+      const name = row && row.firstElementChild;
+      if (!name) throw new Error('expected a member row with a name cell');
+      const before = name.getBoundingClientRect().left;
+      container.scrollLeft = 400;
+      return {
+        scrollWidth: container.scrollWidth,
+        clientWidth: container.clientWidth,
+        scrolled: container.scrollLeft,
+        nameLeftBefore: before,
+        nameLeftAfter: name.getBoundingClientRect().left,
+        containerLeft: container.getBoundingClientRect().left,
+      };
     });
     expect(scroll.scrollWidth).toBeGreaterThan(scroll.clientWidth);
+    expect(scroll.scrolled).toBeGreaterThan(0);
+    // Pinned: the name cell is still against the container's left edge — within the
+    // container's own border — rather than carried `scrolled` pixels off it.
+    expect(scroll.nameLeftAfter).toBeGreaterThanOrEqual(scroll.containerLeft - 1);
+    expect(scroll.nameLeftAfter).toBeLessThanOrEqual(scroll.nameLeftBefore + 1);
   });
 
   // TC-01-E2E-12 (BUG-013) — the range label used to be the flex row's last, unsized child
