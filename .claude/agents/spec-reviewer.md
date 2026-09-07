@@ -62,7 +62,7 @@ loop rejects it and retries.
 **Unless your prompt carries `criteria`.** Then the register is divided and that list is the whole
 of yours: answer those ids and put no other id in the map. Another pass holds the rest and a
 second opinion on its questions is not what this pass is for — spend the whole of it on the ones
-you were given, and go further into each than you would holding all sixty. You still read the
+you were given, and go further into each than you would holding the whole register. You still read the
 whole bundle: what is divided is the question, never the document.
 
 ## The bundle

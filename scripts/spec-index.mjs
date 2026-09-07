@@ -124,7 +124,15 @@ function frontmatter(root, path) {
     ? inline.split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
     : (head.match(/^depends-on:\s*\n((?:\s+-\s+.+\n?)+)/m)?.[1] ?? '')
       .split('\n').map((l) => l.replace(/^\s*-\s*/, '').trim().replace(/^["']|["']$/g, '')).filter(Boolean);
-  return { title, dependsOn };
+  /* Which spec this lighter document hangs off: `owning-spec` on a bug report, `supersedes` on
+     a patch note. Both are written as `area/NN`, which is the key a spec is indexed under, and
+     both are legitimately `null` — a bug nobody has traced to a document yet, a patch that
+     changes a rule no spec stated. `null` is the absence, never the string. */
+  const rel = (k) => {
+    const v = head.match(new RegExp(`^${k}:\\s*(.+)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '');
+    return v && v !== 'null' ? v : null;
+  };
+  return { title, dependsOn, relatesTo: rel('owning-spec') ?? rel('supersedes') };
 }
 
 /* ── entries ──────────────────────────────────────────────────────────────── */
@@ -273,16 +281,34 @@ export function buildIndex(root) {
       key: `${s.area}/${s.num}`,
       path: s.path,
       area: s.area,
-      /* The weight of the document, which is also the track a run against it takes. The board
-         groups by it: ten bug reports filed under a heading that says "specs" is a board that
-         answers the wrong question. */
+      /* The weight of the document, which is also the track a run against it takes. */
       weight: s.area === 'bugs' ? 'bug' : s.area === 'patches' ? 'patch' : 'spec',
       num: s.num,
       writtenAt: s.writtenAt,
       title: fm.title,
       dependsOn: fm.dependsOn,
+      /* The spec this document hangs off, resolved below. A spec hangs off nothing. */
+      relatesTo: fm.relatesTo,
       entries: [],
     });
+  }
+
+  /* ── the lineage: a feature, its specs, and the lighter documents under each ──
+   *
+   * `specs/bugs` and `specs/patches` are where the lighter documents *live*, not what they are
+   * about: BUG-011 lives under `bugs` and belongs to `time-off`. Grouping by the directory puts
+   * every bug in the product under one heading and answers no question anybody arrives with.
+   * So the feature is the area of the spec a document names — its own, for a spec — and a
+   * document naming none has no feature rather than a wrong one. */
+  const byKey = new Map([...specs.values()].map((s) => [s.key, s]));
+  for (const s of specs.values()) {
+    const owner = s.relatesTo ? byKey.get(s.relatesTo) ?? null : null;
+    s.relatesToPath = owner?.path ?? null;
+    s.relatesToTitle = owner?.title ?? null;
+    /* A relation naming a spec that is not there is kept and shown as written: it is either a
+       renamed document or a typo, and both are worth seeing rather than silently dropping. */
+    s.relatesToKnown = !s.relatesTo || !!owner;
+    s.feature = s.weight === 'spec' ? s.area : owner?.area ?? null;
   }
 
   /* A run whose spec is gone — renamed, renumbered, deleted — still happened, and the hours it
@@ -294,8 +320,10 @@ export function buildIndex(root) {
     if (group) group.entries.push(e); else orphans.push(e);
   }
 
+  /* The same order the documents take, for the same reason: what moved last is what somebody
+     is looking for. A run that started first and finished a week ago is not the one. */
   const finish = (list) => {
-    list.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
+    list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || (b.startedAt ?? 0) - (a.startedAt ?? 0));
     return list;
   };
 
@@ -318,11 +346,11 @@ export function buildIndex(root) {
     };
   });
 
-  /* Whatever is moving first, then by the clock: the newest thing to have happened, whether
-     that was a run or somebody writing the document. */
-  out.sort((a, b) => (b.running ? 1 : 0) - (a.running ? 1 : 0)
-    || (b.lastAt ?? 0) - (a.lastAt ?? 0)
-    || b.path.localeCompare(a.path));
+  /* One order, everywhere: the newest thing to have happened, whether that was a run or
+     somebody writing the document. A running run writes as it goes, so it arrives at the top
+     on its own clock and needs no rule of its own — and a rule of its own is what pinned a run
+     abandoned three days ago above a document written this morning. */
+  out.sort((a, b) => (b.lastAt ?? 0) - (a.lastAt ?? 0) || b.path.localeCompare(a.path));
 
   return { generatedAt: Date.now(), specs: out, orphans: finish(orphans) };
 }

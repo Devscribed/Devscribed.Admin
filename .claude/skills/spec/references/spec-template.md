@@ -217,8 +217,33 @@ by a case and every id a case asserts is here.
 
 ## `## Screens` and `## UI Description`
 
-Mocks in fenced blocks; `| Surface | Behaviour |` for loading, empty, saving, read-only,
-permission-limited and error states.
+Mocks in fenced blocks, then the question, the states and what the screen borrows.
+
+**The question.** A screen that asks the server answers a question: the values the answer
+depends on — the range, the scope, the filters, the row. Name it once, here, before the states.
+Every rule below reads it.
+
+```
+| Surface | Behaviour |
+```
+
+Loading, empty, saving, read-only, permission-limited and error — **for each question the
+screen can ask**, not once for the screen. A row that leaves content on screen says which
+question that content still answers.
+
+**What the screen borrows** — every component, place and source it takes rather than defines:
+
+```
+| Borrowed | What it demands of the caller | How this spec meets it |
+```
+
+A component is read by its entry in `specs/design-system/decisions.md`, not by its name; a
+place — a slot, a row, a header, a dialog — states what it does to what is put in it; a list
+states its length and the way to reach a member; a table the screen reads states who fills it.
+That it exports, or that something already lives there, is not a row.
+
+A screen this spec changes and does not draw is named here as undrawn, with the risk that
+leaves open.
 
 ## `## Edge Cases`
 

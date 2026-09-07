@@ -44,9 +44,9 @@ assignment; it is not a decision the judge makes each pass.
 
 | Family | What the shard enumerates |
 |---|---|
-| Currency | every claim the spec makes about code that exists today, and the command that settles each |
+| Currency | every claim the spec makes about code that exists today, and the command that settles each; and everything the spec takes rather than defines — a component, a place it is put, a list, a table a screen reads — against what that thing demands of its caller |
 | Conventions | every rule the spec states, against the `CLAUDE.md` convention that governs it |
-| Self-sufficiency | every rule the implementer must obey, and where **this** document states it |
+| Self-sufficiency | every rule the implementer must obey, and where **this** document states it; every screen's question and the states that question can be in |
 | Testability | every case, its route to the state it asserts, and its expected result |
 | Obligations | everything the spec obliges itself to contain, counted |
 
