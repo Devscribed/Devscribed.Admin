@@ -5,8 +5,8 @@
   "task": "time-off-02-holiday-sourcing",
   "branch": "spec/holiday-sourcing",
   "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
-  "headAtInit": "384d8c604e528f5edbe852b8999816a9ca0d8b05",
-  "status": "halted",
+  "headAtInit": "c837454a282c4385229ada45deee16d6af841794",
+  "status": "static_gate",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T10:33:36.868Z",
-  "updatedAt": "2026-09-07T12:09:00.279Z",
+  "updatedAt": "2026-09-07T12:26:24.341Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -35,23 +35,21 @@
     },
     "implement": {
       "status": "passed",
-      "attempts": 3,
-      "startedAt": "2026-09-07T11:50:20.263Z",
+      "attempts": 4,
+      "startedAt": "2026-09-07T12:10:41.530Z",
       "lastVerdict": "pass",
-      "endedAt": "2026-09-07T11:55:22.919Z"
+      "endedAt": "2026-09-07T12:26:24.286Z"
     },
     "static_gate": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 3,
       "startedAt": "2026-09-07T11:55:23.145Z",
-      "lastVerdict": "pass",
-      "endedAt": "2026-09-07T11:55:26.736Z"
+      "lastVerdict": "pass"
     },
     "review": {
-      "status": "blocked",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-07T11:55:26.943Z",
-      "endedAt": "2026-09-07T12:09:00.225Z",
       "lastVerdict": "blocked"
     },
     "qa": {
@@ -549,11 +547,21 @@
         "from": "e252bfbad0bbdee03cb5cfe416943d38392c567d49cd8701dacc3efe336887ba",
         "pendingUntilReplan": "7aaee48d10ed3c57b2b5095973b06ac7f81c4c361ea3f023e142d9cc07be104e"
       }
+    },
+    {
+      "at": "2026-09-07T12:10:32.164Z",
+      "stage": "implement",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: spec/contradiction — specs/time-off/02-holiday-sourcing.contracts.md:221 vs specs/time-off/02-holiday-sourcing.md REQ-02-023 (specs/time-off/02-holiday-sourcing.contracts.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "384d8c604e528f5edbe852b8999816a9ca0d8b05",
+        "to": "c837454a282c4385229ada45deee16d6af841794"
+      },
+      "specEdits": [
+        "specs/time-off/02-holiday-sourcing.cases.md",
+        "specs/time-off/02-holiday-sourcing.contracts.md"
+      ]
     }
-  ],
-  "halt": {
-    "reason": "spec-defect",
-    "detail": "review found a defect in the spec: spec/contradiction — specs/time-off/02-holiday-sourcing.contracts.md:221 vs specs/time-off/02-holiday-sourcing.md REQ-02-023 (specs/time-off/02-holiday-sourcing.contracts.md)",
-    "at": "2026-09-07T12:09:00.278Z"
-  }
+  ]
 }
