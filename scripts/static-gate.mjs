@@ -15,10 +15,16 @@
  *   4. Every message in the spec's Error Messages table exists in `packages/validation`.
  *   5. Every `data-testid` the spec requires is rendered, and every one the diff adds is named
  *      in the spec.
+ *   6. Every custom property `Geometry & motion` names is declared, and no property the spec
+ *      names is declared under a different spelling. Not "every property the spec names
+ *      exists" — a `## DS gaps` row says a property does not yet exist, and that is allowed.
+ *   7. Every export the spec's `Shared code` table names exists.
+ *   8. Every typeface `--font-family-*` names is fetched by something in the tree.
  *
- * Rules 3 to 5 answer questions with one right answer that no amount of reading a diff
+ * Rules 3 to 8 answer questions with one right answer that no amount of reading a diff
  * reliably produces: a string that exists nowhere, an id nothing renders, a file that does not
- * compile. Everything a rule here cannot settle mechanically it reports as a note.
+ * compile, two spellings of one value in two files, a typeface only the author's machine has.
+ * Everything a rule here cannot settle mechanically it reports as a note.
  *
  * Rules 1 and 2 read `git diff` directly. There is no file walker, no symbol parser and no
  * bespoke copy of a lint rule — design-system token rules already exist as oxlint config in
@@ -403,6 +409,174 @@ if (specText) {
       }
     }
   }
+}
+
+/* 6. A custom property the spec names is a promise in exactly the way a message is: the
+   document says a value has a name, and a stylesheet declaring a different name leaves the
+   spec describing a product that does not exist. The gate asks the mechanical half — is
+   anything called this — because reading a diff answers it only by accident, and a reviewer
+   who sees the property used and the block declared has no reason to compare the two spellings
+   against a table in another file. */
+
+const declaredProperties = (() => {
+  /* POSIX ERE, which is what `git grep -E` speaks: `\s` is not a class there, and a pattern
+     written with it matches nothing while reporting no error — every property then reads as
+     undeclared and every spec blocks. */
+  const text = gitQuiet('grep', '-h', '-E', '--', '^[[:space:]]*--[a-z0-9-]+[[:space:]]*:', '--', 'packages/ds', 'apps/web');
+  return new Set([...text.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+})();
+
+/* A spec that WITHDRAWS a property tabulates it under `### Withdrawn`, where the whole content
+   of the row is that the name must no longer exist — read as a live row it blocks the spec for
+   keeping its own word, which is the mistake rule 4 already learned.
+
+   Rule 4 truncates at that heading, which is right for one section of one file and wrong here:
+   these rules read the whole bundle, so truncating discards every member after whichever file
+   happened to contain a `### Withdrawn` — and the check then passes by having read almost
+   nothing. Cut the block out and keep what follows it. */
+const withoutWithdrawn = (text) => text.replace(/\n###\s+Withdrawn[\s\S]*?(?=\n#{1,3} |$)/g, '\n');
+
+/* Backticked only. Prose names a family of tokens (`--space-*`, "a --surface- colour") and
+   harvesting those asks for a declaration of something that was never one property. */
+const specProperties = new Set(
+  [...withoutWithdrawn(specText ?? '').matchAll(/`(--[a-z0-9]+(?:-[a-z0-9]+)+)`/g)].map((m) => m[1]),
+);
+
+/* Two questions, not one. "Is every property the spec names declared?" is the wrong one: a
+   `## DS gaps` row exists precisely to say a property does NOT yet exist, and asking it of a
+   whole bundle reports the open gaps a spec is allowed to have. The two that have one right
+   answer are these. */
+
+/* 6a. A property named in `## Geometry & motion` is a reservation the implementation owes —
+   the table's whole content is that something is held at a size, and a reservation nothing
+   declares is not held. Unlike DS gaps, this section never describes what is missing. */
+const geometrySection = withoutWithdrawn(section('Geometry & motion'));
+for (const prop of new Set([...geometrySection.matchAll(/`(--[a-z0-9]+(?:-[a-z0-9]+)+)`/g)].map((m) => m[1]))) {
+  if (declaredProperties.has(prop)) continue;
+  add({
+    rule: 'spec/reservation-not-declared',
+    file: run.spec,
+    symbol: prop,
+    claim: `\`${prop}\` holds an element's size in the Geometry & motion table and no stylesheet declares it`,
+    witness: {
+      kind: 'command',
+      detail: `git grep -hE '^[[:space:]]*${prop}[[:space:]]*:' -- packages/ds apps/web\n(no match)`,
+      source: run.spec,
+    },
+    suggestedFix: 'declare the property, or raise a spec finding — an element the spec says is held at a fixed size is held by nothing (UI-01)',
+  });
+}
+
+/* 6b. A property the spec names that is declared under a DIFFERENT spelling. This is the one
+   reading a diff cannot answer: the reviewer sees the property declared and sees it used, and
+   has no reason to compare either against a table in a third file. Firing only when a sibling
+   name exists is what keeps it silent on a spec whose vocabulary simply predates the current
+   design system — there the name is absent, not misspelt. */
+const segmentsOf = (name) => name.slice(2).split('-');
+const siblingsOf = (name) => {
+  const a = segmentsOf(name);
+  return [...declaredProperties].filter((d) => {
+    const b = segmentsOf(d);
+    if (a[0] !== b[0]) return false;
+    const [short, long] = a.length < b.length ? [a, b] : [b, a];
+    return long.length - short.length === 1 && short.every((s) => long.includes(s));
+  });
+};
+
+for (const prop of specProperties) {
+  if (declaredProperties.has(prop)) continue;
+  const siblings = siblingsOf(prop);
+  if (!siblings.length) continue;
+  add({
+    rule: 'spec/property-spelt-differently',
+    file: run.spec,
+    symbol: prop,
+    claim: `the spec names \`${prop}\`, which is declared nowhere, while ${siblings.map((s) => `\`${s}\``).join(' and ')} is declared`,
+    witness: {
+      kind: 'rule',
+      detail: `The spec and the stylesheet hold two spellings of one value. Neither side is wrong on its own, and nothing that reads only one of them can tell.`,
+      source: run.spec,
+    },
+    suggestedFix: 'settle on one spelling in both places, or raise a spec finding if the two names are genuinely two values (CR-30)',
+  });
+}
+
+/* 7. `### Shared code` is the table of what a spec adds and where. An export named there and
+   written nowhere is the same defect as a message that exists nowhere, and it hides in the
+   same place: the screens that were going to call it were built to call something else, so
+   everything compiles and every test passes. */
+
+/* `Shared code` is written as a `###` under a `##` section, so `section()` — which splits on
+   `\n## ` — cannot find it: the split lands inside the marker and the block it yields starts
+   with `# Shared code`. Read the subsection on its own terms. */
+const subsection = (heading) => {
+  const m = new RegExp(`\\n###\\s+${heading}\\s*\\n([\\s\\S]*?)(?=\\n#{1,3} |$)`).exec(specText ?? '');
+  return m ? m[1] : '';
+};
+
+const sharedRows = (section('Shared code') || subsection('Shared code'))
+  .split('\n')
+  .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l));
+
+for (const line of sharedRows) {
+  const cells = line.split('|').map((c) => c.trim());
+  /* The identifier, not the signature: the table writes `fn(a, b)` so the reader can see the
+     arity, and no source file contains that spelling. */
+  const symbol = (cells[1]?.match(/`([A-Za-z_$][\w$]*)/) ?? [])[1];
+  if (!symbol || symbol.length < 4) continue;
+  if (matches(symbol, 'packages', 'apps').length) continue;
+  add({
+    rule: 'spec/export-not-implemented',
+    file: run.spec,
+    symbol,
+    claim: `\`${symbol}\` is named in the Shared code table and exists nowhere under packages or apps`,
+    witness: { kind: 'command', detail: `git grep -lF -- ${JSON.stringify(symbol)} -- packages apps\n(no match)`, source: run.spec },
+    suggestedFix: 'add the export where the table puts it, or raise a spec finding if the row describes something another spec already ships under a different name',
+  });
+}
+
+/* 8. A typeface the tokens name and nothing anywhere fetches. This is not about the diff — it
+   is a standing property of the product, checked here because it is invisible everywhere else:
+   a machine with the family installed draws the product as designed, and the machine without
+   it draws whatever its generic sans is, with nothing on screen saying which.
+
+   What this answers is the total absence: no rule anywhere names the family. It does NOT
+   answer whether a stylesheet that names it is reached at runtime — a rule behind a CSP, an
+   `@import` a bundler hoists somewhere it is refused, a file no entry point imports all leave
+   the family named and unfetched, and none of them is visible to a grep. Nor does it check
+   the weights or the scripts, where a face absent in one weight is resolved down silently
+   rather than refused. Those halves of UI-06 are the reviewer's and QA's. */
+
+const fontSources = gitQuiet(
+  'grep', '-h', '-E', '--', '@font-face|next/font|fonts\\.googleapis\\.com|@import',
+  '--', 'packages/ds', 'apps/web',
+);
+
+/* The FIRST family of each stack, not every quoted name in it. Everything after the first is
+   a fallback the product deliberately does not ship — `'SF Mono'` is on the machine or it is
+   not, and asking the repository to load it is asking for the opposite of a fallback. The
+   first entry is the one the product names, and the one somebody has to fetch. */
+const namedFamilies = new Set(
+  [...gitQuiet('grep', '-h', '-E', '--', '^[[:space:]]*--font-family-[a-z0-9-]+[[:space:]]*:', '--', 'packages/ds')
+    .matchAll(/--font-family-[a-z0-9-]+\s*:\s*([^;]+);/g)]
+    .map((m) => (m[1].split(',')[0] ?? '').trim().replace(/^['"]|['"]$/g, ''))
+    .filter((f) => f && !/^(sans-serif|serif|monospace|system-ui|ui-sans-serif|ui-serif|ui-monospace|inherit|cursive|fantasy)$/i.test(f)),
+);
+
+for (const family of namedFamilies) {
+  if (fontSources.includes(family) || fontSources.includes(family.replace(/ /g, '+'))) continue;
+  add({
+    rule: 'ds/asset-not-loaded',
+    file: 'packages/ds/src/tokens',
+    symbol: family,
+    claim: `\`--font-family-*\` names "${family}" and nothing under packages/ds or apps/web fetches it`,
+    witness: {
+      kind: 'rule',
+      detail: `No @font-face, next/font or stylesheet import mentions "${family}". A machine that happens to have it installed draws the product as designed; one without draws its generic fallback, in whatever weights that fallback has.`,
+      source: 'packages/ds/README.md — rule 2, tokens',
+    },
+    suggestedFix: 'load the family in every weight the tokens ask for, or name a family that is loaded (UI-06)',
+  });
 }
 
 /* ── verdict ─────────────────────────────────────────────────────────────── */

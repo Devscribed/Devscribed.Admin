@@ -58,6 +58,7 @@ here.
 | CR-18 | a mechanism required at a class of call sites is applied at some of them and not the rest | sweep 11 |
 | CR-19 | a state transition writes its record outside the transaction that makes the transition, or a partial failure leaves something half-applied | checklist — Correctness patterns |
 | CR-20 | a secret, token, live URL, typed value or foreign key reaches a log, a stored row, or a response an unauthorized caller can obtain | sweep 6 |
+| CR-35 | a route taking a partial body decides by the value rather than by the presence of the key, so a field the caller did not send is validated, refused, or overwritten | sweep 11 |
 
 ## Data
 
@@ -70,7 +71,11 @@ here.
 
 | id | Blocks when | source |
 |---|---|---|
-| CR-33 | a screen draws an answer to a question it is no longer asking — content kept across a change of filter, range or selection, under a banner or otherwise, with nothing on screen saying which question it answers | sweep 12 |
+| CR-33 | a screen draws an answer to a question it is no longer asking — content kept across a change of filter, range or selection, under a banner or otherwise, with nothing on screen saying which question it answers (UI-03) | sweep 12 |
+| CR-34 | a message is drawn twice — handed to a component that owns a message slot *and* rendered beside it — or a test asserts a user-facing message is visible rather than that it appears exactly once (UI-05) | sweep 13 |
+| CR-36 | one value has two sources that can disagree on screen — a client clock beside a server timezone, a locally derived label over a server-returned grid, a total recomputed where one was returned (UI-07) | sweep 12 |
+| CR-37 | an element's width or height is decided by its own content where something beside or below it moves as a result, or a control is repositioned by the value it changes; `min-width` and `min-height` where a reservation is required (UI-01, UI-02) | sweep 13 |
+| CR-38 | a box drawn outside its own flow — absolutely positioned, transformed, portalled, a slot hanging below its wrapper — is counted in the layout, the scrollable overflow or the clipping of an ancestor that scrolls (UI-04) | sweep 13 |
 
 ## Tests
 

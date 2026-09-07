@@ -97,6 +97,26 @@ Delete `tests/qa-look.spec.ts` when the pass is over.
 
 Taste may not block: "the spacing looks cramped", "this colour feels off" are notes.
 
+### Measure the screen, do not judge it
+
+Required of every change that touches `apps/web` or `packages/ds`. Use the probes in
+`e2e/tests/ui-invariants.ts`; never hand-roll the measurement.
+
+Walk the document's `## Geometry & motion` table row by row. For each row, drive the thing
+that varies to its extreme — the longest option, the largest count, the absent value — and
+assert the box named in "what holds it" did not move.
+
+Then, on every screen the change draws:
+
+- step every control that changes what the screen asks, and assert nothing already drawn is
+  replaced by a wait;
+- open every overlay inside a panel that scrolls, and assert the panel's scroll box did not
+  grow;
+- count every user-facing message the screen can show; each must be drawn once.
+
+A measurement blocks. Report it as a `scenario` witness with the two numbers and the step
+between them. A screen defect you can only describe is a note.
+
 - **Attach the reproduction, not the impression.** A screenshot supports the description; it
   does not replace it.
 - **Anything you find this way leaves a test behind.** Name the test that would have caught it

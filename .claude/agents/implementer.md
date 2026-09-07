@@ -69,6 +69,31 @@ Code and tests that satisfy the handoff, plus a stage report at
 - No second Prisma client and no repository layer — the injected service.
 - Migrations are additive. Run `prisma generate` from `apps/api`, never the repository root.
 
+## Drawing a screen
+
+Eight mechanisms, in `.claude/skills/ui-invariants/`. Read the register before writing the
+first line of a screen, and hold each of these:
+
+- **No box has a size its own content decides.** An element whose content varies — in length,
+  in count, or in presence — sits in a box fixed by the document's `## Geometry & motion` row.
+  `min-width` and `min-height` reserve nothing; they hold until the content exceeds them.
+- **No control moves as a consequence of being used.**
+- **Draw the wait only when there is nothing to draw.** An answer already on screen stands
+  until the next answer arrives; an answer to a question the screen stopped asking is cleared,
+  not kept under a banner.
+- **A box drawn outside its own flow stays out of an ancestor's layout.** Absolute, transformed
+  and portalled boxes are counted in the scrollable overflow of an ancestor that scrolls, and
+  clipped by it. A transformed box contributes its transformed rectangle.
+- **One message, one node.** Hand the message to the component that owns the slot, or draw it
+  yourself. Never both.
+- **One value, one source.** Never derive on the client what the server answers.
+- **Load every asset the tokens name**, in every weight, covering every script the data holds.
+- **Give a list past scrolling length a way through it**, and never hide what is already chosen.
+
+Write the rule for the **mechanism**, not for the control in front of you: before calling a
+screen task done, list the other call sites of the component you changed and the other controls
+of the same kind, and say what each does now.
+
 ## Writes, boundaries and predicates
 
 - **Before a predicate-guarded write, write two sentences:** the rule the predicate is there to
@@ -120,6 +145,13 @@ the first execution.
 **Never run integration or E2E in full**, and never take ports 3000 or 4000 — they belong to
 whoever is working. Filter Jest with a positional path; never `--testPathPatterns`, which this
 version ignores in silence and runs everything while your log says you filtered.
+
+**Where your diff draws, measure it.** For every row of the document's `## Geometry & motion`
+table, drive the varying content to its extreme — the longest option, the largest count, the
+absent value — and assert the box named in "what holds it" did not move. Use the probes in
+`e2e/tests/ui-invariants.ts`. Assert every message the screen can show is drawn once, and that
+no overlay grows the scroll box of a panel that scrolls. A screen rule you did not measure is a
+screen rule you did not implement.
 
 **Then commit, on the working branch, in one commit.** Not optional: the reviewer reads
 `git diff <baseRef>...HEAD`, so work left uncommitted makes that diff empty and the review
