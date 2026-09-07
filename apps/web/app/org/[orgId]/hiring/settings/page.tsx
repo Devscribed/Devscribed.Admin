@@ -593,6 +593,21 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         onClose={() => setEditing(null)}
         data-testid="category-dialog"
         style={{ width: 420 }}
+        /* design-system 01 §10.51 — the actions live in the slot, so below `sm` they are a
+           sticky footer rather than the last thing a long form scrolls past. */
+        actions={(
+            <FormActions align="full">
+              <Button onClick={() => setEditing(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => void saveCategory()}
+                preloader={busy}
+                data-testid="category-submit-button"
+              >
+                {editing?.id ? 'Save' : 'Create'}
+              </Button>
+            </FormActions>
+        )}
       >
         <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
           <TextInput
@@ -616,17 +631,6 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
             data-testid="category-name-input"
           />
 
-          <FormActions align="full">
-            <Button onClick={() => setEditing(null)}>Cancel</Button>
-            <Button
-              variant="primary"
-              onClick={() => void saveCategory()}
-              preloader={busy}
-              data-testid="category-submit-button"
-            >
-              {editing?.id ? 'Save' : 'Create'}
-            </Button>
-          </FormActions>
         </div>
       </Modal>
 

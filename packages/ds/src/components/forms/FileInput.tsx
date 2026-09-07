@@ -1,6 +1,7 @@
 import React from 'react';
 import { RequiredMark } from './FormField';
 import { CloseIcon } from '../icons/Icon';
+import { useHoverState } from '../../useViewport';
 
 export interface FileInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onSelect'> {
@@ -82,7 +83,7 @@ export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(func
   id, style, wrapperStyle, ...rest
 }, ref) {
   const [focused, setFocused] = React.useState(false);
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const generatedId = React.useId();
   const inputId = id || generatedId;
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useHoverState } from '../../useViewport';
 
 /**
  * §62 — the dark bubble a blocked action gives its reason in. Shown on hover **and on focus**,
@@ -52,7 +53,7 @@ export function Tooltip({
   style,
   ...rest
 }: TooltipProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useHoverState();
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const auto = React.useId();
   const tipId = id || `${auto}-tooltip`;

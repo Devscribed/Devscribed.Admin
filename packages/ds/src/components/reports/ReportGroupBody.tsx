@@ -1,4 +1,5 @@
 import React from 'react';
+import { useHoverIndex } from '../../useViewport';
 
 export interface ReportTableColumn<Row = any> {
   /** The column's heading. */
@@ -113,7 +114,7 @@ export function ReportGroupBody<Row = any>({
   style, ...rest
 }: ReportGroupBodyProps<Row>) {
   const count = columns.length;
-  const [hovered, setHovered] = React.useState(-1);
+  const [hovered, setHovered] = useHoverIndex();
 
   return (
     <tbody {...rest} style={{ fontFamily: 'var(--font-family-base)', ...style }}>

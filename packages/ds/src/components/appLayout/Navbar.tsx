@@ -37,7 +37,8 @@ export interface NavbarProps extends React.HTMLAttributes<HTMLElement> {
  *
  * §15 — the height lives in `.ds-navbar` rather than inline, because it is 80px above
  * `--layout-breakpoint-desktop` and 60px below it (`--layout-navbar-height-*`) and a media
- * query cannot be an inline style.
+ * query cannot be an inline style. The horizontal padding is there for the same reason: it steps
+ * 16 → 25 at `md` (design-system 01 §04.23).
  *
  * `tracker` and `account` are both replaceable: a product with no timesheets has no counter to
  * show, and the account row is where a screen needs its own items and its own test hooks.
@@ -48,7 +49,7 @@ export function Navbar({
 }: NavbarProps) {
   return (
     <nav {...rest} className={['ds-navbar', className].filter(Boolean).join(' ')}
-      style={{ width: '100%', flexShrink: 0, padding: '0 var(--space-9)', display: 'flex', alignItems: 'center', borderBottom: 'var(--border-width-hairline) solid var(--border-subtle)', background: 'var(--surface-card)', ...style }}>
+      style={{ width: '100%', flexShrink: 0, display: 'flex', alignItems: 'center', borderBottom: 'var(--border-width-hairline) solid var(--border-subtle)', background: 'var(--surface-card)', ...style }}>
       {/* The drawer's opener. Hidden above the breakpoint by `.ds-navbar-menu`, where the rail
           is already in view — the counterpart to the sidebar's own close button. */}
       {onMenuClick && (

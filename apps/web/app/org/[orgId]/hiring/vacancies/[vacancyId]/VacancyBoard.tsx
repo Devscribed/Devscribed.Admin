@@ -16,7 +16,7 @@ import {
 import { BoardCard, BoardColumn, EmptyState, PageTabs, Preloader } from '@devscribed/ds';
 import type { Board, BoardCardData } from '@/hiring/types';
 import { LoadFailed } from '@/hiring/LoadFailed';
-import { useMediaQuery } from '@/hiring/useMediaQuery';
+import { useMediaQuery, usePointer } from '@devscribed/ds';
 import type { QueuedToast } from '@/toast';
 import { columnWithout, useBoardDrag, withMove, type Placement } from './useBoardDrag';
 
@@ -64,6 +64,13 @@ export function VacancyBoard({
   const router = useRouter();
   const [live, setLive] = useState('');
   const narrow = useMediaQuery(NARROW);
+  /* design-system 01 §08.40-42 — drag follows the **pointer**, not the width. The width test was
+     wrong in both directions: a touch tablet at 900px was handed a drag that cannot work, and a
+     mouse at 700px was refused one that would. `BoardCard` drags with the native HTML5
+     attribute, which does nothing on a touch screen, so refusing it there takes nothing away.
+     Seeding from the stamp also fixes the first frame: `useMediaQuery` used to start `false`, so
+     every card on a phone rendered draggable until the mount effect settled. */
+  const pointer = usePointer();
   const [visibleColumn, setVisibleColumn] = useState<ApplicationStatus>('scheduled');
 
   const board = state.status === 'ready' ? state.board : null;
@@ -355,9 +362,9 @@ export function VacancyBoard({
                 start,
                 viewerTimeZone,
               )}`}
-              // Below 768px a touch drag across a horizontally scrolling container is
-              // unreliable, and the card page's own status control does the same job.
-              draggable={!narrow}
+              // Drag is for a pointer that can do it. On a coarse one the card's own status
+              // control does the same job, with any pointer and at any size.
+              draggable={pointer === 'fine'}
               lifted={drag?.mode === 'keyboard' && drag.applicationId === card.applicationId}
               onDragStart={(event) => {
                 // Some browsers refuse to begin a drag at all without a payload, and

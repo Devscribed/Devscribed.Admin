@@ -116,6 +116,7 @@ export function ToggleButton({
     return (
       <button
         key={option.value}
+        className="ds-hit-44"
         type="button"
         role="radio"
         aria-checked={on}

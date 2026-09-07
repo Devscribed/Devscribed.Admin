@@ -417,7 +417,7 @@ test.describe('Board', () => {
     await expect(card(page, only.applicationId)).toBeVisible();
   });
 
-  test('offers one column at a time, and no drag, on a narrow viewport', async ({
+  test('offers one column at a time on a narrow viewport', async ({
     page,
     request,
   }) => {
@@ -428,11 +428,17 @@ test.describe('Board', () => {
     await signIn(page, seeded.org.email);
     await openBoard(page, seeded);
 
-    // One column, chosen by the tab strip. Drag is not attempted at all down here: the
-    // card page's own status control does the same job.
+    // One column, chosen by the tab strip. That switch is still about **width**: what changes
+    // down here is how much room there is.
     await expect(page.getByTestId('board-column-scheduled')).toBeVisible();
     await expect(page.getByTestId('board-column-maybe')).toHaveCount(0);
-    await expect(card(page, only.applicationId)).toHaveAttribute('draggable', 'false');
+
+    /* Drag is **not** about width any more — design-system 01 §08.40-41 moved the guard to the
+       pointer, and this context has a mouse. A narrow window with a mouse keeps its drag; the
+       card that loses it is the one under a thumb, which `responsive.spec.ts` covers. The old
+       assertion here was `draggable="false"`, and it was wrong in both directions: it refused a
+       mouse at 420 and handed a touch tablet at 900 a drag that cannot work. */
+    await expect(card(page, only.applicationId)).toHaveAttribute('draggable', 'true');
 
     await page.getByTestId('board-tab-maybe').click();
     await expect(page.getByTestId('board-column-maybe')).toBeVisible();

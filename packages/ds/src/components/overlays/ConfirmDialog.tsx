@@ -2,6 +2,7 @@ import React from 'react';
 import { CloseIcon } from '../icons/Icon';
 import { Button } from '../core/Button';
 import { useDialogFocus } from './useDialogFocus';
+import { useHoverState } from '../../useViewport';
 
 export interface ConfirmDialogProps extends React.HTMLAttributes<HTMLDivElement> {
   open: boolean;
@@ -51,9 +52,10 @@ export function ConfirmDialog({
      both controls, and `closeOnAccept={false}` leaves the dialog standing so the caller closes
      it when the work actually finishes. */
   busy, closeOnAccept = true,
+  className,
   ...rest
 }: ConfirmDialogProps) {
-  const [closeHover, setCloseHover] = React.useState(false);
+  const [closeHover, setCloseHover] = useHoverState();
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const titleId = React.useId();
 
@@ -70,6 +72,10 @@ export function ConfirmDialog({
       <div style={{ position: 'fixed', inset: 0, zIndex: 2001, backgroundColor: transparentOverlay ? 'transparent' : 'var(--color-overlay-scrim)' }} onClick={(e) => e.stopPropagation()} />
       <div
         {...rest}
+        /* §10.50 — a confirmation is a dialog, so it is a panel and takes the sheet form below
+           `sm`. It draws its own shell rather than composing `Modal`, which is why the form is
+           implemented twice; the duplication is recorded in the spec rather than hidden. */
+        className={["ds-sheet", className].filter(Boolean).join(" ")}
         ref={panelRef}
         role="dialog"
         aria-modal="true"
@@ -83,19 +89,21 @@ export function ConfirmDialog({
           ...style,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-7)' }}>
+        <div className="ds-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-7)' }}>
           <div id={titleId} style={{ width: '100%', fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-xl)', lineHeight: 'var(--line-height-m)', color: 'var(--text-tertiary)' }}>{title}</div>
           {/* The close mark scales rather than filling on hover — `IconButton`'s rule (§10). */}
-          <button type="button" onClick={onClose} disabled={busy} aria-label="Close dialog." onMouseEnter={() => setCloseHover(true)} onMouseLeave={() => setCloseHover(false)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 13, height: 13, color: 'var(--text-secondary)', transform: closeHover ? 'scale(1.1)' : 'none', transition: 'transform 0.3s' }}><CloseIcon /></button>
+          <button type="button" className="ds-dialog-close" onClick={onClose} disabled={busy} aria-label="Close dialog." onMouseEnter={() => setCloseHover(true)} onMouseLeave={() => setCloseHover(false)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 13, height: 13, color: 'var(--text-secondary)', transform: closeHover ? 'scale(1.1)' : 'none', transition: 'transform 0.3s' }}><CloseIcon /></button>
         </div>
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div className="ds-sheet-body" style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ width: '100%', color: 'var(--text-primary)', marginBottom: 'var(--space-7)', fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)' }}>{description}</div>
-          <div style={{ display: 'flex', alignSelf: 'flex-end', gap: 'var(--space-4)' }}>
-            {/* The composition owns the width, which is §1: a `Button` does not decide how
-                much of a row it takes, so these two are told to fill their 100px slots. */}
-            <div style={{ minWidth: 100 }}><Button style={{ width: '100%' }} disabled={busy} onClick={onClose} data-testid={declineTestId}>{declineBtnText}</Button></div>
-            <div style={{ minWidth: 100 }}><Button style={{ width: '100%' }} variant="primary" preloader={busy} disabled={busy} onClick={handleAccept} data-testid={acceptTestId}>{acceptBtnText}</Button></div>
-          </div>
+        </div>
+        {/* Its own two buttons, so no caller changes: the footer is already here. Below `sm`
+            `.ds-sheet-actions` pins it and gives each control an equal share. */}
+        <div className="ds-sheet-actions" data-testid="sheet-actions" style={{ display: 'flex', alignSelf: 'flex-end', gap: 'var(--space-4)' }}>
+          {/* The composition owns the width, which is §1: a `Button` does not decide how
+              much of a row it takes, so these two are told to fill their 100px slots. */}
+          <div style={{ minWidth: 100 }}><Button style={{ width: '100%' }} disabled={busy} onClick={onClose} data-testid={declineTestId}>{declineBtnText}</Button></div>
+          <div style={{ minWidth: 100 }}><Button style={{ width: '100%' }} variant="primary" preloader={busy} disabled={busy} onClick={handleAccept} data-testid={acceptTestId}>{acceptBtnText}</Button></div>
         </div>
       </div>
     </React.Fragment>

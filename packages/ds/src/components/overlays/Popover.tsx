@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { ThreeDotsIcon } from '../icons/Icon';
 import { Tooltip } from '../feedback/Tooltip';
+import { useHoverable, useHoverState } from '../../useViewport';
 
 /**
  * Popover — the click-to-open menu list, and the row-actions kebab.
@@ -83,7 +84,10 @@ export function Popover({
   trigger, items = [], align = 'right', disabled, label, portal = true, style, ...rest
 }: PopoverProps) {
   const [open, setOpen] = React.useState(false);
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
+  /* §06.32 — the menu row paints from its handler rather than from state; the guard is at the
+     top of it, beside the disabled check that was already there. */
+  const hoverable = useHoverable();
   const [active, setActive] = React.useState(0);
   const ref = React.useRef<HTMLDivElement | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -226,6 +230,7 @@ export function Popover({
         const row = (
           <div
             key={item.key || item.label as React.Key}
+            className="ds-popover-item"
             ref={(node) => { itemRefs.current[i] = node; }}
             role="menuitem"
             tabIndex={i === active ? 0 : -1}
@@ -257,7 +262,7 @@ export function Popover({
             }}
             onFocus={() => setActive(i)}
             onMouseEnter={(e) => {
-              if (item.disabled) return;
+              if (item.disabled || !hoverable) return;
               e.currentTarget.style.backgroundColor = 'var(--surface-row-hover)';
               if (!item.danger) e.currentTarget.style.color = 'var(--color-blue)';
             }}
@@ -285,7 +290,7 @@ export function Popover({
                 what draws it; this is what a reader is told, and what the row's
                 `aria-describedby` points at whether or not anything is hovering. */}
             {item.tooltip && (
-              <span id={tipId} data-testid={item.tooltipTestId} style={VISUALLY_HIDDEN}>
+              <span id={tipId} data-testid={item.tooltipTestId} className="ds-popover-reason">
                 {item.tooltip}
               </span>
             )}
@@ -336,6 +341,8 @@ export function Popover({
       ) : (
         <button
           {...rest}
+          /* §07.36 — 32 x 32 to a mouse, at least 44 to a thumb. */
+          className="ds-popover-trigger"
           ref={triggerRef}
           type="button"
           aria-label={label || 'Actions'}

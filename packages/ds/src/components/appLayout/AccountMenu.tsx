@@ -1,5 +1,6 @@
 import React from 'react';
 import { UserIcon, ArrowIcon } from '../icons/Icon';
+import { useHoverable, useHoverState } from '../../useViewport';
 
 export interface AccountMenuItem {
   label: string;
@@ -36,7 +37,9 @@ export function AccountMenu({
   name = 'Alex Chen', items = DEFAULT_ITEMS, onNavigate, nameTestId, menuTestId, style, ...rest
 }: AccountMenuProps) {
   const [open, setOpen] = React.useState(false);
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
+  /* §06.32 — the menu row paints from the handler, not from state. */
+  const hoverable = useHoverable();
   const ref = React.useRef<HTMLDivElement | null>(null);
   const trigger = React.useRef<HTMLButtonElement | null>(null);
   const entries: AccountMenuItem[] = items.map((item) => (typeof item === 'string' ? { label: item } : item));
@@ -80,7 +83,7 @@ export function AccountMenu({
                ink turns blue together. The size is inherited from the navbar's 16px body. */}
             {entries.map((entry) => (
               <li key={entry.label} style={{ /* @literal the row's inset from the panel edge, below the scale — see the panel's own padding */ margin: '0 5px', borderRadius: 'var(--radius-s)', textAlign: 'left', whiteSpace: 'nowrap' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-row-hover)'; (e.currentTarget.firstElementChild as HTMLElement).style.color = 'var(--color-blue)'; }}
+                onMouseEnter={(e) => { if (!hoverable) return; e.currentTarget.style.background = 'var(--surface-row-hover)'; (e.currentTarget.firstElementChild as HTMLElement).style.color = 'var(--color-blue)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; (e.currentTarget.firstElementChild as HTMLElement).style.color = 'var(--text-primary)'; }}>
                 <button type="button" role="menuitem" data-testid={entry.testId}
                   onClick={() => {

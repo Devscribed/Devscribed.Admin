@@ -1,4 +1,5 @@
 import React from 'react';
+import { useHoverable } from '../../useViewport';
 
 export interface TableColumn<Row = any> {
   label: React.ReactNode;
@@ -89,6 +90,9 @@ export function Table<Row = any>({
   busy, hideHeader, footer,
   style, ...rest
 }: TableProps<Row>) {
+  /* §06.32 — the row tints from the handler rather than from state, so the guard sits at the
+     top of it. On a touch screen the tint would be set by a tap and never released. */
+  const hoverable = useHoverable();
   const cols = columns.map((col) => (typeof col === 'string' ? { label: col } : col));
   /* A string `rowHref` or `rowTestId` applies to every row; a function reads the row. `rowKey`
      is the exception — a string there names the field to read, because "the same key on every
@@ -148,7 +152,7 @@ export function Table<Row = any>({
               /* A disabled row is not hoverable either: the tint would promise a click. */
               pointerEvents: disabled ? 'none' : undefined,
             }}
-            onMouseEnter={(e: React.MouseEvent<HTMLElement>) => { if (!disabled) e.currentTarget.style.backgroundColor = 'var(--color-row-hover)'; }}
+            onMouseEnter={(e: React.MouseEvent<HTMLElement>) => { if (!disabled && hoverable) e.currentTarget.style.backgroundColor = 'var(--color-row-hover)'; }}
             onMouseLeave={(e: React.MouseEvent<HTMLElement>) => { if (!disabled) e.currentTarget.style.backgroundColor = 'var(--surface-card)'; }}
           >
             {cells.map((cell: React.ReactNode, ci: number) => (

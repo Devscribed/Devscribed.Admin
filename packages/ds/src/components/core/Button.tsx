@@ -1,4 +1,5 @@
 import React from 'react';
+import { useHoverState } from '../../useViewport';
 
 /**
  * @startingPoint section="Core" subtitle="Primary, neutral and delete buttons" viewport="700x200"
@@ -126,7 +127,7 @@ export const Button: React.ForwardRefExoticComponent<
     ...rest }: ButtonInternalProps,
   ref: React.Ref<HTMLButtonElement | HTMLAnchorElement>,
 ) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const link = Tag === 'a';
   const painted = base(variant, disabled);
   if (pressed) Object.assign(painted, pressedPaint);

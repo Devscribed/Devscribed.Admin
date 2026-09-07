@@ -1,4 +1,5 @@
 import React from 'react';
+import { useHoverState } from '../../useViewport';
 
 /**
  * §54 — the transient confirmation plate. Its values are deliberately literals rather than
@@ -122,7 +123,7 @@ export function Toast({
 }: ToastProps) {
   const paint = TONES[tone] || TONES.default;
   const path = ICON_PATHS[tone];
-  const [closeHover, setCloseHover] = React.useState(false);
+  const [closeHover, setCloseHover] = useHoverState();
   const restingOpacity = tone === 'default' ? 0.3 : 0.7;
   return (
     <div

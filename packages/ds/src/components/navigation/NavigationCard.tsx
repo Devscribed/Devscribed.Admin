@@ -1,5 +1,6 @@
 import React from 'react';
 import { isKeyboardFocus } from '../core/focus-visible';
+import { useHoverState } from '../../useViewport';
 
 export interface NavigationCardProps extends Omit<React.HTMLAttributes<HTMLElement>, 'title'> {
   title?: React.ReactNode;
@@ -40,7 +41,7 @@ export interface NavigationCardProps extends Omit<React.HTMLAttributes<HTMLEleme
 export function NavigationCard({
   title, description, leading, caption, href, onClick, style, ...rest
 }: NavigationCardProps) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const [focus, setFocus] = React.useState(false);
   const Tag = (href ? 'a' : 'button') as React.ElementType;
 

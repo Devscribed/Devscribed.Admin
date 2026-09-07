@@ -1,4 +1,5 @@
 import React from 'react';
+import { useHoverState } from '../../useViewport';
 
 export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
   /** Accessible name — the button draws only a glyph, so this is the only name it has. */
@@ -26,12 +27,16 @@ export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLBut
  * Takes a `ref` to the `<button>`, which is what a popover trigger anchors to.
  */
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({
-  label, size = 34, active, disabled, style, children, onMouseEnter, onMouseLeave, type = 'button', ...rest
+  label, size = 34, active, disabled, style, className, children, onMouseEnter, onMouseLeave, type = 'button', ...rest
 }, ref) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   return (
     <button
       {...rest}
+      /* §07.36-38 — the class is what a coarse pointer reaches the control through. `size` stays
+         inline as the fine-pointer box; `base.css` raises the *minimum* to `--control-height`, and
+         a stylesheet `min-width` beats an inline `width` with no `!important` and no JavaScript. */
+      className={['ds-icon-button', className].filter(Boolean).join(' ')}
       ref={ref}
       type={type}
       aria-label={label}

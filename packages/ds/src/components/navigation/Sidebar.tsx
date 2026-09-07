@@ -2,6 +2,7 @@ import React from 'react';
 import {
   TimesheetsIcon, ProjectManagementIcon, PeopleIcon, ReportsIcon, TimeOffIcon, OrgIcon, MenuIcon, ArrowIcon,
 } from '../icons/Icon';
+import { useHoverState } from '../../useViewport';
 
 export interface SidebarSubItem {
   label: string;
@@ -140,7 +141,7 @@ function rowClick(href?: string, onNavigate?: SidebarNavigate, onClick?: RowSele
    both turning `--color-blue` together over 0.3s. Hover and current resolve to the same blue,
    so hovering the current row changes nothing — which is correct: it is already where you are. */
 function TopLink({ Icon, title, href, testId, active, onClick, onNavigate }: TopLinkProps) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const color = active || hover ? 'var(--color-blue)' : 'var(--text-secondary)';
   return (
     <li style={{ marginBottom: 'var(--space-11)' }}>

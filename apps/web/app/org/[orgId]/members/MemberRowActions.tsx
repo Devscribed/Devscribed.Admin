@@ -1,6 +1,7 @@
 'use client';
 
 import { Popover } from '@devscribed/ds';
+import { MEMBER_MESSAGES } from '@devscribed/validation';
 import type { Member } from './types';
 
 /**
@@ -58,7 +59,7 @@ export function MemberRowActions({
                 danger: true,
                 testId: 'member-action-delete',
                 disabled: member.isLastAdmin,
-                tooltip: member.isLastAdmin ? 'Cannot remove the last admin' : undefined,
+                tooltip: member.isLastAdmin ? MEMBER_MESSAGES.lastAdminBlocked : undefined,
                 tooltipTestId: 'delete-guard-message',
                 onSelect: () => onDeleteRequest(member),
               },

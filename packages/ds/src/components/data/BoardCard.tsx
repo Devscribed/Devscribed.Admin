@@ -2,6 +2,7 @@ import React from 'react';
 import { isKeyboardFocus } from '../core/focus-visible';
 import { Badge } from '../core/Badge';
 import { FlagIcon } from '../icons/Icon';
+import { useHoverState, useMotion } from '../../useViewport';
 
 /**
  * §42 — the surface is `Card`'s treatment (§12) and the hover is the pair §12 declined,
@@ -42,26 +43,9 @@ export interface BoardCardProps
   onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
 }
 
-/**
- * Motion in this system is minimal and utilitarian — 0.1–0.3s state changes and nothing else —
- * and everything this card animates is decoration: the travelling placeholder is what carries
- * the information, so a visitor who has asked for less motion loses nothing by losing the
- * transform.
- */
-function useReducedMotion() {
-  const [reduced, setReduced] = React.useState(false);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduced(query.matches);
-    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }, []);
-
-  return reduced;
-}
+/* §02.12 — the reduced-motion read moved into the design system as `useMotion()`. It used to
+   be a local `matchMedia` here, the only reader of the query in the product; the export exists
+   so a second one is never opened. */
 
 /* Present to a screen reader, absent to everything else. The marker's meaning has to be in
    the tree at all times so `aria-describedby` always resolves — which is the property the
@@ -122,8 +106,8 @@ export function BoardCard({
   style,
   ...rest
 }: BoardCardProps) {
-  const reducedMotion = useReducedMotion();
-  const [hover, setHover] = React.useState(false);
+  const reducedMotion = useMotion() === 'reduced';
+  const [hover, setHover] = useHoverState();
   const [focused, setFocused] = React.useState(false);
   const flagId = flag ? `board-card-flag-${cardId}` : undefined;
 

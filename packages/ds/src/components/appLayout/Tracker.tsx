@@ -1,5 +1,6 @@
 import React from 'react';
 import { CloseIcon } from '../icons/Icon';
+import { useHoverState } from '../../useViewport';
 
 export interface TrackerProps extends React.HTMLAttributes<HTMLDivElement> {
   /** What the running timer is against — a project name, or what stands in for one. */
@@ -49,7 +50,7 @@ export function Tracker({
   projectTestId, counterTestId, stopTestId,
   style, ...rest
 }: TrackerProps) {
-  const [closeHover, setCloseHover] = React.useState(false);
+  const [closeHover, setCloseHover] = useHoverState();
   return (
     <div
       {...rest}
@@ -74,6 +75,7 @@ export function Tracker({
           type="button"
           onClick={onClose}
           aria-label="Close tracker"
+          className="ds-dialog-close"
           onMouseEnter={() => setCloseHover(true)}
           onMouseLeave={() => setCloseHover(false)}
           style={{

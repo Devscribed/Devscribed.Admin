@@ -250,11 +250,31 @@ export function VacancyDialog({
         title={vacancy ? 'Edit vacancy' : 'New vacancy'}
         onClose={onClose}
         data-testid="vacancy-dialog"
+        /* design-system 01 §10.51 — the actions live in the slot, so below `sm` they pin while
+           the form scrolls under them. The submit sits outside the `<form>` element now, so it
+           carries `form="vacancy-form"`: the attribute is what associates a control with a form
+           it is not nested in, and it is the reason this move costs no handler change. */
+        actions={(
+          <FormActions align="full">
+            <Button onClick={onClose} data-testid="vacancy-cancel-button">
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="vacancy-form"
+              variant="primary"
+              preloader={submitting}
+              data-testid="vacancy-submit-button"
+            >
+              {vacancy ? 'Save changes' : 'Create vacancy'}
+            </Button>
+          </FormActions>
+        )}
         style={{ width: 520 }}
       >
         {/* 20px is the system's form rhythm and the room every field's message slot needs — the
             error and the hint are pinned 16px under the control rather than pushing it. */}
-        <form onSubmit={submit} noValidate style={{ display: 'grid', gap: 'var(--space-7)' }}>
+        <form id="vacancy-form" onSubmit={submit} noValidate style={{ display: 'grid', gap: 'var(--space-7)' }}>
           {banner && (
             <InfoBanner variant="error" role="alert" aria-live="polite" data-testid="vacancy-dialog-error">
               {banner}
@@ -379,19 +399,6 @@ export function VacancyDialog({
             data-testid="vacancy-description-input"
           />
 
-          <FormActions align="full">
-            <Button onClick={onClose} data-testid="vacancy-cancel-button">
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              preloader={submitting}
-              data-testid="vacancy-submit-button"
-            >
-              {vacancy ? 'Save changes' : 'Create vacancy'}
-            </Button>
-          </FormActions>
         </form>
       </Modal>
 

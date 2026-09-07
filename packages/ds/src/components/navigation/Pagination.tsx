@@ -86,6 +86,7 @@ export function Pagination({
 
   const step = (name: string, to: number, blocked: boolean) => (
     <button
+      className="ds-hit-44"
       type="button"
       aria-label={name}
       disabled={blocked}
@@ -134,6 +135,7 @@ export function Pagination({
         ) : (
           <button
             key={entry}
+            className="ds-hit-44"
             type="button"
             data-testid={pageTestId ? pageTestId(entry as number) : undefined}
             aria-current={entry === page ? 'page' : undefined}

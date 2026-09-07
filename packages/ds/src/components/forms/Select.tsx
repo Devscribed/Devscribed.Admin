@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { RequiredMark } from './FormField';
 import { CrossIcon } from '../icons/Icon';
 import { Chip } from '../core/Chip';
+import { useHoverIndex, useHoverState } from '../../useViewport';
 
 export interface SelectOption {
   label: string;
@@ -134,9 +135,9 @@ export function Select({
   const [focused, setFocused] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [active, setActive] = React.useState(-1);
-  const [arrowHover, setArrowHover] = React.useState(false);
-  const [clearHover, setClearHover] = React.useState(false);
-  const [hovered, setHovered] = React.useState(-1);
+  const [arrowHover, setArrowHover] = useHoverState();
+  const [clearHover, setClearHover] = useHoverState();
+  const [hovered, setHovered] = useHoverIndex();
   const ref = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const controlRef = React.useRef<HTMLDivElement | null>(null);

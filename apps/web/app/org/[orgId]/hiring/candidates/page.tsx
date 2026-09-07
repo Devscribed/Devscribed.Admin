@@ -52,7 +52,7 @@ import {
 } from '@/hiring/candidate-list';
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { valuesOf } from '@/select';
-import { useMediaQuery } from '@/hiring/useMediaQuery';
+import { useMediaQuery } from '@devscribed/ds';
 import { useToast } from '@/toast';
 import type {
   CandidateDatabase,
@@ -787,6 +787,28 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         onClose={() => setFiltersOpen(false)}
         closeLabel={CANDIDATE_MESSAGES.filters.close}
         closeTestId="candidates-filters-close"
+        /* design-system 01 §10.51 — the two actions move into the slot, so below `sm` they are
+           a sticky footer the body scrolls under instead of scrolling away with it. Above `sm`
+           they are the last block in the panel, where they already were. */
+        actions={(
+          /* Keeps `.candidates-filters-actions`: `Show results` leads and `Clear filters`
+             follows under it, so the one that discards work is never adjacent to the one that
+             just dismisses. The slot adds the pinning, not a new arrangement. */
+          <div className="candidates-filters-actions">
+            <Button
+              variant="primary"
+              onClick={() => setFiltersOpen(false)}
+              data-testid="candidates-filters-apply"
+            >
+              {CANDIDATE_MESSAGES.filters.showResults}
+            </Button>
+            {filterCount > 0 && (
+              <Button onClick={clearFilters} data-testid="candidates-clear-filters">
+                {CANDIDATE_MESSAGES.clearFilters}
+              </Button>
+            )}
+          </div>
+        )}
         role="dialog"
         aria-labelledby="candidates-filters-title"
         data-testid="candidates-filters"
@@ -934,20 +956,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
             dismisses the panel covering the list it has been changing, which is the only
             thing left to want.
           */}
-          <div className="candidates-filters-actions">
-            <Button
-              variant="primary"
-              onClick={() => setFiltersOpen(false)}
-              data-testid="candidates-filters-apply"
-            >
-              {CANDIDATE_MESSAGES.filters.showResults}
-            </Button>
-            {filterCount > 0 && (
-              <Button onClick={clearFilters} data-testid="candidates-clear-filters">
-                {CANDIDATE_MESSAGES.clearFilters}
-              </Button>
-            )}
-          </div>
         </div>
       </MenuDrawer>
 

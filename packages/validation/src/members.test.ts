@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   MEMBER_MESSAGES,
@@ -168,6 +170,36 @@ describe('MEMBER_MESSAGES', () => {
       jobTitleTooLong: 'Job title must be at most 100 characters',
       memberNotFound: 'Member not found',
       viewForbidden: 'You do not have permission to view this member',
+      lastAdminBlocked: 'Cannot remove the last admin',
     });
+  });
+
+  /**
+   * TC-DS01-UNIT-07 — design-system 01, Error Messages.
+   *
+   * `lastAdminBlocked` was an inline literal in `MemberRowActions.tsx`, which CLAUDE.md forbids
+   * and which mattered little while it only ever appeared in a hover bubble. Requirement 48 puts
+   * it on screen as visible text under a coarse pointer, so it moved here.
+   */
+  it('carries the last-admin reason verbatim, and it is no longer inline in the component', () => {
+    expect(MEMBER_MESSAGES.lastAdminBlocked).toBe('Cannot remove the last admin');
+
+    /* The relocation is only done if the original is gone: two sources of truth is the thing
+       `packages/validation` exists to prevent. */
+    const component = readFileSync(
+      resolve(__dirname, '../../../apps/web/app/org/[orgId]/members/MemberRowActions.tsx'),
+      'utf8',
+    );
+    expect(component).toContain('MEMBER_MESSAGES.lastAdminBlocked');
+    expect(component).not.toContain("'Cannot remove the last admin'");
+  });
+
+  /**
+   * The two are deliberately separate: `lastAdminGuard` is what a rejected request answers with,
+   * `lastAdminBlocked` is what a control says about why it cannot be pressed. Same rule, two
+   * audiences. Pinned so nobody merges them on the grounds that they look alike.
+   */
+  it('keeps the request refusal and the control reason as different strings', () => {
+    expect(MEMBER_MESSAGES.lastAdminBlocked).not.toBe(MEMBER_MESSAGES.lastAdminGuard);
   });
 });

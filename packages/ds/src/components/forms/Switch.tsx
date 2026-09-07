@@ -48,6 +48,9 @@ export function Switch({
   return (
     <button
       {...rest}
+      /* §07 — the 42x24 track is the design; the class reaches 44 with a transparent overlay
+         rather than redrawing the switch. */
+      className="ds-hit-44"
       type="button"
       role="switch"
       aria-checked={checked}

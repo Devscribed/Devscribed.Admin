@@ -1,6 +1,7 @@
 import React from 'react';
 import { Calendar, type CalendarDate, type CalendarMonth } from '../data/Calendar';
 import { isKeyboardFocus } from '../core/focus-visible';
+import { useHoverState } from '../../useViewport';
 
 export interface DateRangePreset {
   label: string;
@@ -258,7 +259,7 @@ export function DateRangePicker({
 }
 
 function PresetRow({ preset, onPick }: { preset: DateRangePreset; onPick: () => void }) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const [focus, setFocus] = React.useState(false);
   return (
     <button

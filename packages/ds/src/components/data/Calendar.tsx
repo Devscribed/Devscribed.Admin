@@ -2,6 +2,7 @@ import React from 'react';
 import { isKeyboardFocus } from '../core/focus-visible';
 import { IconButton } from '../core/IconButton';
 import { Preloader } from '../feedback/Preloader';
+import { useHoverState } from '../../useViewport';
 
 /** `YYYY-MM-DD`. Dates are calendar days here, never instants. */
 export type CalendarDate = string;
@@ -357,7 +358,7 @@ export function Calendar({
 }
 
 function Day({ date, selectable, selected, inRange, today, tabStop, onSelect, onFocus }: DayProps) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const [focus, setFocus] = React.useState(false);
 
   // A cell belonging to an adjacent month carries no number and nothing to press.

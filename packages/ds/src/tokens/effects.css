@@ -11,7 +11,13 @@
   --shadow-popover: 0 6px 12px rgb(0 0 0 / 18%);
   --shadow-modal: 0 0 2px rgba(0, 0, 0, 0.12), 0 20px 20px rgba(0, 0, 0, 0.08);
   --shadow-tracker: 0 4px 12px rgba(0, 0, 0, 0.2);
+  /* The two drawer shadows are named for the edge their panel hangs on, and each falls *away*
+     from it. `--shadow-drawer` is `MenuDrawer`'s, a right-edge panel, so it casts left.
+     `--shadow-drawer-left` is the shell's rail below `xl`, which enters from the left
+     (design-system 01 §03.13-16), so the same blur and the same alpha cast right. One token would
+     have put a shadow underneath one of the two panels. */
   --shadow-drawer: -4px 4px 16px rgb(0 0 0 / 10%);
+  --shadow-drawer-left: 4px 4px 16px rgb(0 0 0 / 10%);
   /* §66 — the lift on a large section. A 120px blur at 5% is not a shadow that reads as depth;
      it is the faint settling that keeps a big white panel from cutting out of the `#f8fafc`
      field it sits on. */

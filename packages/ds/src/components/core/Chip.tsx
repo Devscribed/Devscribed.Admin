@@ -1,5 +1,6 @@
 import React from 'react';
 import { CrossIcon } from '../icons/Icon';
+import { useHoverState } from '../../useViewport';
 
 export interface ChipProps extends React.HTMLAttributes<HTMLDivElement> {
   /** The chip's text. `children` wins when both are given. */
@@ -62,7 +63,7 @@ export function Chip({
   removeDescribedBy,
   ...rest
 }: ChipProps) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const text = children != null ? children : label;
   return (
     <div

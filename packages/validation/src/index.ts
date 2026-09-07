@@ -481,6 +481,15 @@ export function validateInviteAcceptNewAccount(
 export const MEMBER_MESSAGES = {
   cannotRemoveSelf: 'You cannot remove yourself from the organization',
   lastAdminGuard: 'Organization must retain at least one admin',
+  /**
+   * Why the `Delete` control on a member row cannot be pressed, shown beside it — and, under a
+   * coarse pointer, as visible text rather than only in a bubble (design-system 01 §09.48).
+   *
+   * Deliberately **not** merged with `lastAdminGuard` above. That one is what a rejected request
+   * answers with; this is what a control says about itself before anyone presses it. Same rule,
+   * two audiences, and one string serving both would be phrased for neither.
+   */
+  lastAdminBlocked: 'Cannot remove the last admin',
   alreadyRemoved: 'Member is already removed',
   deleteForbidden: 'You do not have permission to remove members',
   notRemoved: 'Member is not in removed status',

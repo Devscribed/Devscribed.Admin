@@ -1,5 +1,6 @@
 import React from 'react';
 import { MagnifyIcon, CloseIcon } from '../icons/Icon';
+import { useHoverState } from '../../useViewport';
 
 export interface SearchInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   placeholder?: string;
@@ -47,7 +48,7 @@ export function SearchInput({
   wrapperStyle, style, clearLabel = 'Clear search', ...rest
 }: SearchInputProps) {
   const [focused, setFocused] = React.useState(false);
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const handleClear = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -86,7 +87,7 @@ export function SearchInput({
       {!!(value && String(value).length) && (
         /* §26 — a real `<button>` with a name. It empties the field, which is an action, and
            an action reachable only by pointer is one a keyboard user cannot take. */
-        <button type="button" aria-label={clearLabel} onClick={handleClear} style={{ position: 'absolute', right: outlined ? 10 : 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        <button type="button" className="ds-hit-44" aria-label={clearLabel} onClick={handleClear} style={{ position: 'absolute', right: outlined ? 10 : 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: 'var(--text-secondary)', cursor: 'pointer' }}>
           <CloseIcon width="12" height="12" aria-hidden />
         </button>
       )}

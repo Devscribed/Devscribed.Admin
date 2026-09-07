@@ -169,3 +169,26 @@ export type { ConfirmDialogProps } from './components/overlays/ConfirmDialog';
 export type { MenuDrawerProps } from './components/overlays/MenuDrawer';
 export type { ModalProps } from './components/overlays/Modal';
 export type { PopoverItem, PopoverProps } from './components/overlays/Popover';
+
+/**
+ * The responsive ladder and the five hooks that read it — spec `design-system/01-responsive`.
+ * Exported from the root like everything else: a hook a product screen cannot import is a hook
+ * the product re-implements, which is what `apps/web/src/hiring/useMediaQuery.ts` was.
+ */
+export {
+  useBreakpoint,
+  useHoverable,
+  useMediaQuery,
+  useMotion,
+  usePointer,
+} from './useViewport';
+export {
+  BREAKPOINTS,
+  MIN_SUPPORTED_WIDTH,
+  QUERIES,
+  RUNGS,
+  STAMP,
+  pointerFrom,
+  rungFor,
+} from './breakpoints';
+export type { Motion, Pointer, Rung } from './breakpoints';

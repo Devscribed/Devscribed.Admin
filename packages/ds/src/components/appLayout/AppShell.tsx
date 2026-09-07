@@ -79,14 +79,25 @@ export function AppShell({
           <Sidebar active={section} activeSub={sub} onSelect={onSelect} onLogoClick={onLogoClick} onClose={onMenuClose} />
         )}
       </div>
-      {/* MenuDrawer's own scrim: a full-bleed click target under the panel, no paint of its own. */}
-      {menuOpen && <div className="ds-app-shell-scrim" onClick={onMenuClose} />}
+      {/* The scrim under the drawer. It **is** painted now — `--color-overlay-scrim`, 60% black,
+          set in `base.css` (§03.17) — because without a wash a reader on a phone gets no signal
+          that the page behind is inert. It hangs from the navbar rather than covering it (§03.18):
+          focus returns to the hamburger up there when the drawer closes, and a control handed
+          focus must not sit under the wash.
+
+          Still rendered on `menuOpen` alone. Above `xl` the stylesheet hides it, so width alone
+          decides the switch and the server and the hydrated client agree at every size (§14) — a
+          React condition on the rung would put that back into JavaScript. */}
+      {menuOpen && <div className="ds-app-shell-scrim" data-testid="app-shell-scrim" onClick={onMenuClose} />}
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
         {navbar !== undefined ? navbar : (
           <Navbar trackerCounter={trackerCounter} onOpenTracker={onOpenTracker} userName={userName} onAccountNavigate={onAccountNavigate} />
         )}
         <div style={{ flexGrow: 1, overflowY: 'auto', background: 'var(--surface-well)' }}>
-          <div style={{ height: '100%', marginLeft: 'auto', marginRight: 'auto', width: '100%', padding: 'var(--space-9)', boxSizing: 'border-box' }}>
+          {/* §04.22 — the padding steps 16 → 25 at `md`, so it is a class rather than an inline
+              style: a media query cannot be inline, the same reason `.page-title` and `.ds-navbar`
+              already reach for one. */}
+          <div className="ds-app-shell-well">
             {children}
           </div>
         </div>

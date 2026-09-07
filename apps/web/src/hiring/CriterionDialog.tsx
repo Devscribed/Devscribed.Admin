@@ -212,6 +212,21 @@ export function CriterionDialog({
         onClose={onClose}
         data-testid="criterion-dialog"
         style={{ width: 520 }}
+        /* design-system 01 §10.51 — the actions live in the slot, so below `sm` they are a
+           sticky footer rather than the last thing a long form scrolls past. */
+        actions={(
+            <FormActions align="full">
+              <Button onClick={onClose}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => void save()}
+                preloader={submitting}
+                data-testid="criterion-submit-button"
+              >
+                {editing ? 'Save' : 'Create'}
+              </Button>
+            </FormActions>
+        )}
       >
         {/* 20px is the system's form rhythm and the room every field's message slot needs — the
             error is pinned under the control rather than pushing it. */}
@@ -289,17 +304,6 @@ export function CriterionDialog({
             />
           )}
 
-          <FormActions align="full">
-            <Button onClick={onClose}>Cancel</Button>
-            <Button
-              variant="primary"
-              onClick={() => void save()}
-              preloader={submitting}
-              data-testid="criterion-submit-button"
-            >
-              {editing ? 'Save' : 'Create'}
-            </Button>
-          </FormActions>
         </div>
       </Modal>
 

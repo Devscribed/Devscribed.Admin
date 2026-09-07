@@ -75,9 +75,11 @@ export function PageTabs({
   onChange,
   /** §45 — the tablist's accessible name. A strip of tabs is a control, and named. */
   label,
+  className,
   style,
   ...rest
 }: PageTabsProps) {
+  const strip = React.useRef<HTMLDivElement | null>(null);
   const values = tabs.map(valueOf);
   const blocked = tabs.map(disabledOf);
   /* §94 — the fallback is the first tab that can be opened, not the first tab. */
@@ -85,6 +87,17 @@ export function PageTabs({
   const [internal, setInternal] = React.useState<string | undefined>(active ?? firstOpenable);
   React.useEffect(() => { setInternal(active ?? firstOpenable); }, [active, values.join('|')]);
   const current = active ?? internal;
+
+  /* §11.58 — a screen whose chosen tab is off-screen must not open looking empty. On mount only:
+     scrolling on every change would fight a reader who has scrolled the strip themselves. */
+  React.useEffect(() => {
+    const node = strip.current;
+    if (!node || node.scrollWidth <= node.clientWidth) return;
+    const tab = node.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!tab) return;
+    const overshoot = tab.offsetLeft + tab.offsetWidth - node.clientWidth;
+    if (overshoot > 0) node.scrollLeft = overshoot;
+  }, []);
 
   const select = (value: string) => {
     if (blocked[values.indexOf(value)]) return;
@@ -122,10 +135,16 @@ export function PageTabs({
   return (
     <div
       {...rest}
+      ref={strip}
+      /* §11.57 — one line at every width, scrolling inside itself. It used to wrap, and a
+         wrapped fifth tab took 36px of height from whatever was under it; under the board, that
+         is the columns. The rules are a class because `overflow` plus a hidden scrollbar cannot
+         be expressed inline across engines. */
+      className={['ds-page-tabs', className].filter(Boolean).join(' ')}
       role="tablist"
       aria-label={label}
       onKeyDown={onKeyDown}
-      style={{ display: 'flex', flexWrap: 'wrap', ...style }}
+      style={{ display: 'flex', ...style }}
     >
       {tabs.map((tab) => {
         const value = valueOf(tab);

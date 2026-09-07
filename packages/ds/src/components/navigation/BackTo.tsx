@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowIcon } from '../icons/Icon';
+import { useHoverState } from '../../useViewport';
 
 export interface BackToProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'onClick'> {
   label?: string;
@@ -20,7 +21,7 @@ export interface BackToProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorE
  * the default prevented, which is a button wearing a link's clothes.
  */
 export function BackTo({ label = 'Back', href, onClick, style, ...rest }: BackToProps) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHover] = useHoverState();
   return (
     <a
       {...rest}

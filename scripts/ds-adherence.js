@@ -191,6 +191,20 @@ for (const f of files) {
 }
 
 /**
+ * Every sub-path `packages/ds/package.json` publishes. Anything else that reaches past the index
+ * is a deep import. Keep this in step with the `exports` map — an entry here that the map does
+ * not publish is a hole, and one the map publishes that is missing here is a false failure.
+ */
+const PUBLISHED_SUBPATHS = new Set([
+  '@devscribed/ds/styles.css',
+  /* The responsive ladder. It exists as its own entry because the package root carries
+     `'use client'`, so a server component importing through it receives a client-reference stub
+     rather than the values — which is what the viewport stamp needs on the server. Data, not a
+     component; see design-system 01 §02.8. */
+  '@devscribed/ds/breakpoints',
+]);
+
+/**
  * Rule 4's mechanical half: nothing outside the package reaches past its index. A deep import
  * makes a component file part of the surface, and then moving it is a breaking change.
  */
@@ -206,13 +220,57 @@ function deepImports() {
       if (p.startsWith(path.join(REPO, 'packages/ds') + path.sep)) continue; // its own internals
       const text = fs.readFileSync(p, 'utf8');
       for (const m of text.matchAll(/from\s+['"](@devscribed\/ds\/[^'"]+)['"]/g)) {
-        if (m[1] === '@devscribed/ds/styles.css') continue; // the one published sub-path
+        if (PUBLISHED_SUBPATHS.has(m[1])) continue;
         hits.push(`${path.relative(REPO, p)}  ${m[1]}`);
       }
     }
   };
   roots.forEach(scanDir);
   return hits;
+}
+
+/**
+ * The responsive ladder lives in three files and cannot be shared between them: CSS cannot read a
+ * JavaScript constant, and a custom property cannot appear in a media query. This is what makes
+ * the duplication safe (design-system 01 §01.4-5).
+ *
+ * Every `min-width` / `max-width` in `base.css` must be a rung boundary or a boundary minus one,
+ * and `--layout-breakpoint-desktop` must be the `xl` rung. A drifted ladder is a bug — neither
+ * `tsc` nor a screenshot catches it, and the symptom is a screen that changes shape at one number
+ * in CSS and another in JavaScript.
+ */
+function ladderDrift() {
+  const problems = [];
+  const read = (rel) => {
+    const p = path.join(REPO, rel);
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+  };
+
+  const ts = read('packages/ds/src/breakpoints.ts');
+  const css = read('packages/ds/src/base.css');
+  const tokens = read('packages/ds/src/tokens/spacing.css');
+  if (!ts || !css || !tokens) return ['the ladder: one of the three files is missing'];
+
+  const rungs = {};
+  const block = ts.slice(ts.indexOf('BREAKPOINTS'), ts.indexOf('MIN_SUPPORTED_WIDTH'));
+  for (const m of block.matchAll(/(\w+):\s*(\d+),/g)) rungs[m[1]] = Number(m[2]);
+  const bounds = new Set();
+  for (const value of Object.values(rungs)) {
+    if (value > 0) { bounds.add(value); bounds.add(value - 1); }
+  }
+
+  for (const m of css.matchAll(/\((?:min|max)-width:\s*(\d+)px\)/g)) {
+    if (!bounds.has(Number(m[1]))) {
+      problems.push(`base.css: ${m[1]}px is not a rung boundary — the ladder is ${[...bounds].sort((a, b) => a - b).join(', ')}`);
+    }
+  }
+
+  const token = tokens.match(/--layout-breakpoint-desktop:\s*(\d+)px/);
+  if (!token) problems.push('tokens/spacing.css: --layout-breakpoint-desktop is missing');
+  else if (Number(token[1]) !== rungs.xl) {
+    problems.push(`tokens/spacing.css: --layout-breakpoint-desktop is ${token[1]}px, the xl rung is ${rungs.xl}px`);
+  }
+  return problems;
 }
 
 const verbose = process.argv.includes('--verbose');
@@ -226,7 +284,27 @@ const deep = deepImports();
 for (const d of deep) console.error(`  DEEP IMPORT  ${d}`);
 if (deep.length) console.error(`${deep.length} import${deep.length === 1 ? '' : 's'} past the package index`);
 
-if (malformed) {
-  console.error(`${malformed} malformed substitution${malformed === 1 ? '' : 's'} — these are bugs, not style`);
+const drift = ladderDrift();
+for (const d of drift) console.error(`  LADDER DRIFT  ${d}`);
+console.log(`ladder: ${drift.length ? `${drift.length} disagreement${drift.length === 1 ? '' : 's'} between base.css, breakpoints.ts and the token` : 'base.css, breakpoints.ts and the token agree'}`);
+
+/**
+ * Three failures, and only three. The token-adherence count above stays a number that should go
+ * down rather than a gate, for the reason at the top of this file — a lint that fails the build
+ * the day it is written is a lint somebody turns off.
+ *
+ * These three are different in kind: each is a bug that neither `tsc` nor a reviewer's eye
+ * catches. A malformed substitution resolves to `NaN` and reads as a real value; a deep import
+ * makes a component file part of the public surface silently (CLAUDE.md has claimed this one
+ * fails the check for a while, and until design-system 01 it did not); a drifted ladder moves a
+ * breakpoint in CSS and not in JavaScript, or the reverse.
+ */
+const fatal = [];
+if (malformed) fatal.push(`${malformed} malformed substitution${malformed === 1 ? '' : 's'} — these are bugs, not style`);
+if (deep.length) fatal.push(`${deep.length} deep import${deep.length === 1 ? '' : 's'} past the package index`);
+if (drift.length) fatal.push(`${drift.length} ladder disagreement${drift.length === 1 ? '' : 's'}`);
+
+if (fatal.length) {
+  for (const f of fatal) console.error(f);
   process.exit(1);
 }

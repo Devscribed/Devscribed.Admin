@@ -24,11 +24,16 @@ a { text-decoration: none; color: var(--text-link); }
 a:hover { color: var(--text-link); }
 p, h1, h2, h3, h4, h5, h6 { margin: 0; }
 
-/* The page heading steps up with the viewport: headline-6, then headline-5 from 768px and
-   headline-4 from 1200px. Media queries cannot be inline, so `PageTitle` renders an `<h1>`
-   against these rules rather than carrying the type itself. */
-.page-title { font-weight: 500; font-size: 16px; line-height: 24px; letter-spacing: -0.32px; }
-@media (min-width: 768px) { .page-title { font-weight: 450; font-size: 20px; line-height: 30px; letter-spacing: -0.32px; } }
+/* The page heading steps up with the viewport: headline-5, then headline-4 from 1200px. Media
+   queries cannot be inline, so `PageTitle` renders an `<h1>` against these rules rather than
+   carrying the type itself.
+
+   **Two steps, not three** (design-system 01 §05.28-29). The 16/24 base at weight 500 is gone,
+   and the 768px step went with it because 20/30 is now the base rather than something 768 steps
+   up to. Below `xl` the rail is a drawer, so the title is the only thing on screen naming the
+   page, and 16px is too small to carry that alone. Every screen keeps its `<h1>` at every
+   width — the title is not hidden at any rung (§05.26). */
+.page-title { font-weight: 450; font-size: 20px; line-height: 30px; letter-spacing: -0.32px; }
 @media (min-width: 1200px) { .page-title { font-weight: 450; font-size: 24px; line-height: 36px; letter-spacing: -0.7px; } }
 img { max-width: 100%; display: block; }
 button {
@@ -87,7 +92,27 @@ input, textarea, select { font: inherit; }
    Below the breakpoint the rail *becomes* the drawer, carrying `MenuDrawer`'s geometry — 340px,
    `--shadow-drawer`, translateX(105%), 0.3s — rather than a second copy of the navigation
    sliding in beside it, which would put two of every nav row in the document. */
-.ds-navbar { height: var(--layout-navbar-height-desktop); }
+.ds-navbar {
+  height: var(--layout-navbar-height-desktop);
+  /* §04.23 — 16px below `md`, 25 at and above it, the same pair the well takes. 16 rather than
+     the 12 this pattern came from, so the margin to the screen edge and the margin inside a card
+     read as one measurement. `--space-6` and `--space-9` directly: both steps already exist and a
+     token whose value is another token adds a name without adding a reader (§04.25). */
+  padding: 0 var(--space-6);
+}
+@media (min-width: 768px) { .ds-navbar { padding: 0 var(--space-9); } }
+
+/* §04.22 — the content well. It carried `var(--space-9)` inline on `AppShell` at every width; a
+   media query cannot be an inline style, which is why it is a class now. */
+.ds-app-shell-well {
+  height: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-6);
+}
+@media (min-width: 768px) { .ds-app-shell-well { padding: var(--space-9); } }
 
 .ds-sidebar { width: var(--layout-sidebar-width); }
 
@@ -104,17 +129,22 @@ input, textarea, select { font: inherit; }
 @media (max-width: 1199px) {
   .ds-navbar { height: var(--layout-navbar-height-mobile); }
 
+  /* §03.13-16 — the drawer enters from the **left**, where its hamburger already is: a panel that
+     arrives from the opposite edge to its control makes the reader cross the screen to find what
+     they just asked for. `-105%` rather than `-100%` so the panel's own shadow is off-screen too
+     while it is closed, and `--shadow-drawer-left` because the shadow must fall away from the
+     edge the panel hangs on. */
   .ds-app-shell-nav {
     position: fixed;
     top: var(--layout-navbar-height-mobile);
-    right: 0;
+    left: 0;
     bottom: 0;
     z-index: 2002;
     width: 340px;
     max-width: 100%;
     border-right: 0;
-    box-shadow: var(--shadow-drawer);
-    transform: translateX(105%);
+    box-shadow: var(--shadow-drawer-left);
+    transform: translateX(-105%);
     transition: transform var(--duration-hover);
   }
 
@@ -126,7 +156,29 @@ input, textarea, select { font: inherit; }
   .ds-navbar-menu, .ds-sidebar-close { display: flex; }
 }
 
-.ds-app-shell-scrim { position: fixed; inset: 0; z-index: 2001; }
+/* §03.17-18 — painted, not a transparent click target: without a wash a reader on a phone gets no
+   signal that the page behind the drawer is inert. It hangs from the navbar rather than covering
+   it, because focus returns to the hamburger when the drawer closes (§03.20) and a control handed
+   focus must not sit under 60% black. Same geometry as `.ds-menu-drawer-scrim` below, for the
+   same reason.
+
+   §03.21 — above `xl` it is **not visible** rather than not rendered. `AppShell` keeps rendering
+   it on `menuOpen` alone, so width alone decides the switch and the server and the hydrated
+   client agree at every size (§14) — the same way `.ds-navbar-menu` is `display: none` up here. */
+.ds-app-shell-scrim {
+  display: none;
+  position: fixed;
+  top: var(--layout-navbar-height-desktop);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2001;
+  background-color: var(--color-overlay-scrim);
+}
+
+@media (max-width: 1199px) {
+  .ds-app-shell-scrim { display: block; top: var(--layout-navbar-height-mobile); }
+}
 
 /* §51 — `MenuDrawer`'s geometry. The panel hangs from **whatever the navbar currently is**,
    which is the same switch `.ds-navbar` and `.ds-app-shell-nav` make above; a literal `top: 60px`
@@ -201,4 +253,156 @@ input, textarea, select { font: inherit; }
   0% { transform: scale(1); opacity: 1; }
   45% { transform: scale(0.1); opacity: 0.7; }
   80% { transform: scale(1); opacity: 1; }
+}
+
+/* §11.57 — the tab strip is **one line at every width** and scrolls inside itself when it
+   overflows. It used to `flex-wrap: wrap`, and a wrapped fifth tab took 36px of height from
+   whatever was under it — under the board, that is the columns. No edge affordance is drawn
+   (§11.59): a tab clipped mid-label at the strip's edge is itself the signal that there is more,
+   and a gradient over it would obscure the one thing that says so. */
+.ds-page-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.ds-page-tabs::-webkit-scrollbar { display: none; }
+.ds-page-tabs > [role='tab'] { flex: 0 0 auto; }
+
+/* §09.48 — a blocked menu item's reason. Always in the tree so `aria-describedby` resolves
+   whether or not the bubble is open; visually hidden to a pointer that can bring the bubble up,
+   and **visible text** to one that cannot. Reversed in the coarse block at the end of this file,
+   which is where it has to be: equal specificity, so source order decides, and written above the
+   base rule the reversal loses silently. */
+.ds-popover-reason {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* §10.49 — below `sm` an overlay panel is a sheet. `Modal`, `ConfirmDialog` and `MenuDrawer` all
+   take this form; `Popover`'s menu is not a panel and stays anchored at every width (§10.50).
+
+   The footer sits above `env(safe-area-inset-bottom)`. Four specs in user-management refuse
+   sticky bottom bars because the browser's URL bar and the system gesture area occupy that edge;
+   that is true of a bar pinned to the *page*, and the inset the platform publishes is what
+   answers it for a panel — the footer stops where the reachable area stops. */
+@media (max-width: 575px) {
+  .ds-sheet {
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    max-height: 92% !important;
+    display: flex !important;
+    flex-direction: column;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0 !important;
+    border-bottom: 0 !important;
+    /* The panel's own padding moves to the head and the body, so the footer can reach the edges
+       and the body can scroll under it. `!important` because each panel sets its padding inline. */
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Above `sm` these two carry no rules at all: the panel's own inline padding is doing the work
+     and the children sit inside it. They exist so the sheet has something to scroll and something
+     to pin. */
+  .ds-sheet-head { flex: 0 0 auto; padding: var(--space-8) var(--space-8) 0; }
+
+  .ds-sheet-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 var(--space-8) var(--space-8);
+  }
+
+  /* Equal widths, however many there are: two is the common case and reads as two halves, one
+     takes the row, three wrap rather than shrink below a readable label (edge cases 10a, 10b). */
+  /* `MenuDrawer` slides sideways at every other width, and `.ds-sheet` cancels the transform it
+     does that with. As a sheet it rises instead. Two classes beat one, so this wins over
+     `.ds-sheet` wherever they disagree, whatever the source order. */
+  .ds-menu-drawer.ds-sheet { transform: translateY(100%) !important; }
+  .ds-menu-drawer.ds-sheet[data-open] { transform: translateY(0) !important; }
+
+  .ds-sheet-actions {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin: 0;
+    padding: var(--space-6);
+    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+    border-top: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-overlay);
+  }
+  .ds-sheet-actions > * { flex: 1 1 0; min-width: 0; }
+}
+
+/* §07.36-39 — the pointer rules, in CSS so they need no hydration and cannot draw the small form
+   first. `(hover: none), (pointer: coarse)` is `NOT ((hover: hover) and (pointer: fine))` by De
+   Morgan's law — the same predicate `pointerFrom` applies in JavaScript, not a second rule that
+   happens to agree.
+
+   **This block is last on purpose.** Every rule in it reverses one written above at the same
+   specificity, so source order is what makes it win. Moved higher, the reversals fail silently.
+
+   `min-width` / `min-height` rather than `width` / `height`: a stylesheet minimum beats an inline
+   `width`, which is what lets `IconButton` grow from the 34 it sets from a prop without an
+   `!important` and without JavaScript. */
+@media (hover: none), (pointer: coarse) {
+  .ds-icon-button,
+  .ds-popover-trigger,
+  .ds-popover-item,
+  .ds-navbar-menu,
+  .ds-sidebar-close,
+  .ds-dialog-close {
+    min-width: var(--control-height);
+    min-height: var(--control-height);
+  }
+
+  /* The three overlay close buttons draw a 13px glyph; centring it in the larger box is what
+     keeps the mark where it was while the target reaches 44. */
+  .ds-dialog-close,
+  .ds-navbar-menu,
+  .ds-sidebar-close {
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Six controls whose box **is** the design rather than a container around it. Their paint is
+     not raised; a transparent overlay reaches 44 without moving a pixel. */
+  .ds-hit-44 { position: relative; }
+  .ds-hit-44::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: var(--control-height);
+    height: var(--control-height);
+  }
+
+  /* §09.48 — the reason becomes visible text, because a coarse pointer has neither the hover nor
+     the focus ring that would open the bubble. It wraps rather than truncating: a reason nobody
+     can finish reading is a reason nobody can act on (edge case 12). */
+  .ds-popover-reason {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    display: block;
+    margin-top: 2px;
+    max-width: 220px;
+    white-space: normal;
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+  }
 }
