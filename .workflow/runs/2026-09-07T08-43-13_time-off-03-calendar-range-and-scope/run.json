@@ -6,7 +6,7 @@
   "branch": "spec/calendar-range-and-scope",
   "baseRef": "c3abb8dc0a7f2bf6438dc6c569a7cea90fa04363",
   "headAtInit": "c3abb8dc0a7f2bf6438dc6c569a7cea90fa04363",
-  "status": "review",
+  "status": "qa",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-03.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T08:43:13.341Z",
-  "updatedAt": "2026-09-07T09:49:56.546Z",
+  "updatedAt": "2026-09-07T10:00:28.607Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -48,11 +48,11 @@
       "lastVerdict": "pass"
     },
     "review": {
-      "status": "pending",
-      "attempts": 2,
-      "startedAt": "2026-09-07T09:27:50.297Z",
-      "endedAt": "2026-09-07T09:41:48.786Z",
-      "lastVerdict": "blocked"
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-07T09:49:56.698Z",
+      "endedAt": "2026-09-07T10:00:28.552Z",
+      "lastVerdict": "pass"
     },
     "qa": {
       "status": "pending",
@@ -443,6 +443,169 @@
       "witness": {
         "kind": "rule",
         "detail": "contracts §Required data-testid: \"`calendar-grid` | Calendar | present under an empty Teams or People selection\". CalendarScreen.tsx:484 puts it on the wallchart; packages/ds/src/components/data/Calendar.tsx also draws `data-testid=\"calendar-grid\"` on the month grid inside the panel, which is why specs/hiring/controls/calendar-control.md:210 lists `calendar-grid` as one of the Calendar's own ids. Nothing in this change breaks on it — every `page.getByTestId('calendar-grid')` in the suite runs with the panel closed (e2e/tests/time-off-calendar.spec.ts:826 comes after the second click commits and `close()` runs, DateRangePicker.tsx:155-157) — but Playwright's strict mode makes the next assertion written against `calendar-grid` while the panel is open fail on ambiguity rather than on the thing it is testing.",
+        "source": "specs/time-off/03-calendar-range-and-scope.contracts.md — §Required data-testid"
+      },
+      "suggestedFix": "Nothing urgent in code. For the person: the wallchart and the design system's Calendar want distinct ids, and this bundle is where the collision first reaches one screen."
+    },
+    {
+      "stage": "review",
+      "id": "L10",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-32",
+      "rule": "REQ-03-014 with REQ-03-018 — a floor on every day column, and a scroll once the floors exceed the space — read against Edge case 13, which speaks only of 'a 92-day range on a narrow viewport'",
+      "file": "apps/web/app/globals.css",
+      "symbol": ".time-off-calendar-grid",
+      "line": 1004,
+      "claim": "the fix is right and the geometry is now the one the rule describes, and the consequence the document never states is that the SHIPPED Month window scrolls at a desktop viewport: 32px times 28-31 days plus the name column is wider than the content well at 1280px, so every reader of a month now gets a horizontal scrollbar where they previously saw the whole month compressed",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-03-014 puts the floor on every day column 'WHILE the grid is drawn' — not only under Range — and REQ-03-018 makes the scroll follow from the floors exceeding the space. With --day-col-min: 32px (globals.css:885) and --name-col: 264px, a 30-day month needs 264 + 30*32 = 1224px, while AppShell gives 1280 - 290 (rail) - 2*25 (well padding, AppShell.tsx:89) = ~940px of content: the Month window scrolls at every viewport this product supports, all year — February's 28 days still need 1160px. It is Month alone: 2 weeks needs 264 + 14*32 = 712px and Week 488px, both inside the well. Before this change the same month divided the page into ~22px columns and did not scroll. Both readings are defensible and the code takes the one the requirements state literally; the shipped case now asserts it (e2e/tests/time-off-calendar.spec.ts:813-816). What is worth a person's eye is that the document's only picture of the scroll is Edge case 13's 'narrow viewport' and cases.md's 'A 92-day range is 92 columns and scrolls' Known Gap, neither of which mentions the default window on a desktop — so the value of --day-col-min, chosen for the two-line header, is what silently decides whether a month fits, and nothing in the bundle records that trade.",
+        "source": "specs/time-off/03-calendar-range-and-scope.md — REQ-03-014, REQ-03-018; §Edge Cases row 13"
+      },
+      "suggestedFix": "Nothing in code — the requirements say what the code does. For the person: record that the floor makes the Month window scroll at a desktop viewport, and if that is unwanted, the next document decides it explicitly (a smaller floor for the presets, or a rule that the floor applies only where the window cannot fit)."
+    },
+    {
+      "stage": "review",
+      "id": "L2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "handoff T1 — \"The screen and the picker both read this; neither restates the arithmetic\"",
+      "file": "packages/validation/src/time-off-calendar.ts",
+      "symbol": "timeOffCalendarLatestEnd",
+      "line": 267,
+      "claim": "`timeOffCalendarLatestEnd` still ships with no product caller — only its own unit test names it — while `DateRangePicker` computes the same start+(span-1) bound locally",
+      "witness": {
+        "kind": "command",
+        "detail": "Re-run this pass: `grep -rn 'timeOffCalendarLatestEnd' apps packages e2e --include=*.ts --include=*.tsx` returns packages/validation/src/time-off-calendar.ts:267 (the definition), packages/validation/dist/time-off-calendar.d.ts:134 (build output) and packages/validation/src/time-off-calendar.test.ts:9,291,293,297 — nothing else. CalendarScreen.tsx:440 passes `maxSpanDays={TIME_OFF_CALENDAR_MAX_RANGE_DAYS}` and DateRangePicker.tsx:145 computes `addDays(pending, maxSpanDays - 1)` through its own local helper. The bound cannot drift, since both derive from the one exported constant; what does not exist is a single definition of the `- 1`. Accepted as the reason it cannot be shared: packages/ds does not import @devscribed/validation (DateRangePicker.tsx:41-44).",
+        "source": "packages/validation/src/time-off-calendar.ts:267"
+      },
+      "suggestedFix": "Either delete the export, or say in its doc comment that it ships for the tests and that the design system restates the arithmetic because it may not import validation."
+    },
+    {
+      "stage": "review",
+      "id": "L3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — a case that exercises nothing the requirement it names introduced",
+      "file": "packages/validation/src/time-off-calendar.test.ts",
+      "symbol": "carries the position across when the window changes between Range and a preset",
+      "line": 284,
+      "claim": "the REQ-03-017 half of TC-03-UNIT-13 repeats the assertion three lines above it, and the code that implements REQ-03-017 is covered by no case at any level",
+      "witness": {
+        "kind": "test",
+        "test": "TC-03-UNIT-13",
+        "detail": "Re-read this pass at packages/validation/src/time-off-calendar.test.ts:270-288. Lines 284-287 assert `timeOffCalendarWindowRange('month', '2026-09-17', 'Monday')` equals `{2026-09-01, 2026-09-30}`; lines 278-281 assert the same expression with `anchor` bound to '2026-09-17'. Both exercise a builder time-off/01 already ships and tests. The behaviour REQ-03-017 adds is CalendarScreen.tsx:351, `if (next === 'range') setCustomRange(range)`; deleting that line leaves every case in this change green, and TC-03-E2E-12 does not reach it either — it enters Range from the Month default and then asserts only the span it picks by hand. Acceptance criterion 15 names TC-03-UNIT-13 as the observer of exactly this.",
+        "source": "packages/validation/src/time-off-calendar.test.ts:284"
+      },
+      "suggestedFix": "Assert the seeding where it lives: in TC-03-E2E-12, immediately after clicking `calendar-window-range` and before opening the panel, read `calendar-range-label` (or count `calendar-day-header-{date}`) and expect the month window it left."
+    },
+    {
+      "stage": "review",
+      "id": "L4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "CLAUDE.md — Design system: anything missing goes into the design system and is recorded in that spec's DS-gaps table",
+      "file": "apps/web/app/globals.css",
+      "symbol": ".time-off-calendar",
+      "line": 879,
+      "claim": "the bundle's DS-gaps table names a custom property `--range-label-col` that the implementation deliberately does not create, so the table and the shipped block no longer name the same set",
+      "witness": {
+        "kind": "rule",
+        "detail": "cases.md §DS gaps: \"`--range-label-col` — no token carries a reserved width for a variable-width label in a control row | REQ-03-015 needs one\". globals.css:879-886 declares --surface-timeoff-band, --border-timeoff-band, --text-timeoff-band, --name-col, --range-col and --day-col-min, and no --range-label-col. Reusing --range-col is the better call and the block comment records the reasoning (globals.css:865-872); what is stale is the gap table, which is the list a future design-system change reads to know what to absorb. Specs are frozen after refine, so this is for the person and not an edit.",
+        "source": "specs/time-off/03-calendar-range-and-scope.cases.md — §DS gaps"
+      },
+      "suggestedFix": "Nothing in code. Carry it to the person: the reservation ships as --range-col, and the design-system change that absorbs these six properties should look for that name."
+    },
+    {
+      "stage": "review",
+      "id": "L5",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "REQ-03-009's heading — \"the invalid span is unreachable\" — against its own body and contracts §UI Description, which bound only the days AFTER the armed start",
+      "file": "packages/ds/src/components/forms/DateRangePicker.tsx",
+      "symbol": "selectable",
+      "line": 146,
+      "claim": "the span bound is forward-only, so an over-92-day range is still reachable from the control by arming a start and then picking an earlier day — and CalendarScreen's own comment claims the opposite",
+      "witness": {
+        "kind": "rule",
+        "detail": "Statement one — REQ-03-009's body: \"THE SYSTEM SHALL bound the picker so that no end more than 91 days after that start can be chosen\", and contracts §UI Description, row 'Range being picked': \"the panel disables every day more than 91 after it\". Both are forward-only and both are satisfied: DateRangePicker.tsx:146-152 filters `(!latest || date <= latest)` where `latest = addDays(pending, maxSpanDays - 1)`. Statement two — the requirement's heading, \"the invalid span is unreachable\", and CalendarScreen.tsx:431-432, \"so the span the server refuses is unreachable from the control\". Arming 2026-09-01, paging back and clicking 2026-01-01 commits `[2026-01-01, 2026-09-01]` through commit()'s sort — a 244-day span, spent, and answered 422 rangeTooWide, which is the outcome contracts §Edge Cases row 7 tabulates. Nothing is broken for the reader; what is undecided is whether the compliant client owes a backwards check, and a reviewer does not settle it. Noted rather than blocked because the normative sentence and the UI row agree with the code and only a section heading and a code comment overreach.",
+        "source": "specs/time-off/03-calendar-range-and-scope.md — REQ-03-009"
+      },
+      "suggestedFix": "Decide it in the document: either the picker bounds both directions from the armed date (and the code comment is then true), or Edge case 7 is the whole rule for a backwards pick — and either way drop the 'unreachable from the control' claim at CalendarScreen.tsx:432."
+    },
+    {
+      "stage": "review",
+      "id": "L6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-15",
+      "rule": "reviewer — a fixture whose doc comment claims a safety it does not have",
+      "file": "apps/api/src/test-support/seed-memberships.ts",
+      "symbol": "seedMemberships",
+      "line": 47,
+      "claim": "the default `prefix` makes a second call collide on the unique email column — not only inside one test but across every test in the run — which is the opposite of what the doc comment promises",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`prefix` defaults to 'seeded' (line 42) and each email is `${prefix}-${index}@seed.test` (line 47), namespaced by position only — not by organization, not by call, not by test. `devscribed_test` is wiped once per run, not between cases, so a second `seedMemberships(prisma, org, 100)` anywhere in the suite throws a Prisma unique-constraint error on `seeded-0@seed.test` instead of seeding. Edge case 1's People-scope mirror is exactly that second call. The doc comment at lines 30-32 states \"two calls inside one test do not collide on the unique email column\", which holds only if the caller remembers a distinct prefix, and the comment does not say so. Nothing fails today: the one call site is apps/api/test/time-off-calendar.spec.ts:1300.",
+        "source": "apps/api/src/test-support/seed-memberships.ts:47"
+      },
+      "suggestedFix": "Fold a per-call token into the email — a module counter or `randomUUID().slice(0, 8)` — so the default is safe, or narrow the comment to say the prefix is the caller's job."
+    },
+    {
+      "stage": "review",
+      "id": "L7",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-27",
+      "rule": "contracts §Required data-testid — \"an id a case touches belongs in the table of the bundle that touches it\"",
+      "file": "e2e/tests/time-off-calendar.spec.ts",
+      "symbol": "firstOfferedDay",
+      "line": 100,
+      "claim": "TC-03-E2E-12 and TC-03-E2E-13 select by `calendar-day-{date}`, `calendar-next-month`, the `data-date` attribute and now `calendar-day-holiday-{date}`, none of which this bundle's test-id table carries",
+      "witness": {
+        "kind": "rule",
+        "detail": "The table in contracts.md §Required data-testid lists eighteen ids and states the completeness rule quoted above; these four are not among them, and the §Selectors lists of TC-03-E2E-12 and TC-03-E2E-13 do not name them either. They are used at e2e/tests/time-off-calendar.spec.ts:101,110-113,727,733-736,796-803,814. CR-27 is nevertheless satisfied and this is a note rather than a blocker: the first three are named by the spec that owns the design system's Calendar (specs/hiring/controls/calendar-control.md:209-218) and the fourth by specs/time-off/01-vacation-calendar.contracts.md:291, \"`calendar-day-holiday-{date}` | Calendar | present only on a whole-column holiday (REQ-01-030)\". The gap is in this bundle's table, not in the tests.",
+        "source": "specs/time-off/03-calendar-range-and-scope.contracts.md — §Required data-testid"
+      },
+      "suggestedFix": "Nothing in code. For the person: a case that drives a design-system panel, or that reaches into a rule an older spec owns, touches ids this bundle's table does not carry, and the table should carry them the next time this rule is written."
+    },
+    {
+      "stage": "review",
+      "id": "L8",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "reviewer — a comment that counts the thing beneath it",
+      "file": "packages/validation/src/time-off-calendar.ts",
+      "symbol": "TIME_OFF_CALENDAR_MESSAGES",
+      "line": 18,
+      "claim": "the doc comment's count was corrected on one side of the line and left wrong on the other",
+      "witness": {
+        "kind": "rule",
+        "detail": "Re-read this pass at packages/validation/src/time-off-calendar.ts:18-34. The diff changes \"The seven above the line are 422 bodies\" to \"The five above the line\", correctly, and leaves \"the four below it are drawn by a screen\" — but five keys follow the blank line: emptyStateTitle, emptyStateBody, orgCountryHint, orgCountryNoneOption and memberCountryDefaultOption. The undercount predates this change (spec 02 added the three orgCountry keys), and this is the change that touched the sentence.",
+        "source": "packages/validation/src/time-off-calendar.ts:18"
+      },
+      "suggestedFix": "Say five below the line, or drop the counts and describe the two groups."
+    },
+    {
+      "stage": "review",
+      "id": "L9",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-27",
+      "rule": "CLAUDE.md — Testing: selectors are data-testid only, and the ids are named in the specs",
+      "file": "apps/web/app/org/[orgId]/time-off/calendar/CalendarScreen.tsx",
+      "symbol": "DateRangePicker",
+      "line": 434,
+      "claim": "drawing the design system's DateRangePicker on this screen puts a second `calendar-grid` on the page whenever the range panel is open, so an id the contracts describe as the wallchart's now identifies two elements",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts §Required data-testid: \"`calendar-grid` | Calendar | present under an empty Teams or People selection\". CalendarScreen.tsx:484 puts it on the wallchart; packages/ds/src/components/data/Calendar.tsx:314 draws `data-testid=\"calendar-grid\"` on the month grid inside the panel. Nothing in this change breaks on it — every `page.getByTestId('calendar-grid')` in the suite runs with the panel closed, including the two new reads in TC-03-E2E-13 (the Month block at :805 runs before the Range window exists, and the 92-day block at :876 runs after commit() has closed the panel) — but Playwright's strict mode makes the next assertion written against `calendar-grid` while the panel is open fail on ambiguity rather than on the thing it is testing.",
         "source": "specs/time-off/03-calendar-range-and-scope.contracts.md — §Required data-testid"
       },
       "suggestedFix": "Nothing urgent in code. For the person: the wallchart and the design system's Calendar want distinct ids, and this bundle is where the collision first reaches one screen."
