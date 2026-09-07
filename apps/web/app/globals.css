@@ -11,6 +11,19 @@
  */
 
 /*
+ * PATCH-027 — the loaded faces, bound to the token every component already reads.
+ *
+ * The design system states the family and cannot fetch it: it is a package of TypeScript
+ * source with no build step and no place to put a `@font-face`, so the app that renders it
+ * is where the files are loaded (`app/layout.tsx`) and this is where the token is pointed at
+ * them. Order is the whole rule — Poppins for Latin, Montserrat for the Cyrillic Poppins
+ * does not carry, and the generic behind both.
+ */
+:root {
+  --font-family-base: var(--font-poppins), var(--font-montserrat), sans-serif;
+}
+
+/*
  * The public booking page is the one screen with real breakpoints — a calendar beside
  * a slot list beside a form. Inline styles cannot express a media query, so its layout
  * lives here. Every value is still a token or a breakpoint from
@@ -985,13 +998,22 @@
   margin-left: var(--space-4);
 }
 
-/* PATCH-024 — under the grid, which is what it is a key to. `margin-top`, where it used to
-   carry `margin-bottom` for the block it sat above. */
+/* PATCH-028 — a block of its own, between the figures and the grid.
+   It was a bare line of text: under the grid it ended up against the bottom of the window,
+   and its swatches began outside the edge every card on the screen keeps, because a line of
+   text has no box to keep one with. It has a box now — the grid's own width, its radius and
+   its inset — so it reads as part of the screen rather than as something that fell out of
+   it, and the row it names starts where the grid's first column does. */
 .time-off-calendar-legend {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-8);
-  margin-top: var(--space-5);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--surface-sunken);
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
 }
@@ -1190,9 +1212,14 @@
   text-overflow: ellipsis;
 }
 
+/* PATCH-027 — the job title, and the line it keeps whether or not there is one. A member
+   with no title left the cell one line short, so their row was shorter than every row around
+   it and the name inside it sat where no other name sat. The slot is the same shape the
+   sourcing panel's status line was given: reserved, not conditional. */
 .time-off-calendar-who-text i {
   font-style: normal;
   font-size: var(--font-size-xs);
+  min-height: var(--line-height-label);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;

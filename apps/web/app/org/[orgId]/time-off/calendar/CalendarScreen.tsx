@@ -523,6 +523,37 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         </div>
       )}
 
+      {/* PATCH-028 — the key, between the figures and the grid.
+
+          PATCH-024 put it under the grid, on the reasoning that a key is read after the
+          picture rather than before it. On a full month that reasoning ran into the page:
+          the grid is as tall as the window is long, so the key landed against the bottom of
+          the viewport, one line high and pinned to the edge, which is where a browser's own
+          furniture lives. It reads as something that fell off rather than as part of the
+          screen.
+
+          Between the two it is on the way to the grid without being in front of it, and it
+          is a block of its own rather than a line of loose text — the same width as the grid
+          below, so nothing about it sits outside the edges everything else keeps. */}
+      <div className="time-off-calendar-legend" data-testid="calendar-legend">
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-approved" />
+          Vacation · approved
+        </span>
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-pending" />
+          Vacation · pending
+        </span>
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-holiday" />
+          Public holiday
+        </span>
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-weekend" />
+          Weekend
+        </span>
+      </div>
+
       {error && (
         <div className="time-off-calendar-banner" data-testid="calendar-error-banner">
           <InfoBanner variant="error" role="alert">
@@ -719,29 +750,6 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         </div>
       )}
 
-      {/* PATCH-024 — the legend belongs to the grid, so it sits under it. Above, between the
-          filters and the figures, it separated the two things that answer the reader's
-          question from each other and explained a grid they had not reached yet. A key is
-          read when something in the picture is not understood, which is after looking at
-          it. */}
-      <div className="time-off-calendar-legend" data-testid="calendar-legend">
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-approved" />
-          Vacation · approved
-        </span>
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-pending" />
-          Vacation · pending
-        </span>
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-holiday" />
-          Public holiday
-        </span>
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-weekend" />
-          Weekend
-        </span>
-      </div>
     </div>
   );
 }
