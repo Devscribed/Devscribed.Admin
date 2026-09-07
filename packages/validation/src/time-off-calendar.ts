@@ -16,7 +16,7 @@ import { validateHolidayCountryCode } from './holidays';
 import { todayInTimeZone } from './requests';
 
 /**
- * §Error Messages, verbatim. The seven above the line are 422 bodies; the four below it
+ * §Error Messages, verbatim. The five above the line are 422 bodies; the four below it
  * are drawn by a screen and reach no route, and live here so no screen writes them inline.
  */
 export const TIME_OFF_CALENDAR_MESSAGES = {
@@ -24,8 +24,6 @@ export const TIME_OFF_CALENDAR_MESSAGES = {
   rangeInverted: 'The end date must be on or after the start date.',
   rangeTooWide: 'Choose a range of 92 days or fewer.',
   scopeInvalid: 'Choose All, Teams, or People.',
-  teamsRequired: 'Choose at least one team.',
-  peopleRequired: 'Choose at least one person.',
   tooManyMembers: 'This view covers more than 100 people. Narrow the scope to see the calendar.',
 
   emptyStateTitle: 'Nobody to show',
@@ -55,6 +53,18 @@ export const TIME_OFF_CALENDAR_UNASSIGNED = 'none';
 
 /** The three window presets the screen offers (REQ-01-019). */
 export type TimeOffCalendarWindow = 'week' | '2weeks' | 'month';
+
+/**
+ * The four window options the screen offers (REQ-03-007) — the three presets plus the
+ * custom **Range**.
+ *
+ * It is a union beside `TimeOffCalendarWindow`, not a widening of it: that type is the
+ * parameter of `timeOffCalendarWindowRange` and `stepTimeOffCalendarAnchor`, both of which
+ * are anchor-driven and have no meaning for a span the reader picked by hand. A `range`
+ * reaching either would have to be given an invented anchor arithmetic; the screen holds
+ * the four-valued choice and calls the range helpers below instead.
+ */
+export type TimeOffCalendarWindowChoice = TimeOffCalendarWindow | 'range';
 
 /** The account preference the two week-based presets are computed from (spec 06). */
 export type TimeOffCalendarWeekStart = 'Monday' | 'Sunday';
@@ -208,6 +218,54 @@ export function stepTimeOffCalendarAnchor(
   // overflow into the month after the one the reader asked for.
   const stepped = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + direction, 1));
   return toISO(stepped);
+}
+
+/**
+ * REQ-03-011 — `‹` and `›` under the custom **Range** window. Both ends move by the range's
+ * OWN length in days, so the length is preserved by construction: a step is not a preset
+ * length here, because the reader chose the length and stepping is how they read the span
+ * beside the one they asked for.
+ */
+export function stepTimeOffCalendarRange(
+  range: TimeOffCalendarRange,
+  direction: -1 | 1,
+): TimeOffCalendarRange {
+  const days = calendarDaySpan(range.startDate, range.endDate) * direction;
+  return {
+    startDate: addCalendarDays(range.startDate, days),
+    endDate: addCalendarDays(range.endDate, days),
+  };
+}
+
+/**
+ * REQ-03-012 — **Today** under the custom **Range** window: the start becomes the caller's
+ * today and the length is kept, so a reader who chose a fortnight comes back to a fortnight
+ * rather than to a preset.
+ */
+export function timeOffCalendarRangeToday(
+  range: TimeOffCalendarRange,
+  today: string,
+): TimeOffCalendarRange {
+  const span = calendarDaySpan(range.startDate, range.endDate);
+  return { startDate: today, endDate: addCalendarDays(today, span - 1) };
+}
+
+/**
+ * REQ-03-013 — the anchor a custom range converts to when the window changes to a preset:
+ * the range's start, so the preset opens on the window containing it. One line, and it
+ * exists so that rule has one definition rather than being retyped in the screen.
+ */
+export function timeOffCalendarAnchorFromRange(range: TimeOffCalendarRange): string {
+  return range.startDate;
+}
+
+/**
+ * REQ-03-009 — the latest end a picker may offer once a start is armed. The 92-day bound is
+ * inclusive (Validation Rule 3), so the last permitted end is 91 days after the start. The
+ * screen and the picker both read this; neither restates the arithmetic.
+ */
+export function timeOffCalendarLatestEnd(startDate: string): string {
+  return addCalendarDays(startDate, TIME_OFF_CALENDAR_MAX_RANGE_DAYS - 1);
 }
 
 const BAND_KIND_LABELS: Record<string, string> = { vacation: 'Vacation' };

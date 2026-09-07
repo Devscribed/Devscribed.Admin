@@ -12,6 +12,7 @@ import { AppModule } from '../src/app.module';
 import { InMemoryMailService } from '../src/mail/in-memory-mail.service';
 import { MailService } from '../src/mail/mail.service';
 import { PrismaService } from '../src/prisma.service';
+import { seedMemberships } from '../src/test-support/seed-memberships';
 
 /** Cheap in tests — the policy under bcrypt doesn't depend on the cost factor. */
 const TEST_BCRYPT_ROUNDS = 4;
@@ -423,20 +424,24 @@ describe('Vacation calendar (time off spec 01)', () => {
     expect(response.body.members.map((m: any) => m.membershipId)).not.toContain(d.membershipId);
   });
 
-  // TC-01-INT-06
-  it('scope=teams with nothing ticked is refused, not drawn empty', async () => {
+  // TC-01-INT-06 — rewritten by time-off/03: an empty Teams selection is no longer a
+  // refusal (REQ-03-001, REQ-03-003), it is no narrowing at all.
+  it('scope=teams with nothing ticked draws every active member, not a refusal', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    const member = await createMember(admin.organizationId, {
+      email: 'm@acme.com', role: 'user', firstName: 'Anna', lastName: 'Alpha',
+    });
+
     const response = await calendar(
       admin.cookies,
       admin.organizationId,
       `?startDate=${MONTH_START}&endDate=${MONTH_END}&scope=teams`,
     );
-    expect(response.status).toBe(422);
-    expect(response.body).toEqual({
-      error: 'validation_error',
-      fields: { projectIds: 'Choose at least one team.' },
-    });
-    expect(response.body.members).toBeUndefined();
+    expect(response.status).toBe(200);
+    expect(new Set(response.body.members.map((m: any) => m.membershipId))).toEqual(
+      new Set([admin.membershipId, member.membershipId]),
+    );
+    expect(response.body.fields).toBeUndefined();
   });
 
   // TC-01-INT-07
@@ -464,16 +469,24 @@ describe('Vacation calendar (time off spec 01)', () => {
     expect(new Set(response.body.members.map((m: any) => m.membershipId))).toEqual(new Set(picked));
   });
 
-  // TC-01-INT-08
-  it('scope=people with nobody picked is refused', async () => {
+  // TC-01-INT-08 — rewritten by time-off/03: an empty People selection is no longer a
+  // refusal either (REQ-03-002, REQ-03-003).
+  it('scope=people with nobody picked draws every active member', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    const member = await createMember(admin.organizationId, {
+      email: 'm@acme.com', role: 'user', firstName: 'Anna', lastName: 'Alpha',
+    });
+
     const response = await calendar(
       admin.cookies,
       admin.organizationId,
       `?startDate=${MONTH_START}&endDate=${MONTH_END}&scope=people`,
     );
-    expect(response.status).toBe(422);
-    expect(response.body.fields.memberIds).toBe('Choose at least one person.');
+    expect(response.status).toBe(200);
+    expect(new Set(response.body.members.map((m: any) => m.membershipId))).toEqual(
+      new Set([admin.membershipId, member.membershipId]),
+    );
+    expect(response.body.fields).toBeUndefined();
   });
 
   // TC-01-INT-09
@@ -1150,6 +1163,155 @@ describe('Vacation calendar (time off spec 01)', () => {
       'Company Day',
       'Polish National Day',
     ]);
+  });
+
+  /* ---------------------------------------------------------------- *
+   * Time off spec 03 — the scope defaults and the span the route still refuses
+   * ---------------------------------------------------------------- */
+
+  /**
+   * The window every spec-03 case asks for, bound to the run's own today rather than to a
+   * literal: these cases are about what a scope resolves to, and a window that is in the
+   * past on a later run is a different question.
+   */
+  const runToday = (): string => new Date().toISOString().slice(0, 10);
+  const daysAfter = (iso: string, days: number): string => {
+    const date = new Date(`${iso}T00:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+  const spanFromToday = (days: number, scope: string, extra = ''): string => {
+    const start = runToday();
+    return `?startDate=${start}&endDate=${daysAfter(start, days - 1)}&scope=${scope}${extra}`;
+  };
+
+  /** Three active memberships, two of them on one project. */
+  const seedThree = async () => {
+    const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    const onProject = await createMember(admin.organizationId, {
+      email: 'anna@acme.com', role: 'user', firstName: 'Anna', lastName: 'Alpha',
+    });
+    const alsoOnProject = await createMember(admin.organizationId, {
+      email: 'boris@acme.com', role: 'user', firstName: 'Boris', lastName: 'Beta',
+    });
+    const project = await seedProject(admin.organizationId, admin.accountId, 'Acme Redesign');
+    await assign(project.id, onProject.membershipId, admin.accountId);
+    await assign(project.id, alsoOnProject.membershipId, admin.accountId);
+    return { admin, onProject, alsoOnProject, project };
+  };
+
+  // TC-03-INT-21
+  it('scope=teams with no projectIds answers every active membership, and echoes the scope', async () => {
+    const { admin, onProject, alsoOnProject } = await seedThree();
+
+    const response = await calendar(
+      admin.cookies,
+      admin.organizationId,
+      spanFromToday(14, 'teams'),
+    );
+    expect(response.status).toBe(200);
+    // Three rows, the member on no project included: an empty selection narrows nothing,
+    // and `id: { in: [] }` — which would answer none of them — is the wrong answer here.
+    expect(response.body.members).toHaveLength(3);
+    expect(new Set(response.body.members.map((m: any) => m.membershipId))).toEqual(
+      new Set([admin.membershipId, onProject.membershipId, alsoOnProject.membershipId]),
+    );
+    // The scope the caller asked for, echoed unchanged — never rewritten to `all`.
+    expect(response.body.meta).toEqual({ scope: 'teams', memberCount: 3 });
+    expect(response.body.fields).toBeUndefined();
+    expect(response.body.message).toBeUndefined();
+  });
+
+  // TC-03-INT-22
+  it('scope=people with no memberIds answers every active membership', async () => {
+    const { admin, onProject, alsoOnProject } = await seedThree();
+
+    const response = await calendar(
+      admin.cookies,
+      admin.organizationId,
+      spanFromToday(14, 'people'),
+    );
+    expect(response.status).toBe(200);
+    expect(response.body.members).toHaveLength(3);
+    expect(new Set(response.body.members.map((m: any) => m.membershipId))).toEqual(
+      new Set([admin.membershipId, onProject.membershipId, alsoOnProject.membershipId]),
+    );
+    expect(response.body.meta).toEqual({ scope: 'people', memberCount: 3 });
+    expect(response.body.fields).toBeUndefined();
+  });
+
+  // TC-03-INT-23
+  it('a non-empty selection still narrows, under both scopes', async () => {
+    const { admin, onProject, alsoOnProject, project } = await seedThree();
+
+    const teams = await calendar(
+      admin.cookies,
+      admin.organizationId,
+      spanFromToday(14, 'teams', `&projectIds=${project.id}`),
+    );
+    expect(teams.status).toBe(200);
+    expect(teams.body.members).toHaveLength(2);
+    expect(new Set(teams.body.members.map((m: any) => m.membershipId))).toEqual(
+      new Set([onProject.membershipId, alsoOnProject.membershipId]),
+    );
+
+    const people = await calendar(
+      admin.cookies,
+      admin.organizationId,
+      spanFromToday(14, 'people', `&memberIds=${onProject.membershipId}`),
+    );
+    expect(people.status).toBe(200);
+    expect(people.body.members).toHaveLength(1);
+    expect(people.body.members[0].membershipId).toBe(onProject.membershipId);
+  });
+
+  // TC-03-INT-24
+  it('a span of 93 days is refused and one of exactly 92 is answered', async () => {
+    const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    const start = runToday();
+
+    const tooWide = await calendar(
+      admin.cookies,
+      admin.organizationId,
+      `?startDate=${start}&endDate=${daysAfter(start, 92)}&scope=all`,
+    );
+    expect(tooWide.status).toBe(422);
+    expect(tooWide.body).toEqual({
+      error: 'validation_error',
+      fields: { range: 'Choose a range of 92 days or fewer.' },
+    });
+
+    // The bound is inclusive: a 92-day span ends 91 days after its start.
+    const widest = await calendar(
+      admin.cookies,
+      admin.organizationId,
+      `?startDate=${start}&endDate=${daysAfter(start, 91)}&scope=all`,
+    );
+    expect(widest.status).toBe(200);
+    expect(widest.body.days).toHaveLength(92);
+  });
+
+  // Edge case 1 — the refusal that REPLACES the two being withdrawn. An empty Teams
+  // selection in an organization over the row cap resolves to more than 100 rows and is
+  // refused with the message that says so, rather than drawn.
+  it('an empty Teams selection over the row cap is refused with tooManyMembers', async () => {
+    const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    // 100 seeded plus the admin's own membership: 101 active rows.
+    await seedMemberships(prisma, admin.organizationId, 100);
+
+    const response = await calendar(
+      admin.cookies,
+      admin.organizationId,
+      spanFromToday(14, 'teams'),
+    );
+    expect(response.status).toBe(422);
+    expect(response.body).toEqual({
+      error: 'validation_error',
+      fields: {
+        scope: 'This view covers more than 100 people. Narrow the scope to see the calendar.',
+      },
+    });
+    expect(response.body.members).toBeUndefined();
   });
 
   it('carries the tabulated refusal text on every 422 this route answers', () => {

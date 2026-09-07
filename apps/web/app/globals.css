@@ -863,11 +863,18 @@
  * system carries no absence-band colour. Violet, which none of the status colours and none
  * of `--color-holiday` uses, so a band reads as a category and not as a claim about how
  * somebody is doing. `--name-col`: no token carries a pinned first column's width.
- * `--range-col` (BUG-013): no token carries a reserved width for a variable-width label
- * beside controls that must not move when it changes — the widest string `rangeLabel` can
- * return is a Week or 2 weeks range crossing both a month and a year boundary, e.g.
- * `28 Dec 2026 – 10 Jan 2027`. All five close by entering `@devscribed/ds` and this block
- * losing them in the same change.
+ * `--range-col` (BUG-013, and REQ-03-015's reservation): no token carries a reserved width
+ * for a variable-width label beside controls that must not move when it changes. It is the
+ * ONE name for that reservation across all four windows — Week, 2 weeks, Month and the
+ * custom Range — and the widest string `rangeLabel` can return under any of them is a span
+ * crossing both a month and a year boundary: `28 Dec 2026 – 10 Jan 2027` for a preset,
+ * `28 Dec 2026 – 14 Mar 2027` for a custom range, the same 25 characters. A second property
+ * for the same width is how two names come to reserve one thing, so Range widens nothing.
+ * `--day-col-min` (REQ-03-014): no token carries a minimum data-column width, and a 92-day
+ * range divided by the page draws 12px columns that no day header fits. 32px is what the
+ * two-line header (weekday over day-of-month) needs; it must stay well above ~11px, below
+ * which 92 columns fit a 1280px viewport and the grid stops scrolling at all.
+ * All six close by entering `@devscribed/ds` and this block losing them in the same change.
  */
 .time-off-calendar {
   --surface-timeoff-band: oklch(0.9 0.06 285);
@@ -875,6 +882,7 @@
   --text-timeoff-band: oklch(0.38 0.12 285);
   --name-col: 264px;
   --range-col: 26ch;
+  --day-col-min: 32px;
 }
 
 .time-off-calendar-nav {
@@ -960,8 +968,8 @@
   margin-bottom: var(--space-3);
 }
 
-/* The grid is wider than the page on a narrow viewport, and it scrolls inside its own
-   container rather than taking the page body sideways with it. */
+/* The grid outgrows the page on a narrow viewport and under a wide window, and it scrolls
+   inside its own container rather than taking the page body sideways with it. */
 .time-off-calendar-scroll {
   overflow-x: auto;
 }
@@ -971,14 +979,11 @@
   border-radius: var(--radius-l);
   background: var(--surface-page);
   overflow: hidden;
-}
-
-@media (max-width: 1199px) {
-  /* One step below --layout-breakpoint-desktop (1200px): below it the day columns stop
-     dividing the page and take their own minimum, and the container above scrolls. */
-  .time-off-calendar-grid {
-    min-width: max-content;
-  }
+  /* REQ-03-018 — at EVERY width, not below a breakpoint: the day columns take their own
+     minimum (--day-col-min) and the container above scrolls once the sum of them is wider
+     than the page. A 92-day range is wider than a desktop viewport, so a rule that applied
+     only below 1200px compressed exactly the window the floor exists for. */
+  min-width: max-content;
 }
 
 .time-off-calendar-row {

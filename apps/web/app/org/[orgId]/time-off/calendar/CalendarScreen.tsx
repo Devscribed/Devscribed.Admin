@@ -1,18 +1,30 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, IconButton, InfoBanner, ReportControls, ToggleButton } from '@devscribed/ds';
+import {
+  Button,
+  DateRangePicker,
+  IconButton,
+  InfoBanner,
+  ReportControls,
+  ToggleButton,
+} from '@devscribed/ds';
 import {
   HOLIDAY_MESSAGES,
+  TIME_OFF_CALENDAR_MAX_RANGE_DAYS,
   TIME_OFF_CALENDAR_MESSAGES,
   TIME_OFF_CALENDAR_UNASSIGNED,
   stepTimeOffCalendarAnchor,
+  stepTimeOffCalendarRange,
   timeOffBandAccessibleName,
+  timeOffCalendarAnchorFromRange,
+  timeOffCalendarRangeToday,
   timeOffCalendarToday,
   timeOffCalendarWindowRange,
+  type TimeOffCalendarRange,
   type TimeOffCalendarScope,
   type TimeOffCalendarWeekStart,
-  type TimeOffCalendarWindow,
+  type TimeOffCalendarWindowChoice,
 } from '@devscribed/validation';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/layout/icons';
 import { PageHeader } from '@/layout/PageHeader';
@@ -34,8 +46,16 @@ function parts(iso: string): { year: number; month: number; day: number; weekday
   return { year, month, day, weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay() };
 }
 
-/** `September 2026` under Month, `14 – 27 Sep 2026` under the two week presets. */
-function rangeLabel(window: TimeOffCalendarWindow, startDate: string, endDate: string): string {
+/**
+ * `September 2026` under Month, `14 – 27 Sep 2026` under the two week presets — and under
+ * the custom **Range** window the same two-date shape the week presets take, because a span
+ * the reader chose by hand is named by its ends and by nothing else.
+ */
+function rangeLabel(
+  window: TimeOffCalendarWindowChoice,
+  startDate: string,
+  endDate: string,
+): string {
   const from = parts(startDate);
   const to = parts(endDate);
   if (window === 'month') return `${MONTH_NAMES[from.month - 1]} ${from.year}`;
@@ -54,10 +74,12 @@ const SCOPE_SEGMENTS = [
   { value: 'people', label: 'People', testId: 'calendar-scope-people' },
 ];
 
+/* REQ-03-007 — four segments in ONE control: Range is a window, not a mode. */
 const WINDOW_SEGMENTS = [
   { value: 'week', label: 'Week', testId: 'calendar-window-week' },
   { value: '2weeks', label: '2 weeks', testId: 'calendar-window-2weeks' },
   { value: 'month', label: 'Month', testId: 'calendar-window-month' },
+  { value: 'range', label: 'Range', testId: 'calendar-window-range' },
 ];
 
 /**
@@ -72,7 +94,7 @@ function GridSkeleton() {
   // when `days[]` is empty and that template declares a single day column — fourteen cells
   // would then create thirteen implicit auto tracks and a placeholder sized `width: 100%`
   // inside one resolves against no definite width.
-  const columns = `var(--name-col) repeat(${days.length}, minmax(0, 1fr))`;
+  const columns = `var(--name-col) repeat(${days.length}, minmax(var(--day-col-min), 1fr))`;
   return (
     <div className="time-off-calendar-scroll" role="status" aria-label="Loading the calendar">
       <div className="time-off-calendar-grid time-off-calendar-skeleton" aria-hidden>
@@ -119,11 +141,13 @@ function GridSkeleton() {
  * The window is in-page state and is deliberately **not** in the URL — §Screens.
  *
  * Everything visual is in the `.time-off-calendar` block of `apps/web/app/globals.css`:
- * the three band colours and the pinned column's width the design system does not carry
- * yet (recorded as this spec's DS gaps), plus what an inline style cannot express — the
- * sticky first column and the scroll container below the desktop breakpoint. What stays
- * inline here is only what is data: how many day columns there are, and which of them a
- * cell or a band sits on.
+ * the three band colours, the pinned column's width, the reserved range-label width and the
+ * day column's floor — none of which the design system carries yet (recorded as the DS gaps
+ * of this screen's two specs) — plus what an inline style cannot express: the sticky first
+ * column and the scroll container, which holds at every width (REQ-03-018) because a custom
+ * range is wider than the page long before a narrow viewport is. What stays inline here is
+ * only what is data: how many day columns there are, and which of them a cell or a band
+ * sits on.
  */
 export function CalendarScreen({ orgId }: { orgId: string }) {
   const session = useSession();
@@ -139,8 +163,15 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
   const today = (): string => timeOffCalendarToday(session.account.timezone);
 
   const [scope, setScope] = useState<TimeOffCalendarScope>('all');
-  const [windowPreset, setWindowPreset] = useState<TimeOffCalendarWindow>('month');
+  /* REQ-03-007 — four values, of which three are anchor-driven presets and the fourth is
+     the reader's own span. The anchor and the custom range are held beside each other so
+     that leaving one window for the other carries the position across (REQ-03-013,
+     REQ-03-017) rather than resetting it. */
+  const [windowChoice, setWindowChoice] = useState<TimeOffCalendarWindowChoice>('month');
   const [anchor, setAnchor] = useState<string>(today);
+  const [customRange, setCustomRange] = useState<TimeOffCalendarRange>(() =>
+    timeOffCalendarWindowRange('month', today(), firstDayOfWeek),
+  );
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [memberIds, setMemberIds] = useState<string[]>([]);
 
@@ -152,8 +183,11 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
   const [members, setMembers] = useState<{ id: string; label: string }[]>([]);
 
   const range = useMemo(
-    () => timeOffCalendarWindowRange(windowPreset, anchor, firstDayOfWeek),
-    [windowPreset, anchor, firstDayOfWeek],
+    () =>
+      windowChoice === 'range'
+        ? customRange
+        : timeOffCalendarWindowRange(windowChoice, anchor, firstDayOfWeek),
+    [windowChoice, customRange, anchor, firstDayOfWeek],
   );
 
   /* The two pickers' catalogues, from the endpoints every other screen reads them from. */
@@ -195,23 +229,9 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
 
   const load = useCallback(
     async (signal: AbortSignal): Promise<void> => {
-      // Validation Rules 6 and 7, client-side: a scope with nothing ticked is refused
-      // with the message the server would send, without spending the request. The grid
-      // is cleared along with the refusal — REQ-01-049 — so the banner is the only thing
-      // drawn, never a previous window's grid underneath it.
-      if (scope === 'teams' && projectIds.length === 0) {
-        setLoading(false);
-        setError(TIME_OFF_CALENDAR_MESSAGES.teamsRequired);
-        setData(null);
-        return;
-      }
-      if (scope === 'people' && memberIds.length === 0) {
-        setLoading(false);
-        setError(TIME_OFF_CALENDAR_MESSAGES.peopleRequired);
-        setData(null);
-        return;
-      }
-
+      // REQ-03-005 — an empty Teams or People selection spends the request like any other:
+      // it is no narrowing at all, not a refusal, so there is nothing to short-circuit and
+      // nothing to announce (REQ-03-016).
       setLoading(true);
       const query = new URLSearchParams({
         startDate: range.startDate,
@@ -265,7 +285,10 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
   }, [load]);
 
   const days = data?.days ?? [];
-  const gridColumns = `var(--name-col) repeat(${Math.max(days.length, 1)}, minmax(0, 1fr))`;
+  // REQ-03-014 — every day column has a floor, so a 92-day window stays legible and the
+  // grid scrolls (REQ-03-018) rather than dividing the page into unreadable slivers.
+  const gridColumns =
+    `var(--name-col) repeat(${Math.max(days.length, 1)}, minmax(var(--day-col-min), 1fr))`;
   const columnOf = useCallback(
     (date: string): number => days.findIndex((day) => day.date === date) + 2,
     [days],
@@ -302,6 +325,34 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
   const isCurrentWindow =
     data !== null && data.range.startDate === range.startDate && data.range.endDate === range.endDate;
 
+  /**
+   * REQ-03-011 — `‹` and `›`. Under a preset they move the anchor by that preset's own
+   * length; under **Range** they move both ends of the reader's span by the span's length,
+   * which is the one arithmetic an anchor cannot express.
+   */
+  const step = (direction: -1 | 1): void => {
+    if (windowChoice === 'range') setCustomRange(stepTimeOffCalendarRange(customRange, direction));
+    else setAnchor(stepTimeOffCalendarAnchor(windowChoice, anchor, direction));
+  };
+
+  /** REQ-03-012 — **Today** keeps a custom range's length and starts it on the caller's today. */
+  const goToToday = (): void => {
+    if (windowChoice === 'range') setCustomRange(timeOffCalendarRangeToday(customRange, today()));
+    else setAnchor(today());
+  };
+
+  /**
+   * REQ-03-013 / REQ-03-017 — the position crosses the window change in both directions:
+   * a preset opens on the window containing the custom range's start, and Range opens on
+   * the preset's own current start and end.
+   */
+  const chooseWindow = (next: TimeOffCalendarWindowChoice): void => {
+    if (next === windowChoice) return;
+    if (next === 'range') setCustomRange(range);
+    else if (windowChoice === 'range') setAnchor(timeOffCalendarAnchorFromRange(customRange));
+    setWindowChoice(next);
+  };
+
   return (
     <div className="time-off-calendar" data-testid="time-off-calendar-page">
       <PageHeader
@@ -311,23 +362,23 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
           <div className="time-off-calendar-nav">
             <IconButton
               label="Previous window"
-              onClick={() => setAnchor(stepTimeOffCalendarAnchor(windowPreset, anchor, -1))}
+              onClick={() => step(-1)}
               data-testid="calendar-prev"
             >
               <ChevronLeftIcon />
             </IconButton>
-            <Button onClick={() => setAnchor(today())} data-testid="calendar-today">
+            <Button onClick={goToToday} data-testid="calendar-today">
               Today
             </Button>
             <IconButton
               label="Next window"
-              onClick={() => setAnchor(stepTimeOffCalendarAnchor(windowPreset, anchor, 1))}
+              onClick={() => step(1)}
               data-testid="calendar-next"
             >
               <ChevronRightIcon />
             </IconButton>
             <span className="time-off-calendar-range" data-testid="calendar-range-label">
-              {rangeLabel(windowPreset, range.startDate, range.endDate)}
+              {rangeLabel(windowChoice, range.startDate, range.endDate)}
             </span>
           </div>
         }
@@ -370,10 +421,26 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         <ToggleButton
           label="Window"
           options={WINDOW_SEGMENTS}
-          selectedValue={windowPreset}
-          onChange={(value) => setWindowPreset(value as TimeOffCalendarWindow)}
+          selectedValue={windowChoice}
+          onChange={(value) => chooseWindow(value as TimeOffCalendarWindowChoice)}
           style={{ marginBottom: 0 }}
         />
+        {/* REQ-03-008 — the panel is drawn only while Range is the window, and its two ends
+            become the request's `startDate` and `endDate` unchanged: no rounding to a week,
+            no clamping to a month. REQ-03-009 — once a start is armed the panel offers no
+            end more than 91 days after it, so the span the server refuses is unreachable
+            from the control. */}
+        {windowChoice === 'range' && (
+          <DateRangePicker
+            data-testid="calendar-range-picker"
+            triggerTestId="calendar-range-picker-trigger"
+            label="Range"
+            start={customRange.startDate}
+            end={customRange.endDate}
+            maxSpanDays={TIME_OFF_CALENDAR_MAX_RANGE_DAYS}
+            onChange={([from, to]) => setCustomRange({ startDate: from, endDate: to })}
+          />
+        )}
       </ReportControls>
 
       <div className="time-off-calendar-legend" data-testid="calendar-legend">

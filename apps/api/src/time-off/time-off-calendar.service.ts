@@ -105,7 +105,9 @@ export class TimeOffCalendarService {
     const caller = await this.requireViewCapability(session);
 
     // §Validation Rules — evaluated in the table's order, and the FIRST failure is the
-    // whole answer. Rules 1–4 first, then the scope, then that scope's own selection.
+    // whole answer. Rules 1–4 first, then the scope. Rules 6 and 7 constrain nothing: an
+    // empty selection under `teams` or `people` is no narrowing at all (REQ-03-001,
+    // REQ-03-002), never a refusal.
     const range = validateTimeOffCalendarRange(query.startDate, query.endDate);
     if (!range.valid) throw this.refusal(range.field, range.error);
     const { startDate, endDate } = range.value;
@@ -116,12 +118,6 @@ export class TimeOffCalendarService {
 
     const projectIds = this.idList(query.projectIds);
     const memberIds = this.idList(query.memberIds);
-    if (scope === 'teams' && projectIds.length === 0) {
-      throw this.refusal('projectIds', TIME_OFF_CALENDAR_MESSAGES.teamsRequired);
-    }
-    if (scope === 'people' && memberIds.length === 0) {
-      throw this.refusal('memberIds', TIME_OFF_CALENDAR_MESSAGES.peopleRequired);
-    }
 
     const memberships = await this.resolveRows(caller, scope, projectIds, memberIds);
 
@@ -297,11 +293,16 @@ export class TimeOffCalendarService {
         for (const row of unassigned) ids.add(row.id);
       }
 
+      // REQ-03-001 — an EMPTY selection leaves `idFilter` null, which is the sentinel for
+      // "no id narrowing" the `all` scope already uses. Setting it to the empty list here
+      // would make the query `id: { in: [] }`, which answers zero rows: a 200 carrying the
+      // empty state where every active member is the answer.
       // A Set is what collapses a member on two ticked projects to one row (Edge case 6).
-      idFilter = [...ids];
+      if (projectIds.length > 0) idFilter = [...ids];
     }
 
-    if (scope === 'people') {
+    // REQ-03-002 — the same rule on the other scope, for the same reason.
+    if (scope === 'people' && memberIds.length > 0) {
       idFilter = memberIds;
     }
 

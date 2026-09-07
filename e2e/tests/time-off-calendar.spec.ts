@@ -1,5 +1,5 @@
 import { TIME_OFF_CALENDAR_MESSAGES } from '@devscribed/validation';
-import { expect, test, type APIRequestContext, type Page } from './fixtures';
+import { expect, test, type APIRequestContext, type Locator, type Page } from './fixtures';
 import {
   VALID,
   assignProjectMembersViaApi,
@@ -82,6 +82,38 @@ async function goToSeptember2026(page: Page): Promise<void> {
 const background = (page: Page, testId: string) =>
   page.getByTestId(testId).evaluate((el) => getComputedStyle(el).backgroundColor);
 
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** `n` days after an ISO day, read off the string — never a literal date in the past. */
+function addDays(iso: string, n: number): string {
+  const date = new Date(`${iso}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + n);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The first day the open range panel offers. The panel opens on the month the window is
+ * already showing, so this is that month's first day — read off the panel rather than
+ * computed, because the screen reckons today in the ACCOUNT's zone and the runner's clock
+ * is not it.
+ */
+async function firstOfferedDay(picker: Locator): Promise<string> {
+  const offered = picker.locator('[data-testid^="calendar-day-"]:not([disabled])');
+  await expect(offered.first()).toBeVisible();
+  const date = await offered.first().getAttribute('data-date');
+  if (!date) throw new Error('expected the range panel to offer a day');
+  return date;
+}
+
+/** Pages the open range panel forward until it renders `date`. */
+async function pageToDay(picker: Locator, date: string): Promise<void> {
+  for (let step = 0; step < 6; step += 1) {
+    if ((await picker.getByTestId(`calendar-day-${date}`).count()) > 0) return;
+    await picker.getByTestId('calendar-next-month').click();
+  }
+  throw new Error(`the range panel never reached ${date}`);
+}
+
 test.describe('time-off/01 — Vacation calendar', () => {
   // TC-01-E2E-01 — the wallchart itself: the nav row, the rows, the two band treatments
   // and the weekend columns. Earns E2E: one element spanning a weekend, a CSS treatment
@@ -163,9 +195,9 @@ test.describe('time-off/01 — Vacation calendar', () => {
     expect(saturday).not.toBe(monday);
   });
 
-  // TC-01-E2E-02 — the Teams scope, its Unassigned entry, and the refusal that clears the
-  // grid. Earns E2E: a picker, a banner, and a grid that must disappear under it.
-  test('picking teams draws their union, and unticking the last one refuses and clears the grid', async ({
+  // TC-01-E2E-02 — the Teams scope, its Unassigned entry, and what an empty selection now
+  // means. Earns E2E: a picker, a banner that must not be drawn, and the rows under them.
+  test('picking teams draws their union, and unticking the last one widens it to everybody', async ({
     page,
     request,
   }) => {
@@ -205,13 +237,14 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await expect(page.getByTestId(`calendar-member-row-${c.id}`)).toHaveCount(0);
     await expect(page.getByTestId(`calendar-member-row-${a.id}`)).toBeVisible();
 
-    // Untick the last one: refused, and the grid underneath is gone — REQ-01-049.
+    // Untick the last one: an empty selection is no narrowing at all, so the chart widens
+    // to every active member and nothing is announced (REQ-03-001, REQ-03-016; Edge case 3).
     await page.getByRole('button', { name: 'Remove Acme Redesign' }).click();
-    await expect(page.getByTestId('calendar-error-banner')).toHaveText(
-      'Choose at least one team.',
-    );
-    await expect(page.getByTestId('calendar-grid')).toHaveCount(0);
-    await expect(page.getByTestId(`calendar-member-row-${a.id}`)).toHaveCount(0);
+    await expect(page.getByTestId('calendar-error-banner')).toHaveCount(0);
+    await expect(page.getByTestId('calendar-grid')).toBeVisible();
+    for (const id of [a.id, b.id, c.id, d.id]) {
+      await expect(page.getByTestId(`calendar-member-row-${id}`)).toBeVisible();
+    }
 
     // Unassigned alone is a selection, and is answered rather than refused.
     await page.getByTestId('calendar-teams-picker').click();
@@ -306,7 +339,7 @@ test.describe('time-off/01 — Vacation calendar', () => {
   // TC-01-E2E-11 (BUG-012) — the grid used to keep whatever window last answered while the
   // range label kept moving underneath a scope refusal. Earns E2E: which of two client
   // objects a screen draws is a rendering decision, out of an API test's reach.
-  test('stepping the window moves the grid with the label, and a scope refusal clears both', async ({
+  test('stepping the window moves the grid with the label, under a scope change too', async ({
     page,
     request,
   }) => {
@@ -333,13 +366,18 @@ test.describe('time-off/01 — Vacation calendar', () => {
     );
     for (const id of firstIds) expect(nextIds).not.toContain(id);
 
+    // A scope change with nothing ticked spends the request like any other (REQ-03-005),
+    // and the grid keeps step with the label through it: the week that answers is the week
+    // the label names, not the one before it.
     await page.getByTestId('calendar-scope-teams').click();
     await page.getByTestId('calendar-next').click();
-    await expect(page.getByTestId('calendar-error-banner')).toHaveText(
-      TIME_OFF_CALENDAR_MESSAGES.teamsRequired,
+    await expect(page.getByTestId('calendar-error-banner')).toHaveCount(0);
+    await expect(page.getByTestId('calendar-grid')).toBeVisible();
+    await expect(dayHeaders).toHaveCount(7);
+    const thirdIds = await dayHeaders.evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-testid')),
     );
-    await expect(page.getByTestId('calendar-grid')).toHaveCount(0);
-    await expect(dayHeaders).toHaveCount(0);
+    for (const id of nextIds) expect(thirdIds).not.toContain(id);
   });
 
   // TC-01-E2E-04 — the two holiday treatments. Earns E2E: a column shaded whole against a
@@ -619,6 +657,174 @@ test.describe('time-off/01 — Vacation calendar', () => {
     // The hint's bottom edge sits above the filter's top edge — no pixel of the two boxes
     // overlaps.
     expect(hintBox.y + hintBox.height).toBeLessThanOrEqual(filterBox.y);
+  });
+
+  // TC-03-E2E-11 — an empty Teams or People selection draws the chart. Earns E2E: a banner
+  // that must NOT be drawn and a request the screen must spend are both out of an API
+  // test's reach.
+  test('switching Scope to Teams or People with nothing ticked draws every member', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    const annaEmail = await addMember(request, adminEmail, 'user', 'Anna', 'Alpha');
+    const borisEmail = await addMember(request, adminEmail, 'user', 'Boris', 'Beta');
+    const anna = await findMember(request, org.organizationId, annaEmail);
+    const boris = await findMember(request, org.organizationId, borisEmail);
+
+    await signInUi(page, adminEmail);
+    await openCalendar(page);
+
+    await page.getByTestId('calendar-scope-teams').click();
+    await expect(page.getByTestId('calendar-error-banner')).toHaveCount(0);
+    await expect(page.getByTestId('calendar-grid')).toBeVisible();
+    // REQ-03-004 — the picker says what an empty selection does.
+    await expect(page.getByTestId('calendar-teams-picker')).toContainText('All');
+    for (const id of [anna.id, boris.id]) {
+      await expect(page.getByTestId(`calendar-member-row-${id}`)).toBeVisible();
+    }
+
+    await page.getByTestId('calendar-scope-people').click();
+    await expect(page.getByTestId('calendar-error-banner')).toHaveCount(0);
+    await expect(page.getByTestId('calendar-grid')).toBeVisible();
+    await expect(page.getByTestId('calendar-people-picker')).toContainText('All');
+    for (const id of [anna.id, boris.id]) {
+      await expect(page.getByTestId(`calendar-member-row-${id}`)).toBeVisible();
+    }
+  });
+
+  // TC-03-E2E-12 — the Range window: the panel, the span bound once a start is armed, and
+  // the grid the two ends fetch. Earns E2E: a day the panel must render disabled and a
+  // control that exists only under one window are rendering decisions.
+  test('the Range window fetches the picked span and offers no end past the bound', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+
+    await signInUi(page, adminEmail);
+    await openCalendar(page);
+
+    // REQ-03-008 — the picker belongs to the Range window and to no other.
+    await expect(page.getByTestId('calendar-range-picker')).toHaveCount(0);
+    await page.getByTestId('calendar-window-range').click();
+    const picker = page.getByTestId('calendar-range-picker');
+    await expect(picker).toBeVisible();
+
+    await page.getByTestId('calendar-range-picker-trigger').click();
+    const start = await firstOfferedDay(picker);
+    await picker.getByTestId(`calendar-day-${start}`).click();
+
+    // REQ-03-009 — with the start armed, the last day the panel offers is 91 days after
+    // it, and the day after that is rendered disabled rather than merely refused later.
+    const latest = addDays(start, 91);
+    const beyond = addDays(start, 92);
+    await pageToDay(picker, latest);
+    await expect(picker.getByTestId(`calendar-day-${latest}`)).toBeEnabled();
+    await pageToDay(picker, beyond);
+    await expect(picker.getByTestId(`calendar-day-${beyond}`)).toBeDisabled();
+
+    // Escape drops the half-made range; the second pass commits a 21-day span.
+    await page.keyboard.press('Escape');
+    await page.getByTestId('calendar-range-picker-trigger').click();
+    await picker.getByTestId(`calendar-day-${start}`).click();
+    const end = addDays(start, 20);
+    await picker.getByTestId(`calendar-day-${end}`).click();
+
+    // The two ends reach the request unchanged: 21 columns, the first being the armed day.
+    const dayHeaders = page.locator('[data-testid^="calendar-day-header-"]');
+    await expect(dayHeaders).toHaveCount(21);
+    await expect(dayHeaders.first()).toHaveAttribute(
+      'data-testid',
+      `calendar-day-header-${start}`,
+    );
+    // `start` is the first of its month, so the span is the 1st to the 21st of that month.
+    await expect(page.getByTestId('calendar-range-label')).toHaveText(
+      `1 – 21 ${MONTH_ABBR[Number(start.slice(5, 7)) - 1]} ${start.slice(0, 4)}`,
+    );
+
+    await page.getByTestId('calendar-window-month').click();
+    await expect(page.getByTestId('calendar-range-picker')).toHaveCount(0);
+  });
+
+  // TC-03-E2E-13 — the geometry: one position for the nav controls across every window,
+  // and a 92-day range that scrolls rather than compressing. Earns E2E: both are rendered
+  // boxes under a real font and a real viewport.
+  test('the nav controls hold one position, and a 92-day range scrolls at its column floor', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signInUi(page, adminEmail);
+    await openCalendar(page);
+
+    const todayControl = page.getByTestId('calendar-today');
+    const xs: number[] = [];
+    const record = async (): Promise<void> => {
+      const box = await todayControl.boundingBox();
+      if (!box) throw new Error('expected calendar-today to be measurable');
+      xs.push(box.x);
+    };
+
+    await record();
+    for (const window of [
+      'calendar-window-week',
+      'calendar-window-2weeks',
+      'calendar-window-month',
+      'calendar-window-range',
+    ]) {
+      await page.getByTestId(window).click();
+      await record();
+    }
+
+    // The widest window this screen can be asked for: 92 days, picked on the panel.
+    const picker = page.getByTestId('calendar-range-picker');
+    await page.getByTestId('calendar-range-picker-trigger').click();
+    const start = await firstOfferedDay(picker);
+    await picker.getByTestId(`calendar-day-${start}`).click();
+    const last = addDays(start, 91);
+    await pageToDay(picker, last);
+    await picker.getByTestId(`calendar-day-${last}`).click();
+
+    const dayHeaders = page.locator('[data-testid^="calendar-day-header-"]');
+    await expect(dayHeaders).toHaveCount(92);
+    await record();
+
+    await page.getByTestId('calendar-prev').click();
+    await expect(dayHeaders).toHaveCount(92);
+    await record();
+    for (let i = 0; i < 2; i += 1) {
+      await page.getByTestId('calendar-next').click();
+      await expect(dayHeaders).toHaveCount(92);
+      await record();
+    }
+
+    // REQ-03-015 — one position for `‹`, Today and `›`, across every window and every step.
+    for (const x of xs) expect(x).toBe(xs[0]);
+
+    // REQ-03-014 — no day column is narrower than the minimum the screen declares.
+    const declared = await page
+      .getByTestId('time-off-calendar-page')
+      .evaluate((el) => getComputedStyle(el).getPropertyValue('--day-col-min').trim());
+    const floor = Number.parseFloat(declared);
+    expect(floor).toBeGreaterThan(0);
+    const widths = await dayHeaders.evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect().width),
+    );
+    for (const width of widths) expect(width).toBeGreaterThanOrEqual(floor - 0.5);
+
+    // REQ-03-018 — the grid scrolls inside its own container rather than compressing.
+    const scroll = await page.getByTestId('calendar-grid').evaluate((el) => {
+      const container = el.parentElement;
+      if (!container) throw new Error('expected the grid to sit inside its scroll container');
+      return { scrollWidth: container.scrollWidth, clientWidth: container.clientWidth };
+    });
+    expect(scroll.scrollWidth).toBeGreaterThan(scroll.clientWidth);
   });
 
   // TC-01-E2E-12 (BUG-013) — the range label used to be the flex row's last, unsized child

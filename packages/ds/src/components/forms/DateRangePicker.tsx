@@ -18,6 +18,16 @@ export interface DateRangePickerProps extends Omit<React.HTMLAttributes<HTMLDivE
   minDate?: CalendarDate;
   maxDate?: CalendarDate;
   /**
+   * The inclusive number of days a committed range may cover. It applies only once the first
+   * click has armed a start: while nothing is armed every date inside `minDate`/`maxDate` is
+   * offered, and after it the days beyond the bound render disabled.
+   *
+   * It is separate from `minDate` / `maxDate` because those two are the panel's fixed edges
+   * and also gate the month controls, while this one moves with the armed start and must
+   * never stop the reader paging to the month their end date is in.
+   */
+  maxSpanDays?: number;
+  /**
    * Named spans down the left of the panel. Each carries its own dates: this component does no
    * date arithmetic beyond drawing a month, and "last month" is a question about the reader's
    * zone that only the screen that fetched the report can answer.
@@ -38,6 +48,13 @@ const format = (date: CalendarDate): string =>
   `${SHORT[Number(date.slice(5, 7)) - 1]} ${date.slice(8, 10)}, ${date.slice(0, 4)}`;
 
 const monthOf = (date: CalendarDate): CalendarMonth => date.slice(0, 7);
+
+/** `n` days after an ISO day, through UTC midnight so no zone shifts it. */
+function addDays(date: CalendarDate, n: number): CalendarDate {
+  const [year, month, day] = date.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + n));
+  return shifted.toISOString().slice(0, 10);
+}
 
 /**
  * The month's grid, Monday-first. `Calendar` takes its weeks from the consumer rather than
@@ -80,7 +97,7 @@ function monthWeeks(month: CalendarMonth): Array<Array<CalendarDate | null>> {
  * its neighbours everywhere except here reads as a different kind of thing.
  */
 export function DateRangePicker({
-  start = null, end = null, onChange, minDate, maxDate, presets = [],
+  start = null, end = null, onChange, minDate, maxDate, maxSpanDays, presets = [],
   label, triggerTestId, placeholder = 'Pick a range', disabled, style, ...rest
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
@@ -122,10 +139,17 @@ export function DateRangePicker({
   }, [open, close]);
 
   const weeks = React.useMemo(() => monthWeeks(month), [month]);
+  /* The span bound, as a date: the last day a second click may land on, or null while no
+     start is armed and while no bound was asked for. */
+  const latest = React.useMemo(
+    () => (pending && maxSpanDays ? addDays(pending, maxSpanDays - 1) : null),
+    [pending, maxSpanDays],
+  );
   const selectable = React.useMemo(
     () => weeks.flat().filter((date): date is CalendarDate =>
-      !!date && (!minDate || date >= minDate) && (!maxDate || date <= maxDate)),
-    [weeks, minDate, maxDate],
+      !!date && (!minDate || date >= minDate) && (!maxDate || date <= maxDate) &&
+      (!latest || date <= latest)),
+    [weeks, minDate, maxDate, latest],
   );
 
   function commit(from: CalendarDate, to: CalendarDate) {

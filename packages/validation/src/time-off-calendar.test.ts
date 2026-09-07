@@ -4,6 +4,10 @@ import {
   TIME_OFF_CALENDAR_MESSAGES,
   resolveTimeOffCalendarTimezone,
   stepTimeOffCalendarAnchor,
+  stepTimeOffCalendarRange,
+  timeOffCalendarAnchorFromRange,
+  timeOffCalendarLatestEnd,
+  timeOffCalendarRangeToday,
   timeOffCalendarToday,
   timeOffCalendarWindowRange,
   validateStatedCountryCode,
@@ -134,8 +138,6 @@ describe('TC-01-UNIT-02: the range rules and the window presets', () => {
     expect(TIME_OFF_CALENDAR_MESSAGES.tooManyMembers).toBe(
       'This view covers more than 100 people. Narrow the scope to see the calendar.',
     );
-    expect(TIME_OFF_CALENDAR_MESSAGES.teamsRequired).toBe('Choose at least one team.');
-    expect(TIME_OFF_CALENDAR_MESSAGES.peopleRequired).toBe('Choose at least one person.');
     expect(TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle).toBe('Nobody to show');
     expect(TIME_OFF_CALENDAR_MESSAGES.emptyStateBody).toBe('No active member matches this scope.');
     expect(TIME_OFF_CALENDAR_MESSAGES.orgCountryHint).toBe(
@@ -222,3 +224,84 @@ describe('timeOffCalendarToday / resolveTimeOffCalendarTimezone', () => {
     expect(resolveTimeOffCalendarTimezone('Pacific/Kiritimati')).toBe('Pacific/Kiritimati');
   });
 });
+
+/**
+ * Time off spec 03 — the custom Range window's arithmetic. Every rule here is one the
+ * screen and the picker both run, which is why it lives beside the preset helpers rather
+ * than inside the screen that draws the control.
+ */
+describe('time-off/03 — the custom range', () => {
+  // TC-03-UNIT-11
+  it('steps a custom range by its own length, in both directions, and keeps that length', () => {
+    const ten = { startDate: '2026-09-14', endDate: '2026-09-23' };
+
+    expect(stepTimeOffCalendarRange(ten, -1)).toEqual({
+      startDate: '2026-09-04',
+      endDate: '2026-09-13',
+    });
+    expect(stepTimeOffCalendarRange(ten, 1)).toEqual({
+      startDate: '2026-09-24',
+      endDate: '2026-10-03',
+    });
+
+    // A one-day range steps by one day, and stays one day.
+    const one = { startDate: '2026-09-14', endDate: '2026-09-14' };
+    expect(stepTimeOffCalendarRange(one, 1)).toEqual({
+      startDate: '2026-09-15',
+      endDate: '2026-09-15',
+    });
+    expect(stepTimeOffCalendarRange(one, -1)).toEqual({
+      startDate: '2026-09-13',
+      endDate: '2026-09-13',
+    });
+  });
+
+  // TC-03-UNIT-12
+  it('Today keeps the range length and starts it on the supplied today', () => {
+    // A 10-day range that does not contain the supplied today at all.
+    expect(
+      timeOffCalendarRangeToday({ startDate: '2026-03-01', endDate: '2026-03-10' }, '2026-09-17'),
+    ).toEqual({ startDate: '2026-09-17', endDate: '2026-09-26' });
+
+    expect(
+      timeOffCalendarRangeToday({ startDate: '2026-03-01', endDate: '2026-03-01' }, '2026-09-17'),
+    ).toEqual({ startDate: '2026-09-17', endDate: '2026-09-17' });
+  });
+
+  // TC-03-UNIT-13
+  it('carries the position across when the window changes between Range and a preset', () => {
+    // Range → a preset: the preset opens on the window containing the range's start.
+    const custom = { startDate: '2026-09-17', endDate: '2026-10-02' };
+    const anchor = timeOffCalendarAnchorFromRange(custom);
+    expect(anchor).toBe('2026-09-17');
+    expect(timeOffCalendarWindowRange('month', anchor, 'Monday')).toEqual({
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+    });
+
+    // A preset → Range: the range is that preset's own current start and end, seeded from
+    // the same builder the preset is drawn from — no second definition of a month.
+    expect(timeOffCalendarWindowRange('month', '2026-09-17', 'Monday')).toEqual({
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+    });
+  });
+
+  it('bounds the pickable end at 91 days after the armed start, the bound being inclusive', () => {
+    expect(timeOffCalendarLatestEnd('2026-09-01')).toBe('2026-12-01');
+    // The bound is exactly the widest span the route accepts, and one day more is refused.
+    expect(validateTimeOffCalendarRange('2026-09-01', timeOffCalendarLatestEnd('2026-09-01')).valid).toBe(
+      true,
+    );
+    expect(
+      validateTimeOffCalendarRange('2026-09-01', addDay(timeOffCalendarLatestEnd('2026-09-01'))).valid,
+    ).toBe(false);
+  });
+});
+
+/** One day later, read off the ISO string — the test's own arithmetic, not the module's. */
+function addDay(iso: string): string {
+  const date = new Date(`${iso}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
