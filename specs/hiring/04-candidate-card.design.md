@@ -505,14 +505,63 @@ card floating inside a white card.
 
 | Width | Layout |
 |---|---|
-| ≥ 1024px | As drawn; criteria chips wrap in a flex row |
-| 768–1023px | The header's status control moves below the title, **and the body's two columns become one** — the rule between them becomes a rule above the second, the same division turned through 90° rather than dropped |
+| ≥ 992px | As drawn; criteria chips wrap in a flex row |
+| 768–991px | The header's status control moves below the title, **and the body's two columns become one** — the rule between them becomes a rule above the second, the same division turned through 90° rather than dropped |
 | < 768px | Criteria chips stack full width; textareas keep their row counts |
-| < 600px | Reschedule and Cancel stack full width, Cancel lower |
+| < 576px | The header's two actions stack full width, `Open in calendar` lower |
 
-Those four are media queries and therefore live in `globals.css` rather than inline, which is the
-same reason `AppShell`'s breakpoint and `PageTitle`'s three type steps do. Every value in them is a
-design-system token.
+> ~~The first two rows read `≥ 1024px` and `768–1023px`.~~
+>
+> **Overruled by [design-system 01 §01.1](../design-system/01-responsive.md)**, the ladder, whose
+> rung above `md` is `lg ≥ 992`, written in CSS as `991`. [§01.3](../design-system/01-responsive.md)
+> is the row that executes it — *"`1023` … the candidate card. **Retired to `991`**"* — and this
+> revision is what it was waiting for. Of this screen's three numbers, `1024 / 768 / 600`, one was
+> already the ladder's.
+>
+> The 32px it hands back are worth having, which is why the row moves rather than the ladder
+> bending around it. At 1000 the one-column form gave `Interview notes` **900px of width for a
+> paragraph** and put the CV below the fold; two columns give it 553 with the CV beside it, and
+> the right-hand column is 325 — comfortably over the 240px minimum it may not go under. Measured
+> at both ends of the new band: at 992 the body reports two tracks of `552.812px 325.188px` and
+> the side draws its rule on the left; at 991 it reports one track of `901px` and the rule is on
+> top.
+
+> ~~| < 600px | Reschedule and Cancel stack full width, Cancel lower |~~
+>
+> **Struck by [§Layout](#layout)'s kebab paragraph** (`60cdebc`, two days after this row was last
+> touched in `8172070`), which moved both of those controls into `Actions for this interview` and
+> said so: *"`Reschedule interview` and `Cancel interview` were two buttons under the facts they
+> change."* A menu's rows are already stacked, already full width, and already in that order —
+> `Reschedule` first and the `danger` `Cancel` after it — so the rule this row protected is now
+> kept by the component rather than by a width. The 600 it carried is
+> [§01.3](../design-system/01-responsive.md)'s too, which names this line: *"`599` … **Retired to
+> `575`** … and `04-candidate-card.design.md:511`, which also states a 600."* It was prose only —
+> this screen never had a 599 media query for those two buttons to stack in.
+>
+> The row is replaced rather than deleted, because the geometry it described did not go away with
+> its subjects: `View vacancy` and `Open in calendar` now sit where those two buttons sat, and
+> they have the same problem there. Side by side at 360 the row splits into two 139px buttons and
+> **both labels wrap to two lines**. Stacked, each takes the full 288 and reads on one line, and
+> `Open in calendar` is the lower of the two — it is the primary and the one most often reached
+> for mid-interview ([§Layout](#layout)), so it is the one nearest the thumb.
+
+Those three thresholds are media queries and therefore live in `globals.css` rather than inline,
+which is the same reason `AppShell`'s breakpoint and `PageTitle`'s three type steps do. Every value
+in them is a design-system token. The top row is the drawn layout and needs no query.
+
+**The stacked header keeps `align-self: stretch`** rather than cancelling it. It is one declaration
+that means the right thing twice: while the head is a row, stretch is full height, which is what
+puts the two actions on the header's baseline; once the head is a column, stretch is full width,
+which is what gives them the row to sit on. Cancelled — which is how it was written — the aside
+shrank to fit inside a head whose `align-items` is `flex-start`, and `Open in calendar` wrapped its
+label onto two lines from 991 all the way down with 400px of empty row beside it.
+
+**The three interview facts keep their glyphs on their own first line.** `align-items: center` is
+right until the text wraps and then it is beside the wrong line: at 360 the clock line runs to
+three and the clock glyph lands against `· booked …`. One glyph per line is what makes these facts
+a list rather than a run ([§Layout](#layout)); a glyph two lines below its fact is neither. The 2px
+that centring was giving an 18px glyph in a 22px line is stated instead, so nothing moves at any
+width where nothing wrapped.
 
 ## Accessibility
 

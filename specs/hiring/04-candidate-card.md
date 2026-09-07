@@ -441,6 +441,9 @@ does not leave with the toast.
     `application-when-{applicationId}` (the date), `application-time-{applicationId}`
     (the clock, length and zone), `application-interviewer-{applicationId}`,
     `application-submitted-as-{applicationId}`, `application-status-select-{applicationId}`
+  - `application-body-{applicationId}` (the two-column grid), `application-side-{applicationId}`
+    (the candidate's column, which owns the rule between them),
+    `application-open-vacancy-{applicationId}`, `application-calendar-{applicationId}`
   - `card-cv-name`, `card-cv-view`, `card-cv-download`
   - `card-notes-input`, `card-notes-save`, `card-notes-saved-at`,
     `card-conclusion-input`, `card-conclusion-save`, `card-conclusion-saved-at`
@@ -709,3 +712,28 @@ does not leave with the toast.
   2. The member is still on the card, and the status survives the reload.
 - **Selectors:** `application-status-select-{applicationId}`, `application-status-option-{applicationId}-{status}`, `card-status-toast`, `card-conclusion-input`.
 - **Covered elsewhere:** the reschedule toast on this route, `toast-interview-rescheduled`, is asserted by [07 TC-H07-E2E-03](07-manage-booking.md); the cancel toast, `toast-interview-cancelled`, by the team-cancel case beside it in the same suite (`e2e/tests/team-scheduling.spec.ts`), which 07 has not numbered.
+
+### TC-H04-E2E-12: The card folds at the ladder's three numbers
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one candidate reached through the invite's deep link, with one criterion assessed so the section has a chip.
+- **Steps:**
+  1. At 992, read the body's computed `grid-template-columns`, the side column's computed
+     `border-left-width` and `border-top-width`, and the status control's `y` against the vacancy
+     title's.
+  2. At 991, read the same four.
+  3. At 767, read the chip's width against the column it sits in.
+  4. At 360, read the two header actions' boxes and the notes field's `rows`.
+- **Expected Result:**
+  1. Two tracks; the rule is on the side column's **left**; the status control is on the title's line.
+  2. One track; the rule is on its **top**; the status control is below the title.
+  3. The chip fills its column — it stacks rather than wrapping mid-control.
+  4. `View vacancy` and `Open in calendar` share one `x` and one width, `Open in calendar` is the
+     lower, each is at least `--control-height` tall, and `rows` is still 12.
+- **Why E2E:** every assertion is a computed style or a laid-out box — which grid a `display: grid`
+  resolved to, which edge of an element carries a border, whether two buttons ended up on one line
+  or two. None of it exists before a browser has laid the page out. The four widths are the four
+  rows of the design's own table, read at the boundary rather than in the middle of a band: 992 and
+  991 are the same pixel from either side, which is the assertion that a `991` was written where a
+  `1023` used to be.
+- **Selectors:** `application-body-{applicationId}`, `application-side-{applicationId}`, `application-status-select-{applicationId}`, `application-vacancy-{applicationId}`, `card-criterion-{criterionId}`, `application-open-vacancy-{applicationId}`, `application-calendar-{applicationId}`, `card-notes-input`.
+- **Covered elsewhere:** that this route does not scroll horizontally at 360 is [design-system 01 TC-DS01-E2E-11](../design-system/01-responsive.md), which walks it with six others; that the reschedule dialog is a sheet below `sm` is TC-DS01-E2E-09, asserted on the vacancy dialog, which is the cheaper page. Neither is repeated here.
