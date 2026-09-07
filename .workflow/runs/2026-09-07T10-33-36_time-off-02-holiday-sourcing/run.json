@@ -6,7 +6,7 @@
   "branch": "spec/holiday-sourcing",
   "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
   "headAtInit": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
-  "status": "implement",
+  "status": "static_gate",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T10:33:36.868Z",
-  "updatedAt": "2026-09-07T11:33:04.930Z",
+  "updatedAt": "2026-09-07T11:36:32.469Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,14 +34,14 @@
       "lastVerdict": "pass"
     },
     "implement": {
-      "status": "pending",
-      "attempts": 1,
-      "startedAt": "2026-09-07T10:50:17.014Z",
-      "endedAt": "2026-09-07T11:32:55.490Z",
+      "status": "passed",
+      "attempts": 2,
+      "startedAt": "2026-09-07T11:33:05.110Z",
+      "endedAt": "2026-09-07T11:36:32.424Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "blocked",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-07T11:32:55.722Z",
       "endedAt": "2026-09-07T11:33:04.873Z",
@@ -66,7 +66,13 @@
   },
   "carriedFindings": [],
   "carriedFrom": null,
-  "contested": [],
+  "contested": [
+    {
+      "key": "spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`",
+      "reason": "The gate's probe is not a message. scripts/static-gate.mjs:295-311 takes the cell under the Message header and searches packages/validation for it; for this row that cell reads '(shipped, unchanged)' — a note about the export, 20 characters, just over the 12-character floor at which the gate stops skipping. The string the row refers to ships and is unchanged by this diff: packages/validation/src/holiday-messages.ts:29 is toastServerError: 'Something went wrong. Please try again.', re-exported from packages/validation/src/index.ts:2340 and emitted eight times from apps/web/app/org/[orgId]/settings/holidays/page.tsx. The row's New column says 'no', and git diff 9ad9fd8d...HEAD touches neither holiday-messages.ts nor that constant. There is nothing to implement: adding the literal '(shipped, unchanged)' to packages/validation would be writing text to satisfy a grep, which pre-implement note P1 raised this row to prevent. The document fix — putting the shipped text in the Message cell, as every other carried-over row does — is a spec edit, and the implementer may not make it.",
+      "at": "2026-09-07T11:34:03.691Z"
+    }
+  ],
   "notes": [
     {
       "stage": "pre_implement",
