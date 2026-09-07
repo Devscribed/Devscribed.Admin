@@ -1,0 +1,32 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1430,
+      "failed": 0,
+      "ms": 1790
+    },
+    "int": {
+      "skipped": true,
+      "reason": "diff touches no apps/api files"
+    },
+    "e2e": {
+      "passed": 21,
+      "failed": 0,
+      "files": [
+        "tests/time-off-calendar.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "findings": [],
+  "walkthrough": [
+    {
+      "area": "Time off calendar grid vs. header window, roles admin/manager/user",
+      "route": "/org/{orgId}/time-off/calendar",
+      "observed": "Stepping the window with the prior/next controls moves both the range label and the day-header columns together for admin, manager and user sessions. Selecting the Teams scope with nothing ticked clears calendar-grid entirely, leaving only calendar-error-banner, and stepping the window while the refusal stands moves the label with the grid still absent. Delaying the calendar fetch shows the loading skeleton (no calendar-day-header-* cells) while the label has already advanced, then the grid replaces the skeleton with the new window's days once the delayed response resolves. Returning to the All scope restores the grid.",
+      "result": "matches the fix approach and REQ-01-049"
+    }
+  ]
+}

@@ -6,7 +6,7 @@
   "branch": "fix/calendar-grid-stale-window",
   "baseRef": "4633c286de0de4114377fe891678cbeba011048e",
   "headAtInit": "4633c286de0de4114377fe891678cbeba011048e",
-  "status": "qa",
+  "status": "ready",
   "track": "bug",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-07T08:31:31.685Z",
-  "updatedAt": "2026-09-07T08:36:42.350Z",
+  "updatedAt": "2026-09-07T08:41:47.886Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -50,8 +50,11 @@
       "lastVerdict": "pass"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:36:42.512Z",
+      "endedAt": "2026-09-07T08:41:47.837Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
