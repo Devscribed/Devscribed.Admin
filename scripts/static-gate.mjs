@@ -291,7 +291,13 @@ const present = (text) => validationText.includes(seamless(text));
    has carried a `Route` column since specs began naming the route that emits each message, so
    cell 2 is a URL — and a rule that searches `packages/validation` for a URL path reports every
    row as unimplemented, which is what it did on a spec whose messages were all in place. */
+/* A spec that WITHDRAWS a message tabulates it under `### Withdrawn` in this same section,
+   and the whole content of such a row is that the string must no longer exist anywhere. Read
+   as a live row it is a promise that is deliberately false, and every spec that removes a
+   message is blocked for keeping its own word. The rows checked are the ones above that
+   heading. */
 const messageRows = section('Error Messages')
+  .split(/\n###\s+Withdrawn/)[0]
   .split('\n')
   .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l));
 const messageCol = (() => {
