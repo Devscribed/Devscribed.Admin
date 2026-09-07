@@ -6,7 +6,7 @@
   "branch": "spec/holiday-sourcing",
   "baseRef": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
   "headAtInit": "9ad9fd8d337d6cb82120557d5b2c91bdbe44a844",
-  "status": "static_gate",
+  "status": "halted",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/time-off-02.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-07T10:33:36.868Z",
-  "updatedAt": "2026-09-07T11:36:32.469Z",
+  "updatedAt": "2026-09-07T11:36:39.143Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -41,10 +41,10 @@
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 1,
-      "startedAt": "2026-09-07T11:32:55.722Z",
-      "endedAt": "2026-09-07T11:33:04.873Z",
+      "status": "running",
+      "attempts": 2,
+      "startedAt": "2026-09-07T11:36:32.608Z",
+      "endedAt": "2026-09-07T11:36:39.095Z",
       "lastVerdict": "blocked"
     },
     "review": {
@@ -139,7 +139,11 @@
       "suggestedFix": "Planned as the account that triggered the sync — the only account in the transaction, and one that necessarily holds manage-holidays. Not a blocker: the repository's own shape leaves exactly one implementation, and no requirement or case observes the column."
     }
   ],
-  "halt": null,
+  "halt": {
+    "reason": "contested",
+    "detail": "1 finding(s) contested by the implementer: spec/message-not-implemented@specs/time-off/02-holiday-sourcing.md#`HOLIDAY_MESSAGES.toastServerError`",
+    "at": "2026-09-07T11:36:39.142Z"
+  },
   "preflight": {
     "at": "2026-09-07T10:33:36.999Z",
     "checks": [
