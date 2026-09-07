@@ -162,6 +162,13 @@ export class HolidaySourcingService {
     const refresh = flag.valid ? flag.value : false;
 
     const countries = await this.sourcedCountrySet(caller.organizationId);
+
+    // PATCH-017 — a refresh also clears the countries that are no longer sourced. A
+    // country leaves the set when the last member in it does, and its imported rows then
+    // sit in the list reaching nobody. The sync loop below never visits such a country,
+    // so nothing else would ever remove them.
+    if (refresh) await this.clearOrphanedImports(caller.organizationId, year.value, countries);
+
     const existing = await this.prisma.holidayImport.findMany({
       where: { organizationId: caller.organizationId, year: year.value, countryCode: { in: countries } },
     });
@@ -409,6 +416,42 @@ export class HolidaySourcingService {
         // year is the first value outside this one.
         date: { gte: asUtcDate(`${year}-01-01`), lt: asUtcDate(`${year + 1}-01-01`) },
       },
+    });
+  }
+
+  /**
+   * PATCH-017 — everything imported for a country the organization no longer sources,
+   * removed for one year.
+   *
+   * `source` gates this exactly as it gates {@link clearImported}: a row somebody added by
+   * hand survives whatever country it names, because a person naming a country is a
+   * statement and an import is a guess that has expired. Global rows — the ones carrying
+   * no country at all — are never orphaned and are excluded explicitly rather than by
+   * relying on how `NOT IN` treats a null.
+   *
+   * The import record goes with the rows. Leaving it would claim a country was sourced
+   * and holds twelve holidays when it holds none, and would stop it being re-sourced if
+   * somebody moves back.
+   */
+  private async clearOrphanedImports(
+    organizationId: string,
+    year: number,
+    sourced: readonly string[],
+  ): Promise<void> {
+    const window = {
+      gte: asUtcDate(`${year}-01-01`),
+      lt: asUtcDate(`${year + 1}-01-01`),
+    };
+    await this.prisma.holiday.deleteMany({
+      where: {
+        organizationId,
+        source: HOLIDAY_SOURCE_IMPORTED,
+        countryCode: { not: null, notIn: [...sourced] },
+        date: window,
+      },
+    });
+    await this.prisma.holidayImport.deleteMany({
+      where: { organizationId, year, countryCode: { notIn: [...sourced] } },
     });
   }
 

@@ -18,6 +18,16 @@ import { HOLIDAY_SOURCING_MESSAGES } from '@devscribed/validation';
  * follows it**, so the year tabs and the list stay interactive while it is up and the
  * summary's own wait ends at the same moment this does.
  */
+/**
+ * PATCH-016 — the panel's own width, fixed.
+ *
+ * It was `minWidth: 220` and the panel is at the end of a row with `margin-left: auto`, so
+ * a status line wider than 220 grew the box leftwards and carried the Refresh button inside
+ * it sideways and back. Wide enough for the longer of the two lines the slot can hold —
+ * `syncFailedSome`, at 35 characters — so neither of them can resize it.
+ */
+const PANEL_WIDTH = 300;
+
 export function HolidaySourcingPanel({
   year,
   syncing,
@@ -38,7 +48,7 @@ export function HolidaySourcingPanel({
         flexDirection: 'column',
         alignItems: 'flex-start',
         gap: 'var(--space-3)',
-        minWidth: 220,
+        width: PANEL_WIDTH,
       }}
     >
       <div
@@ -66,10 +76,15 @@ export function HolidaySourcingPanel({
           /* `--line-height-m` is a length, and the token whose stated purpose is exactly
              this: a box whose height must not move when the text inside it does. It clears
              both the 14px line and the inline preloader's row. `--line-height-base` is a
-             ratio and would not resolve here at all. */
-          minHeight: 'var(--line-height-m)',
+             ratio and would not resolve here at all.
+
+             PATCH-016 — a height rather than a minimum, and the line below does not wrap.
+             A minimum holds only until the content exceeds it, which is the moment the box
+             was supposed to survive. */
+          height: 'var(--line-height-m)',
           fontSize: 'var(--font-size-s)',
           color: 'var(--text-secondary)',
+          whiteSpace: 'nowrap',
         }}
       >
         {syncing ? (

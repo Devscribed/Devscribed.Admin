@@ -143,7 +143,6 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   const [year, setYear] = useState<number>(thisYear);
   const [country, setCountry] = useState<string>(ALL_COUNTRIES);
   const [holidays, setHolidays] = useState<HolidayRow[] | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   const [modalMode, setModalMode] = useState<HolidayModalMode | null>(null);
@@ -168,17 +167,16 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   const syncRun = useRef(0);
 
   /**
-   * PATCH-011 — `quiet` is a re-read of what is already on screen, and it does not raise
-   * the wait. A read that answers a NEW question (the year tab, the country filter) draws
-   * the preloader, because what is on screen is then an answer to something else; a read
-   * that follows a write of this screen's own leaves the table standing until the newer
-   * rows replace it, which is the difference between a screen settling and a screen
-   * blinking.
+   * PATCH-015 — the list read, and it no longer holds a flag saying it is in flight.
+   * PATCH-011 gave the reads a `quiet` option and left the year tab and the country filter
+   * loud, which still blinked the screen on the two things a person does most. The rule is
+   * simpler than an option on each call site: **the wait is drawn when there is nothing to
+   * draw**, so it depends on the rows in hand and on nothing else, and rows already on
+   * screen stand until the new ones replace them.
    */
   const load = useCallback(
-    async (options: { signal?: AbortSignal; quiet?: boolean } = {}): Promise<void> => {
-      const { signal, quiet } = options;
-      if (!quiet) setLoading(true);
+    async (options: { signal?: AbortSignal } = {}): Promise<void> => {
+      const { signal } = options;
       setError(false);
       const query = new URLSearchParams({ year: String(year) });
       if (country !== ALL_COUNTRIES) query.set('country', country);
@@ -209,8 +207,6 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         setHolidays([]);
         setError(true);
       }
-      if (signal?.aborted) return;
-      setLoading(false);
     },
     [orgId, year, country, router],
   );
@@ -220,12 +216,9 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
    * slow summary never holds the list back and a failed one never blanks it.
    */
   const loadSummary = useCallback(
-    async (options: { signal?: AbortSignal; quiet?: boolean } = {}): Promise<void> => {
-      const { signal, quiet } = options;
-      // PATCH-011 — the same rule the list follows, for the same reason. The figures on
-      // screen are last moment's answer to the same question and they stand until the
-      // new ones arrive.
-      if (!quiet) setSummaryLoading(true);
+    async (options: { signal?: AbortSignal } = {}): Promise<void> => {
+      const { signal } = options;
+      setSummaryLoading(true);
       setSummaryFailed(false);
       try {
         const response = await fetch(
@@ -258,9 +251,18 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
     // cannot clobber the newer one.
     const controller = new AbortController();
     void load({ signal: controller.signal });
+    return () => controller.abort();
+  }, [authorized, load]);
+
+  /* PATCH-015 — the summary's own effect, woken by the year and not by the country
+     filter. The two shared one effect, so choosing a country re-fetched a summary the
+     filter does not govern and could not change. */
+  useEffect(() => {
+    if (!authorized) return undefined;
+    const controller = new AbortController();
     void loadSummary({ signal: controller.signal });
     return () => controller.abort();
-  }, [authorized, load, loadSummary]);
+  }, [authorized, loadSummary]);
 
   /**
    * The sync itself. The status line stays up for the request AND the re-reads that
@@ -293,12 +295,11 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         setSyncLeftUnsourced(
           result.countries.some((entry) => entry.state === 'unsourced') ? result.year : null,
         );
-        // PATCH-011 — quiet: the sync has its own status line, and blanking the table and
-        // the summary under it made pressing Refresh throw the whole screen away and
-        // rebuild it. The rows are replaced when the new ones are in hand.
+        // The sync has its own status line, and the rows below it stand until these two
+        // reads answer (PATCH-015).
         await Promise.all([
-          load({ signal: options.signal, quiet: true }),
-          loadSummary({ signal: options.signal, quiet: true }),
+          load({ signal: options.signal }),
+          loadSummary({ signal: options.signal }),
         ]);
       } catch (err) {
         // A sync that was abandoned — the year tab moved (Edge case 18) — or that never
@@ -358,9 +359,9 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         setDeleteTarget(null);
         setModalMode(null);
         showToast('toast-holiday-deleted', HOLIDAY_MESSAGES.toastDeleted);
-        // PATCH-011 — quiet. The toast is the confirmation; the row leaving the table is
-        // the evidence. Neither needs the table to disappear first.
-        await load({ quiet: true });
+        // The toast is the confirmation; the row leaving the table is the evidence.
+        // Neither needs the table to disappear first (PATCH-015).
+        await load();
       } else {
         // A 403 carries the tabulated wording in `message`; anything else is generic.
         const body = await response.json().catch(() => null);
@@ -478,7 +479,10 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
      rather than claiming the year has no holidays. */
   const uncovered = (sourcing?.countries ?? []).filter((entry) => entry.state !== 'sourced');
   const hasUnsourced = (sourcing?.countries ?? []).some((entry) => entry.state === 'unsourced');
-  const noHolidays = !loading && !error && holidays !== null && holidays.length === 0;
+  /* PATCH-015 — a read in flight no longer suppresses this. The empty state is a fact
+     about the rows in hand, and holding it back while a re-read runs left an empty table
+     with a head and no bands standing in its place. */
+  const noHolidays = !error && holidays !== null && holidays.length === 0;
   /* REQ-02-012 / §UI Description — the empty state is a claim the product can only make
      once every country in the set is settled. An unsourced one shows the warning instead. */
   const isEmpty = noHolidays && !hasUnsourced;
@@ -532,23 +536,8 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ width: COUNTRY_FILTER_WIDTH }} data-testid="holidays-country-filter">
-          {/* PATCH-004 — searchable, so `holidays-country-filter` sits on this wrapper: §21
-              puts the control's own attributes, `data-testid` included, on the inner
-              `<input>` once a `Select` is searchable, and the chosen value then sits in a
-              sibling span the wrapper still contains. */}
-          <Select
-            value={optionFor(HOLIDAY_COUNTRY_OPTIONS, country)}
-            options={HOLIDAY_COUNTRY_OPTIONS}
-            onChange={(option) => setCountry(valueOf(option))}
-            isSearchable
-            data-testid="holidays-country-filter-input"
-          />
-          <HiddenSelectedLabel label={selectedLabel(HOLIDAY_COUNTRY_OPTIONS, country)} />
-        </div>
-
-        {/* Time off spec 02 §Screens — sourcing sits at the end of the row that says which
-            countries this screen is showing. */}
+        {/* Time off spec 02 §Screens — sourcing, alone in the row under the year tabs: it
+            is the only control on this screen that acts on the whole year. */}
         <div style={{ marginLeft: 'auto' }}>
           <HolidaySourcingPanel
             year={year}
@@ -579,15 +568,43 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
       )}
 
       {/* The summary sits ABOVE the list: it is the answer to the question the year tab
-          asked, and the list is the evidence for it. */}
+          asked, and the list is the evidence for it. It counts every country, and the
+          filter below does not reach it — the filter chooses which of the evidence to
+          read, not what the year adds up to. */}
       <HolidaySummary
         year={year}
         summary={summary}
-        loading={summaryLoading}
+        /* PATCH-015 — the wait is drawn when there is nothing to draw. Figures already on
+           screen are last moment's answer to the same question and they stand until the
+           new ones arrive; a year change still waits, because the block below refuses to
+           label one year's figures with another year's heading. */
+        loading={summaryLoading && summary === null}
         failed={summaryFailed}
       />
 
-      {loading || holidays === null ? (
+      {/* PATCH-014 — the country filter, directly above the table it filters. It stood in
+          the control row at the top of the screen, beside a picker that governed the whole
+          organization, and read as though it governed the screen: choosing a country
+          changed nothing anybody was looking at, because the summary above is a total over
+          every country and the only thing the filter moves is the list. Here, and labelled,
+          it says what it filters by standing on it. */}
+      <div style={{ width: COUNTRY_FILTER_WIDTH, marginBottom: 'var(--space-4)' }} data-testid="holidays-country-filter">
+        {/* PATCH-004 — searchable, so `holidays-country-filter` sits on this wrapper: §21
+            puts the control's own attributes, `data-testid` included, on the inner
+            `<input>` once a `Select` is searchable, and the chosen value then sits in a
+            sibling span the wrapper still contains. */}
+        <Select
+          label="Show holidays for"
+          value={optionFor(HOLIDAY_COUNTRY_OPTIONS, country)}
+          options={HOLIDAY_COUNTRY_OPTIONS}
+          onChange={(option) => setCountry(valueOf(option))}
+          isSearchable
+          data-testid="holidays-country-filter-input"
+        />
+        <HiddenSelectedLabel label={selectedLabel(HOLIDAY_COUNTRY_OPTIONS, country)} />
+      </div>
+
+      {holidays === null ? (
         <HolidaysLoading />
       ) : error ? (
         <div data-testid="holidays-error-banner">
@@ -693,7 +710,7 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           orgId={orgId}
           canDelete={canDelete}
           onClose={() => setModalMode(null)}
-          onSaved={() => void load({ quiet: true })}
+          onSaved={() => void load()}
           onRequestDelete={(holiday) => setDeleteTarget(holiday)}
         />
       )}

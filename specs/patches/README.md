@@ -52,10 +52,20 @@ spec, and writing it as a patch only moves where the run stops.
 | [011](PATCH-011-a-re-read-does-not-blank-the-screen.md) | A re-read of the Holidays screen does not blank it first | time-off/02 | none |
 | [012](PATCH-012-a-member-states-their-own-country-or-none.md) | A member states their own holiday country, or none | time-off/01, time-off/02 | none |
 | [013](PATCH-013-a-refresh-replaces-what-it-imported-before.md) | A refresh replaces what a previous import wrote | time-off/02 | none |
+| [014](PATCH-014-the-country-filter-stands-on-the-list-it-filters.md) | The country filter stands on the list it filters | time-off/02 | none |
+| [015](PATCH-015-the-wait-is-drawn-when-there-is-nothing-to-draw.md) | The wait is drawn when there is nothing to draw | time-off/02, PATCH-011 | none |
+| [016](PATCH-016-the-sourcing-panel-is-a-fixed-box.md) | The sourcing panel is a fixed box | time-off/02, PATCH-009 | none |
+| [017](PATCH-017-a-refresh-clears-a-country-nobody-is-in.md) | A refresh clears the imports of a country nobody is in | time-off/02, PATCH-012 | none |
 
 PATCH-001 is the mock fixture the track was built against and is not indexed as product work.
 
-**006 to 013 carry no cases and were not shipped through the pipeline.** Each was written,
+**A patch supersedes a patch the same way it supersedes a spec.** 015 replaces the mechanism
+011 introduced, 016 finishes what 009 half-fixed and 017 clears what 012 orphaned; each states
+its whole rule and names the one it replaces in `supersedes`, and nothing is edited back into
+the earlier note. Three of the four are the same lesson — a first fix that reasoned about the
+cause instead of measuring it.
+
+**006 to 017 carry no cases and were not shipped through the pipeline.** Each was written,
 implemented and committed in one sitting at the user's direction, with the regression waived —
 the `Cases` section of each note says so and names the case it would have carried. PATCH-012 is
 also **wider than the entry condition above allows**, at nine product files, and says so in its
