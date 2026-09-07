@@ -6,7 +6,7 @@
   "branch": "fix/holiday-country-pickers-searchable",
   "baseRef": "e659a5baa790c54e7c1e3c3c565385a2359450c6",
   "headAtInit": "e659a5baa790c54e7c1e3c3c565385a2359450c6",
-  "status": "static_gate",
+  "status": "implement",
   "track": "patch",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-07T07:37:39.764Z",
-  "updatedAt": "2026-09-07T08:03:45.470Z",
+  "updatedAt": "2026-09-07T08:03:45.917Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -29,15 +29,18 @@
       "lastVerdict": "skipped"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-07T07:37:40.029Z",
       "endedAt": "2026-09-07T08:03:45.423Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "blocked",
+      "attempts": 1,
+      "startedAt": "2026-09-07T08:03:45.611Z",
+      "endedAt": "2026-09-07T08:03:45.867Z",
+      "lastVerdict": "blocked"
     },
     "review": {
       "status": "pending",
@@ -49,11 +52,13 @@
     }
   },
   "budget": {
-    "codeAttempts": 0,
+    "codeAttempts": 1,
     "handoffReplans": 0,
     "infra": 0
   },
-  "findingHistory": {},
+  "findingHistory": {
+    "pipeline/work-uncommitted@apps/web/app/org/[orgId]/settings/holidays/HolidayModal.tsx#-": 1
+  },
   "carriedFindings": [],
   "carriedFrom": null,
   "contested": [],
