@@ -172,6 +172,10 @@ Below **1200px** the rail leaves the flow and becomes a drawer: a 340px panel ag
 >
 > The four ways to close it, and the focus rules two paragraphs below, are unchanged.
 
+> **Amended again by [design-system 01 §03.13 §03.18 §03.19](../design-system/01-responsive.md).** Neither the panel nor the wash stops at the navbar: both start at **`top: 0`**, so the drawer covers the bar and the scrim covers whatever the drawer does not. "Under the now-60px navbar" above, and "it hangs from the navbar rather than covering it" in the amendment above this one, are both retired — the rail replaces the screen rather than opening beside it, and the exemption the wash had was written for a moment (focus back on a washed hamburger) that cannot occur, since the scrim leaves with the drawer that put it there.
+>
+> The close button in the sidebar head draws a **close mark** rather than the hamburger's three bars. Its name is still `Close sidebar`, and the four ways to close are still four.
+
 **The drawer is the rail, not a copy of it.** One node holds the navigation at every width; below the breakpoint it changes position, width and shadow. A second copy inside a real `MenuDrawer` would put two of every nav row in the document, and with them two of every `data-testid` and two of every `aria-current`.
 
 **Width alone decides.** The switch is a media query in the design system's `base.css`, not a `matchMedia` read — so the server and the hydrated client agree at every size, with no stored preference and nothing to flash. That constraint is why the rule lives in a stylesheet at all: a media query cannot be an inline style, which is the same reason the system's `PageTitle` reaches for a class.

@@ -195,6 +195,23 @@ wide form".
     from the left. It is 340px wide, `max-width: 100%`, hangs from the navbar's current height, and
     slides with `transform: translateX(-105%)` → `translateX(0)`.
 
+    > ~~"hangs from the navbar's current height"~~
+    > **Corrected by the design review of 2026-09-07**, recorded here because this requirement is
+    > where the number lives. The drawer starts at **`top: 0`** and covers the navbar.
+    >
+    > Hanging from the bar was the geometry `MenuDrawer` already had (§51), taken for the rail
+    > because both are panels. They are not the same panel. `MenuDrawer` opens *beside* a screen
+    > that stays live behind it; the rail **replaces** the screen — every route in it leaves the
+    > page you are on — and a navigation panel that stops 60px short of the top leaves the bar of
+    > the screen it is replacing standing above it, reading as the frame around a drawer that is
+    > not inside that frame. Nothing else moves: 340px, `-105%`, `--shadow-drawer-left` and the
+    > 0.3s are unchanged, and `bottom: 0` now gives the panel the whole height rather than the
+    > height minus a bar.
+    >
+    > `MenuDrawer` is **not** amended with it. It keeps `--layout-navbar-height-*`, because the
+    > reason above is the reason: a filter panel beside a list the reader is still looking at
+    > wants the app's own bar in view.
+
 14. The drawer enters from the left **because the hamburger that opens it is on the left**
     (`packages/ds/src/components/appLayout/Navbar.tsx:54-59`, `marginRight` on the button, first
     child of the bar). A panel that opens from the opposite edge to its control makes the reader's
@@ -219,13 +236,51 @@ wide form".
     (`packages/ds/src/base.css` `.ds-app-shell-scrim`), which is why a reader on a phone gets no
     signal that the page behind the drawer is inert.
 
-18. The scrim hangs from the navbar and does not cover it. Focus returns to the hamburger when the
+    > **Extended by the design review of 2026-09-07.** While the drawer is open the page behind it
+    > **does not scroll**.
+    >
+    > "Inert" is what the wash claims, and a page that still answers the wheel and the thumb is
+    > not inert — it is a second scroller under the same finger as the drawer's own. The rule
+    > lives in `base.css` inside the `max-width: 1199px` block, off `data-menu-open` on the shell
+    > root, for the reason requirement 21 gives about the scrim: above `xl` the rail is in the
+    > flow, `menuOpen` may still be true, and there is nothing to lock. A media query re-evaluates
+    > on resize; a lock taken in an effect does not, and crossing `xl` with the drawer open would
+    > leave the well shut on a screen with no drawer — which is edge case 4's own scenario.
+
+18. ~~The scrim hangs from the navbar and does not cover it. Focus returns to the hamburger when the
     drawer closes (requirement 20), and a control focus is handed back to must not be sitting under
-    a 60% wash. This matches `.ds-menu-drawer-scrim`, which already hangs from the navbar.
+    a 60% wash. This matches `.ds-menu-drawer-scrim`, which already hangs from the navbar.~~
+
+    > **Reversed by the design review of 2026-09-07.** The scrim starts at **`top: 0`** and covers
+    > the navbar with everything else.
+    >
+    > The argument above was sound and its premise is now false. It said a control that focus
+    > returns to must not sit under the wash — but focus returns *when the drawer closes*, and the
+    > scrim is unmounted by the same state change that closes it (`menuOpen`). There is no moment
+    > where the hamburger is focused and washed. What the exemption actually bought was a 60px
+    > strip of live-looking chrome above an inert page, which is the opposite of what a scrim is
+    > for: while the drawer is open the navbar is inert too, and it now says so.
+    >
+    > The hamburger is under the panel rather than under the wash in any case, once requirement 13
+    > puts the panel at `top: 0` — 340px from the left edge, and the hamburger is at 16.
+    >
+    > `.ds-menu-drawer-scrim` is **not** amended with it, for the same reason `MenuDrawer` keeps
+    > its own top: the list behind that panel is still live, and so is the bar above it.
 
 19. The drawer closes on the scrim, on `Escape`, on the sidebar's own close button, and on choosing
     a section. All four already work (`packages/ds/src/components/appLayout/AppShell.tsx:62-73`,
     `apps/web/src/layout/AppShell.tsx:32`) and this spec changes none of them.
+
+    > **Extended by the design review of 2026-09-07.** The close button draws a **close mark**,
+    > `CloseIcon` — the glyph every other dismissable overlay in the system already closes with
+    > (`Modal`, `ConfirmDialog`, `MenuDrawer`, all three through `.ds-dialog-close`).
+    >
+    > It draws `MenuIcon` today (`packages/ds/src/components/navigation/Sidebar.tsx`) — the same
+    > three bars as the hamburger that opened it. Two controls, opposite jobs, one glyph: the mark
+    > that means *open this* is being used to mean *close this*, in the one place where both are on
+    > screen within 300ms of each other. Its accessible name has always said `Close sidebar`; only
+    > the drawing disagreed, which is why nothing about the name, the test route or requirement 21
+    > moves.
 
 20. Focus moves into the drawer when it opens and returns to the hamburger when it closes. Already
     true; stated here because requirement 18 depends on it.
@@ -258,6 +313,55 @@ wide form".
 25. The two values are `var(--space-6)` and `var(--space-9)` directly. **No `--layout-well-padding`
     token is introduced**: both steps already exist on the spacing scale, they are consumed in one
     file, and a token whose value is another token adds a name without adding a reader.
+
+    > **Added by the design review of 2026-09-07.** The well's scroller is
+    > **`overflow-x: hidden`**. It scrolls vertically, and only vertically.
+    >
+    > It has always been `overflow-y: auto` with nothing said about the other axis, and CSS
+    > resolves that for you: an `overflow` of `visible` beside an `auto` computes to `auto`, so the
+    > frame has been a horizontal scroller nobody chose. What that costs is not a stray scrollbar —
+    > it is that anything wider than the well drags **the page header and the toolbar** sideways
+    > with the content, so the reader loses the controls while chasing the row.
+    >
+    > It was reported on the candidates screen and the mechanism is the closed `MenuDrawer`: at
+    > rest the panel is `translateX(105%)`, which parks a 340px box **357px past the right edge**
+    > of that scroller with nothing clipping it. `position: fixed` normally keeps it out of the
+    > scroller's overflow — until any ancestor gains a `transform`, `filter`, `contain` or
+    > `will-change` and becomes its containing block, which browsers also do on their own for
+    > fixed descendants of a scrolling ancestor. Measured: give the scroller `translateZ(0)` and
+    > its `scrollWidth` goes 768 → **1125**, the overhang exactly.
+    >
+    > Hiding the axis is the fix rather than moving the panel, because the panel is not the only
+    > way in — a wide table, a long unbroken string, or the next overlay parked off-screen all
+    > reach the same place. **Nothing pays for it today:** swept at 360, 768 and 1440 across all
+    > 19 shell routes, no screen's well scrolls sideways, and the one thing on the product that is
+    > legitimately wider than its box — the board's five columns — already carries its own
+    > `.board-scroll` (`globals.css`) for exactly this reason. A fixed descendant is not clipped by
+    > it either: the drawer, every `Modal`, and `Popover`'s portalled menu hang from the viewport,
+    > outside the well's containing block.
+    >
+    > Acceptance criterion 16 and TC-DS01-E2E-11 measure `document.documentElement` and would not
+    > have caught this — the document never scrolled; the well inside it did. Both now read the
+    > well too.
+
+    > **Added by the same review.** The scroller is **`position: relative`** — the page's own
+    > coordinate space.
+    >
+    > Reported as *two scrollbars side by side* on the candidate card, and that is exactly what it
+    > was: the well's, and the **document's**. Left `static`, the scroller is not a containing
+    > block, so a box a screen positions `absolute` resolves against the initial containing block
+    > instead — it is not clipped by the overflow, it is not carried by the scroll, and it
+    > stretches the document down to its own static position. Measured at 485 × 1213: the document
+    > wanted **1293px** for a **1px** box.
+    >
+    > That box is `card-conclusion-announcer`, the candidate card's visually-hidden live region —
+    > `position: absolute`, 1px, `clip` — and **eighteen files carry that pattern**. On any page
+    > long enough to scroll, one of them lands below the fold, which is why the card showed it and
+    > a short screen did not. Fixing them one at a time is the same defect eighteen times and does
+    > nothing for the nineteenth; a containing block here answers all of them.
+    >
+    > `fixed` descendants are untouched, which is what the nav drawer, `Modal`, `Popover`'s portal
+    > and `Select`'s list all depend on: they hang from the viewport, not from this box.
 
 ### §05 The page title
 
@@ -518,6 +622,22 @@ wide form".
     caller keeps its actions inline and gets edge case 10's behaviour, which is correct rather than
     pending: a dialog whose actions belong with the text they follow should scroll with it.
 
+    > **Corrected by the design review of 2026-09-07 — `MenuDrawer` only, and above `sm` only.**
+    > The slot has to carry the panel's own padding, `0 var(--space-10) var(--space-9)`, matching
+    > the body it now sits beneath.
+    >
+    > "Above `sm` it is the last block in the panel, where they already were" is what this
+    > requirement promised, and for two of the three panels it is what happened: `Modal` and
+    > `ConfirmDialog` pad the panel itself, so a block moved from `children` into the slot stays
+    > inside that padding. `MenuDrawer` does not — it sets `padding: 0` and pushes the padding down
+    > to `.ds-sheet-head` and `.ds-sheet-body`, so the slot alone was left outside it, and
+    > `candidates-filters-apply` landed flush against the panel's left edge, its right edge and the
+    > bottom of the screen while every field above it stayed inset by 20px.
+    >
+    > `.ds-sheet-actions`'s own `var(--space-6)` below `sm` is unchanged and still wins there, by
+    > source order at equal specificity — which is why the padding is a class on the panel's own
+    > `.ds-menu-drawer-actions` rather than an inline style, where it would have beaten the sheet.
+
 52. **Above `sm`, `Modal`'s geometry does not change**: `maxWidth: 70%`, `minWidth: 360`,
     `maxHeight: 98%`, centred (`Modal.tsx:49-55`). No size ladder, and no `size` prop. Adding one
     would move every modal in six sections this spec otherwise never touches, and would put width
@@ -531,6 +651,25 @@ wide form".
     deliberately not to trap (`MenuDrawer.tsx:31-33`), on the grounds that it is a panel beside live
     content a reader may Tab out of. At 92% of a 360px screen there is no live content behind it, so
     the reason for the exception is gone at that width and only at that width.
+
+    > **Extended by the design review of 2026-09-07.** The sheet also **stops the screen behind
+    > it scrolling**, at the same width and by the same argument.
+    >
+    > The requirement above took the trap and left the scroll, and the two are the same claim: a
+    > panel that holds focus, says `aria-modal` and covers 92% of the screen is telling the reader
+    > there is nothing behind it to work in, while the thing behind it goes on answering the
+    > thumb. On the candidates screen that is what a phone actually shows — **two scrollers under
+    > one finger**, the panel's own body and the list it is covering.
+    >
+    > `.ds-app-shell-scroller:has(.ds-menu-drawer[data-open])` in `base.css`, inside the `sm`
+    > block. A media query rather than a lock taken in an effect, so it releases itself: dragged
+    > past `sm` the panel stops being a sheet and the page behind it scrolls again, with nothing
+    > having to run. `scrollbar-gutter: stable` on the scroller is what keeps the content from
+    > jumping by a scrollbar's width as the lock goes on and off, where scrollbars take room.
+    >
+    > `Modal` and `ConfirmDialog` are `aria-modal` at **every** width and have the same gap. They
+    > are deliberately not changed here: this requirement is about the form a panel takes below
+    > `sm`, and a rule for dialogs at every width is a decision of its own.
 
 55. Above `sm`, `MenuDrawer` keeps its right-edge drawer form and keeps **not** trapping focus.
     Its one caller passes `role="dialog"` without `aria-modal`
@@ -864,8 +1003,11 @@ they exist. That rule is already in force
 15. Opening a screen whose active tab is off-screen scrolls that tab into view.
 16. No page scrolls horizontally at 360 on any of the seven routes TC-DS01-E2E-11 walks: members,
     vacancies, the vacancy detail, candidates, the candidate card, libraries and the public booking
-    page. The other sections are not claimed, because `Table` has no card form until the next spec
-    and a wide table at 360 is expected to overflow its own scroller until it does.
+    page — and **neither does the shell's content well**, which is the scroller the document's own
+    measurement cannot see (§04.25). On a screen inside the shell the well is the **only**
+    scroller, vertically too: a document that scrolls behind it is a second scrollbar beside it.
+    The other sections are not claimed, because `Table` has no card form until the next spec and a
+    wide table at 360 is expected to overflow its own scroller until it does.
 17. `npm run ds:check` fails when `base.css` and `breakpoints.ts` disagree about a rung.
 
 ## Out of Scope
@@ -1341,8 +1483,16 @@ Known Gaps row.
   1. At 360 × 800 visit members, vacancies, the vacancy detail, candidates, the candidate card,
      libraries, and the public booking page.
   2. On each, read `document.documentElement.scrollWidth - clientWidth`.
+  3. On the six shell screens, read the same difference on the **well's scroller** — the element
+     `.ds-app-shell-well` sits in. The booking page has no shell and is skipped for this step.
+  4. On the same six, read `document.documentElement.scrollHeight - clientHeight`.
 - **Expected Result:**
   1–2. 0 on every one of the seven.
+  3. 0 on all six, and the scroller's computed `overflow-x` is `hidden` (§04.25). Step 2 alone
+     passed while the well was 357px wider than its box, which is what step 3 exists to catch:
+     the document is not the scroller on a screen inside `AppShell`.
+  4. 0 on all six — the well is the only scroller, vertically as well. It was **80** on the
+     candidate card, for a 1px box, which is a second scrollbar beside the well's own.
 - **Selectors:** `page-title` on each shell screen as the arrival assertion; none for the
   measurement.
 
@@ -1359,6 +1509,7 @@ that does it. Listed here so a reader of this spec knows the full reach.
 | `decisions.md` §62 | a `Tooltip`'s bubble is what a pointer or a ring brings to the surface | §09.45, §09.48 |
 | `decisions.md` §45 §58 §68 §94 | `PageTabs` wraps | §11.57 |
 | `specs/user-management/00-app-shell.design.md` §Responsive | "a 340px panel against the **right** edge" | §03.13 |
+| `specs/user-management/00-app-shell.design.md` §Responsive | "under the now-60px navbar"; the scrim "hangs from the navbar rather than covering it" | §03.13, §03.18 — the panel and the wash both start at `top: 0` |
 | `specs/user-management/00-app-shell.design.md` Frame table | "Content well — 25px padding" | §04.22 |
 | `specs/user-management/00-app-shell.design.md` Page header | "16/24 at 500, 20/30 at 450 from 768px" | §05.28 |
 | `specs/hiring/05-board.design.md` §Responsive | "Below 768px … drag is replaced by the status control" | §08.40 — the guard is the pointer, not the width |
