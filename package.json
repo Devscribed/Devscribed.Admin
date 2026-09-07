@@ -38,7 +38,9 @@
     "refine:loop": "node scripts/refine-loop.mjs",
     "ds:equiv": "node scripts/ds-equiv.js",
     "ds:tokens": "node scripts/ds-token-resolve.js",
-    "ds:check": "node scripts/ds-adherence.js"
+    "ds:check": "node scripts/ds-adherence.js",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:teams": "node scripts/seed-teams.mjs"
   },
   "devDependencies": {
     "release-it": "21.0.2"
