@@ -77,6 +77,13 @@ screen. Light theme only this release.
 numbered in the specs (`TC-01-E2E-03`) and the code references those ids. E2E reads sent mail from
 `GET /api/test/mail/latest?email=` — the in-memory mail sink, fenced off in production.
 
+**One exception, and it is deliberate: a navigation control is reached by its accessible name.**
+The hamburger, the sidebar's close button and the nav group titles are `Open navigation`,
+`Close sidebar`, `People`, `Hiring` — the name is what a reader has to navigate by, and a test id
+would not prove it exists. `openNavSection` in `e2e/tests/helpers.ts` has worked this way since the
+shell landed; the rule is recorded in `specs/user-management/00-app-shell.design.md` and
+`specs/design-system/01-responsive.md`. It reaches those controls and nothing else.
+
 **Which level a case belongs at.** Unit is free, one integration case costs about half a second,
 one E2E case about eight. E2E earns its place only when the assertion is out of reach of an API
 test: a multi-page journey through real mail, focus and blur, layering, CSS tokens, the session

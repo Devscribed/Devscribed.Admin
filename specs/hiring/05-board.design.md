@@ -287,6 +287,10 @@ until they break:
 | 768–1199px | The column group scrolls horizontally **inside its own container**; the page body does not |
 | < 768px | Columns become a `PageTabs` strip — one column at a time, the tab label carrying the count. Drag is replaced by the status control on the card page, which the board links to |
 
+> **Amended by [design-system 01 §08.40 §08.41 §08.42 §08.44](../design-system/01-responsive.md).** The columns-to-tab-strip switch stays a **width** test at `md`, exactly as this table says — what changes there is how much room there is. **Drag is not a width test.** A card is draggable when the pointer is fine and not when it is coarse, at every width. The width guard is wrong in both directions: a touch tablet at 900px is handed a drag that does not work, and a mouse at 700px is refused one that would. It also draws the wrong first frame, because `useMediaQuery` starts `false` and every card on a phone renders `draggable` until the mount effect settles.
+>
+> Keyboard drag is untouched at every width and under every pointer — it is reached by `Space` on a `role="button"` card and lives in the caller, not behind the `draggable` attribute.
+
 The first row is about the viewport, but the columns live inside the shell: with the system's 290px
 sidebar and `AppShell`'s own 25px padding, five columns at their 220px minimum need roughly
 **1510px of viewport** before they all fit. Between 1200px and that, the group still scrolls. This

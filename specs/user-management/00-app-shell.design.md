@@ -46,7 +46,7 @@ in [`decisions.md`](../design-system/decisions.md), cited here as `§n`.
 | Navbar height | 80px desktop / 60px below the breakpoint | `--layout-navbar-height-desktop` / `-mobile` |
 | Breakpoint | 1200px | `--layout-breakpoint-desktop` |
 | Sidebar & navbar background | `--surface-card` (white) | |
-| Content well | `#f8fafc`, 25px padding | set by `AppShell`, not by any screen |
+| Content well | `#f8fafc`, 25px padding — *amended by [design-system 01 §04.22 §04.23](../design-system/01-responsive.md): 16px below `md`, 25px at `md` and above, and the navbar's horizontal padding steps with it* | set by `AppShell`, not by any screen |
 | Separating rules | 1px `--border-subtle` | |
 
 Sidebar and navbar are fixed. Only the content column scrolls, and the well is the one place page padding and the page background are set — a screen renders straight into it and owns nothing outside its own content.
@@ -144,6 +144,10 @@ The system's `Navbar` without its mini tracker, so what is left is right-aligned
 
 Every screen inside the shell opens with one. The heading is the system's `PageTitle`, whose type steps with the viewport — 16/24 at 500, 20/30 at 450 from 768px, 24/36 at 450 from 1200px — with an optional 14px `--text-tertiary` subtitle and an optional trailing action button. 20px below it, the screen's own content begins.
 
+> **Amended by [design-system 01 §05.28 §05.29](../design-system/01-responsive.md).** The ladder is two steps, not three: **20/30 at 450 below 1200px, 24/36 at 450 from 1200px.** The 16/24 step at weight 500 is removed and the 768px step goes with it, because below `xl` the rail is a drawer and the title is the only thing naming the page — 16px is too small to carry that alone.
+>
+> **"Every screen inside the shell opens with one" is reaffirmed rather than overruled** ([01 §05.26 §05.27](../design-system/01-responsive.md)). The source design draws the title only below `xl`; that reasoning belongs to a prototype whose screens carry no heading of their own, and this product's eighteen `PageHeader` callers and five direct `PageTitle` callers do. Hiding it at `xl` would leave their `<h2>` card captions with no heading above them.
+
 The organization name is **not** shown anywhere in the shell. One account belongs to exactly one organization, so the name distinguishes nothing; it was removed from the members screen when the shell landed.
 
 ## Members
@@ -161,6 +165,12 @@ Rows go nowhere. The member detail screen is spec 04, so the table is told of no
 ## Responsive
 
 Below **1200px** the rail leaves the flow and becomes a drawer: a 340px panel against the right edge, under the now-60px navbar, with `--shadow-drawer` and a 0.3s slide. A hamburger in the navbar opens it; the close button in the sidebar head — which the shipping app draws and then hides — closes it, as does the scrim, as does `Escape`. Arriving at a new screen closes it too, since the drawer is covering the screen it just navigated to.
+
+> **Amended by [design-system 01 §03.13 §03.15 §03.16 §03.17 §03.18](../design-system/01-responsive.md).** The panel is against the **left** edge, entering from the left with `translateX(-105%)` and `--shadow-drawer` mirrored so the shadow falls away from the edge it hangs on. It opens from the left because the hamburger that opens it is on the left, and a panel that arrives from the opposite edge to its control makes the reader cross the screen to find what they just asked for.
+>
+> The scrim is **painted** `--color-overlay-scrim` — it is a transparent click target today, so a reader gets no signal that the page behind is inert — and it hangs from the navbar rather than covering it, because focus returns to the hamburger and a control handed focus must not sit under a 60% wash.
+>
+> The four ways to close it, and the focus rules two paragraphs below, are unchanged.
 
 **The drawer is the rail, not a copy of it.** One node holds the navigation at every width; below the breakpoint it changes position, width and shadow. A second copy inside a real `MenuDrawer` would put two of every nav row in the document, and with them two of every `data-testid` and two of every `aria-current`.
 

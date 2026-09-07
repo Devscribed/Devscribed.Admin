@@ -405,6 +405,8 @@ A new nav row under the existing **PROJECTS** section, positioned after **Projec
 **Tablet (768–1024px):** Table Actions column moves into a `⋯` overflow menu; other columns remain. Toolbar collapses to two rows (status filter above search).
 **Mobile (<768px):** Table converts to a card list — each client renders as a Card with name, project count, status badge, and a `⋯` menu. Modals expand to the full width with a 16px inset. The client picker in the project modal becomes a bottom-sheet select.
 
+  > **Amended by [design-system 01 §10.50 §10.56](../design-system/01-responsive.md).** The modal is a sheet below `sm`, not "full width with a 16px inset". And the bottom-sheet select is **withdrawn**: a `Popover`'s menu is not a panel and stays anchored to its trigger at every width, because a menu that leaves its button has lost what it belongs to. A per-screen overlay chosen by width is exactly the one-off §10.56 forbids.
+
 ### Accessibility
 
 - Every button carries an `aria-label` matching its visible text.

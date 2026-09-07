@@ -67,6 +67,8 @@ Two DS-level items surfaced while building spec 07's currency picker (details in
 - **`Select` dropdown scroll — fixed.** The `Select` popover had no `max-height` and `overflow: hidden`, so a long option list (the 42-item ISO 4217 currency picker) was clipped inside a `Modal` and its lower options — including `USD` — were unreachable by mouse. `1_DS for dev/components/forms/Select.jsx` now caps the dropdown at `max-height: 280px` with `overflow-y: auto` (keeping `overflow-x: hidden` for rounded corners). Strictly-improving for every `Select` instance (role picker, timezone, country, currency, first-day); short lists are unaffected.
 - **`Modal` full-screen drawer < 480px — open.** Spec 07 asks for the edit modal to become a full-screen drawer on narrow viewports, but the DS `Modal` has a fixed `width` prop and no breakpoint variant. Not addressed yet — the modal uses the standard `width={480}` shell; a responsive `Modal` variant is the outstanding chore.
 
+  > **Closed by [design-system 01 §10.49 §10.51 §10.56](../design-system/01-responsive.md).** `Modal` takes a **sheet** form below `sm` (576) — full width, rounded at the top, capped at 92% height, body scrolling, actions a sticky footer — with an `actions` slot. The number moves from 480 to 576 because the ladder has a rung there and 480 was never measured; the form moves from "full-screen drawer" to a bottom sheet because that is what the three other overlays in the system now do. No longer an outstanding chore.
+
 ## Cross-Spec Side Effects
 
 | Trigger | Source | Effect | Target |

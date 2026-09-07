@@ -177,7 +177,9 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 ```
 
 - The system's `MenuDrawer`: 340px, `--shadow-drawer`, `translateX(105%)` at rest and a 0.3s slide,
-  25/30 padding. It hangs from the navbar rather than over it —
+  25/30 padding — *from `sm` up; below it the panel is a bottom sheet, amended by
+  [design-system 01 §10.49 §10.54](../design-system/01-responsive.md)*. It hangs from the navbar
+  rather than over it —
   [§51](../design-system/decisions.md) replaces its hard-coded `top: 60px` (which was
   `--layout-navbar-height-mobile`, not a drawer measurement) with the shell's own switch.
 - Five fields, stacked full width at `--space-6`, each one the same `Select`. The gap is the one
@@ -628,6 +630,12 @@ The drawer is 340px at every width and `max-width: 100%` below it; its fields ar
 the criterion chip wraps its controls onto a second line rather than overflowing. Nothing in it
 scrolls horizontally.
 
+> **Amended by [design-system 01 §10.49 §10.54 §10.55](../design-system/01-responsive.md).** "340px
+> at every width" holds from `sm` up and no longer below it. Below `sm` the panel is a **sheet**:
+> full width, rounded at the top only, at most 92% of the viewport height, the body scrolling
+> inside it and the actions a sticky footer. At 92% of a 360px screen a 340px side panel is the
+> whole screen with a 20px sliver beside it, which is a drawer in name only.
+
 ## Accessibility
 
 - The `Filters` button carries `aria-expanded` and `aria-haspopup="dialog"`, and its label carries
@@ -638,6 +646,12 @@ scrolls horizontally.
   ([§14](../design-system/decisions.md)): the list behind it is still live, and the panel is a place
   to work rather than a modal question. Everything inside it is one Tab walk, in the order it is
   drawn.
+
+  > **Amended by [design-system 01 §10.54 §10.55](../design-system/01-responsive.md).** "Not
+  > trapped" holds from `sm` up. **Below `sm` focus is trapped** and the panel carries
+  > `aria-modal="true"`. The exception was argued from "the list behind it is still live"; in the
+  > sheet form the panel is 92% of the screen and there is no list behind it to work against. The
+  > announcement changes only in that form.
 - Each criterion chip is a labelled group naming its index ("Criteria filter 1"); its operator and
   value name the criterion they belong to ("Operator for English"), so they make sense read out of
   order, and its cross is named `Remove English`.

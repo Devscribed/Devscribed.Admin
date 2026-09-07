@@ -78,6 +78,8 @@ The badge lives in the shell and shows on **every** route, but its number is the
 - **Card stack.** Vertical `flex` column, `gap: var(--sp-6)`, **`max-width` ~700px, centered** in the content column (a page-level container wider than 05's 600px member-detail column — design-owned for this list). Page-level scroll only, no inner scroll container; pagination is out of scope (business spec).
 - **Responsive.** At the ~700px cap the stack is centered; on narrower viewports it goes full-width with the shell's content padding (00's `28px 32px 48px`). Cards always stack vertically; card internals use `flex`/`min-width: 0` wrapping so the body never scrolls horizontally, matching 09's row-wrap rule. The `<1024px` sidebar collapse and the `Modal` `<480px` drawer gap are 00/09's carried behaviours, unchanged.
 
+  > **Amended by [design-system 01 §10.49 §10.51](../design-system/01-responsive.md).** The `Modal` gap is closed — a sheet at `sm` (576), not a drawer at 480. The sidebar collapse is unchanged and is still 00's.
+
 ---
 
 ## Request card anatomy
@@ -189,6 +191,8 @@ Dates use 09's en-dash `formatDateRange`; money uses 09's `formatCurrency`; the 
 | **No `Skeleton` primitive** (carried from 05/09). | `requests-loading-skeleton` uses static `--bg-sunken` card-shaped blocks, matching 05/09's `LoadingSkeleton`/`VacationSkeleton`. | carried; not blocking |
 
 Carried forward from specs 00–09, still true: the DS ships no `AppShell`/`Sidebar`/`Topbar`/`PageHeader` (built in `apps/web/src/layout/`, 00's deliberate exception) and `NavItem` cannot host a `next/link` (00's gap — `href` + intercepted `onClick` remain the workaround, and the same interception applies to the Requests row); the DS exports no icon beyond `Eye`/`EyeOff`, so the Requests glyph is added to `apps/web/src/layout/icons.tsx`; `Select`/`Input` still lack a first-class `errorId`; `Modal` still lacks the `<480px` full-screen-drawer breakpoint (governs the reused reject modal); `InfoBanner` still hardcodes its tone triplets as `oklch(...)` literals (the reused toasts are further instances).
+
+  > **Closed by [design-system 01 §10.49 §10.51](../design-system/01-responsive.md).** `Modal` has the breakpoint: a sheet below `sm`, with an `actions` slot. The reused reject modal takes it with no screen-specific change.
 
 ---
 

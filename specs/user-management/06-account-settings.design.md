@@ -236,6 +236,8 @@ Mirrors the business spec's Change Email modal States table.
 
 - `width={480}`, centred by the overlay. On narrow viewports the modal spans the available width with the DS `Modal`'s own horizontal padding, matching the card pattern from specs 01/02.
 
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** Below `sm` it is a sheet — full width, rounded at the top, actions pinned — rather than a centred dialog spanning the width.
+
 ---
 
 ## Change Password modal
@@ -333,6 +335,8 @@ Mirrors the business spec's Change Password modal States table.
 ### Responsive
 
 - `width={480}`, centred by the overlay; spans the available width with the `Modal`'s own padding on narrow viewports.
+
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** As above: a sheet below `sm`.
 
 ---
 

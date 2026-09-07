@@ -213,6 +213,8 @@ The bar (spec 12) gains a small toggle chip labelled **Billable** on the right, 
 **Tablet:** the toolbar's Billable/Non-billable chips remain visible; the legend swatch collapses to icon-only.
 **Mobile:** the toolbar chips wrap onto a second row; the Weekly view scrolls horizontally; the entry modal is full-screen. The Running Timer bar's Billable toggle moves into a `⋯` overflow menu to save horizontal space.
 
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** A sheet capped at 92% of the viewport height, not full-screen. The strip of page left visible above it is what says the dialog is dismissible.
+
 ### Accessibility
 
 - The toggle uses `role="switch"`, `aria-checked="true|false"`, and `aria-describedby` pointing at the description line so screen readers hear the current state and its meaning.

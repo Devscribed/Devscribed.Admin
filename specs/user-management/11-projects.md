@@ -529,6 +529,8 @@ Breakpoints follow the app shell (spec 00). The Projects page has three layouts:
 
 **Mobile (< 768px):**
 - This is a **responsive web app viewed in a mobile browser** — no native-app chrome, no iOS-style bottom sheets, no sticky bottom action bars (the mobile browser's own URL bar and gesture area sit there).
+
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** Below `sm` (576) an overlay panel **is** a bottom sheet with a sticky footer — this is now the system's own form, not a per-screen choice. The objection this sentence records is answered rather than overruled: the footer sits above `env(safe-area-inset-bottom)`, so it stops where the browser chrome and the gesture area begin. What stays forbidden is a bar pinned to the **page**, which is what this rule was written about.
 - Sidebar hidden by default; opens as an overlay drawer via a hamburger toggle in the topbar. The drawer slides in from the left, dims the content, and closes on scrim tap or the drawer's own close button. Standard web pattern.
 - **Project table transforms into a card list**: each project is a card with name, status badge, member avatar stack (max 3 + count), hours, and a kebab menu (⋮) in the top-right for row actions (Edit / Archive). Cards are tap-targetable — tapping the card body opens the project detail.
 - **Page-level primary action** (New project) sits **inline in the page header** next to the title as a compact button (36px height, `+ New`). No floating action button, no sticky bar. The page header scrolls with the content normally.

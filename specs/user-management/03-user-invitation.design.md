@@ -102,6 +102,8 @@ Role option labels are the role names, capitalized: Admin, Manager, User, Viewer
 ### Responsive
 
 - `Modal` is already responsive: `width: '100%', maxWidth: 480` with `padding: 20` on the scrim, so it naturally gains side margins on narrow viewports without any screen-specific work.
+
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** Two corrections. The geometry quoted here is already stale — `packages/ds/src/components/overlays/Modal.tsx:53` is `maxWidth: 70%, minWidth: 360`, not `width: 100%, maxWidth: 480` — and on a 375px phone that floor overflows the screen. Below `sm` the panel is a full-width sheet, so it gains no side margins; the sheet is what removes the overflow.
 - Fields stay stacked; the action row's two buttons are `flex: 1` each so Cancel and Send invitation split the footer evenly at every width.
 
 ---

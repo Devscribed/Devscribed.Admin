@@ -1,0 +1,297 @@
+{
+  "status": "blocked",
+  "spec": "specs/design-system/01-responsive.md",
+  "request": "Make the app usable on a phone: give the design system a breakpoint ladder, a pre-paint stamp so JavaScript knows the width and pointer before it draws, touch-correct hover and hit targets, the shell's rail as a left drawer, and a phone sheet form for the overlay panels.",
+  "read": {
+    "specs": [
+      "specs/design-system/01-responsive.md",
+      "specs/design-system/README.md",
+      "specs/design-system/decisions.md",
+      "specs/user-management/README.md",
+      "specs/user-management/00-app-shell.design.md",
+      "specs/user-management/03-user-invitation.design.md",
+      "specs/user-management/06-account-settings.design.md",
+      "specs/user-management/07-vacation-accrual-management.md",
+      "specs/user-management/07-vacation-accrual-management.design.md",
+      "specs/user-management/09-vacation-requests.design.md",
+      "specs/user-management/10-organization-requests-page.design.md",
+      "specs/user-management/11-projects.md",
+      "specs/user-management/11-projects.design.md",
+      "specs/user-management/12-time-tracking.md",
+      "specs/user-management/12-time-tracking.design.md",
+      "specs/user-management/13-kanban-board.design.md",
+      "specs/user-management/14-task-collaboration.design.md",
+      "specs/user-management/15-time-tracking-tasks.design.md",
+      "specs/user-management/16-billable-time.md",
+      "specs/hiring/01-vacancies.design.md",
+      "specs/hiring/02-booking-page.design.md",
+      "specs/hiring/03-candidate-database.md",
+      "specs/hiring/03-candidate-database.design.md",
+      "specs/hiring/04-candidate-card.design.md",
+      "specs/hiring/05-board.design.md",
+      "specs/organization/01-clients.md",
+      "specs/organization/03-holidays.md",
+      "CLAUDE.md"
+    ],
+    "files": [
+      "packages/ds/src/base.css",
+      "packages/ds/src/tokens/spacing.css",
+      "packages/ds/src/tokens/effects.css",
+      "packages/ds/src/tokens/colors.css",
+      "packages/ds/src/components/appLayout/AppShell.tsx",
+      "packages/ds/src/components/appLayout/Navbar.tsx",
+      "packages/ds/src/components/appLayout/AccountMenu.tsx",
+      "packages/ds/src/components/appLayout/MiniTracker.tsx",
+      "packages/ds/src/components/appLayout/Tracker.tsx",
+      "packages/ds/src/components/navigation/Sidebar.tsx",
+      "packages/ds/src/components/navigation/PageTabs.tsx",
+      "packages/ds/src/components/navigation/Pagination.tsx",
+      "packages/ds/src/components/core/IconButton.tsx",
+      "packages/ds/src/components/core/Card.tsx",
+      "packages/ds/src/components/core/PageTitle.tsx",
+      "packages/ds/src/components/core/ToggleButton.tsx",
+      "packages/ds/src/components/core/Chip.tsx",
+      "packages/ds/src/components/forms/Switch.tsx",
+      "packages/ds/src/components/forms/SearchInput.tsx",
+      "packages/ds/src/components/forms/Checkbox.tsx",
+      "packages/ds/src/components/data/Table.tsx",
+      "packages/ds/src/components/data/BoardCard.tsx",
+      "packages/ds/src/components/data/TableToolbar.tsx",
+      "packages/ds/src/components/feedback/Tooltip.tsx",
+      "packages/ds/src/components/feedback/Toast.tsx",
+      "packages/ds/src/components/overlays/Modal.tsx",
+      "packages/ds/src/components/overlays/ConfirmDialog.tsx",
+      "packages/ds/src/components/overlays/MenuDrawer.tsx",
+      "packages/ds/src/components/overlays/Popover.tsx",
+      "packages/ds/src/components/overlays/useDialogFocus.ts",
+      "apps/web/app/globals.css",
+      "apps/web/next.config.mjs",
+      "apps/web/src/layout/AppShell.tsx",
+      "apps/web/src/layout/PageHeader.tsx",
+      "apps/web/src/hiring/useMediaQuery.ts",
+      "apps/web/src/hiring/CriterionDialog.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/VacancyDialog.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/VacancyBoard.tsx",
+      "apps/web/app/org/[orgId]/hiring/candidates/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/settings/page.tsx",
+      "apps/web/app/org/[orgId]/members/MemberRowActions.tsx",
+      "apps/web/app/org/[orgId]/members/[memberId]/MemberDetailScreen.tsx",
+      "apps/web/app/org/[orgId]/settings/holidays/HolidayModal.tsx",
+      "apps/web/app/org/[orgId]/projects/[projectId]/board/BoardScreen.tsx",
+      "apps/web/app/book/[slug]/BookingScreen.tsx",
+      "apps/web/app/manage/[slug]/[token]/ManageScreen.tsx",
+      "packages/validation/src/hiring.ts",
+      "packages/validation/src/index.ts",
+      "scripts/ds-adherence.js",
+      "e2e/playwright.config.ts",
+      "e2e/tests/fixtures.ts",
+      "e2e/tests/helpers.ts"
+    ]
+  },
+  "sweeps": {
+    "currency": 107,
+    "contradiction": 61,
+    "consequence": 34,
+    "obligations": 69,
+    "scope": 8
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirement 49 (§10)",
+      "line": 393,
+      "claim": "Seven statements in five documents forbid on mobile exactly what requirement 49 now makes the system's own form — a bottom sheet with a sticky footer — and none of them carries an amendment",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 49 (specs/design-system/01-responsive.md:393): 'Below `sm` an overlay **panel** is a sheet: full width, rounded at the top only, at most 92% of the viewport height, the body scrolling inside it, and its actions a sticky footer.' Against it, unamended: (1) specs/user-management/11-projects.md:531 'no iOS-style bottom sheets, no sticky bottom action bars'; (2) specs/user-management/11-projects.design.md:287 'A responsive web layout — no native chrome, no bottom sheets, no sticky bars (business spec is explicit)'; (3) specs/user-management/12-time-tracking.md:838 'no iOS-style bottom sheets, no sticky bottom action bars (the mobile browser's own URL bar and gesture area sit there and would collide with them)'; (4) specs/user-management/12-time-tracking.design.md:358 '**No native chrome, no sticky bars, no iOS bottom sheets**'; (5) specs/user-management/13-kanban-board.design.md:365 '**Modals** (Create Task, Board Settings) render as standard centered/near-top web dialogs (56px from top, 12px side margins) at near-full width — no drawer, no bottom sheet (carried convention from 12)'; (6) specs/user-management/15-time-tracking-tasks.design.md:209 'this is the one departure from 12/13's \"no bottom sheets\" rule'; (7) specs/user-management/15-time-tracking-tasks.design.md:229 'the one exception to 12/13's \"no bottom sheets\" rule, scoped narrowly to the task popover' — a DS-gaps row whose workaround requirement 56 (:459, 'A screen chooses its overlay by meaning … and never by width') also forbids, which is the same consequence the spec did apply to specs/user-management/14-task-collaboration.design.md:312. The spec's Amendments table (:1230-1250) names 07, 09, 12-time-tracking.design.md and 14 only; the area README's Cross-Spec Side Effects row (specs/design-system/README.md:57) names 'user-management 07, 09, 12, 14' and misses 11, 13, 15 and 16.",
+        "source": "specs/design-system/01-responsive.md:393 against specs/user-management/12-time-tracking.md:838"
+      },
+      "suggestedFix": "Amend each of the seven statements in place, beside the sentence, naming §10.49 / §10.51 / §10.56 — or, if the 'no bottom sheets' convention is meant to survive for those sections, say so in requirement 49 and carve them out by name."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirement 49 (§10)",
+      "line": 393,
+      "claim": "Seven more statements describe the narrow-viewport geometry of a `Modal` as something requirement 49 replaces, and none is amended",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 49 (:393) makes a `Modal` below 576 'full width, rounded at the top only, at most 92% of the viewport height … its actions a sticky footer'. Unamended statements that assert otherwise: (1) specs/user-management/12-time-tracking.md:849 '**Modals** stay as **standard centered web dialogs** — full width minus 12px page margins, top-anchored 56px from viewport top … No drag handle, no swipe-to-dismiss'; (2) specs/user-management/16-billable-time.md:214 '**Mobile:** … the entry modal is full-screen' (92% cap, not full-screen); (3) specs/user-management/03-user-invitation.design.md:104 '`Modal` is already responsive: `width: \\'100%\\', maxWidth: 480` … so it naturally gains side margins on narrow viewports without any screen-specific work' — a full-width sheet has no side margins (and the geometry quoted is already refuted by packages/ds/src/components/overlays/Modal.tsx:53, which is `maxWidth: '70%', minWidth: 360`); (4) specs/user-management/06-account-settings.design.md:237 'On narrow viewports the modal spans the available width with the DS `Modal`'s own horizontal padding'; (5) specs/user-management/06-account-settings.design.md:335 'spans the available width with the `Modal`'s own padding on narrow viewports'; (6) specs/organization/01-clients.md:406 '**Mobile (<768px):** … Modals expand to the full width with a 16px inset. The client picker in the project modal becomes a bottom-sheet select'; (7) specs/organization/03-holidays.md:267 '**Mobile (<768px):** … the Edit modal is full-screen with a bottom sheet for the country picker'. The last two are also overruled by requirement 50 (:407, '`Popover` … **no** — anchored at every width') and requirement 56 (:459, a screen 'never' picks its overlay by width): a per-screen bottom-sheet select is exactly the one-off the spec forbids.",
+        "source": "specs/design-system/01-responsive.md:393 against specs/organization/01-clients.md:406"
+      },
+      "suggestedFix": "Add an amendment beside each of the seven, naming §10.49 (and §10.50/§10.56 for the two bottom-sheet selects), and add organization 01 and 03 to the Amendments table and to the area README's Cross-Spec Side Effects row."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirement 3, the `480` row",
+      "line": 98,
+      "claim": "The `480` row says the gap is recorded in 'user-management/README.md:68 and four more' and that it is 'Amended in each document'; a sixth document records it, is not amended, and is not in the Amendments table",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/design-system/01-responsive.md:98: '| `480` | the open `Modal` full-screen-drawer gap — `user-management/README.md:68` and four more | **Superseded**, not retired: requirement 49 puts the sheet at `sm`. Amended in each document; see the Amendments table. |' The Amendments table itself names five documents besides the README (07-vacation-accrual-management.md, 07-…design.md, 09-vacation-requests.design.md, 12-time-tracking.design.md, 14-task-collaboration.design.md), so 'four more' is one short of the spec's own list. Unamended and absent from both: specs/user-management/10-organization-requests-page.design.md:79 'The `<1024px` sidebar collapse and the `Modal` `<480px` drawer gap are 00/09's carried behaviours, unchanged.' and :191 '`Modal` still lacks the `<480px` full-screen-drawer breakpoint (governs the reused reject modal)'. Both assert the gap is open; requirement 49 (:393) and requirement 51 (:413) close it.",
+        "source": "specs/design-system/01-responsive.md:98 against specs/user-management/10-organization-requests-page.design.md:191"
+      },
+      "suggestedFix": "Amend specs/user-management/10-organization-requests-page.design.md:79 and :191 beside each sentence, add the document to the Amendments table, and correct 'four more' to the number the table actually carries."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirement 39",
+      "line": 342,
+      "claim": "'44 is `--control-height`, which is already the height of every drawn control in the system' — six design-system controls are drawn shorter than 44 today, and requirement 36's own table names nine more",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -rn 'height: ' packages/ds/src/components returns, among others: packages/ds/src/components/navigation/Pagination.tsx:75 `height: 36,` (minWidth 36); packages/ds/src/components/forms/Switch.tsx:86 `height: 24,` (width 42); packages/ds/src/components/core/ToggleButton.tsx:166 `height: 32` and :81 `height: 36`; packages/ds/src/components/forms/SearchInput.tsx:89 clear button `width: 20, height: 20`; packages/ds/src/components/appLayout/Tracker.tsx:83 close button `width: 13, height: 13`; packages/ds/src/components/appLayout/MiniTracker.tsx:32 `width: 144, height: 30`. Only nine components read `var(--control-height)` (grep -rn 'control-height' packages/ds/src). The claim is also contradicted inside the document: requirement 36's table (:314-326) lists nine controls at 34, 32, 37, 24, 18x13 and 13x13 today.",
+        "source": "packages/ds/src/components/navigation/Pagination.tsx:75 and packages/ds/src/components/forms/Switch.tsx:86 against specs/design-system/01-responsive.md:342"
+      },
+      "suggestedFix": "Rewrite requirement 39 to say what is true — 44 is the height of every *field-shaped* control (`Button`, `TextInput`, `Select`, `SearchInput`, `FileInput`, `DateRangePicker`, `.ds-calendar-day`) — and say explicitly which controls keep a sub-44 box under a coarse pointer."
+    },
+    {
+      "id": "R5",
+      "severity": "blocker",
+      "rule": "spec/scope-gap",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirement 36 (§07)",
+      "line": 314,
+      "claim": "The request asks for 'touch-correct … hit targets'; the spec raises nine named controls to 44 and leaves six other pressable design-system controls under 44 without saying it narrowed the rule",
+      "witness": {
+        "kind": "command",
+        "detail": "Requirement 36 (:314) is a closed table of nine controls, and acceptance criterion 9 (:766) bounds itself to 'Every `IconButton`, `Popover` item, row kebab and the navbar hamburger'. Not in either, and under 44 today: `Pagination`'s page buttons 36x36 (packages/ds/src/components/navigation/Pagination.tsx:75); `Switch` 42x24 (forms/Switch.tsx:86); `ToggleButton`'s segments 32 high (core/ToggleButton.tsx:166); `SearchInput`'s clear button 20x20 (forms/SearchInput.tsx:89); `Tracker`'s close x 13x13 (appLayout/Tracker.tsx:83); `MiniTracker` 144x30 (appLayout/MiniTracker.tsx:32) — the navbar pill a phone reader presses to reach the running timer. `Chip`'s remove button (core/Chip.tsx:89) has no box of its own either, and `Chip` is one of the twenty-one requirement 31 already touches for hover. The spec's only stated reason for stopping at nine is requirement 39 (:342), which finding R4 refutes.",
+        "source": "specs/design-system/01-responsive.md:314 against packages/ds/src/components/appLayout/MiniTracker.tsx:32"
+      },
+      "suggestedFix": "Either extend requirement 36's table to every pressable design-system control under 44, or state the narrowing and its reason in Out of Scope with the omitted controls named, the way requirement 31 names its twenty-one."
+    },
+    {
+      "id": "R6",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "Data Model, the `useMotion` paragraph",
+      "line": 516,
+      "claim": "'it is the third reader of `prefers-reduced-motion` this product would have, and the first two each opened their own `matchMedia`' — the repository holds exactly one reader",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -rn \"prefers-reduced-motion\" apps packages e2e --include='*.ts' --include='*.tsx' --include='*.css' (excluding node_modules and .next) returns exactly one line: packages/ds/src/components/data/BoardCard.tsx:56 `const query = window.matchMedia('(prefers-reduced-motion: reduce)');`. `useMotion()` would be the second reader, not the third, and there is one prior `matchMedia` on that query, not two.",
+        "source": "packages/ds/src/components/data/BoardCard.tsx:56 against specs/design-system/01-responsive.md:516"
+      },
+      "suggestedFix": "Say 'the second reader', or drop the count and keep the argument — that a second reader of the same query is what the export exists to prevent."
+    },
+    {
+      "id": "R7",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirement 51, the four-caller table",
+      "line": 431,
+      "claim": "Two of the four rows point at the caller's `Modal` inline-width line, not at the actions the row says move",
+      "witness": {
+        "kind": "command",
+        "detail": "Spec :431 '| `hiring/settings/page.tsx:595` | the category dialog's actions |' — sed -n '595p' 'apps/web/app/org/[orgId]/hiring/settings/page.tsx' gives `        style={{ width: 420 }}`; the category dialog's actions are `<FormActions align=\"full\">` at :619. Spec :432 '| `apps/web/src/hiring/CriterionDialog.tsx:214` | the criterion dialog's actions |' — sed -n '214p' apps/web/src/hiring/CriterionDialog.tsx gives `        style={{ width: 520 }}`; the criterion dialog's actions are at :292. The other two rows do cite the actions (`VacancyDialog.tsx:382` is `<FormActions align=\"full\">`; `candidates/page.tsx:941` and `:946` are the two `Button`s), so the table is inconsistent about what its line number means.",
+        "source": "apps/web/app/org/[orgId]/hiring/settings/page.tsx:619 against specs/design-system/01-responsive.md:431"
+      },
+      "suggestedFix": "Cite `hiring/settings/page.tsx:619` and `apps/web/src/hiring/CriterionDialog.tsx:292` in the four-caller table; leave `:595` where requirement 51 already cites it correctly as an inline width (:421)."
+    },
+    {
+      "id": "R8",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirement 40 (§08)",
+      "line": 348,
+      "claim": "'A board card' has two readings — the design system's `BoardCard`, or every draggable card on every board — and the projects kanban has a second one the spec never names",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Requirement 40 (:348): 'A board card is draggable when the pointer is fine, **at every width**, and is not draggable when the pointer is coarse, at every width. The grab cursor follows the same test.' Requirement 41 (:350) names one implementation site, `VacancyBoard.tsx:24`/`:360`. But Out of Scope (:800-801) says of documents, **projects**, clients, reports, time tracking, requests and outbox: 'They get the shell, the pointer rules and the sheets'. The projects kanban draws its own card — apps/web/app/org/[orgId]/projects/[projectId]/board/BoardScreen.tsx:79 says in its own comment '**The column is the system's `BoardColumn` (§43); the card is not `BoardCard` (§42).**' — with `draggable={!archived && canManageTasks}` (:524), `useSortable({ id: task.id, disabled: !draggable })` (:739) and `cursor: draggable ? 'grab' : …` (:799), gated on neither width nor pointer. Concrete input: an iPad at 900px on /org/{orgId}/projects/{projectId}/board. Reading A (requirement 40 governs `BoardCard`): the card is draggable and draws a grab cursor, and acceptance criterion 10 (:769) — 'A touch tablet at 900px draws no grab cursor and no draggable board card' — is false on that page. Reading B (Out of Scope's 'the pointer rules' reaches it): BoardScreen.tsx:524 and :799 change, in a section the Blast Radius, the Screens, the test cases and the acceptance criteria never mention.",
+        "source": "apps/web/app/org/[orgId]/projects/[projectId]/board/BoardScreen.tsx:524 against specs/design-system/01-responsive.md:348 and :800"
+      },
+      "suggestedFix": "Say which. Either bind requirement 40 to `BoardCard` and add `BoardScreen.tsx`'s TaskCard to Known Gaps with the spec that owns it, or add it to requirement 41's replacement list and to Blast Radius, and qualify acceptance criterion 10 either way."
+    },
+    {
+      "id": "R9",
+      "severity": "blocker",
+      "rule": "spec/missing-artefact",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "acceptance criterion 12 / Observing each criterion",
+      "line": 869,
+      "claim": "Acceptance criterion 12 names three components; the verification table says two E2E cases observe it, and neither exercises a `ConfirmDialog` — the one panel the spec says implements the sheet form a second time",
+      "witness": {
+        "kind": "rule",
+        "detail": "Acceptance criterion 12 (:772): 'Below 576 a `Modal`, a `ConfirmDialog` and a `MenuDrawer` are full-width sheets, rounded at the top, capped at 92% height, with the body scrolling and the actions pinned.' Observing each criterion (:869): '| 12–13 sheets and their focus trap | TC-DS01-E2E-09, TC-DS01-E2E-10 | E2E | no |'. TC-DS01-E2E-09's selectors are `vacancy-dialog`, `sheet-actions` — `vacancy-dialog` is the `Modal` at apps/web/app/org/[orgId]/hiring/vacancies/VacancyDialog.tsx:252. TC-DS01-E2E-10's selectors are `candidates-filters-open`, `candidates-filters`, `candidates-filters-close` — the `MenuDrawer`. No case in the spec opens a `ConfirmDialog`. A shared unit case cannot stand in for it, because Out of Scope (:796-799) states that `ConfirmDialog` 'draws its own shell, so this spec implements the sheet form **twice**', and Known Gaps (:819) repeats it: '`ConfirmDialog` and `Modal` each implement the sheet form … there is no shared shell to put it in.' TC-DS01-UNIT-06's precondition is the singular 'A panel in its sheet form', naming neither implementation. The Required data-testid table has `sheet-actions` for 'the sticky footer of a `Modal` in sheet form' (:663) only, so the pinned footer of the other two has no selector either.",
+        "source": "specs/design-system/01-responsive.md:869 against :796"
+      },
+      "suggestedFix": "Add a case that opens a `ConfirmDialog` at 360 (25 call sites to pick from; `vacancy-delete-confirm` on the vacancies list is already reachable), give its footer and `MenuDrawer`'s a `data-testid`, and name both implementations in TC-DS01-UNIT-06's preconditions — or record the second implementation as unverified in Known Gaps."
+    },
+    {
+      "id": "R10",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "Required data-testid Attributes",
+      "line": 654,
+      "claim": "The spec's new E2E cases select by accessible name; CLAUDE.md says selectors are `data-testid` only",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:76: '**Testing.** Selectors are `data-testid` only, and the ids are named in the specs.' specs/design-system/01-responsive.md:654: 'The shell's controls are reached by **accessible name**, not by test id — `Open navigation`, `Close sidebar` — because those names are what a reader navigates by and a test id would not prove they exist.' Two new cases rely on it: TC-DS01-E2E-01's Selectors (:1064) 'the hamburger and the close button by accessible name (`Open navigation`, `Close sidebar`)' and TC-DS01-E2E-05's (:1150) 'the hamburger by accessible name'. The spec cites specs/user-management/00-app-shell.design.md:197 as the exception already in force, and that sentence does say it — but CLAUDE.md is unamended, and its Amendments table (:1249) shows the author is willing to amend CLAUDE.md when a requirement reaches it.",
+        "source": "CLAUDE.md:76 against specs/design-system/01-responsive.md:654"
+      },
+      "suggestedFix": "Amend CLAUDE.md's Testing rule to carry the exception the app-shell design already states, or drop the accessible-name selection and give the hamburger and the close button test ids. A person decides which; the refiner does not."
+    },
+    {
+      "id": "N1",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "Blast Radius, the well-padding row",
+      "line": 717,
+      "claim": "The risk this row mitigates does not exist in either direction: a caller's `style` cannot reach the well today and will not after the change",
+      "witness": {
+        "kind": "rule",
+        "detail": "The row reads 'a caller passing `style` to `AppShell` could now override it', and then cites both lines that refute it: packages/ds/src/components/appLayout/AppShell.tsx:76 spreads `...style` onto the **outer** `display: flex; height: 100vh` container, while the well's `padding: 'var(--space-9)'` is on the inner div at :89. A caller's `style` never reached the padding, so moving the padding to a class cannot open an override that was closed. The mitigation (one call site, no `style`) is correct and unaffected.",
+        "source": "packages/ds/src/components/appLayout/AppShell.tsx:76 against specs/design-system/01-responsive.md:717"
+      },
+      "suggestedFix": "Drop the row, or restate it as what actually moves — the well's padding stops being an inline style and starts being a class name a screen could collide with."
+    },
+    {
+      "id": "N2",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "requirements 45 and 47",
+      "line": 376,
+      "claim": "Requirement 45 names two acceptable carriers; requirement 47 says the rule already holds by way of a third, so a future call site has no stated test",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 45 (:369-370): 'A `Tooltip`'s content may never be the only carrier of its information. It **must also be the trigger's accessible name, or be duplicated in visible text**.' Requirement 47 (:376-379): 'The rule already holds everywhere it applies today … `Popover` already renders an always-present visually-hidden copy of the reason and **points the row's `aria-describedby` at that copy** rather than at the bubble … No code changes for this requirement.' An `aria-describedby` target is a description, not an accessible name and not visible text. In this one case the hidden `<span>` sits inside the `role=\"menuitem\"` row (packages/ds/src/components/overlays/Popover.tsx:288-290), so name-from-content may fold it into the name by accident — which is exactly why the next call site cannot tell what requirement 45 asks of it.",
+        "source": "specs/design-system/01-responsive.md:369 against :376"
+      },
+      "suggestedFix": "Add the third carrier to requirement 45 if a hidden `aria-describedby` copy is meant to satisfy it, or state in requirement 47 which of the two carriers `Popover` currently provides and where in the file it is provided."
+    },
+    {
+      "id": "N3",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/design-system/01-responsive.md",
+      "symbol": "edge case 5",
+      "line": 699,
+      "claim": "Edge case 5's `MenuDrawer` half has neither an observer nor a stated reason for having none, unlike every other edge case in the table",
+      "witness": {
+        "kind": "rule",
+        "detail": "Edge case 5 (:699): 'The panel becomes a centred `Modal` or a right-edge drawer in place. `MenuDrawer` **stops trapping focus at that moment; focus stays where it is** rather than being moved.' TC-DS01-E2E-09 steps 1-2 do cross `sm` with a `Modal` open, which covers the first sentence. TC-DS01-E2E-10 does not: step 3 presses `Escape` and step 4 resizes to 992 and **reopens** the panel, so the trap is never released under a live sheet and focus is never observed staying put. Every other row in the table either names its observer (3 → E2E-03 step 5; 4 → E2E-01 step 6; 10/10a/10b → UNIT-06; 11 → UNIT-05; 12 → E2E-07 step 5) or says why there is none (1, 2, 6, 7, 8, 9). Row 5 does neither.",
+        "source": "specs/design-system/01-responsive.md:699 against :1244"
+      },
+      "suggestedFix": "Add a step to TC-DS01-E2E-10 that resizes to 992 with the sheet still open and reads `document.activeElement` and the trap, or give edge case 5 a 'no case' sentence with its reason."
+    }
+  ]
+}

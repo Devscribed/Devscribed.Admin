@@ -266,6 +266,8 @@ Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone 
 **Tablet (768–1024px):** month band stays sticky. Actions column collapses to `⋯` menu.
 **Mobile (<768px):** table converts to a card list — each holiday is a card with the date badge, name, hours, and country chip; the Edit modal is full-screen with a bottom sheet for the country picker.
 
+  > **Amended by [design-system 01 §10.50 §10.56](../design-system/01-responsive.md).** The modal is a sheet capped at 92% height, not full-screen. The country picker keeps its anchored `Popover` at every width — §10.50 classifies a menu as not a panel, and §10.56 forbids choosing an overlay by width.
+
 ### Accessibility
 
 - Month bands are `role="rowheader"` for screen-readers.

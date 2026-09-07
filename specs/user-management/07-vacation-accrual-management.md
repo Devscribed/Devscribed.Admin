@@ -430,6 +430,8 @@ Server-side validation: all rules enforced regardless of UI state.
 - Cards stack vertically.
 - Modals become full-screen drawers on mobile (< 480px width).
 
+  > **Amended by [design-system 01 §10.49 §10.51 §10.56](../design-system/01-responsive.md).** Below **576**, not 480, and a **bottom sheet**, not a full-screen drawer. The breakpoint is the ladder's `xs`/`sm` boundary and the form is the one `Modal`, `ConfirmDialog` and `MenuDrawer` all take.
+
 ## Required `data-testid` Attributes
 
 **Tab bar:**

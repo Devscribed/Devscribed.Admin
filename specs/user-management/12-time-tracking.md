@@ -836,6 +836,8 @@ Breakpoints follow the app shell (spec 00). The Time Tracking page has three lay
 
 **Mobile (< 768px):**
 - This is a **responsive web app viewed in a mobile browser** — no native-app chrome, no iOS-style bottom sheets, no sticky bottom action bars (the mobile browser's own URL bar and gesture area sit there and would collide with them).
+
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** Below `sm` (576) an overlay panel **is** a bottom sheet with a sticky footer — this is now the system's own form, not a per-screen choice. The objection this sentence records is answered rather than overruled: the footer sits above `env(safe-area-inset-bottom)`, so it stops where the browser chrome and the gesture area begin. What stays forbidden is a bar pinned to the **page**, which is what this rule was written about.
 - Sidebar hidden; hamburger toggle in the topbar opens an overlay drawer sliding in from the left. Closes on scrim tap or Escape.
 - **Quick actions bar** stays at the **top of the page content, right below the title** — it does not become sticky. It collapses vertically:
   1. Project select (full width, 40px height)
@@ -847,6 +849,8 @@ Breakpoints follow the app shell (spec 00). The Time Tracking page has three lay
 - **Monthly view** shrinks cells to fit 7 across; each cell shows the day number and a thin colored bar proportional to hours (no numeric hours text unless the cell is tapped or the viewport is wide enough).
 - **Topbar timer indicator** collapses to a compact pill: colored dot + elapsed time only, no project name. Tapping navigates to the Time Tracking page where the full running-timer card is visible.
 - **Modals** stay as **standard centered web dialogs** — full width minus 12px page margins, top-anchored 56px from viewport top (so mobile keyboard doesn't push them off-screen), scrim covers the rest. No drag handle, no swipe-to-dismiss. Close on scrim tap, Escape, or Cancel.
+
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** Below `sm` they are bottom sheets: full width, rounded at the top, capped at 92% height, body scrolling, actions pinned. From `sm` up the centred dialog is unchanged. Swipe-to-dismiss is still not offered — the sheet closes by its button, the scrim and `Escape`, exactly as the dialog did.
 - **Add Entry modal** on mobile stacks fields vertically at full width; the time-range / duration-only radio group becomes a segmented control (44px touch targets); Save/Cancel are equal-width 44px buttons at the bottom of the modal content.
 - **Member filter** (admin/manager) becomes a full-width selector on its own row above the view toggle.
 - **Timer running state** turns the quick-actions card into a highlighted amber card with the elapsed time chip (large, monospace) at the top, editable project/task below, and `Discard` / `Stop & save` as two equal-width buttons. Still not sticky — but the topbar pill guarantees the timer is always visible while browsing other pages.

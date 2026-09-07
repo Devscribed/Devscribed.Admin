@@ -363,6 +363,8 @@ Breakpoints follow 00 and the business spec's own responsive notes per screen (�
   - **List** collapses to stacked cards (key/type/title/priority/avatar), same click-through.
   - **Task detail** side panel becomes a closed-by-default "Details" accordion above the description; delete stays pinned at the page bottom.
   - **Modals** (Create Task, Board Settings) render as standard centered/near-top web dialogs (56px from top, 12px side margins) at near-full width — no drawer, no bottom sheet (carried convention from 12).
+
+  > **Amended by [design-system 01 §10.49](../design-system/01-responsive.md).** Below `sm` (576) an overlay panel **is** a bottom sheet with a sticky footer — this is now the system's own form, not a per-screen choice. The objection this sentence records is answered rather than overruled: the footer sits above `env(safe-area-inset-bottom)`, so it stops where the browser chrome and the gesture area begin. What stays forbidden is a bar pinned to the **page**, which is what this rule was written about.
   - **Touch targets** ≥44×44px throughout (icon buttons, tabs, card tap targets).
 
 ---
