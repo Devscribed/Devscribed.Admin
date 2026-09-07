@@ -390,16 +390,40 @@ control 1px on press; the system's buttons have neither.
 | Width | Layout |
 |---|---|
 | ≥ 880px | Reschedule pickers `1fr 1fr`; booking Card capped at 560px, centred |
-| 600–879px | Pickers stack; the action row keeps both buttons on one line |
-| < 600px | Everything stacks; both actions go full width, **Cancel beneath Reschedule with `--space-5` between them**; the slot list caps at `60vh` and scrolls in its own region |
-| < 600px, team | The reschedule `Modal` goes full-bleed; the card's two actions drop below the header row |
+| 576–879px | Pickers stack; the action row keeps both buttons on one line |
+| < 576px | Everything stacks; both actions go full width, **Cancel beneath Reschedule with `--space-5` between them**; the date grid goes edge to edge inside its Card; the slot list caps at `60vh` and scrolls in its own region |
+| < 576px, team | The reschedule and cancel `Modal`s take the **sheet** form; the candidate card's two header actions drop below the facts they change |
+
+> ~~The middle two rows read `600–879px` and `< 600px`, and the last read `< 600px, team | The
+> reschedule Modal goes full-bleed`.~~
+> **Overruled by [design-system 01 §01.1](../design-system/01-responsive.md) and executed by
+> [§01.3](../design-system/01-responsive.md)**, which names this file among the three that hold a
+> `599`. 600 was never measured. The band the retirement gives back is 576–599, and it is a real
+> band rather than a rounding: at 576 the action row is 528px wide and `Reschedule interview`
+> (211) and `Cancel interview` (174) with their 16px gap are **401**, so they sit side by side
+> there with 127px to spare — which is what the row is for.
+>
+> "Full-bleed" is replaced by "the sheet form" because that is the shape the system now has for it:
+> [§10 of design-system 01](../design-system/01-responsive.md) makes every overlay **panel** a
+> sheet below `sm` — full width, rounded at the top, up to 92% height, a sticky split footer — and
+> `Modal` has drawn it since that requirement landed. The cancel confirmation on this page is one
+> without a line of its own code. The candidate card's own clause was executed by
+> [04 design §Responsive](04-candidate-card.design.md#responsive).
 
 At the narrowest width the destructive action is the lower of the two and never adjacent to the
-thumb's resting position. The page body never scrolls horizontally at any supported width.
+thumb's resting position: measured at 360, `Reschedule interview` is at `y` 435 and `Cancel
+interview` at 491, both 296 wide, both `--control-height` tall. The page body never scrolls
+horizontally at any supported width — `scrollWidth − clientWidth` is 0 from 360 to 1440.
 
-These breakpoints are this spec's own and are unchanged by the move to the system — they belong to the
-content, and this page does not render in `AppShell`, whose 1200px breakpoint has nothing to say
-about it.
+**`880` is the booking page's number and this page inherits it**, because the pickers it folds are
+that page's pickers, lifted into `SlotPicker` and rendered here unchanged. The measurement that
+defends it is in [02 design §Responsive](02-booking-page.design.md#responsive) and is not repeated:
+one picker, one number, one place it is argued.
+
+The reschedule row's own two controls stack `column-reverse` below `sm`, so `Move interview` is
+above `Keep current time`. Neither is destructive, so the thumb rule the live state's actions follow
+has nothing to say here; the direction is recorded because it is the reverse of source order and
+would otherwise read as an accident.
 
 ## Accessibility
 

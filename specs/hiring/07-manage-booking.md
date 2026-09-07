@@ -964,3 +964,26 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
   1. A single collapsed summary line, not four rows.
   2. Expanded: both moves, the CV replacement, and the original booking, newest first, each attributed.
   3. The manage page shows no history of any kind.
+
+### TC-H07-E2E-05: The two actions stack below `sm`, with the destructive one lower
+- **Level:** E2E
+- **Preconditions:** a live booking reached through its own manage link, with no session.
+- **Steps:**
+  1. At 576, read `Reschedule interview`'s box against `Cancel interview`'s.
+  2. At 575, read the same pair.
+  3. At 360, read the same pair, and the document's `scrollWidth` against its `clientWidth`.
+- **Expected Result:**
+  1. They share a `y` and differ in `x` — one row, benign leading and destructive trailing.
+  2. They share an `x` and a width, and `Cancel interview` is the lower.
+  3. The same, each at least `--control-height` tall, and the document does not scroll
+     horizontally.
+- **Why E2E:** which of two buttons a flex row put lower is a laid-out box, and the rule it proves —
+  that the irreversible action is never the one under the thumb — has no server side to assert it
+  from. 576 and 575 are the same pixel from either side, which is what makes step 2 an assertion
+  that a `575` was written where a `599` used to be; a test at 360 alone would pass against either
+  number.
+- **Selectors:** `manage-reschedule-button`, `manage-cancel-button`.
+- **Covered elsewhere:** the cancel confirmation's sheet form below `sm` is
+  [design-system 01 TC-DS01-E2E-09](../design-system/01-responsive.md); the picker's own fold at 880
+  and its date grid at 360 are [02 TC-H02-E2E-08](02-booking-page.md), on the page that owns
+  `SlotPicker`. Neither is repeated here.

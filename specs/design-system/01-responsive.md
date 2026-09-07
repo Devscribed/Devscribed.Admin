@@ -88,8 +88,8 @@ wide form".
 
    | Number | Where in code | Verdict, and the document that executes it |
    |---|---|---|
-   | `879` | `globals.css:83` — the booking page's two-panel fold | **Survives** as the one exception, because a measurement defends it rather than a spec claiming it. The measurement is in `specs/hiring/02-booking-page.design.md:33`: 880 is where the calendar and the slot list stop fitting side by side. |
-   | `599` | `globals.css:89`, `:737`, `:827` | **Retired to `575`**, the `xs`/`sm` boundary. 600 was never measured; it is one off the ladder and reads as a different decision when it is the same one. `specs/hiring/02-booking-page.design.md`, `07-manage-booking.design.md`, and `04-candidate-card.design.md:511`, which also states a 600. |
+   | `879` | `globals.css` — the booking page's two-panel fold | **Survives** as the one exception, because a measurement defends it rather than a spec claiming it. ~~The measurement is in `specs/hiring/02-booking-page.design.md:33`: 880 is where the calendar and the slot list stop fitting side by side.~~ **Corrected by [02 design §Responsive](../hiring/02-booking-page.design.md#responsive)**, which took it: line 33 was the column cap described as "wide enough", and the two Cards go on fitting down to **818**, where a day cell reaches `--control-height`. The verdict is unchanged and the reason is now a range — 818–991 is legal and **no ladder number falls inside it**, `md` being 767 (cell 39.9) and `lg` 991 (173px of room to spare). That absence is what earns the exception. |
+   | `599` | `globals.css` ×3 — the booking page's stack, and the manage page's two action rows | **Retired to `575`**, the `xs`/`sm` boundary. 600 was never measured; it is one off the ladder and reads as a different decision when it is the same one. **Executed** in `specs/hiring/02-booking-page.design.md` and `07-manage-booking.design.md`; `04-candidate-card.design.md:511`, which also stated a 600, was struck rather than retired — its subjects had moved into a kebab. |
    | `1023` | `globals.css:347`, `:778` — the candidate card | **Retired to `991`**, the `md`/`lg` boundary. `specs/hiring/04-candidate-card.design.md`. |
    | `1023` | `apps/web/app/org/[orgId]/hiring/candidates/page.tsx:77` — `const NARROW = '(max-width: 1023px)'`, a **constant**, not CSS | **Retired to `991`**. Owned by `specs/hiring/03-candidate-database.design.md`, not the candidate card — this is the database list. Requirement 11 moves `useMediaQuery` and deliberately does not touch the query passed to it, so this survives Phase 1. |
    | `767` | `VacancyBoard.tsx:24` — `const NARROW = '(max-width: 767px)'` | **Already on the ladder**: `md` minus one. Nothing to do. |
@@ -358,6 +358,27 @@ wide form".
     `SearchInput`, `FileInput`, `DateRangePicker` — and already the height of a `Calendar` day cell
     for exactly this reason (`base.css` `.ds-calendar-day`). It is **not** the height of every
     drawn control: six are shorter, and the rest of this requirement says what happens to them.
+
+    > ~~"and already the height of a `Calendar` day cell" — cited as a control this rule already
+    > covers.~~
+    > **Half of it. Corrected by [02 design §Responsive](../hiring/02-booking-page.design.md#responsive).**
+    > A day cell is 44 **tall**; its width is `1fr`, so it is whatever the consumer's box leaves
+    > after the grid's inset and six gutters. On the public booking page at 360 that was **35.9**,
+    > and this requirement's own closing sentence — "every pressable design-system control is at
+    > least 44 × 44 to a coarse pointer" — did not hold for it. A gate written for controls with a
+    > drawn box does not reach a control whose width is a share of something else's box, and the
+    > table above lists nine such boxes and none of these.
+    >
+    > The fix is in `base.css` beside `.ds-calendar-day`: below `sm` the grid takes back its
+    > 12.8px inset and its 31.9px of gutter. It is the one place this requirement is keyed to the
+    > **viewport** rather than to the pointer, against 37 — a `1fr` cell has no drawn width to
+    > protect, so at 360 the only question is whether the seven columns get the width or the
+    > gutters do, and the answer does not depend on what is pointing at them. One drawing, not two.
+    >
+    > Blast radius: `DateRangePicker` is the product's only other `Calendar`, in a 280px panel. Its
+    > cell goes **33.6 → 40** below `sm` and its panel's box does not move (448 × 407.3 at every
+    > width). Still short of 44, and still short for the same reason — the panel is 280px because
+    > it is a popover, not a page. Recorded under Known Gaps; the reports specs own it.
 
     Six pressable controls are drawn below 44 today, and their *paint* is not raised, because in
     each the box **is** the design rather than a container around it. Under a coarse pointer each
@@ -883,6 +904,7 @@ they exist. That rule is already in force
 | The coarse-pointer rules are verified by Playwright's emulation, not on a real device | `hasTouch` and `(pointer: coarse)` emulation is what Chromium reports to the page, and every rule here is written against exactly that query | A device-lab pass, out of scope for this release |
 | Requirement 58 — the active tab scrolled into view **on mount** — has no E2E observer | No `PageTabs` caller can currently mount with an off-screen active tab. The board holds its column in `useState('scheduled')`, the first tab, and writes no URL (`VacancyBoard.tsx:67`); the member detail resolves any disabled tab back to `about` (`MemberDetailScreen.tsx:222-224`); no other caller has enough tabs to overflow 360. TC-DS01-UNIT-04 tests the behaviour directly instead | A caller whose chosen tab lives in the URL. The board is the natural one and it belongs to `specs/hiring/05-board.design.md`, not here |
 | `ConfirmDialog` and `Modal` each implement the sheet form | `ConfirmDialog` does not compose `Modal`, so there is no shared shell to put it in | The rewrite named in Out of Scope |
+| `DateRangePicker`'s day cell is 40 wide below `sm`, not 44 | Requirement 39's rule now reaches it — the grid gives back its inset and gutters there, taking the cell from 33.6 to 40 — but the panel it sits in is a fixed 280px, so the last 4px are the panel's to give, not the grid's. It is a popover on a reports page, not the primary control of a public page, and its whole panel is 448 wide at 360 already | A reports spec that says what that panel does below `sm`. `reports/01-reports.md` owns it; nothing in this spec's blast radius touches its width |
 
 ## Verification Plan
 
@@ -1360,7 +1382,16 @@ that does it. Listed here so a reader of this spec knows the full reach.
 | `specs/user-management/06-account-settings.design.md` ×2 | "spans the available width with the `Modal`'s own padding" | §10.49 |
 | `specs/organization/01-clients.md` | "the client picker … becomes a **bottom-sheet select**" | §10.50 §10.56 — a menu is not a panel and stays anchored |
 | `specs/organization/03-holidays.md` | "the Edit modal is full-screen with a bottom sheet for the country picker" | §10.50 §10.56 |
+| `specs/hiring/02-booking-page.design.md` §Responsive ×2 | "`≥ 880px` / `600–879px` / `< 600px`"; "the submit goes full width" | §01.1 §01.3 — `599 → 575`; the submit clause on its own measurement, 320 of 328 at 360 |
+| `specs/hiring/07-manage-booking.design.md` §Responsive ×2 | the same three rows; "the reschedule `Modal` goes **full-bleed**" | §01.1 §01.3; §10.49 — the sheet is the form it takes |
 | `CLAUDE.md` *(reaffirmed, not overruled)* | "`npm run ds:check` fails on a deep import" — true of the document, false of the script | §01.5 corrects `scripts/ds-adherence.js` so the sentence becomes true |
+
+**Amended in the other direction, by a document this one named.** §01.3 and §07.39 each stated
+something about the public booking page that the measurement did not bear out, and
+[02 design §Responsive](../hiring/02-booking-page.design.md#responsive) corrects both **here**,
+beside the statements, rather than in a banner: `879` survives for a different reason than the one
+given (the two Cards fit down to 818; the exception is earned by no ladder number falling inside
+818–991), and a `Calendar` day cell was 44 in one dimension only.
 
 **Not amended, deliberately:** the twenty-nine width statements in eleven documents that use `1024`,
 `768`, `600` or `520`. Requirement 1 is narrowed rather than applied retroactively, and requirement

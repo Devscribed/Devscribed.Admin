@@ -31,7 +31,9 @@ product's own frame.
 
 `BookingLayout` is the `#f8fafc` well `AppShell` paints, with one centred column capped at
 **880px** — wide enough for the calendar and slot list side by side, where `AuthLayout`'s 480px
-card is not. Page padding is 40px top and bottom, 16px at the sides, with 30px under the wordmark:
+card is not. (*"Wide enough" is a floor, not the floor:* the two fit from 818 — see
+[§Responsive](#responsive), which is where the measurement lives and which
+[design-system 01 §01.3](../design-system/01-responsive.md) should cite instead of this line.) Page padding is 40px top and bottom, 16px at the sides, with 30px under the wordmark:
 `AuthLayout`'s own rhythm, deliberately, because a candidate who books and then returns through
 the link in their invite must land on a page they recognise.
 
@@ -267,16 +269,82 @@ this screen a motion vocabulary the rest of the product does not have.
 | Width | Layout |
 |---|---|
 | ≥ 880px | Date and Time Cards side by side, `1fr 1fr`; first and last name on one row |
-| 600–879px | Date and Time stack; the name row stays two columns |
-| < 600px | Everything stacks; the submit goes full width; the slot list caps at `60vh` and scrolls in its own region |
+| 576–879px | Date and Time stack; the name row stays two columns |
+| < 576px | Everything stacks; the zone and the format toggle stack with them; the date grid goes edge to edge inside its Card; the slot list caps at `60vh` and scrolls in its own region |
 
-The breakpoints are this spec's own and do not change — they belong to the content, not to the
-shell, and the system's 1200px `AppShell` breakpoint has nothing to say about a page that does not use
-`AppShell`. They live in `globals.css` because a media query cannot be an inline style, which is
-the same reason `.page-title` and `.ds-sidebar` exist.
+> ~~The third row read `< 600px`, and said the submit goes full width.~~
+> **Overruled by [design-system 01 §01.1](../design-system/01-responsive.md)**, whose ladder puts
+> the `xs`/`sm` boundary at 576 — and by [§01.3](../design-system/01-responsive.md), the row that
+> executes it: *"`599` … **Retired to `575`** … 600 was never measured; it is one off the ladder
+> and reads as a different decision when it is the same one."* This spec is the document §01.3
+> names, so the retirement happens here. The 24px it gives back change nothing: every rule in the
+> band is a stack, and the name row it also governs is 258px per column at 600 and **246 at 576**,
+> both of them a first name with room to spare.
+>
+> The submit clause is struck on its own evidence. `Book` is 320px with `max-width: 100%`
+> (`globals.css`, `.booking-submit > button`), so it is full width only where full width is 320 or
+> less: **320 of 328 at 360**, and 320 of 543 at 575. The paint is not changed to match the
+> sentence, because a 543px `Book` is not a better button than a 320px one — the sentence is
+> changed to match the paint, which is what it always described.
+
+**880 is the one number in the system that is off the ladder and stays** — [§01.3](../design-system/01-responsive.md)
+grants it that on condition a measurement defends it rather than a spec claiming it. Here is the
+measurement, and it is a **range** rather than a point.
+
+Forced to two columns at every width from 700 to 920 and read back, the picker's binding constraint
+is the day cell, whose width is a `1fr` share of what is left after the Card's padding and the
+grid's own gutters:
+
+| Viewport | Card each | Day cell |
+|---|---|---|
+| 767 | 359.5 | 39.9 |
+| 810 | 381 | 43.5 |
+| **818** | **385** | **44.2** |
+| 880 | 416 | 48.5 |
+| 991 | 432 | 50.8 |
+
+So the two-column form is legal from **818** up, where a day cell reaches `--control-height`, and
+below it the grid falls under the height every other control in the system is. **No ladder number
+falls inside 818–991**: `md` is 767, where the cell is 39.9, and `lg` is 991, which would stack the
+two Cards on a screen with 173px of room to spare for them. That absence is what earns the
+exception — not the number itself, which is the page's own and is what ships. Nothing measured asks
+880 to move, and a fold written at 818 would put a derived value in a media query, where any change
+to the Card's padding silently invalidates it.
+
+> ~~[§01.3](../design-system/01-responsive.md) cites the measurement as being at line 33 of this
+> file: *"880 is where the calendar and the slot list stop fitting side by side."*~~
+> **That was not a measurement, and it is not true.** Line 33 is `BookingLayout`'s column cap
+> described as "wide enough", and the two Cards go on fitting down to 818. §01.3's verdict —
+> *survives* — is unchanged; its stated reason is replaced by the table above. Note also that 880
+> is not the cap in effect at 880: the column is `min(880, viewport − 32)`, so it reaches its cap
+> only at a viewport of 912, and at 880 each Card is 416 rather than 432.
+
+**The date grid goes edge to edge inside its Card below `sm`, and the grid's own gutters go with
+the padding.** It is the one control this page exists for, it is seven columns wide, and at 360 the
+column is 328px: the Card's 32px of side padding, the grid's 12.8px inset and its six 5.3px gutters
+are **44.7px of the 328 spent on air**, which leaves a day cell 35.9 wide against a 44px control
+height. Bled and gutterless it is **46.9 × 44**, and all 30 cells clear it.
+
+Both halves are needed and neither is enough alone — bleeding without the gutters gives 40.5, and
+the gutters without the bleed give 42.3. The gutters are `.ds-calendar-row` and `.ds-calendar-body`
+in `base.css`, moved out of `Calendar`'s inline styles for this, at their existing values.
+
+**Not `padded={false}`**, which is the mechanism an edge-to-edge `Table` uses. That bleeds all four
+sides, and three of them are wanted: this Card also draws a centred `Preloader` while a month is in
+flight and a failure message with a retry, both of which would then sit against its edges, and the
+grid needs the vertical padding it was already being given. A negative inline margin on the
+`Calendar` bleeds only the axis that is short. It is set from `useBreakpoint()` rather than a media
+query because an inline style is not a declaration a query can reach.
+
+At the boundary the cell is **77.6 at 575 and 66.8 at 576** — wider on the narrower screen, which is
+the bleed and the gutters changing hands. That is not a defect: stacked at 767 the same cell is
+94.1 today, so 77.6 is well inside the range this page already draws.
+
+The breakpoints live in `globals.css` because a media query cannot be an inline style, which is the
+same reason `.page-title` and `.ds-sidebar` exist.
 
 The date grid keeps seven columns at every width — columns resize, never reflow. The page body
-never scrolls horizontally.
+never scrolls horizontally: `scrollWidth − clientWidth` is 0 at every width from 360 to 1440.
 
 ## Accessibility
 

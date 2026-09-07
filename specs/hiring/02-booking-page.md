@@ -473,6 +473,9 @@ Errors:
   - `booking-submit-button`, `booking-error-banner`
   - `field-error-firstName`, `field-error-lastName`, `field-error-email`, `field-error-cv`,
     `field-error-note`
+  - `slot-list-options` — the region of slot chips, which is the box that caps at `60vh` and
+    scrolls inside itself below `sm`. `slot-list` is its parent and holds the date heading too, so
+    it is the wrong box to measure.
   - control test ids are owned by the control specs.
 
 ## Out of Scope
@@ -734,3 +737,36 @@ Errors:
   1. The not-found state is shown.
   2. No vacancy title, organization name, or interviewer detail appears anywhere in the page.
 - **Selectors:** `booking-not-found`, `booking-vacancy-title` (asserted absent).
+
+### TC-H02-E2E-08: The page folds at 880 and at `sm`, and the grid keeps its target at 360
+- **Level:** E2E
+- **Preconditions:** an open vacancy with availability.
+- **Steps:**
+  1. At 880, read the `Date` grid's box against the slot list's, and the two name fields' boxes.
+  2. At 879, read the same two pairs.
+  3. At 576, read the two name fields' boxes and the slot region's computed `max-height`.
+  4. At 575, read the same two.
+  5. At 360, read **every** day cell's box, and the document's `scrollWidth` against its
+     `clientWidth`.
+- **Expected Result:**
+  1. The grid and the slot list share a `y` and differ in `x` — side by side. The name fields
+     share a `y`. (The **list**, not the region of chips inside it: the chips sit below the Time
+     panel's own date heading, so their top is never the calendar's.)
+  2. They no longer share a `y`; the grid is above. The name fields still share theirs.
+  3. The name fields still share a `y`; the slot region has no `max-height`.
+  4. The name fields no longer share one. The slot region's `max-height` is `60vh` of the viewport
+     and it scrolls inside itself rather than growing the page.
+  5. Every cell is at least 44 wide and 44 tall, and the document does not scroll horizontally.
+- **Why E2E:** every assertion is a laid-out box or a computed style — whether two elements ended up
+  on one line, what a `1fr` share resolved to in pixels, whether a `max-height` in `vh` is in force.
+  None of it exists before a browser has laid the page out, and none of it is reachable from the
+  API. The four widths are read **at the boundary rather than in the middle of a band**: 880 and 879
+  are the same pixel from either side, and so are 576 and 575, which is what makes step 4 an
+  assertion that a `575` was written where a `599` used to be rather than a restatement of the band.
+  Step 5 reads every cell rather than the first, because the first is the one the old arithmetic got
+  right.
+- **Selectors:** `calendar-control`, `slot-list`, `slot-list-options`, `booking-first-name-input`,
+  `booking-last-name-input`, `calendar-day-{date}`.
+- **Covered elsewhere:** that a `Modal` on this page's sibling takes the sheet form below `sm` is
+  [design-system 01 TC-DS01-E2E-09](../design-system/01-responsive.md), asserted on the vacancy
+  dialog, which is the cheaper page. Not repeated here.
