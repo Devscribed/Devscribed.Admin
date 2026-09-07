@@ -891,20 +891,31 @@
   gap: var(--space-3);
 }
 
+/* PATCH-024 — the window's name, between the two arrows that move it. Its width is
+   reserved rather than measured, so stepping from May to September never moves the arrows
+   either side of it; centred, because it now has one of them on each side. */
 .time-off-calendar-range {
   display: inline-block;
   width: var(--range-col);
   white-space: nowrap;
+  text-align: center;
   font-weight: var(--font-weight-medium);
-  margin-left: var(--space-3);
   color: var(--text-primary);
 }
 
+/* PATCH-024 — Today is the only control in this row that is not a step, and it is set
+   apart by the one gap that is wider than the row's own. */
+.time-off-calendar-today {
+  margin-left: var(--space-4);
+}
+
+/* PATCH-024 — under the grid, which is what it is a key to. `margin-top`, where it used to
+   carry `margin-bottom` for the block it sat above. */
 .time-off-calendar-legend {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-8);
-  margin-bottom: var(--space-5);
+  margin-top: var(--space-5);
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
 }

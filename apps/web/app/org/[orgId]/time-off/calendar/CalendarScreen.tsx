@@ -382,6 +382,12 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         title="Time off calendar"
         subtitle="Who is away, and when."
         action={
+          /* PATCH-024 — the window's name sits BETWEEN the arrows that move it, and Today
+              stands apart as the one control here that is not a step. It used to read
+              `‹ Today › September 2026`, which puts the label the arrows change on the far
+              side of them and the button that jumps somewhere else in the middle of the
+              pair. The label keeps its reserved width, so stepping a month still moves
+              nothing but the text. */
           <div className="time-off-calendar-nav">
             <IconButton
               label="Previous window"
@@ -390,9 +396,9 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
             >
               <ChevronLeftIcon />
             </IconButton>
-            <Button onClick={goToToday} data-testid="calendar-today">
-              Today
-            </Button>
+            <span className="time-off-calendar-range" data-testid="calendar-range-label">
+              {rangeLabel(windowChoice, range.startDate, range.endDate)}
+            </span>
             <IconButton
               label="Next window"
               onClick={() => step(1)}
@@ -400,9 +406,13 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
             >
               <ChevronRightIcon />
             </IconButton>
-            <span className="time-off-calendar-range" data-testid="calendar-range-label">
-              {rangeLabel(windowChoice, range.startDate, range.endDate)}
-            </span>
+            <Button
+              className="time-off-calendar-today"
+              onClick={goToToday}
+              data-testid="calendar-today"
+            >
+              Today
+            </Button>
           </div>
         }
       />
@@ -465,25 +475,6 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
           />
         )}
       </ReportControls>
-
-      <div className="time-off-calendar-legend" data-testid="calendar-legend">
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-approved" />
-          Vacation · approved
-        </span>
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-pending" />
-          Vacation · pending
-        </span>
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-holiday" />
-          Public holiday
-        </span>
-        <span>
-          <i className="time-off-calendar-swatch time-off-calendar-swatch-weekend" />
-          Weekend
-        </span>
-      </div>
 
       {/* PATCH-022 — what the window costs, for the people the filter left on screen. The
           grid says who is away and when; these say how much of the window that is, which is
@@ -696,6 +687,30 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
           </div>
         </div>
       ) : null}
+
+      {/* PATCH-024 — the legend belongs to the grid, so it sits under it. Above, between the
+          filters and the figures, it separated the two things that answer the reader's
+          question from each other and explained a grid they had not reached yet. A key is
+          read when something in the picture is not understood, which is after looking at
+          it. */}
+      <div className="time-off-calendar-legend" data-testid="calendar-legend">
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-approved" />
+          Vacation · approved
+        </span>
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-pending" />
+          Vacation · pending
+        </span>
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-holiday" />
+          Public holiday
+        </span>
+        <span>
+          <i className="time-off-calendar-swatch time-off-calendar-swatch-weekend" />
+          Weekend
+        </span>
+      </div>
     </div>
   );
 }
