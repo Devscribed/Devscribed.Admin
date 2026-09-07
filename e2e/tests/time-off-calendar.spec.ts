@@ -938,4 +938,48 @@ test.describe('time-off/01 — Vacation calendar', () => {
     for (const x of xs) expect(x).toBe(xs[0]);
     expect(new Set(labels).size).toBeGreaterThanOrEqual(4);
   });
+
+  // TC-01-E2E-13 (PATCH-005) — the member's country picker is searched by typing, the last
+  // country picker in the product that was not. Earns E2E: the search input, the filtered
+  // list, the No-options row leaving the selection alone, and the value surviving a reload.
+  test("the member's country picker is searchable and the choice survives a reload", async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    const managerEmail = await addMember(request, adminEmail, 'manager', 'Maya', 'Manager');
+    const memberEmail = await addMember(request, adminEmail, 'user', 'Nina', 'Nowhere');
+    const member = await findMember(request, org.organizationId, memberEmail);
+
+    await signInUi(page, managerEmail);
+    await page.goto(`/org/${org.organizationId}/members/${member.id}`);
+    await expect(page.getByTestId('member-detail-name')).toHaveText('Nina Nowhere');
+
+    const control = page.getByTestId('member-country-select');
+    const input = page.getByTestId('member-country-select-input');
+    const list = page.getByRole('listbox', { name: 'Country' });
+
+    // A query that matches nothing draws the control's own No-options row and leaves the
+    // stored value — here the default option, which is what a `null` renders as — alone.
+    await input.fill('zzzz');
+    await expect(list).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(0);
+    await expect(list).toContainText('No options');
+    await expect(control).toContainText(TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption);
+
+    await input.fill('pola');
+    await expect(list.getByRole('option')).toHaveCount(1);
+    await list.getByRole('option').click();
+    await expect(input).toHaveValue('');
+    await expect(control).toContainText('Poland');
+
+    // One save, one toast — the button the role and the job title already share.
+    await page.getByTestId('job-title-save-button').click();
+    await expect(page.getByTestId('toast-member-saved')).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByTestId('member-detail-name')).toHaveText('Nina Nowhere');
+    await expect(control).toContainText('Poland');
+  });
 });

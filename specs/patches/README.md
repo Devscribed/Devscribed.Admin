@@ -43,6 +43,7 @@ spec, and writing it as a patch only moves where the run stops.
 | [002](PATCH-002-needed-by-upper-bound.md) | A needed-by date more than five years out is refused | requests/01, requirement 8 | TC-01-UNIT-07, TC-01-INT-23 |
 | [003](PATCH-003-new-request-addressee-first.md) | The addressee is chosen first, and the project chooses the contact | requests/03 | TC-03-E2E-06, TC-01-E2E-01 |
 | [004](PATCH-004-holiday-country-pickers-searchable.md) | The holiday country pickers are searched by typing | organization/03 | TC-03-E2E-10, TC-01-E2E-09 |
+| [005](PATCH-005-member-country-picker-searchable.md) | The member's country picker is searched by typing | time-off/01 | TC-01-E2E-13 |
 
 PATCH-001 is the mock fixture the track was built against and is not indexed as product work.
 

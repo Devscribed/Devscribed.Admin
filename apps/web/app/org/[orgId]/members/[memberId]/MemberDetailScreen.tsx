@@ -334,14 +334,23 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
                     caller holds edit-detail"), never read-only. The first option means
                     "use the organization's country", which is what `null` stores. */}
                 {detail.canEditJobTitle && (
-                  <Select
-                    label="Country"
-                    options={MEMBER_COUNTRY_OPTIONS}
-                    value={optionFor(MEMBER_COUNTRY_OPTIONS, countryCode)}
-                    onChange={(option) => setCountryCode(valueOf(option))}
-                    isDisabled={saving}
-                    data-testid="member-country-select"
-                  />
+                  /* PATCH-005 — searchable, so `member-country-select` moves onto this
+                     wrapper: §21 puts the control's own attributes, `data-testid` included,
+                     on the inner `<input>` once a `Select` is searchable, and the chosen
+                     value then sits in a sibling span the wrapper still contains. The input
+                     takes its own id. The wrapper stays inside this guard, so the id is as
+                     absent for a caller who may not save as the control was. */
+                  <div data-testid="member-country-select">
+                    <Select
+                      label="Country"
+                      options={MEMBER_COUNTRY_OPTIONS}
+                      value={optionFor(MEMBER_COUNTRY_OPTIONS, countryCode)}
+                      onChange={(option) => setCountryCode(valueOf(option))}
+                      isDisabled={saving}
+                      isSearchable
+                      data-testid="member-country-select-input"
+                    />
+                  </div>
                 )}
 
                 {detail.canEditJobTitle && (
