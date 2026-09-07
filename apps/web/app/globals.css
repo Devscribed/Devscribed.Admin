@@ -862,14 +862,19 @@
  * `--surface-timeoff-band`, `--border-timeoff-band` and `--text-timeoff-band`: the design
  * system carries no absence-band colour. Violet, which none of the status colours and none
  * of `--color-holiday` uses, so a band reads as a category and not as a claim about how
- * somebody is doing. `--name-col`: no token carries a pinned first column's width. All
- * four close by entering `@devscribed/ds` and this block losing them in the same change.
+ * somebody is doing. `--name-col`: no token carries a pinned first column's width.
+ * `--range-col` (BUG-013): no token carries a reserved width for a variable-width label
+ * beside controls that must not move when it changes — the widest string `rangeLabel` can
+ * return is a Week or 2 weeks range crossing both a month and a year boundary, e.g.
+ * `28 Dec 2026 – 10 Jan 2027`. All five close by entering `@devscribed/ds` and this block
+ * losing them in the same change.
  */
 .time-off-calendar {
   --surface-timeoff-band: oklch(0.9 0.06 285);
   --border-timeoff-band: oklch(0.55 0.14 285);
   --text-timeoff-band: oklch(0.38 0.12 285);
   --name-col: 264px;
+  --range-col: 26ch;
 }
 
 .time-off-calendar-nav {
@@ -879,6 +884,9 @@
 }
 
 .time-off-calendar-range {
+  display: inline-block;
+  width: var(--range-col);
+  white-space: nowrap;
   font-weight: var(--font-weight-medium);
   margin-left: var(--space-3);
   color: var(--text-primary);

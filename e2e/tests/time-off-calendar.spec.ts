@@ -580,4 +580,39 @@ test.describe('time-off/01 — Vacation calendar', () => {
     // overlaps.
     expect(hintBox.y + hintBox.height).toBeLessThanOrEqual(filterBox.y);
   });
+
+  // TC-01-E2E-12 (BUG-013) — the range label used to be the flex row's last, unsized child
+  // in a row pinned to the header's right edge, so `‹`, Today and `›` slid sideways by the
+  // width the label gained or lost on every step. Earns E2E: a rendered box position under a
+  // real font, out of reach of an API test and of a unit test over the label builder.
+  test('the calendar navigation controls hold still while the range label changes width', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+
+    await signInUi(page, adminEmail);
+    await openCalendar(page);
+    await page.getByTestId('calendar-window-month').click();
+
+    const today = page.getByTestId('calendar-today');
+    const label = page.getByTestId('calendar-range-label');
+
+    const firstBox = await today.boundingBox();
+    if (!firstBox) throw new Error('expected calendar-today to be measurable');
+
+    const xs = [firstBox.x];
+    const labels = [await label.textContent()];
+    for (let i = 0; i < 11; i += 1) {
+      await page.getByTestId('calendar-next').click();
+      const box = await today.boundingBox();
+      if (!box) throw new Error('expected calendar-today to be measurable');
+      xs.push(box.x);
+      labels.push(await label.textContent());
+    }
+
+    for (const x of xs) expect(x).toBe(xs[0]);
+    expect(new Set(labels).size).toBeGreaterThanOrEqual(4);
+  });
 });
