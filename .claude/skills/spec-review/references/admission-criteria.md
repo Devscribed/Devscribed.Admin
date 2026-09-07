@@ -59,7 +59,7 @@ disagree, the source governs and the disagreement is a defect of this page.
 | S-03 | Every status the spec attributes to a route that already ships is the status that route returns today. | `spec/stale-statement` | blocks | any | spec-review |
 | S-04 | Every schema fact the spec attributes to today — column, type, nullability, default, uniqueness, enum member — matches `apps/api/prisma/schema.prisma`. | `spec/stale-statement` | blocks | any | spec-review |
 | S-05 | Every "today the code does X" claim is true of the code today. | `spec/stale-statement` | blocks | any | spec-review |
-| S-06 | Every `@ds` export the spec relies on is exported by `apps/web/src/ds.ts`, and one that is not has a `## DS gaps` row. | `spec/stale-statement` | blocks | contracts | CLAUDE.md — Design system |
+| S-06 | Every `@ds` export the spec relies on is exported from the package root, `packages/ds/src/index.ts`, and one that is not has a `## DS gaps` row. A deep import into a component file is not an export this spec may rely on. | `spec/stale-statement` | blocks | contracts | CLAUDE.md — Design system |
 | S-07 | Every premise about the pipeline, the deploy or the test rig is cited by file path rather than restated. | `spec/stale-statement` | blocks | any | checklist — Consistency |
 | S-08 | Every number the spec states about its own contents equals the thing it counts. | `spec/stale-statement` | blocks | any | spec-review |
 
@@ -76,6 +76,8 @@ disagree, the source governs and the disagreement is a defect of this page.
 | S-15 | Every rule has the data it needs — column, nullability, uniqueness, index — either in the schema today or in a migration this spec owns; and no column this spec adds is written by no rule. | `spec/contradiction` | blocks | judge | spec-review |
 | S-16 | No rule makes another unreachable: a refusal that fires before the check it complements, an ordering that leaves a second answer unobservable, two numbers for one set. | `spec/contradiction` | blocks | judge | spec-review |
 | S-17 | No requirement has two readings that produce materially different implementations. | `spec/ambiguous-requirement` | blocks | judge | spec-review |
+| S-59 | Every set of values the spec states more than once agrees with itself. List each one and the places that state it — the values a control offers, the values a rule accepts, the values a message names, the values a case sends, the values a column may hold — and read them against each other. A value one place offers and another refuses is a contradiction whichever is right. | `spec/contradiction` | blocks | judge | spec-review |
+| S-60 | A section this spec delegates to another document by pointing at it — blast radius and backward compatibility in the area `README.md`, and anything else the bundle owes and answers with a pointer — is this spec's section, and every claim in it is judged as if it stood here. List the documents the bundle points at that way and read them. A claim there the code refutes blocks under this id; one that disagrees with the bundle is S-09's. | `spec/stale-statement` | blocks | judge | spec-review |
 
 ## Repository conventions a spec may not overrule
 
@@ -102,7 +104,7 @@ opposite is a contradiction against the repository, and the repair is the spec's
 | id | The question | rule | severity | where | source |
 |---|---|---|---|---|---|
 | S-30 | The reference test: cover every mention of another spec and read the sentence again — nothing the implementer needs went away with it. | `spec/incomplete-decision` | blocks | any | spec-review |
-| S-31 | Every route the spec adds or changes states its audience, its request, its response, every status it answers and every message it emits. | `spec/incomplete-decision` | blocks | contracts | spec-review |
+| S-31 | Every route the spec adds or changes states its audience, its request, its response, every status it answers and every message it emits. Then read the join the other way: list every value a screen must display, a case must assert or a rule must read, and name the route that supplies each. A value the spec requires and no route returns is a route the spec owes and has not stated — a table of well-formed rows cannot show a row that is missing. | `spec/incomplete-decision` | blocks | contracts | spec-review |
 | S-32 | Every behaviour this spec changes from what an older document describes is stated here in full, and the older document is neither edited nor marked. | `spec/incomplete-decision` | blocks | any | checklist — Consistency |
 | S-33 | Every vocabulary the spec introduces is enumerated exhaustively — the stored value and the displayed label of each member. | `spec/incomplete-decision` | blocks | any | spec-review |
 | S-34 | No "TBD", no "decide later", no requirement without stated behaviour. | `spec/incomplete-decision` | blocks | any | checklist — Prose |
@@ -113,7 +115,7 @@ opposite is a contradiction against the repository, and the repair is the spec's
 
 | id | The question | rule | severity | where | source |
 |---|---|---|---|---|---|
-| S-36 | Every case's steps can reach the state it asserts, under this spec's own rules. | `spec/untestable-case` | blocks | cases | spec-review |
+| S-36 | Every case's steps can reach the state it asserts, under this spec's own rules. List each case: the rows its steps seed, the field values its expected result asserts, and the rule or column that would have to produce each. A case that seeds one row of an entity and asserts two values of a field that entity holds once cannot run, whichever value is right. Then ask of each the same question about time: **can these steps run whenever the suite runs?** A fixture seeded through a route the product guards by date, or an expected result true only on some days, is a case that stops working with nobody having changed it — and the day it stops is not a day anyone chose. | `spec/untestable-case` | blocks | cases | spec-review |
 | S-37 | Every expected result follows from the steps that precede it. | `spec/untestable-case` | blocks | cases | spec-review |
 | S-38 | Every acceptance criterion is settled by one observation, and does not restate a functional requirement. | `spec/untestable-case` | blocks | behaviour | checklist — Coverage |
 | S-39 | A case amended for a new contract is amended on its Expected Result as well as its Steps. | `spec/untestable-case` | blocks | cases | checklist — Consistency |

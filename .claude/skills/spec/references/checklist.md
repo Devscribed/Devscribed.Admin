@@ -56,6 +56,11 @@ governs** — it is what the loop enforces — and the disagreement is a defect 
       hangs off answered.
 - [ ] **(blocks)** Every state a test case names has a route, and the route either exists today or
       is a task this spec owes.
+- [ ] **(blocks)** Every case's asserted values can be produced at once by one fixture under this
+      spec's own rules — no field an entity holds once is asserted with two values.
+- [ ] **(blocks)** No integration or E2E case seeds or asserts a calendar date; every date is
+      derived from the run's own today, and a case needing another month names the control that
+      navigates to it.
 - [ ] **(author)** Every acceptance criterion names its observer.
 - [ ] **(author)** Every credential, account or tool the checking needs was obtained, used once
       against the live system, and left where the next agent finds it.

@@ -49,6 +49,7 @@ export function readRegister(root, which) {
     severity: new Map(),
     where: new Map(),
     question: new Map(),
+    family: new Map(),
     exists: existsSync(path),
   };
   if (out.exists) {
@@ -56,7 +57,12 @@ export function readRegister(root, which) {
        at the end of every row, and `.` does not match a carriage return — so the row regex below
        matches nothing, every register reads as empty, and enforcement turns itself off in
        silence. That is the one failure a gate must not have. */
+    let family = '(none)';
     for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+      /* The heading a row sits under. Criteria in one section ask one kind of question — the
+         document against the code, or the document against itself — and a shape that divides the
+         register between passes divides it along that seam and not by counting rows. */
+      if (line.startsWith('## ')) family = line.slice(3).trim();
       const m = line.match(/^\|\s*((?:S|CR)-\d+)\s*\|(.*)$/);
       if (!m) continue;
       out.ids.add(m[1]);
@@ -70,6 +76,7 @@ export function readRegister(root, which) {
       /* The criterion's own text, so a shard is handed the question rather than a page to read
          and an id to find in it. */
       if (cells[0]) out.question.set(m[1], cells[0]);
+      out.family.set(m[1], family);
     }
   }
   cache.set(key, out);

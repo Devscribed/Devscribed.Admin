@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 
 import { enforceCriteria, readRegister } from './criteria.mjs';
 import { loadConfig, stageFor, timeoutFor } from './ship-config.mjs';
-import { bundleMembers, stemFor } from './spec-paths.mjs';
+import { bundleMembers, repairPaths, stemFor } from './spec-paths.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -122,7 +122,7 @@ function headSha() {
  */
 function commitGate(ledger, { round, gate, summary, spec }) {
   if (dryRun) return null;
-  const files = ['.workflow/refine', ...(spec ? [spec, ...bundleMembers(spec)] : [])]
+  const files = ['.workflow/refine', ...(spec ? [spec, ...repairPaths(spec)] : [])]
     .filter((f) => existsSync(join(ROOT, f)));
   try { git('add', '--', ...files); } catch { /* nothing staged */ }
   /* Both halves are limited to this gate's paths. A gate runs for a quarter of an hour while a
@@ -264,6 +264,9 @@ function finish(ledger, status, reason, detail) {
 }
 
 /* ── T0 ───────────────────────────────────────────────────────────────────── */
+
+/* A lint finding's identity is its rule and its place, never its line: the repair moves lines. */
+const lintKey = (f) => `${f.rule}:${(f.message ?? '').split(/[\s,]/)[0]}`;
 
 function gateLint(spec) {
   step('T0  spec-lint');
@@ -496,13 +499,14 @@ async function gatePlan(spec, ledger, round) {
   }, null, 2)}\n`);
 
   const verdictPath = `${dir}/pre_implement.verdict.json`;
-  const prompt =
-    `Compile the specification into a plan. The run is at \`${dir}/run.json\`; the spec it names is `
-    + `\`${spec}\`, and its bundle members beside it are part of it. Write the handoff to `
-    + `\`${dir}/handoff.json\` and your report to \`${dir}/stages/pre_implement.md\`. `
-    + `Write your verdict to \`${verdictPath}\` in the schema from your agent definition. `
-    + `Nothing is implemented yet and nothing will be implemented from this plan — it is run to `
-    + `find out whether the spec can be compiled at all.`;
+  const prompt = JSON.stringify({
+    run: `${dir}/run.json`,
+    spec,
+    handoff: `${dir}/handoff.json`,
+    report: `${dir}/stages/pre_implement.md`,
+    verdict: verdictPath,
+    probe: true,
+  }, null, 2);
 
   /* The same compiler the pipeline runs, read the same way — the point of running T1 here is
      that it is the pipeline's own gate, not a second opinion configured separately. */
@@ -528,96 +532,196 @@ const lastVerdictPath = (ledger, round) =>
 const lastFixPath = (ledger, round) =>
   `.workflow/refine/${ledger.stem}.probe/${round - 1}/fix.verdict.json`;
 
-async function gateJudge(spec, ledger, round, request, since) {
-  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name})`);
-  const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
-  const prompt = [
-    spec,
-    '',
-    request || 'no request given',
-    '',
-    /* The split is computed and offered; whether to use it is the judge's. `spec-slice` prints
-       one shard per member of the bundle with the criteria that member settles, so a judge that
-       delegates does not have to invent the division — and one that does not delegate says so
-       in the verdict rather than leaving the choice invisible. */
-    `Run \`node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''}`
-    + ` --shape ${SHAPE.name}\` first. It prints the bundle, this pass's mode, and a ready`,
-    `split: one shard per member, the criteria that member settles, and the shard agent to use.`,
-    ``,
-    `**Dispatching is yours to decide.** Delegate when the reading is more than one pass should`,
-    `hold, and read it yourself when it is not. Either way the verdict says which you did and`,
-    `why, in \`shardDecision\`, and records every shard you dispatched in \`shards\`.`,
-    ``,
-    since
-      ? [
-        `Judge the change: this document has already been judged in full and repaired. The range `
-        + `is \`${since}..HEAD\`. Sweep the lines that commit changed and the rules those lines `
-        + `touch, plus contradiction across the whole document. A statement outside the range is a `
-        + `statement an earlier pass accepted.`,
-        ``,
-        /* What the repair was answering, and what it says it did. Judging a repair without them
-           is judging a diff whose purpose is invisible: the same finding gets filed again
-           because the change reads as unmotivated, and the loop halts on `stuck-finding` over a
-           question the fixer settled on purpose. These are the claim and the receipt — check
-           them against the document, never accept them. A finding recorded as fixed that the
-           text does not carry is the most valuable thing you can find in this pass. */
-        `What that repair was answering is in \`${lastVerdictPath(ledger, round)}\`, and what the`,
-        `fixer says it did about each finding — including what it settled by deciding, and the`,
-        `alternative it rejected — is in \`${lastFixPath(ledger, round)}\`. Read both.`,
-        ``,
-        `They are a claim to check, never a conclusion to accept. A finding listed as fixed is`,
-        `fixed only if the document now carries the repair; a decision recorded there is one the`,
-        `fixer made, not one you are bound by. Where the record and the text disagree, the text`,
-        `is what ships and the disagreement is your finding.`,
-      ].join('\n')
-      : 'Judge the document in full. This is its first pass.',
-    '',
-    /* Where to put the answer, in the prompt and not only in the definition. Twice a range pass
-       has ended in a markdown report addressed to whoever dispatched it: told to check two
-       records and never told what to produce, the agent produces the natural artefact of
-       checking. A pass that judges correctly and writes nowhere costs the same as one that
-       failed, and its verdict — `clear` on both occasions — is lost. */
-    `Write your verdict to \`${verdictPath}\`. That file is the only output of this pass: a`,
-    `judgement that is not in it did not happen, whatever you say in your final message. Write it`,
-    `even when nothing blocks — \`"status": "pass"\` with an empty \`findings\` array is a verdict`,
-    `and is the outcome this loop is looking for. Then print the same JSON and nothing after it.`,
-  ].join('\n');
+/**
+ * Two judgements of one text, as one verdict.
+ *
+ * A pass reads a bundle larger than it holds and answers a criterion by what it noticed, so two
+ * passes over identical text return overlapping but different sets. Taking the union is what
+ * turns "what this pass saw" into "what a pass of this kind sees", and it costs a second pass
+ * and no wall clock when they run together.
+ *
+ * The merge is worst-case per criterion, findings deduplicated on their key, and `raisedBy` on
+ * each finding — a finding two passes filed independently is worth reading before one that a
+ * single pass filed.
+ */
+const WORST = ['clear', 'n/a', 'note', 'blocked'];
+function unionVerdicts(verdicts) {
+  const kept = verdicts.filter((v) => v && v.status !== 'error');
+  if (kept.length <= 1) return kept[0] ?? verdicts[0];
 
-  return runAgent({
-    agent: JUDGE_AGENT,
-    model: JUDGE_MODEL,
-    prompt,
-    verdictPath,
-    timeoutMin: RC.timeoutMin ?? 45,
-    logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}`,
-  });
+  const criteria = {};
+  for (const v of kept) {
+    for (const [id, answer] of Object.entries(v.criteria ?? {})) {
+      const a = WORST.indexOf(answer);
+      const b = WORST.indexOf(criteria[id] ?? 'clear');
+      criteria[id] = a > b ? answer : (criteria[id] ?? answer);
+    }
+  }
+
+  /* The place and the severity identify a finding; the rule and the file are what each pass
+     made of it, and both are kept. */
+  const idOf = (f) => `${placeOf(f)}|${f.severity ?? '?'}`;
+  const byKey = new Map();
+  for (const v of kept) {
+    for (const f of v.findings ?? []) {
+      const seen = byKey.get(idOf(f));
+      if (seen) {
+        seen.raisedBy += 1;
+        if (!seen.rules.includes(f.rule)) seen.rules.push(f.rule);
+        if (!seen.criteria.includes(f.criterion)) seen.criteria.push(f.criterion);
+        if (!seen.files.includes(f.file)) seen.files.push(f.file);
+        continue;
+      }
+      byKey.set(idOf(f), { ...f, raisedBy: 1, rules: [f.rule], criteria: [f.criterion], files: [f.file] });
+    }
+  }
+  const findings = [...byKey.values()]
+    .sort((a, b) => (b.raisedBy - a.raisedBy) || String(a.id ?? '').localeCompare(String(b.id ?? '')));
+
+  const sweeps = {};
+  for (const v of kept) {
+    if (!v.sweeps || Array.isArray(v.sweeps) || typeof v.sweeps !== 'object') continue;
+    for (const [k, n] of Object.entries(v.sweeps)) {
+      if (typeof n === 'number') sweeps[k] = Math.max(sweeps[k] ?? 0, n);
+    }
+  }
+
+  return {
+    ...kept[0],
+    status: kept.some((v) => v.status === 'blocked') ? 'blocked' : kept[0].status,
+    admitted: kept.every((v) => v.admitted !== false) ? kept[0].admitted : false,
+    criteria,
+    findings,
+    sweeps: Object.keys(sweeps).length ? sweeps : kept[0].sweeps,
+    /* Concatenated, not maxed: where the register is divided, neither pass covers the bundle and
+       between them they must. Duplicates across passes are the overlap, and cost nothing. */
+    enumerated: kept.flatMap((v) => (Array.isArray(v.enumerated) ? v.enumerated : [])),
+    passes: kept.length,
+    shardDecision: kept.map((v, i) => `pass ${i + 1}: ${v.shardDecision ?? 'no decision recorded'}`).join(' — '),
+  };
+}
+
+/* Where the lead writes its division of the register, and where `spec-shards.mjs` reads it back
+   from. One path, named in the prompt and passed to the tool, so neither can drift from it. */
+const planPathFor = (ledger, round) => `.workflow/refine/${ledger.stem}.probe/${round}/plan.json`;
+
+async function gateJudge(spec, ledger, round, request, since) {
+  const passes = Math.max(1, Number(SHAPE.judgePasses ?? 1));
+  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, shape ${SHAPE.name}${SHAPE.plannedShards ? `, ${SHAPE.plannedShards} children dispatched by the loop` : ''}${passes > 1 ? `, ${passes} passes unioned` : ''})`);
+  const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
+  /* The pass, as values. Every rule about how to judge, what to run first, what a range pass
+     reads and where the answer goes is in the judge’s definition. */
+  const buildPrompt = (out, extra = {}) => JSON.stringify({
+    spec,
+    request: request || null,
+    mode: since ? 'range' : 'full',
+    since,
+    shape: SHAPE.name,
+    verdict: out,
+    ...(since ? { answered: lastVerdictPath(ledger, round), repair: lastFixPath(ledger, round) } : {}),
+    ...(SHAPE.plannedShards ? { children: SHAPE.plannedShards, plan: planPathFor(ledger, round) } : {}),
+    ...(SHAPE.minShards ? { children: SHAPE.minShards } : {}),
+    ...extra,
+  }, null, 2);
+
+  const outFor = (n) => (passes === 1 ? verdictPath
+    : `.workflow/refine/${ledger.stem}.probe/${round}/pass-${n}.verdict.json`);
+
+  /**
+   * Which criteria each pass owns, when the shape divides them.
+   *
+   * `judgeSplit` is a list of groups, one per pass, each naming register sections by a prefix of
+   * their heading. Two passes over the same whole register overlap on what both find easy and
+   * leave the same gaps; two that own different questions do not. Sections, not counts: the
+   * register's own headings are where one kind of question ends and another begins.
+   *
+   * A section no group claims goes to every pass, so a heading added later is over-covered rather
+   * than dropped.
+   */
+  const splitFor = (i) => {
+    const groups = SHAPE.judgeSplit;
+    if (!Array.isArray(groups) || !groups[i]) return null;
+    const claimed = new Set(groups.flat());
+    const mine = groups[i];
+    const owns = (fam) => {
+      const hit = (g) => mine.some((p) => fam.startsWith(p));
+      return hit() || ![...claimed].some((p) => fam.startsWith(p));
+    };
+    return [...SPEC_CRITERIA.ids]
+      .filter((id) => owns(SPEC_CRITERIA.family.get(id) ?? '(none)'))
+      .sort();
+  };
+
+  /* A shape that names a child count is checked against the verdict, and a pass that
+     under-dispatched is run once more with `shardsRecorded` naming what it did. */
+  const dispatchOf = async (i) => {
+    const out = outFor(i + 1);
+    const stem = `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}${passes === 1 ? '' : `.pass-${i + 1}`}`;
+    const owned = splitFor(i);
+    const call = (shardsRecorded) => runAgent({
+      agent: JUDGE_AGENT,
+      model: JUDGE_MODEL,
+      prompt: buildPrompt(out, {
+        ...(owned ? { pass: i + 1, of: passes, criteria: owned } : {}),
+        ...(shardsRecorded === undefined ? {} : { shardsRecorded }),
+      }),
+      verdictPath: out,
+      timeoutMin: RC.timeoutMin ?? 45,
+      logStem: shardsRecorded === undefined ? stem : `${stem}.redispatch`,
+    });
+    let v = await call(undefined);
+    const short = (x) => SHAPE.minShards && !dryRun && x && x.status !== 'error'
+      && (x.shards ?? []).length < SHAPE.minShards;
+    if (short(v)) {
+      note(`the lead recorded ${(v.shards ?? []).length} shard(s) of ${SHAPE.minShards} — re-running the pass`);
+      v = await call((v.shards ?? []).length);
+      if (short(v)) note(`the lead recorded ${(v.shards ?? []).length} shard(s) again — recorded as it stands`);
+    }
+    return v;
+  };
+
+  const answers = await Promise.all(Array.from({ length: passes }, (_, i) => dispatchOf(i)));
+
+  if (passes === 1) return answers[0];
+
+  const errors = answers.filter((v) => !v || v.status === 'error');
+  if (errors.length === answers.length) return answers[0];
+  if (errors.length) note(`${errors.length} of ${passes} passes produced no verdict; the union is of the rest`);
+
+  const union = unionVerdicts(answers);
+  const raised = (union.findings ?? []).filter((f) => f.severity === 'blocker');
+  note(`${passes} passes: ${raised.length} distinct blocker(s), `
+    + `${raised.filter((f) => f.raisedBy > 1).length} of them raised by more than one`);
+  if (!dryRun) writeFileSync(join(ROOT, verdictPath), `${JSON.stringify(union, null, 2)}\n`);
+  return union;
 }
 
 /* ── repair ───────────────────────────────────────────────────────────────── */
 
-async function repair(spec, ledger, round) {
+async function repair(spec, ledger, round, lintFindings = []) {
   step(`fix  ${FIXER_AGENT}  (round ${round})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
+  /* The script's findings join the judge's in the one file the fixer reads. They carry no
+     criterion — no register entry decided them — so the demotion leaves them as notes, and the
+     fixer repairs every finding it is given. */
+  if (!dryRun && lintFindings.length) {
+    const abs = join(ROOT, verdictPath);
+    const v = existsSync(abs) ? JSON.parse(readFileSync(abs, 'utf8').replace(/^﻿/, '')) : { findings: [] };
+    v.findings = [...(v.findings ?? []), ...lintFindings.map((f, i) => ({
+      id: `L${i + 1}`, severity: 'note', criterion: null, rule: f.rule,
+      file: f.file, line: f.line, claim: f.message,
+      witness: { kind: 'command', detail: f.message, source: `node scripts/spec-lint.mjs ${spec}` },
+      suggestedFix: f.fix ?? null, raisedBy: 'spec-lint',
+    }))];
+    writeFileSync(abs, `${JSON.stringify(v, null, 2)}
+`);
+  }
   const fixPath = `.workflow/refine/${ledger.stem}.fix.json`;
-  /* The output path is named here, as it is for the pre-implementer. It used to be sent as two
-     bare paths and the agent had to derive where to write from its own definition; it repaired
-     the whole verdict across four files, made 52 edits, and never called Write once. An agent
-     told what to read and not where to put the answer is being asked to guess the one thing the
-     orchestrator will check. */
-  const prompt = [
-    `Repair every finding in the verdict.`,
-    ``,
-    `Spec: \`${spec}\` — its bundle members beside it are part of it.`,
-    `Verdict: \`${verdictPath}\``,
-    ``,
-    `Write your record of the repair to \`${fixPath}\`, in the schema from your agent definition,`,
-    `and print the same JSON. The loop reads that file and nothing else: a repair you made and`,
-    `did not record there is a repair the loop cannot see, and the round stops as an error.`,
-  ].join('\n');
   return runAgent({
     agent: FIXER_AGENT,
     model: FIXER_MODEL,
-    prompt,
+    /* Three paths. What to do with them is the fixer's definition. */
+    prompt: JSON.stringify({ spec, verdict: verdictPath, record: fixPath }, null, 2),
     verdictPath: fixPath,
     timeoutMin: RC.timeoutMin ?? 45,
     logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${FIXER_AGENT}`,
@@ -693,6 +797,24 @@ function criteriaShift(ledger, round, verdict) {
 
 const blockersOf = (v) => (v.findings ?? []).filter((f) => f.severity === 'blocker');
 const keyOf = (f) => `${f.rule ?? '?'}:${f.symbol ?? f.file ?? '?'}`;
+/* What identifies a finding across passes.
+ *
+ * Not the rule: two passes name one defect under two — the same disagreement arrives as an
+ * ambiguity from one and as a contradiction from another — so a key carrying the rule reads a
+ * survivor as something new, and the check that exists to stop a loop repairing one finding
+ * twice never fires.
+ *
+ * Not the file either: one pass files a finding against the member it is in and another against
+ * the spec it was given, and both readings have been in the definition at once.
+ *
+ * The symbol is what does not move — a requirement id, a case id, a table, a section — once the
+ * qualifier a pass puts in front of it is dropped. */
+const symbolOf = (f) => String(f.symbol ?? f.line ?? '?')
+  .replace(/^.*[·:]\s*/, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+const placeOf = (f) => symbolOf(f);
 
 /**
  * Lines a commit added to the bundle, net of what it removed. A repair that answers a finding
@@ -700,6 +822,34 @@ const keyOf = (f) => `${f.rule ?? '?'}:${f.symbol ?? f.file ?? '?'}`;
  * deletes a sentence adds none. The number is the cheapest signal that a loop is growing the
  * thing it is refining, and it is read from git rather than from the fixer's account of itself.
  */
+/**
+ * What the bundle obliges a sweep to have listed.
+ *
+ * The cases and the requirements are headings on disk, so the length of two of the judge's lists
+ * is not its own to decide. Nothing else is counted here: the currency sweep ranges over claims
+ * no script can enumerate, and a floor invented for it is a number the judge learns to satisfy
+ * rather than a reading it has to do.
+ */
+function bundleCounts(spec, criteria) {
+  const count = (file, re) => {
+    const abs = join(ROOT, file);
+    if (!existsSync(abs)) return 0;
+    return readFileSync(abs, 'utf8').split(/\r?\n/).filter((l) => re.test(l)).length;
+  };
+  /* A pass that owns a divided register is owed the lists of the families it holds and no
+     others: a currency pass has no business enumerating the cases, and a floor it cannot meet
+     is a floor it satisfies by padding. */
+  const owns = (family) => !criteria || [...(SPEC_CRITERIA.ids ?? [])]
+    .some((id) => criteria.includes(id) && (SPEC_CRITERIA.family.get(id) ?? '').startsWith(family));
+  const base = spec.replace(/\.md$/, '');
+  const owed = {};
+  const cases = count(`${base}.cases.md`, /^#{2,4}\s+TC-\d+-(UNIT|INT|E2E)-\d+/);
+  if (cases && owns('Testability')) owed.testability = cases;
+  const reqs = count(spec, /^#{2,4}\s+REQ-\d+-\d+/);
+  if (reqs && owns('Obligations')) owed.obligations = reqs;
+  return owed;
+}
+
 function growthOf(sha, spec) {
   if (!sha) return 0;
   const out = git('diff', '--numstat', `${sha}~1..${sha}`, '--', spec, ...bundleMembers(spec));
@@ -752,17 +902,30 @@ async function main() {
     commitGate(ledger, { round, gate: 'T0 spec-lint', summary: lint.findings.length ? `${lint.findings.length} finding(s)` : 'clean' });
     if (lint.findings.length) {
       for (const f of lint.findings.slice(0, 20)) note(`${f.file}:${f.line}  ${f.rule} — ${f.message}`);
-      finish(ledger, 'blocked', 'lint',
-        `${lint.findings.length} lint finding(s). Every one has a mechanical repair and no judgement in it; `
-        + 'fix them and run again rather than paying a model to edit text.');
-    }
-    note('clean');
+      /* A finding a script can state is a finding the fixer can repair, so it rides into the
+         verdict rather than stopping the run. One that needs a person comes back in the fixer's
+         `left`, which halts on its own. A finding that survived the repair that was given it has
+         been tried. */
+      const stuck = (ledger.rounds[round - 2]?.lintKeys ?? []).filter((k) => lint.findings.some((f) => lintKey(f) === k));
+      if (stuck.length) {
+        finish(ledger, 'blocked', 'stuck-lint',
+          `${stuck.join(', ')} survived a repair. The lint states it, the fixer did not clear it, `
+          + 'and a person decides.');
+      }
+      note(`${lint.findings.length} finding(s), repaired with the verdict`);
+    } else note('clean');
+    record.lintKeys = lint.findings.map(lintKey);
 
     /* T2 — the judge. Full on the first round; the previous repair's range after that. */
     let verdict = null;
     let gate = null;
     if (!skip.has('t2')) {
-      const since = round > 1 ? ledger.rounds[round - 2]?.commit ?? null : null;
+      /* The base is the previous round's *starting* head, not its repair commit. `commit..HEAD`
+         excludes the repair the pass exists to judge, and `spec-slice` then reports an empty
+         bundle diff — which reads as "the fixer touched nothing" and convicts a fixer that did
+         its work. `head..HEAD` spans that round's lint, verdict and repair commits. */
+      const prior = round > 1 ? ledger.rounds[round - 2] : null;
+      const since = prior ? prior.head ?? prior.commit ?? null : null;
       verdict = await gateJudge(spec, ledger, round, request, since);
       if (verdict.status === 'error') finish(ledger, 'error', 'judge-error', verdict.error);
       /* A judged pass that reports no criterion did not run one. The register says so — "a
@@ -778,6 +941,62 @@ async function main() {
           `the verdict carries no criteria map, so no enumerated criterion was run. `
           + `Re-run the round; a pass that reports nothing is not a pass.`);
       }
+      /* An admission rests on an enumeration. `sweeps` is where the judge says how many items
+         each sweep listed — "a sweep reporting zero enumerated is a sweep that did not run" —
+         and a pass whose sweeps are prose, or absent, has recorded no enumeration at all. A
+         blocked verdict is going to be repaired and judged again, so the shape of a diagnostic
+         field there is a note; a pass is the last word and carries the burden. */
+      const sweepCounts = verdict.sweeps && !Array.isArray(verdict.sweeps)
+        && typeof verdict.sweeps === 'object'
+        ? Object.values(verdict.sweeps).filter((n) => typeof n === 'number')
+        : [];
+      const enumerated = sweepCounts.some((n) => n > 0);
+      /* The list the counts count, checked against what the bundle holds. A sweep is self-reported
+         and a number is free to write; the cases and the requirements are on disk and can be
+         counted. A testability list shorter than the bundle's cases is a sweep that stopped
+         part-way, and every criterion it cleared was cleared over the part it did not reach. */
+      if (!dryRun && RC.requireEnumeration) {
+        const listed = Array.isArray(verdict.enumerated) ? verdict.enumerated : [];
+        const per = (sweep) => listed.filter((e) => String(e?.sweep ?? '') === sweep).length;
+        /* A case is not settled by its own lines. The sweep that lists every case must say, per
+           case, what would produce each value its expected result asserts. */
+        const unproduced = listed
+          .filter((e) => String(e?.sweep ?? '') === 'testability' && !String(e?.produces ?? '').trim())
+          .map((e) => String(e?.item ?? '?').split(/[\s—-]+/)[0]);
+        if (unproduced.length) {
+          record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
+          saveLedger(ledger);
+          finish(ledger, 'error', 'judge-error',
+            `${unproduced.length} case(s) enumerated with nothing that would produce them: `
+            + `${unproduced.slice(0, 8).join(', ')}. A case is not settled by its own lines.`);
+        }
+        const owed = bundleCounts(spec);
+        const short = Object.entries(owed).filter(([sweep, n]) => per(sweep) < n);
+        if (!listed.length || short.length) {
+          record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
+          saveLedger(ledger);
+          finish(ledger, 'error', 'judge-error',
+            listed.length
+              ? `the enumeration stops short of the bundle: ${short.map(([s, n]) => `${s} listed ${per(s)} of ${n}`).join(', ')}. `
+                + 'Re-run the round; a criterion cleared over part of a list was cleared over the part the sweep reached.'
+              : 'the verdict carries no `enumerated` list, so nothing it cleared was enumerated. '
+                + 'Re-run the round; the counts in `sweeps` are the length of that list.');
+        }
+        note(`enumerated ${listed.length} item(s); ${Object.entries(owed).map(([s, n]) => `${s} ${per(s)}/${n}`).join(', ')}`);
+      }
+
+      /* Every verdict, not only a passing one. A blocked pass clears far more criteria than it
+         blocks, and a `clear` from a sweep that enumerated nothing is worth exactly as little
+         whichever way the verdict went. */
+      if (!dryRun && RC.requireSweepCounts && !enumerated) {
+        record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
+        saveLedger(ledger);
+        finish(ledger, 'error', 'judge-error',
+          'the pass carries no sweep counts, so nothing it cleared was enumerated. '
+          + 'Re-run the round; `sweeps` is how many items each sweep listed, not a description of them.');
+      }
+      if (!enumerated) note('the verdict records no sweep counts — nothing says what was enumerated');
+
       /* Whether to shard is the judge's call, so an empty `shards` is a legitimate answer and
          not an error. What is not optional is saying which way it went: a pass that delegates
          and one that does not are different passes, and a ledger that cannot tell them apart
@@ -857,29 +1076,69 @@ async function main() {
     record.gate = gate;
     record.blockers = blockers.length;
     record.keys = blockers.map(keyOf);
+    record.places = blockers.map(placeOf);
+    /* The criteria a round actually blocked under, kept because the next round's stall test is
+       about them and not about how many findings each pass happened to file. */
+    record.criteriaBlocked = [...new Set(blockers.map((f) => f.criterion).filter(Boolean))];
     saveLedger(ledger);
 
     /* A finding that survived a repair has been tried and not fixed. Another round buys nothing. */
     const previous = ledger.rounds[round - 2];
     if (previous?.keys) {
-      const survived = record.keys.filter((k) => previous.keys.includes(k));
+      const before = previous.places ?? previous.keys;
+      const survived = blockers.filter((f, i) => before.includes(previous.places ? record.places[i] : record.keys[i]));
       if (survived.length) {
         finish(ledger, 'blocked', 'stuck-finding',
-          `${survived.join(', ')} survived a repair — the requirement is ambiguous or the finding is wrong. A person decides.`);
+          `${survived.map(keyOf).join(', ')} survived a repair — the requirement is ambiguous or the finding is wrong. A person decides.`);
+      }
+      /* Not shrinking is only a stall when the round is grinding the same criteria. A round
+         whose findings are disjoint from the round before it has discovered, not re-judged —
+         the count says nothing, because the pool a pass samples from is larger than a pass.
+         Halting there throws a judged round away with its repairs unmade, and the next
+         invocation starts cold and samples somewhere else again. */
+      const criteriaBefore = new Set(previous.criteriaBlocked ?? []);
+      const criteriaNow = blockers.map((f) => f.criterion).filter(Boolean);
+      const reground = criteriaNow.filter((c) => criteriaBefore.has(c));
+      if (previous.gate === gate && blockers.length >= previous.blockers && reground.length) {
+        finish(ledger, 'blocked', 'not-converging',
+          `round ${round - 1} left ${previous.blockers} blocker(s), round ${round} found ${blockers.length}, `
+          + `and ${[...new Set(reground)].join(', ')} blocked in both. `
+          + 'A loop that does not shrink on the criteria it just repaired is judging the document again rather than the repair.');
       }
       if (previous.gate === gate && blockers.length >= previous.blockers) {
-        finish(ledger, 'blocked', 'not-converging',
-          `round ${round - 1} left ${previous.blockers} blocker(s), round ${round} found ${blockers.length}. `
-          + 'A loop that does not shrink is judging the document again rather than the repair.');
+        note(`round ${round} found ${blockers.length} blocker(s) against round ${round - 1}'s ${previous.blockers}, `
+          + 'under criteria none of them shared — discovery, not a stall');
+        record.discovering = true;
       }
     }
 
     if (noFix) { finish(ledger, 'blocked', 'verdict-only', 'stopped before the fixer, as asked.'); }
 
-    const fix = await repair(spec, ledger, round);
+    const fix = await repair(spec, ledger, round, lint.findings ?? []);
     if (fix.status === 'error') finish(ledger, 'error', 'fixer-error', fix.error);
     record.fix = { fixed: fix.fixed?.length ?? 0, decided: fix.decided?.length ?? 0, left: fix.left?.length ?? 0 };
     note(`fixed ${record.fix.fixed}, decided ${record.fix.decided}, left ${record.fix.left}`);
+
+    if (!dryRun && RC.requireRepairPlan) {
+      const planned = [...(fix.fixed ?? []), ...(fix.decided ?? [])];
+      const missing = planned
+        .map((r) => {
+          const gaps = [];
+          if (!String(r.subject ?? '').trim()) gaps.push('subject');
+          if (!String(r.found ?? '').trim()) gaps.push('found');
+          if (!Array.isArray(r.also)) gaps.push('also');
+          if (!Array.isArray(r.dependsOn)) gaps.push('dependsOn');
+          return gaps.length ? `${r.id ?? '?'} (${gaps.join(', ')})` : null;
+        })
+        .filter(Boolean);
+      record.repairPlan = { planned: planned.length, unplanned: missing.length };
+      if (missing.length) {
+        finish(ledger, 'error', 'fixer-error',
+          `${missing.length} of ${planned.length} repair(s) recorded no plan: ${missing.join('; ')}. `
+          + 'A repair states its subject, the search that found its places, the places it left '
+          + 'standing, and what its new text leans on.');
+      }
+    }
 
     /* The round ends in the fixer's commit, and that commit is the next pass's boundary: it is
        the one that carries the document's repairs, which is what the next judge is given a
@@ -903,11 +1162,24 @@ async function main() {
     saveLedger(ledger);
     note(`bundle grew by ${record.growth} line(s) for ${record.repairs} repair(s)`);
 
+    /* Only a blocker left unsettled is worth a person's round. A note the fixer declined is
+       still a note: it does not hold admission, and stopping the loop over one throws away every
+       repair the round has left to make. The question is recorded either way — a note addressed
+       to the register is how the register gets fixed — but it waits for whoever reads the ledger
+       rather than halting the spec in front of it. */
     if (fix.left?.length) {
-      for (const l of fix.left) note(`left: ${l.id} — ${l.question}`);
-      finish(ledger, 'blocked', 'needs-a-person',
-        `${fix.left.length} finding(s) the fixer may not settle: a repair needing scope the spec does not have, `
-        + 'or a question only the product owner answers.');
+      const severityOf = new Map((verdict.findings ?? []).map((f) => [f.id, f.severity]));
+      const blocking = fix.left.filter((l) => severityOf.get(l.id) !== 'note');
+      for (const l of fix.left) {
+        note(`left${severityOf.get(l.id) === 'note' ? ' (note)' : ''}: ${l.id} — ${l.question}`);
+      }
+      record.leftForAPerson = fix.left.map((l) => ({ id: l.id, criterion: l.criterion, question: l.question }));
+      saveLedger(ledger);
+      if (blocking.length) {
+        finish(ledger, 'blocked', 'needs-a-person',
+          `${blocking.length} blocking finding(s) the fixer may not settle: a repair needing scope the spec `
+          + 'does not have, or a question only the product owner answers.');
+      }
     }
 
     /* A repair that adds text is a repair the next pass has to judge. Past the budget it is

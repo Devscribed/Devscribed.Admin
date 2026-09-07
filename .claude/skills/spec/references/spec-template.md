@@ -257,14 +257,23 @@ A row marked `Assumed` may not carry a requirement. A claim half seen and half i
 
 # 3. The cases file — `NN-name.cases.md`
 
+## `## DS gaps`
+
+Present whenever the mock declares a custom property or writes a colour the design system does not
+name — `| Gap | Impact | What closes it |`. Every `--token` the mock declares has a row here, and a
+colour with no name to declare carries `@literal <reason>` on its own line. A name improvised on
+one screen is improvised again on the next.
+
 ## `## Verification Plan`
 
 The rig the cases run on, walked **before** they were written. Every cell is what happened, not
 what should happen; a row nobody ran says `not run` and earns a Known Gaps entry.
 
-**Bringing it up** — `| Step | Command | Observed |`. The ports are the run's own
-(`E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1`) and the database is the E2E one, never
-`devscribed_dev`.
+**Bringing it up** — `| Step | Command | Observed |`. Run it on the spec run's own pair under
+`CI=1`, against the E2E database and never `devscribed_dev`. **Record what answered, never where it
+ran**: the suite claims its own ports and the database follows them, so a port, a host or a
+database name written into this table is a fact about one machine on one afternoon, and it is wrong
+for the next reader by construction.
 
 **Reaching the states the cases need** — `| State a case needs | Route to it | Exists today | Proven |`.
 The route is a helper in `e2e/tests/helpers.ts`, a product endpoint, or a fixture under
@@ -309,6 +318,46 @@ agree with itself about the status code" from a judgement into an integer compar
 
 Cover, at minimum: the happy path, every cell of every decision table, every permission boundary,
 org scoping, concurrency and idempotency, and the failure of each external dependency.
+
+**Steps and Expected Result carry no calendar date.** A date written as a literal stops being an
+example and becomes a promise about the calendar: the case passes until that day is past and then
+fails with nobody having changed anything, and a fixture whose start is already behind cannot be
+created at all through a route that refuses one. Bind what the case needs to the run's own today
+and name the control that reaches it:
+
+```markdown
+- **Steps:** Let `M` be the month after the run's today. Seed an approved request spanning a
+  weekend inside `M` — the second Friday of `M` through the Tuesday after it. Open the calendar,
+  click `calendar-window-month`, then `calendar-next` once to reach `M`.
+- **Expected Result:** The band is one element spanning all five columns of its range. The
+  `calendar-day-header-{date}` cells of that Saturday and Sunday carry the weekend styling and the
+  Monday after them does not.
+```
+
+Where a case is about the clock itself, assert the **relation** rather than the readings: that one
+zone's date is a day ahead of the other's at that instant, not that they read `2026-09-05` and
+`2026-09-04`. A literal date belongs only in a unit case, where it is an argument to a function and
+no clock is involved.
+
+**Steps and Expected Result carry no calendar date.** A date written as a literal stops being an
+example and becomes a promise about the calendar: the case passes until that day is past and then
+fails with nobody having changed anything, and a fixture whose start is already behind cannot be
+created at all through a route that refuses one. Bind what the case needs to the run's own today
+and name the control that reaches it:
+
+```markdown
+- **Steps:** Let `M` be the month after the run's today. Seed an approved request spanning a
+  weekend inside `M` — the second Friday of `M` through the Tuesday after it. Open the calendar,
+  click `calendar-window-month`, then `calendar-next` once to reach `M`.
+- **Expected Result:** The band is one element spanning all five columns of its range. The
+  `calendar-day-header-{date}` cells of that Saturday and Sunday carry the weekend styling and the
+  Monday after them does not.
+```
+
+Where a case is about the clock itself, assert the **relation** rather than the readings: that one
+zone's date is a day ahead of the other's at that instant, not that they read two particular days.
+A literal date belongs only in a unit case, where it is an argument to a function and no clock is
+involved.
 
 **Which level.** A server rule — a status, a message, a token state, an authorization decision —
 belongs at integration even when a screen shows it. E2E earns its place only when the assertion is

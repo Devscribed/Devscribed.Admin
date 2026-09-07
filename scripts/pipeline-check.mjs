@@ -117,6 +117,17 @@ for (const k of Object.keys(cfg.breakers ?? {}).filter((k) => !k.startsWith('$')
   ok(readsOutsideConfig(k), `breakers.${k} is read`);
 }
 
+/* The refine block was outside this sweep, and it is the block a person reads to find out how
+   a spec is judged. A shape key nothing reads is the same defect there as anywhere: `npm run
+   config` prints it back and a reader believes it took effect. */
+const refineKeys = new Set(Object.keys(cfg.refine ?? {}).filter((k) => !k.startsWith('$') && k !== 'shapes' && k !== 'use'));
+for (const shape of Object.values(cfg.refine?.shapes ?? {})) {
+  for (const k of Object.keys(shape)) if (!k.startsWith('$')) refineKeys.add(k);
+}
+for (const k of [...refineKeys].sort()) {
+  ok(readsOutsideConfig(k), `refine.${k} is read by a script that runs the loop`);
+}
+
 /* ── the port ladder ─────────────────────────────────────────────────────── */
 
 head('The E2E port ladder');
