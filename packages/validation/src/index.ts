@@ -3781,6 +3781,12 @@ export * from './reports';
  * ------------------------------------------------------------------ */
 
 export * from './time-off-calendar';
+/**
+ * Time off spec 02 — holiday sourcing. Exported after `./holidays` and `./reports`,
+ * which it reads: the country chain, the holiday-name rule and the country list are all
+ * theirs, and this module states only what sourcing adds on top of them.
+ */
+export * from './holiday-sourcing';
 
 /* ------------------------------------------------------------------ *
  * Hiring — specs 01 (vacancies), 02 (booking page), 03 (candidate database),

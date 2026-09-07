@@ -77,6 +77,8 @@ model Account {
   clientsArchived           Client[]                     @relation("ClientsArchived")
   /// Spec organization/03 — audit back-relation for the Holiday entity.
   holidaysCreated           Holiday[]                    @relation("HolidaysCreated")
+  /// Time off spec 02 — who last touched the include-organization-country checkbox.
+  holidaySourcingUpdated    OrganizationHolidaySourcing[] @relation("HolidaySourcingUpdatedBy")
   /// Requests spec 01 — the account that moved a request into a terminal status.
   requestsResolved          Request[]                    @relation("RequestResolvedBy")
   /// Requests spec 02 — audit back-relations for the RequestTopic entity.
@@ -213,6 +215,10 @@ model Organization {
   clients              Client[]
   /// Spec organization/03 — the organization's paid public-holiday calendar.
   holidays             Holiday[]
+  /// Time off spec 02 — which (country, year) pairs have been sourced, and the
+  /// include-organization-country setting. Both cascade with the organization.
+  holidayImports       HolidayImport[]
+  holidaySourcing      OrganizationHolidaySourcing?
   /// Requests spec 01 — the organization's requests.
   requests             Request[]
   /// Requests spec 02 — the organization's own catalogue of request topics.
@@ -930,12 +936,66 @@ model Holiday {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   createdByAccountId String
+  /// Time off spec 02 §Data Model — 'manual' | 'imported'. A documented string column,
+  /// matching the role/status convention — not a Prisma enum. Every row that predates
+  /// the column reads 'manual' from the default, which is exactly what those rows are.
+  source             String   @default("manual")
+  /// The provider's stable key for an imported holiday, `{provider}:{countryCode}:{date}`.
+  /// Null on a manual row. Deliberately NOT unique: the composite index on
+  /// (organizationId, date, countryCode) is what detects an identity mismatch, and a new
+  /// uniqueness constraint would change what every reader of Holiday may assume.
+  externalKey        String?
+  /// When an import wrote this row. Null on a manual row.
+  importedAt         DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    Account      @relation("HolidaysCreated", fields: [createdByAccountId], references: [id])
 
   @@unique([organizationId, date, countryCode])
   @@index([organizationId, date])
+}
+
+/// Time off spec 02 REQ-02-021 — that a `(organization, country, year)` has been sourced,
+/// and what the provider offered for it. Its absence is the `unsourced` state and a
+/// `holidayCount` of 0 is the covered-but-empty one (REQ-02-010); the difference is what
+/// stops a country the provider does not cover being re-asked on every page load.
+model HolidayImport {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// ISO 3166-1 alpha-2, uppercase. Never null — a global holiday is not sourced.
+  countryCode    String   @db.Char(2)
+  /// The calendar year sourced.
+  year           Int
+  /// The provider that answered, e.g. `nager`.
+  provider       String
+  /// How many nationwide `Public` entries the provider OFFERED for this country and
+  /// year — not how many rows were written (REQ-02-021). A refresh that writes nothing
+  /// because every date is already stored still records what was offered, which is what
+  /// keeps such a country `sourced` rather than `empty` (REQ-02-023).
+  holidayCount   Int
+  /// Updated on a refresh.
+  importedAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Invariant 3 — at most one import record per (organization, country, year),
+  /// enforced by the index rather than by the service, which is also what resolves two
+  /// admins syncing the same unsourced year at the same instant (Edge case 12).
+  @@unique([organizationId, countryCode, year])
+}
+
+/// Time off spec 02 REQ-02-002 — the include-organization-country checkbox. One row per
+/// organization; a MISSING row reads as `true`, so no organization changes behaviour
+/// before somebody touches the control and no backfill is needed.
+model OrganizationHolidaySourcing {
+  id                 String   @id @default(uuid())
+  organizationId     String   @unique
+  includeOrgCountry  Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+  updatedByAccountId String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy    Account      @relation("HolidaySourcingUpdatedBy", fields: [updatedByAccountId], references: [id])
 }
 
 /// Spec 13 — a column on a project's Kanban board. Lazy-created on first `GET /board`

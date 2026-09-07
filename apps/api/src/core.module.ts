@@ -4,6 +4,8 @@ import { mailProvider } from './mail/mail.provider';
 import { MailService } from './mail/mail.service';
 import { pdfRendererProvider } from './pdf/pdf.provider';
 import { PdfRenderer } from './pdf/pdf-renderer';
+import { HolidayProvider } from './holidays/provider/holiday-provider';
+import { holidayProviderProvider } from './holidays/provider/holiday.provider';
 import { PrismaService } from './prisma.service';
 import { RequestNotifier } from './requests/request-notifier';
 import { requestNotifierProvider } from './requests/request-notifier.provider';
@@ -62,6 +64,10 @@ import { fileStorageProvider } from './storage/storage.provider';
     // every other port is: one instance for the whole application, so a test that
     // overrides the token overrides the one the routes call.
     requestNotifierProvider,
+    // Time off spec 02 — the public-holiday port. Here for the same reason as every
+    // other port: one instance for the whole application, so a test that overrides the
+    // token overrides the one the sourcing route calls.
+    holidayProviderProvider,
     InternalSigningProvider,
     SignWellSigningProvider,
     SigningProviderRegistry,
@@ -75,6 +81,7 @@ import { fileStorageProvider } from './storage/storage.provider';
     JobQueue,
     SignWellHttpClient,
     RequestNotifier,
+    HolidayProvider,
     InternalSigningProvider,
     SignWellSigningProvider,
     SigningProviderRegistry,

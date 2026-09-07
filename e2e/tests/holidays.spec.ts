@@ -1,8 +1,9 @@
 import { expect, test, type APIRequestContext, type Page } from './fixtures';
-import { HOLIDAY_MESSAGES } from '@devscribed/validation';
+import { HOLIDAY_MESSAGES, HOLIDAY_SOURCING_MESSAGES } from '@devscribed/validation';
 import {
   API,
   VALID,
+  configureFinancials,
   createHolidayViaApi,
   findMember,
   inviteAndAcceptViaApi,
@@ -11,6 +12,7 @@ import {
   seedReserveCredit,
   setMemberCountryViaApi,
   setMembershipRole,
+  setOrganizationCountryViaApi,
   signupOrg,
   uniqueEmail,
 } from './helpers';
@@ -386,5 +388,212 @@ test.describe('organization/03 — Holidays', () => {
     await expect(list).toBeVisible();
     await expect(list).toContainText('No options');
     await expect(page.getByTestId('holiday-country-select')).toContainText('Poland');
+  });
+});
+
+/**
+ * Time off spec 02 — holiday sourcing.
+ *
+ * The API these run against uses the `fake` holiday driver (the default outside
+ * production), whose country table is the one §External Contracts measured: `PL` answers
+ * 14 nationwide entries, `US` 11, `IN` refuses the connection, and a country it does not
+ * name answers nothing. Nothing here reaches the network.
+ */
+test.describe('time-off/02 — Holiday sourcing', () => {
+  const PL_DAYS = 14;
+  const US_DAYS = 11;
+
+  /** States a member's holiday country by email. Requires an admin cookie jar. */
+  async function stateCountry(
+    request: APIRequestContext,
+    organizationId: string,
+    email: string,
+    countryCode: string,
+  ): Promise<string> {
+    const member = await findMember(request, organizationId, email);
+    await setMemberCountryViaApi(request, organizationId, member.id, countryCode);
+    return member.id;
+  }
+
+  // TC-02-E2E-01 — the screen syncs without being asked (REQ-02-012).
+  // Earns E2E: the assertion is that a page issues a request nobody asked it to and then
+  // repaints, which is not a call an API test can make.
+  test('opening a year with unsourced countries fills the list without anybody clicking', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    const polish = await addMember(request, adminEmail, 'user', 'Piotr');
+    const american = await addMember(request, adminEmail, 'user', 'Sam');
+    await stateCountry(request, org.organizationId, polish, 'PL');
+    await stateCountry(request, org.organizationId, american, 'US');
+
+    // The provider answers from memory, so the in-flight window would otherwise be a few
+    // milliseconds wide. Delaying the response makes the window real rather than lucky —
+    // the claim under test is that the line is up **while** the sync is, and a race here
+    // would pass by accident on a fast machine and fail on a slow one.
+    await page.route('**/holidays/sync', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.continue();
+    });
+
+    await signInUi(page, adminEmail);
+    await openHolidaysPage(page);
+    const year = new Date().getFullYear();
+    await page.getByTestId(`holidays-year-tab-${year}`).click();
+
+    const status = page.getByTestId('holiday-sourcing-status');
+    await expect(status).toBeVisible();
+    await expect(status).toContainText(HOLIDAY_SOURCING_MESSAGES.syncing);
+    await expect(status).toHaveCount(0, { timeout: 60_000 });
+
+    // Nobody clicked a control to make this happen.
+    await expect(page.getByTestId('holidays-table')).toBeVisible();
+    await expect(page.getByTestId('holidays-empty-state')).toHaveCount(0);
+
+    const list = await request.get(
+      `${API}/api/organizations/${org.organizationId}/holidays?year=${year}`,
+    );
+    expect(list.ok(), 'holidays list fetch').toBeTruthy();
+    const rows = (await list.json()).holidays as Array<{
+      id: string;
+      countryCode: string | null;
+      source: string;
+    }>;
+    expect(rows.filter((r) => r.countryCode === 'PL')).toHaveLength(PL_DAYS);
+    expect(rows.filter((r) => r.countryCode === 'US')).toHaveLength(US_DAYS);
+
+    const first = rows[0];
+    await expect(page.getByTestId(`holidays-row-${first.id}`)).toBeVisible();
+    await expect(page.getByTestId(`holidays-row-${first.id}-source`)).toHaveText('imported');
+
+    // Switching to the next year tab repeats it for that year.
+    await page.getByTestId(`holidays-year-tab-${year + 1}`).click();
+    await expect(page.getByTestId('holiday-sourcing-status')).toBeVisible();
+    await expect(page.getByTestId('holiday-sourcing-status')).toHaveCount(0, { timeout: 60_000 });
+    await expect(page.getByTestId('holidays-table')).toBeVisible();
+  });
+
+  // TC-02-E2E-02 — the include-organization-country checkbox (REQ-02-002).
+  // Earns E2E: the setting is stored rather than in-page state, which only a reload shows.
+  test('the checkbox changes the country set, and the change survives a reload', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    // The organization states a country no member resolves to: every member states one of
+    // their own, so only the checkbox can put GB in the set.
+    await setOrganizationCountryViaApi(request, org.organizationId, 'GB');
+    await stateCountry(request, org.organizationId, adminEmail, 'PL');
+
+    await signInUi(page, adminEmail);
+    await openHolidaysPage(page);
+
+    const orgCountryRow = page.getByTestId('holiday-summary-country-GB');
+    await expect(orgCountryRow).toBeVisible();
+
+    const checkbox = page.getByTestId('holiday-sourcing-include-org-country');
+    await expect(checkbox).toBeChecked();
+    await checkbox.uncheck();
+    await expect(orgCountryRow).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByTestId('holidays-page')).toBeVisible();
+    // Stored, not in-page state.
+    await expect(page.getByTestId('holiday-sourcing-include-org-country')).not.toBeChecked();
+    await expect(page.getByTestId('holiday-summary-country-GB')).toHaveCount(0);
+
+    await page.getByTestId('holiday-sourcing-include-org-country').check();
+    await expect(page.getByTestId('holiday-summary-country-GB')).toBeVisible();
+
+    await page.getByTestId('holiday-sourcing-refresh-btn').click();
+    await expect(page.getByTestId('holiday-sourcing-status')).toHaveCount(0, { timeout: 60_000 });
+    await expect(page.getByTestId('holiday-summary-country-GB')).toBeVisible();
+  });
+
+  // TC-02-E2E-03 — the screen names the countries it could not source (REQ-02-009).
+  // Earns E2E: a banner that must be drawn and an error banner that must not be.
+  test('the screen names the countries it could not source, and does not call it an error', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    const indian = await addMember(request, adminEmail, 'user', 'Ishaan');
+    await stateCountry(request, org.organizationId, adminEmail, 'PL');
+    // The provider does not cover India — one of the two codes the live probe recorded as
+    // missing, and the reason the warning exists.
+    await stateCountry(request, org.organizationId, indian, 'IN');
+
+    await signInUi(page, adminEmail);
+    await openHolidaysPage(page);
+
+    await expect(page.getByTestId('holiday-sourcing-uncovered')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('holiday-sourcing-uncovered-IN')).toContainText(
+      HOLIDAY_SOURCING_MESSAGES.countryNotCovered,
+    );
+
+    // The country that answered is in the table, and the screen is not in an error state.
+    await expect(page.getByTestId('holidays-table')).toBeVisible();
+    await expect(page.getByTestId('holidays-error-banner')).toHaveCount(0);
+    await expect(page.getByTestId('holiday-sourcing-uncovered-PL')).toHaveCount(0);
+  });
+
+  // TC-02-E2E-04 — the summary is on the screen and readable (REQ-02-013/14/15).
+  // Earns E2E only for the ordering and presence of the block; the arithmetic is asserted
+  // at integration, where it costs a fraction of a second instead of eight.
+  test('the per-country and per-person figures sit above the list', async ({ page, request }) => {
+    const adminEmail = uniqueEmail('admin');
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    const polish = await addMember(request, adminEmail, 'user', 'Piotr');
+    const american = await addMember(request, adminEmail, 'user', 'Sam');
+    const adminId = await stateCountry(request, org.organizationId, adminEmail, 'PL');
+    const polishId = await stateCountry(request, org.organizationId, polish, 'PL');
+    const americanId = await stateCountry(request, org.organizationId, american, 'US');
+
+    const RATE = 40;
+    for (const memberId of [adminId, polishId, americanId]) {
+      await configureFinancials(request, org.organizationId, memberId, {
+        monthlySalary: 3000,
+        clientHourlyRate: RATE,
+        vacationDaysPerYear: 20,
+        currency: 'USD',
+        isReservePercentManual: false,
+      });
+    }
+
+    await signInUi(page, adminEmail);
+    await openHolidaysPage(page);
+
+    await expect(page.getByTestId('holiday-summary-country-PL-days')).toHaveText(String(PL_DAYS), {
+      timeout: 60_000,
+    });
+    await expect(page.getByTestId('holiday-summary-country-US-days')).toHaveText(String(US_DAYS));
+
+    await expect(page.getByTestId(`holiday-summary-member-${adminId}-days`)).toHaveText(
+      String(PL_DAYS),
+    );
+    await expect(page.getByTestId(`holiday-summary-member-${americanId}-days`)).toHaveText(
+      String(US_DAYS),
+    );
+    await expect(page.getByTestId(`holiday-summary-member-${polishId}-amount`)).toHaveText(
+      `${(PL_DAYS * 8 * RATE).toFixed(2)} USD`,
+    );
+    await expect(page.getByTestId('holiday-summary-total-USD')).toHaveText(
+      `${((PL_DAYS * 2 + US_DAYS) * 8 * RATE).toFixed(2)} USD`,
+    );
+
+    // The summary is the answer and the list is the evidence for it, so it sits ABOVE.
+    const order = await page.evaluate(() => {
+      const summary = document.querySelector('[data-testid="holiday-summary"]');
+      const table = document.querySelector('[data-testid="holidays-table"]');
+      if (!summary || !table) return null;
+      return summary.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? 'above'
+        : 'below';
+    });
+    expect(order).toBe('above');
   });
 });

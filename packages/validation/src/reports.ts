@@ -415,6 +415,29 @@ export interface ResolvedRate {
 }
 
 /**
+ * The one snapshot selection: the newest snapshot with `effectiveFrom <= date`, or
+ * `null` when none precedes the date (spec requirement 12).
+ *
+ * Extracted so the rate in force on a date and the **currency** in force on a date
+ * (time off spec 02 REQ-02-015) are chosen by the same rule rather than by two copies of
+ * it — two copies drift, and a member whose snapshots sit close together would then be
+ * paid one snapshot's rate in another snapshot's currency.
+ */
+function newestSnapshotOnOrBefore<T extends { effectiveFrom: Date }>(
+  snapshots: readonly T[],
+  date: Date,
+): T | null {
+  let picked: T | null = null;
+  for (const snap of snapshots) {
+    if (snap.effectiveFrom.getTime() > date.getTime()) continue;
+    if (!picked || snap.effectiveFrom.getTime() > picked.effectiveFrom.getTime()) {
+      picked = snap;
+    }
+  }
+  return picked;
+}
+
+/**
  * Resolve the rate in effect on `date` for a member: the newest snapshot with
  * `effectiveFrom <= date`, falling back to the live `MemberFinancials` if no
  * snapshot precedes the date (spec requirement 12). If neither is available,
@@ -426,19 +449,44 @@ export function resolveRateAtDate(
   live: LiveMemberFinancials | null,
   date: Date,
 ): ResolvedRate {
-  let picked: RateSnapshot | null = null;
-  for (const snap of snapshots) {
-    if (snap.effectiveFrom.getTime() > date.getTime()) continue;
-    if (!picked || snap.effectiveFrom.getTime() > picked.effectiveFrom.getTime()) {
-      picked = snap;
-    }
-  }
+  const picked = newestSnapshotOnOrBefore(snapshots, date);
   const source = picked ?? live;
   if (!source) return { billRate: 0, payRate: 0 };
   const billRate = Number(source.clientHourlyRate) || 0;
   const monthlySalary = Number(source.monthlySalary) || 0;
   const payRate = monthlySalary > 0 ? monthlySalary / HOURS_PER_MONTH_FOR_PAY_RATE : 0;
   return { billRate, payRate };
+}
+
+/** A snapshot as the currency lookup reads it — the date it took effect and its currency. */
+export interface CurrencySnapshot {
+  effectiveFrom: Date;
+  currency: string;
+}
+
+/** The live `MemberFinancials` row, for a date no snapshot precedes. */
+export interface LiveMemberCurrency {
+  currency: string;
+}
+
+/**
+ * Time off spec 02 REQ-02-015 — the currency in force on `date`, chosen by exactly the
+ * selection {@link resolveRateAtDate} uses: the newest snapshot with
+ * `effectiveFrom <= date`, else the live row.
+ *
+ * `null` means the member has no financial settings at all on that date, which is
+ * REQ-02-018's "omit their amounts entirely" — not a zero and not a default currency,
+ * because a currency invented here would be summed into somebody else's total.
+ */
+export function resolveCurrencyAtDate(
+  snapshots: readonly CurrencySnapshot[],
+  live: LiveMemberCurrency | null,
+  date: Date,
+): string | null {
+  const source = newestSnapshotOnOrBefore(snapshots, date) ?? live;
+  if (!source) return null;
+  const currency = (source.currency ?? '').trim().toUpperCase();
+  return currency.length > 0 ? currency : null;
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -35,10 +35,15 @@ import { ClientsController } from './clients/clients.controller';
 import { ClientsService } from './clients/clients.service';
 import { HolidaysController } from './holidays/holidays.controller';
 import { HolidaysService } from './holidays/holidays.service';
+import { HolidaySourcingController } from './holidays/holiday-sourcing.controller';
+import { HolidaySourcingService } from './holidays/holiday-sourcing.service';
+import { HolidaySummaryService } from './holidays/holiday-summary.service';
 import { TimeOffCalendarController } from './time-off/time-off-calendar.controller';
 import { TimeOffCalendarService } from './time-off/time-off-calendar.service';
 import { OrganizationCountryController } from './organizations/organization-country.controller';
 import { OrganizationCountryService } from './organizations/organization-country.service';
+import { HolidaySourcingSettingsController } from './organizations/holiday-sourcing-settings.controller';
+import { HolidaySourcingSettingsService } from './organizations/holiday-sourcing-settings.service';
 import { ReportsModule } from './reports/reports.module';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
@@ -213,11 +218,19 @@ const calendarProvider = {
     // on the read side, and the contact is a principal rather than part of the record.
     ClientContactsController,
     HolidaysController,
+    // Time off spec 02 — the sync and the summary. Its own controller beside
+    // HolidaysController rather than more handlers on it: these two perform writes
+    // against a third party and answer a different shape, and the four shipped holiday
+    // routes are unchanged by this spec.
+    HolidaySourcingController,
     // Time off spec 01 — the vacation calendar's one read, and the organization country
     // the holiday chain falls back to. Flat here beside HolidaysController, which is the
     // resource both of them are about.
     TimeOffCalendarController,
     OrganizationCountryController,
+    // Time off spec 02 — the include-organization-country checkbox, one column beside
+    // the organization country above and gated exactly as it is.
+    HolidaySourcingSettingsController,
     TimeTrackingController,
     AccrualController,
     // Spec 03's contract details. Flat here rather than in `DocumentsModule`: the
@@ -278,8 +291,11 @@ const calendarProvider = {
     ClientsService,
     ClientContactsService,
     HolidaysService,
+    HolidaySourcingService,
+    HolidaySummaryService,
     TimeOffCalendarService,
     OrganizationCountryService,
+    HolidaySourcingSettingsService,
     TimeTrackingService,
     AccrualService,
     SigningSettingsService,

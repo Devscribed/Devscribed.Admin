@@ -10,6 +10,7 @@ import {
   isZeroTotal,
   pdfReportFilename,
   resolveMemberHolidayCountry,
+  resolveCurrencyAtDate,
   resolveRateAtDate,
   validateBillableFilter,
   validateCuidList,
@@ -237,6 +238,49 @@ describe('TC-01-UNIT-07..10: resolveRateAtDate (spec §Rate lookup)', () => {
   it('empty snapshots and null live → both rates 0', () => {
     const rate = resolveRateAtDate([], null, new Date('2026-03-15'));
     expect(rate).toEqual({ billRate: 0, payRate: 0 });
+  });
+});
+
+/**
+ * Time off spec 02 REQ-02-015 — the currency in force on a date, chosen by exactly the
+ * selection the rate is chosen by. The two are asserted against the SAME snapshot list so
+ * a divergence between them is what fails, not a difference between two fixtures.
+ */
+describe('resolveCurrencyAtDate (time off spec 02 REQ-02-015)', () => {
+  const snapshots = [
+    { effectiveFrom: new Date('2026-01-01'), currency: 'USD' },
+    { effectiveFrom: new Date('2026-06-01'), currency: 'EUR' },
+  ];
+
+  it('picks the newest snapshot on or before the date', () => {
+    expect(resolveCurrencyAtDate(snapshots, { currency: 'EUR' }, new Date('2026-03-15'))).toBe('USD');
+    expect(resolveCurrencyAtDate(snapshots, { currency: 'EUR' }, new Date('2026-07-15'))).toBe('EUR');
+  });
+
+  it('falls back to the live row when no snapshot precedes the date', () => {
+    expect(
+      resolveCurrencyAtDate(
+        [{ effectiveFrom: new Date('2026-04-01'), currency: 'EUR' }],
+        { currency: 'USD' },
+        new Date('2026-03-15'),
+      ),
+    ).toBe('USD');
+  });
+
+  it('answers null for a member with no financial settings at all (REQ-02-018)', () => {
+    expect(resolveCurrencyAtDate([], null, new Date('2026-03-15'))).toBeNull();
+    expect(resolveCurrencyAtDate([], { currency: '  ' }, new Date('2026-03-15'))).toBeNull();
+  });
+
+  it('selects the same snapshot the rate does, on both sides of a mid-year change', () => {
+    const rates = [
+      { effectiveFrom: new Date('2026-01-01'), clientHourlyRate: 45, monthlySalary: 5000 },
+      { effectiveFrom: new Date('2026-06-01'), clientHourlyRate: 55, monthlySalary: 6000 },
+    ];
+    for (const date of [new Date('2026-03-15'), new Date('2026-06-01'), new Date('2026-07-15')]) {
+      const usedNewer = resolveRateAtDate(rates, null, date).billRate === 55;
+      expect(resolveCurrencyAtDate(snapshots, null, date)).toBe(usedNewer ? 'EUR' : 'USD');
+    }
   });
 });
 

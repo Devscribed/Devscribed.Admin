@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { use, useCallback, useEffect, useMemo, useState } from 'react';
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Card,
@@ -21,11 +21,24 @@ import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
-import { HOLIDAY_MESSAGES, TIME_OFF_CALENDAR_MESSAGES, can, type Role } from '@devscribed/validation';
+import {
+  HOLIDAY_MESSAGES,
+  HOLIDAY_SOURCING_MESSAGES,
+  TIME_OFF_CALENDAR_MESSAGES,
+  can,
+  type Role,
+} from '@devscribed/validation';
 import { STATED_COUNTRY_OPTIONS } from '@/stated-country-options';
 import { HolidayModal, type HolidayModalMode } from './HolidayModal';
+import { HolidaySourcingPanel } from './HolidaySourcingPanel';
+import { HolidaySummary } from './HolidaySummary';
 import { ALL_COUNTRIES, HOLIDAY_COUNTRY_OPTIONS, holidayCountryLabel } from './country-options';
-import type { HolidayRow, HolidaysResponse } from './types';
+import type {
+  HolidayRow,
+  HolidaysResponse,
+  HolidaySummaryResponse,
+  SourcingBlock,
+} from './types';
 
 /**
  * The organization country picker's list: the option meaning *no country*, which submits
@@ -151,6 +164,22 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   const [deleteTarget, setDeleteTarget] = useState<HolidayRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  /* Time off spec 02 — what the list read says about the year's countries, the summary
+     beside it, the sync in flight, and the stored include-organization-country setting. */
+  const [sourcing, setSourcing] = useState<SourcingBlock | null>(null);
+  const [summary, setSummary] = useState<HolidaySummaryResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryFailed, setSummaryFailed] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [includeOrgCountry, setIncludeOrgCountry] = useState(true);
+  const [savingSetting, setSavingSetting] = useState(false);
+  /* REQ-02-012 issues ONE sync per year. A country the provider will never cover reads
+     `unsourced` after the sync too, and without this the re-read would issue another. */
+  const autoSynced = useRef<Set<number>>(new Set());
+  /* Which sync owns the status line. An abandoned run must not clear a line the run that
+     replaced it put up, and a run that was abandoned must not leave one up forever. */
+  const syncRun = useRef(0);
+
   const load = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       setLoading(true);
@@ -172,6 +201,9 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           const data = (await response.json()) as HolidaysResponse;
           if (signal?.aborted) return;
           setHolidays(data.holidays);
+          // Present for every caller that reaches this screen (REQ-02-025); `undefined`
+          // only if the capability was lost mid-session, which the 404 above handles.
+          setSourcing(data.sourcing ?? null);
         } else {
           setHolidays([]);
           setError(true);
@@ -238,14 +270,172 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
     setSavingCountry(false);
   }
 
+  /**
+   * Time off spec 02 REQ-02-013/14/15 — the summary. Its own read and its own wait, so a
+   * slow summary never holds the list back and a failed one never blanks it.
+   */
+  const loadSummary = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      setSummaryLoading(true);
+      setSummaryFailed(false);
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/holidays/summary?year=${year}`,
+          { credentials: 'same-origin', signal },
+        );
+        if (signal?.aborted) return;
+        if (response.ok) {
+          const body = (await response.json()) as HolidaySummaryResponse;
+          if (signal?.aborted) return;
+          setSummary(body);
+        } else {
+          setSummary(null);
+          setSummaryFailed(true);
+        }
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+        setSummary(null);
+        setSummaryFailed(true);
+      }
+      if (signal?.aborted) return;
+      setSummaryLoading(false);
+    },
+    [orgId, year],
+  );
+
   useEffect(() => {
     if (!authorized) return undefined;
     // Abort the in-flight read on every year/country change so a slow earlier reply
     // cannot clobber the newer one.
     const controller = new AbortController();
     void load(controller.signal);
+    void loadSummary(controller.signal);
     return () => controller.abort();
-  }, [authorized, load]);
+  }, [authorized, load, loadSummary]);
+
+  /** REQ-02-002 — the stored checkbox, read once beside the list. */
+  useEffect(() => {
+    if (!authorized) return undefined;
+    let cancelled = false;
+    void (async () => {
+      const response = await fetch(`/api/organizations/${orgId}/settings/holiday-sourcing`, {
+        credentials: 'same-origin',
+      });
+      if (!response.ok || cancelled) return;
+      const body = (await response.json()) as { includeOrgCountry: boolean };
+      if (cancelled) return;
+      setIncludeOrgCountry(body.includeOrgCountry);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authorized, orgId]);
+
+  /**
+   * The sync itself. The status line stays up for the request AND the re-reads that
+   * follow it, which is what makes the screen settle in one step rather than flickering
+   * through a half-filled year.
+   */
+  const runSync = useCallback(
+    async (options: { refresh: boolean; signal?: AbortSignal }): Promise<void> => {
+      const run = (syncRun.current += 1);
+      setSyncing(true);
+      try {
+        const response = await fetch(`/api/organizations/${orgId}/holidays/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ year, refresh: options.refresh }),
+          signal: options.signal,
+        });
+        if (options.signal?.aborted) return;
+        if (!response.ok) {
+          // A provider failure is never a status (REQ-02-009), so anything but a 200 is
+          // this application failing, and it takes the generic toast.
+          showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
+          return;
+        }
+        await Promise.all([load(options.signal), loadSummary(options.signal)]);
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+        showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
+      } finally {
+        // Only the newest run clears the line; an older one that was abandoned mid-flight
+        // says nothing about the sync that took its place.
+        if (syncRun.current === run) setSyncing(false);
+      }
+    },
+    [orgId, year, load, loadSummary, showToast],
+  );
+
+  /**
+   * REQ-02-012 — the screen syncs without being asked. Nobody clicks anything: a year
+   * whose list read reports an unsourced country issues one sync and repaints on its
+   * answer. Switching the year tab abandons it (Edge case 18), so a slow answer never
+   * repaints a year nobody is looking at.
+   */
+  /* The one fact the effect below turns on. A boolean rather than the block itself: every
+     re-read produces a new `sourcing` object, and an effect that woke on each of them
+     would abandon the very request it had just issued. */
+  const needsSync =
+    sourcing !== null &&
+    sourcing.year === year &&
+    sourcing.countries.some((entry) => entry.state === 'unsourced');
+
+  /* `runSync` closes over the year and both reads, so its identity changes with them.
+     Held in a ref so the effect turns on the fact above and on nothing else. */
+  const runSyncRef = useRef(runSync);
+  useEffect(() => {
+    runSyncRef.current = runSync;
+  }, [runSync]);
+
+  useEffect(() => {
+    if (!authorized || !canManage || !needsSync) return undefined;
+    if (autoSynced.current.has(year)) return undefined;
+    autoSynced.current.add(year);
+    const controller = new AbortController();
+    void runSyncRef.current({ refresh: false, signal: controller.signal });
+    return () => controller.abort();
+  }, [authorized, canManage, needsSync, year]);
+
+  /** REQ-02-002 — the checkbox is stored, so the set it changes survives a reload. */
+  async function handleToggleIncludeOrgCountry(next: boolean): Promise<void> {
+    if (savingSetting) return;
+    const previous = includeOrgCountry;
+    // The box moves when it is clicked and the write reconciles it: a control that waits
+    // for a round trip before it moves reads as a control that did not take the click.
+    // A refusal puts it back, which is why the previous value is held rather than
+    // recomputed from the response.
+    setIncludeOrgCountry(next);
+    setSavingSetting(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/settings/holiday-sourcing`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ includeOrgCountry: next }),
+      });
+      if (response.ok) {
+        const body = (await response.json()) as { includeOrgCountry: boolean };
+        setIncludeOrgCountry(body.includeOrgCountry);
+        // The set changed, so both the sourcing block and the summary did.
+        await Promise.all([load(), loadSummary()]);
+      } else {
+        setIncludeOrgCountry(previous);
+        const body = await response.json().catch(() => null);
+        const fields = body?.fields as Record<string, string> | undefined;
+        showToast(
+          'toast-server-error',
+          fields?.includeOrgCountry ?? HOLIDAY_MESSAGES.toastServerError,
+          'error',
+        );
+      }
+    } catch {
+      setIncludeOrgCountry(previous);
+      showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
+    }
+    setSavingSetting(false);
+  }
 
   async function handleDeleteConfirm(): Promise<void> {
     if (!deleteTarget || deleting) return;
@@ -339,6 +529,21 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         ),
       },
       {
+        /* Time off spec 02 — where the row came from. `manual` or `imported`, the one
+           field the list route gained. */
+        key: 'source',
+        label: 'Source',
+        width: 120,
+        render: (row) => (
+          <span
+            data-testid={`holidays-row-${row.id}-source`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {row.source}
+          </span>
+        ),
+      },
+      {
         key: 'actions',
         label: '',
         align: 'end',
@@ -358,7 +563,14 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
     [canManage],
   );
 
-  const isEmpty = !loading && !error && holidays !== null && holidays.length === 0;
+  /* A country the provider could not source, or covers with nothing: the screen names it
+     rather than claiming the year has no holidays. */
+  const uncovered = (sourcing?.countries ?? []).filter((entry) => entry.state !== 'sourced');
+  const hasUnsourced = (sourcing?.countries ?? []).some((entry) => entry.state === 'unsourced');
+  const noHolidays = !loading && !error && holidays !== null && holidays.length === 0;
+  /* REQ-02-012 / §UI Description — the empty state is a claim the product can only make
+     once every country in the set is settled. An unsourced one shows the warning instead. */
+  const isEmpty = noHolidays && !hasUnsourced;
   const isCountryFiltered = country !== ALL_COUNTRIES;
 
   // Nothing is drawn while the redirect swaps the URL — no flash of the shell.
@@ -447,6 +659,19 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         >
           Save country
         </Button>
+
+        {/* Time off spec 02 §Screens — sourcing sits beside the country it may add, because
+            the two answer one question: which countries' holidays this organization pays. */}
+        <div style={{ marginLeft: 'auto' }}>
+          <HolidaySourcingPanel
+            year={year}
+            includeOrgCountry={includeOrgCountry}
+            savingSetting={savingSetting}
+            syncing={syncing}
+            onToggleIncludeOrgCountry={(next) => void handleToggleIncludeOrgCountry(next)}
+            onRefresh={() => void runSync({ refresh: true })}
+          />
+        </div>
       </div>
 
       <div
@@ -470,6 +695,34 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
           <HiddenSelectedLabel label={selectedLabel(HOLIDAY_COUNTRY_OPTIONS, country)} />
         </div>
       </div>
+
+      {/* REQ-02-009 / §UI Description — an InfoBanner, not the error banner: the screen is
+          working and the data is partial. `holidays-error-banner` stays absent. */}
+      {uncovered.length > 0 && (
+        <div data-testid="holiday-sourcing-uncovered" style={{ marginBottom: 'var(--space-5)' }}>
+          <InfoBanner variant="warning">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              {uncovered.map((entry) => (
+                <span
+                  key={entry.countryCode}
+                  data-testid={`holiday-sourcing-uncovered-${entry.countryCode}`}
+                >
+                  {`${holidayCountryLabel(entry.countryCode)}: ${HOLIDAY_SOURCING_MESSAGES.countryNotCovered}`}
+                </span>
+              ))}
+            </div>
+          </InfoBanner>
+        </div>
+      )}
+
+      {/* The summary sits ABOVE the list: it is the answer to the question the year tab
+          asked, and the list is the evidence for it. */}
+      <HolidaySummary
+        year={year}
+        summary={summary}
+        loading={summaryLoading}
+        failed={summaryFailed}
+      />
 
       {loading || holidays === null ? (
         <HolidaysLoading />
@@ -538,6 +791,10 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
             </div>
           )}
         </EmptyState>
+      ) : noHolidays ? (
+        /* No holiday, and a country still unsourced: neither the empty state nor a table
+           of nothing. The warning above already says why, and the sync is on its way. */
+        null
       ) : (
         <Card padded={false}>
           <div style={{ overflowX: 'auto' }}>
