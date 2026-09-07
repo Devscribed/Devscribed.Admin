@@ -23,7 +23,12 @@ import { HolidayProvider, type ProviderHolidays } from './holiday-provider';
  * | `VA` | An empty array — covered, and offering nothing (REQ-02-010) |
  * | `IN`, `AE` | A refused connection (REQ-02-009) — the two codes §External Contracts recorded as uncovered |
  * | `AQ` | A call that never answers (REQ-02-011) |
- * | anything else | An empty array — recorded as covered-but-empty rather than re-asked forever |
+ * | anything else | Four nationwide days — an unseeded country is covered like any other (PATCH-007) |
+ *
+ * `VA` is the only country that answers empty, and that is the point: covered-but-empty is a
+ * state a case reaches on purpose. It used to be the catch-all, which made every country
+ * nobody had taught the double claim it — and the screen then told a developer that the real
+ * service lists no holidays for Belarus, which lists ten.
  *
  * The dates are fixed month-days rather than the real movable feasts: a double has to
  * answer the same thing for every year a case asks about, and no rule under test depends
@@ -231,6 +236,23 @@ export function malformedShape(year: number, countryCode = 'MT'): RawProviderEnt
   ];
 }
 
+/**
+ * PATCH-007 — what a country the table does not name answers with. Four nationwide days on
+ * fixed month-days, like every other shape here, so the same country answers the same thing
+ * for every year a case asks about. Deliberately not any real country's calendar: it stands
+ * for "this country is covered and has holidays", which is what almost every country is.
+ */
+const GENERIC: Array<[string, string]> = [
+  ['01-01', "New Year's Day"],
+  ['05-01', 'Labour Day'],
+  ['10-14', 'National Day'],
+  ['12-25', 'Christmas Day'],
+];
+
+export function genericShape(year: number, countryCode: string): RawProviderEntry[] {
+  return GENERIC.map(([md, name]) => nationwideEntry(year, countryCode, md, name));
+}
+
 function defaultBehaviour(countryCode: string): FakeCountryBehaviour {
   switch (countryCode) {
     case 'PL':
@@ -250,6 +272,12 @@ function defaultBehaviour(countryCode: string): FakeCountryBehaviour {
     case 'AQ':
       return { kind: 'never' };
     default:
-      return { kind: 'empty' };
+      // PATCH-007 — an unseeded country is an ordinary covered country, not an empty one.
+      // Answering `empty` here made the screen say "the holiday service lists no public
+      // holidays for this country" about almost every country in development, which is a
+      // false claim about a third party; and an empty answer is recorded with a count of
+      // zero and never re-asked, so switching to `nager` afterwards still showed nothing.
+      // `VA` above is the deliberate covered-but-empty case and keeps that behaviour.
+      return { kind: 'entries', entries: genericShape };
   }
 }
