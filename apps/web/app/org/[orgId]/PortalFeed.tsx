@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Avatar, Badge, Button, Card, EmptyState, InfoBanner, Preloader, SettingsIcon } from '@devscribed/ds';
-import { can, PORTAL_MESSAGES, type Role } from '@devscribed/validation';
+import { can, PORTAL_MESSAGES, resolvedTimeZone, type Role } from '@devscribed/validation';
 import { useSession } from '@/layout/session-context';
 import type { PortalFeedEntry, PortalNewsResponse } from './portal-types';
 
@@ -295,7 +295,7 @@ function FeedEntryCard({
  */
 export function PortalFeed({ orgId, canManageSettings }: { orgId: string; canManageSettings: boolean }) {
   const session = useSession();
-  const timeZone = session.account.timezone ?? 'UTC';
+  const timeZone = resolvedTimeZone(session.account.timezone);
   const canInvite = can(session.role as Role, 'invite');
   const [state, setState] = useState<NewsState>({ status: 'loading' });
 

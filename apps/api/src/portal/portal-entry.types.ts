@@ -12,6 +12,7 @@ import {
   hasCapability,
   normalizeRole,
   parseIsoDate,
+  resolvedTimeZone,
   zonedTimeToUtc,
   type NormalizedRole,
   type PortalEntryKind,
@@ -135,7 +136,7 @@ export interface PortalFeedRawEntry {
  * 365-day span — the ordinary case, not the exception.
  */
 export function computePortalWindow(today: string, timezone: string | null | undefined): { start: Date; end: Date } {
-  const zone = timezone && timezone.trim().length > 0 ? timezone : 'UTC';
+  const zone = resolvedTimeZone(timezone);
   const { year, month, day } = parseIsoDate(today);
   // Midnight at the *start* of the following day in `zone`, minus one millisecond,
   // is the last instant of `today` in `zone` — `zonedTimeToUtc` normalizes the

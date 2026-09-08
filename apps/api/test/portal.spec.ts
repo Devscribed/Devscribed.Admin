@@ -1185,4 +1185,36 @@ describe('Portal (spec 01 — home)', () => {
       (unassignedPage.body.facts as Array<{ key: string }>).some((f) => f.key === 'client'),
     ).toBe(false);
   });
+
+  /* ================================================================ *
+   * Review F1 — an unresolvable `Account.timezone` reads 200, not 500
+   *
+   * `validateTimezone` only checks non-emptiness, so the column can hold a string no
+   * `Intl` construction can resolve. REQ-01-010 says the caller's own today is read in
+   * `Account.timezone`, UTC when unset — an unresolvable zone is neither "set" in any
+   * usable sense nor the same as unset, and the fix (`resolvedTimeZone`) treats it the
+   * same as unset rather than letting it reach `Intl` at all.
+   * ================================================================ */
+
+  it('answers 200 for the feed and an entry page when Account.timezone cannot be resolved', async () => {
+    const admin = await signupAdmin('adminbadtz@acme.test', 'Acme Inc');
+    const orgId = admin.organizationId;
+    const member = await createMember(orgId, {
+      email: 'badtz@acme.test',
+      role: 'user',
+      timezone: 'Europe/Warszawa',
+    });
+    await backdateJoined(member.email, ymdUtc(0));
+
+    const feedResponse = await news(member, orgId);
+    expect(feedResponse.status).toBe(200);
+    const entries = feedResponse.body.entries as Array<{ kind: string; subject: { id: string } }>;
+    const ownJoin = entries.find(
+      (e) => e.kind === 'member-joined' && e.subject.id === member.membershipId,
+    );
+    expect(ownJoin).toBeDefined();
+
+    const entryResponse = await newsEntry(member, orgId, `member-joined:${member.membershipId}`);
+    expect(entryResponse.status).toBe(200);
+  });
 });
