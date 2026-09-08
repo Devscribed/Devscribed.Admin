@@ -572,12 +572,20 @@ function spentSoFar(run) {
 /** The breaker this run has tripped, as the sentence a person would want, or null. */
 function breakerBlown(run) {
   const b = cfg.breakers ?? {};
-  const startedAt = run.createdAt ? Date.parse(run.createdAt) : null;
+  /* The clock runs from the last resume, not from init. This breaker catches a run that is
+     going nowhere under its own power; it is not a deadline on the work. A run that stopped for
+     a person — a spec defect to settle, a halt to read, an orchestrator to restart — accrues
+     wall clock while nothing is running, and measuring from init spends that against the next
+     stage, refusing a resume the moment it is asked for. Every resume is already stamped, so
+     the segment since the newest one is the span this question is about. */
+  const resumedAt = run.resumes?.length ? Date.parse(run.resumes[run.resumes.length - 1].at) : null;
+  const startedAt = resumedAt || (run.createdAt ? Date.parse(run.createdAt) : null);
   if (b.runTimeoutMin && startedAt) {
     const min = Math.round((Date.now() - startedAt) / 60_000);
     if (min > b.runTimeoutMin) {
-      return `the run has been going ${min} minutes, past the ${b.runTimeoutMin}-minute breaker `
-        + '(breakers.runTimeoutMin)';
+      const since = resumedAt ? 'since the last resume' : 'since it began';
+      return `the run has been going ${min} minutes ${since}, past the ${b.runTimeoutMin}-minute `
+        + 'breaker (breakers.runTimeoutMin)';
     }
   }
   if (b.runTokenCap) {

@@ -11,7 +11,7 @@
     "prebuild": "tsc -p ../../packages/validation/tsconfig.json",
     "build": "nest build",
     "start": "node dist/main.js",
-    "test": "jest --maxWorkers=4",
+    "test": "jest --runInBand --forceExit",
     "test:serial": "jest --runInBand"
   },
   "dependencies": {

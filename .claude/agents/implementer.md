@@ -170,6 +170,13 @@ the first execution.
 whoever is working. Filter Jest with a positional path; never `--testPathPatterns`, which this
 version ignores in silence and runs everything while your log says you filtered.
 
+**A command that has not answered is a finding, not something to wait out.** Never spend a turn
+to pass time: `echo poll`, `date`, `sleep`, `until … do sleep`, or re-listing processes are not
+work, and a command still silent after two checks has hung. Say so in your report, naming the
+command and what you did see — a hung suite is a defect in the suite. Never hunt the process
+table and never kill a pid: the only processes you may end are ones you started and can name
+from the command that started them.
+
 **Where your diff draws, measure it.** For every row of the document's `## Geometry & motion`
 table, drive the varying content to its extreme — the longest option, the largest count, the
 absent value — and assert the box named in "what holds it" did not move. Use the probes in
