@@ -5,7 +5,7 @@
   "task": "portal-01-home",
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
-  "headAtInit": "3bba8e34152e503501c14b13d728cdf6d3ef9317",
+  "headAtInit": "69bba60c334e5ef2656d8fb90e2243e00861d26a",
   "status": "halted",
   "track": "spec",
   "shapes": {
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T09:50:02.278Z",
+  "updatedAt": "2026-09-08T10:16:50.875Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -28,10 +28,10 @@
     },
     "pre_implement": {
       "status": "blocked",
-      "attempts": 2,
-      "startedAt": "2026-09-08T09:31:05.770Z",
+      "attempts": 3,
+      "startedAt": "2026-09-08T09:58:41.779Z",
       "lastVerdict": "blocked",
-      "endedAt": "2026-09-08T09:50:02.194Z"
+      "endedAt": "2026-09-08T10:16:50.821Z"
     },
     "implement": {
       "status": "pending",
@@ -60,7 +60,8 @@
     "spec/incomplete-decision@specs/portal/01-home.md#REQ-01-038": 1,
     "spec/contradiction@specs/portal/01-home.md#Acceptance Criteria, criterion 5": 1,
     "spec/contradiction@specs/portal/01-home.cases.md#TC-01-E2E-03": 1,
-    "spec/untestable-case@specs/portal/01-home.cases.md#TC-01-INT-14": 1
+    "spec/untestable-case@specs/portal/01-home.cases.md#TC-01-INT-14": 1,
+    "spec/stale-statement@specs/portal/01-home.contracts.md#Error Messages, row TEMPLATE_MESSAGES.generic.forbidden": 1
   },
   "carriedFindings": [],
   "carriedFrom": null,
@@ -167,7 +168,6 @@
       "20260907120000_time_off_02_holiday_sourcing"
     ]
   },
-  "pendingSpecSha": "e913c6052939ee528b25f0dc3b5e913548eda710cd31a054fa37282de9694746",
   "resumes": [
     {
       "at": "2026-09-08T09:30:41.666Z",
@@ -183,11 +183,34 @@
         "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
         "pendingUntilReplan": "e913c6052939ee528b25f0dc3b5e913548eda710cd31a054fa37282de9694746"
       }
+    },
+    {
+      "at": "2026-09-08T09:58:37.392Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/contradiction (specs/portal/01-home.cases.md); spec/untestable-case (specs/portal/01-home.cases.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "3bba8e34152e503501c14b13d728cdf6d3ef9317",
+        "to": "69bba60c334e5ef2656d8fb90e2243e00861d26a"
+      },
+      "specEdits": [
+        "specs/portal/01-home.cases.md",
+        "specs/portal/01-home.contracts.md",
+        "specs/portal/01-home.md",
+        "specs/portal/01-home.mock.html",
+        "specs/portal/README.md"
+      ],
+      "specSha": {
+        "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+        "pendingUntilReplan": "45d79cf712f413e1ddbfce9ffa9594059a8520632fda9c8143195beadcbf67bf"
+      }
     }
   ],
+  "pendingSpecSha": "45d79cf712f413e1ddbfce9ffa9594059a8520632fda9c8143195beadcbf67bf",
   "halt": {
     "reason": "spec-defect",
-    "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/contradiction (specs/portal/01-home.cases.md); spec/untestable-case (specs/portal/01-home.cases.md)",
-    "at": "2026-09-08T09:50:02.277Z"
+    "detail": "pre_implement found a defect in the spec: spec/stale-statement (specs/portal/01-home.contracts.md)",
+    "at": "2026-09-08T10:16:50.874Z"
   }
 }
