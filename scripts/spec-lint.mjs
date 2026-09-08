@@ -938,6 +938,158 @@ function checkGrowth(specPath) {
   }
 }
 
+/* ── refusals ─────────────────────────────────────────────────────────────── */
+
+/** The statuses that refuse a caller, as opposed to refusing what they sent. */
+const REFUSAL = new Set(['401', '403', '404']);
+const ROUTE_IN_TEXT = /\b(?:GET|POST|PUT|PATCH|DELETE)\s+[^\s`,;]+/;
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * A refusal written one requirement per condition reads correctly one requirement at a time.
+ * Two of them then answer one request differently — a rule over every route this spec names,
+ * and a rule over one of them — and neither says which wins. Only that pair is decidable here:
+ * a condition narrower than "every route" lives in prose, and this check does not guess at it.
+ */
+function checkRefusalScope(reqs, files) {
+  const universal = [];
+  const scoped = [];
+  for (const r of reqs.values()) {
+    const text = plain(r.body.join(' '));
+    const statuses = [...new Set((text.match(/\b[1-5]\d\d\b/g) ?? []).filter((s) => REFUSAL.has(s)))];
+    if (!statuses.length) continue;
+    (ROUTE_IN_TEXT.test(text) ? scoped : universal).push({ r, statuses, text });
+  }
+  for (const u of universal) {
+    for (const s of scoped) {
+      const clash = s.statuses.filter((x) => !u.statuses.includes(x));
+      if (!clash.length) continue;
+      add('refusal/unqualified', files.behaviour, u.r.line,
+        `${u.r.id} answers ${u.statuses.join('/')} on every route this spec names, and `
+          + `${s.r.id} answers ${clash.join('/')} on ${s.text.match(ROUTE_IN_TEXT)[0]}; `
+          + 'a caller both rules describe is answered twice',
+        'name the exception in the wider rule, or state both refusals as one decision-table over '
+          + 'the caller — principal kind and capability — so the overlap is a cell, not two sentences');
+      return;
+    }
+  }
+}
+
+/* ── vocabularies ─────────────────────────────────────────────────────────── */
+
+/** `clientAdded`, `client-added` and `client added` are one member written three ways. */
+function memberPattern(member) {
+  const words = member
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/(\d)([a-zA-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeRe);
+  /* The document writes a member as prose writes it: "2weeks" as "2 weeks", "reorder" as
+     "reorders". A member missing from a section has to be missing, not merely inflected. */
+  return new RegExp(`\\b${words.join('[-_ ]?')}(?:s|es|ed|ing|d)?\\b`, 'i');
+}
+
+/**
+ * A vocabulary the spec introduces is completed member by member. The member nobody finished is
+ * the one every sibling is written around, and a section that answers all but one of them has
+ * not decided the last: it has forgotten it.
+ */
+function checkVocabularySymmetry(lines, files) {
+  const domains = new Map();
+  for (const key of Object.keys(files)) {
+    for (const raw of lines[key] ?? []) {
+      const m = plain(raw.trim()).match(DT_DIRECTIVE);
+      if (!m) continue;
+      /* Three values is a flag with a middle, and a section naming two of them is ordinary
+         prose. Four is where a vocabulary starts structuring the document written around it,
+         and where a member missing from one section is a member nobody finished. */
+      for (const [name, values] of Object.entries(parseDomains(m[2]))) {
+        if (values.length >= 4 && !domains.has(name)) domains.set(name, values);
+      }
+    }
+  }
+  if (!domains.size) return;
+
+  const said = new Set();
+  for (const key of Object.keys(files)) {
+    for (const depth of [2, 3]) {
+      for (const sec of sections(lines[key] ?? [], depth)) {
+        /* Where a member is *answered*, not merely listed: a section carrying requirements, or
+           the one that draws the screen. A route table, a data model and a test case all name
+           a vocabulary in passing, and none of them owes it a rule. */
+        const answers = sec.body.some((l) => REQ_HEADING.test(l))
+          || plain(sec.title).toLowerCase().startsWith('screens');
+        if (!answers) continue;
+        const text = sec.body.join(' ');
+        for (const [name, members] of domains) {
+          const missing = members.filter((v) => !memberPattern(v).test(text));
+          if (missing.length !== 1) continue;
+          const seen = `${key}:${name}:${missing[0]}`;
+          if (said.has(seen)) continue;
+          said.add(seen);
+          add('vocab/asymmetry', files[key], sec.line,
+            `"${plain(sec.title)}" answers ${members.length - 1} of the ${members.length} `
+              + `${name} values and not ${missing[0]}`,
+            'answer the missing member here as its siblings are answered, or take it out of the '
+              + 'vocabulary — a member three sections are written around and a fourth forgets is '
+              + 'decided by whoever implements it first');
+        }
+      }
+    }
+  }
+}
+
+/* ── the newest document ──────────────────────────────────────────────────── */
+
+/**
+ * A patch note is the newest document about the behaviour it changes, and it does not live in
+ * the area it changes. A spec restating another area's rule from that area's own specs restates
+ * it as it stood before the last patch — a defect no reading of either document finds, because
+ * both are internally consistent.
+ */
+function checkPatchesRead(lines, files) {
+  /* The area README carries §Related Areas — which is where a bundle says whose rule it is
+     restating, and so where this check has to read. It is the same document the bundle answers
+     blast radius and backward compatibility with, and it is judged as if it stood here. */
+  const readme = read(path.join(ROOT, path.dirname(files.behaviour), 'README.md')) ?? [];
+  const bundle = [...Object.keys(files).map((k) => (lines[k] ?? []).join('\n')), readme.join('\n')]
+    .join('\n');
+  if (/\bPATCH-\d+/.test(bundle)) return; // the directory was opened; which notes is the author's call
+
+  const areas = new Set([...bundle.matchAll(/specs\/([a-z][a-z-]*)\//g)].map((m) => m[1]));
+  for (const own of ['patches', 'bugs', path.basename(path.dirname(files.behaviour))]) areas.delete(own);
+  if (!areas.size) return;
+
+  const dir = path.join(ROOT, 'specs', 'patches');
+  if (!fs.existsSync(dir)) return;
+
+  const governing = new Map(); // area -> patch ids
+  for (const f of fs.readdirSync(dir).filter((n) => /^PATCH-\d+.*\.md$/.test(n))) {
+    const head = fs.readFileSync(path.join(dir, f), 'utf8').slice(0, 800);
+    const sup = head.match(/^supersedes:\s*(.+)$/m)?.[1] ?? '';
+    for (const area of areas) {
+      if (!new RegExp(`(^|[\\s,])${escapeRe(area)}(/|[,\\s]|$)`).test(sup)) continue;
+      const id = f.match(/^(PATCH-\d+)/)[1];
+      governing.set(area, [...(governing.get(area) ?? []), id]);
+    }
+  }
+  if (!governing.size) return;
+
+  const where = [...governing].map(([a, ids]) => {
+    const shown = ids.slice(0, 6).join(', ') + (ids.length > 6 ? `, +${ids.length - 6} more` : '');
+    return `specs/${a}/ (${ids.length}: ${shown})`;
+  });
+  add('patch/unread', files.behaviour, 1,
+    `this bundle takes rules from ${where.join('; ')} and cites no patch note at all`,
+    'read specs/patches/ for every area you restate a rule from — a patch note is newer than '
+      + 'every spec in the area it changes and lives outside it — and cite the ones the rules '
+      + 'you restate depend on');
+}
+
 /* ── main ─────────────────────────────────────────────────────────────────── */
 
 const args = process.argv.slice(2);
@@ -965,6 +1117,13 @@ checkContractAgreement(contracts, files.contracts);
 checkCases(cases, reqs, contracts, files);
 checkE2ESelectorsDeclared(cases, contracts, files);
 checkAcceptance(lines.behaviour, cases, files.behaviour);
+
+/* Three joins the bundle makes against itself and against the documents around it: one rule
+   stated twice for one caller, one vocabulary finished for every member but one, and the
+   newest document about a behaviour this spec restates from somewhere else. */
+checkRefusalScope(reqs, files);
+checkVocabularySymmetry(lines, files);
+checkPatchesRead(lines, files);
 
 /* The mock and the area README are outside the bundle the checks above parse, and both carry
    claims the bundle is judged against. Read them where they exist and skip them where they

@@ -63,6 +63,9 @@ governs** — it is what the loop enforces — and the disagreement is a defect 
       row or mock state carrying the rule. The lint decides the first half; no judge files
       against this.
 - [ ] **(author)** No row of that table states a rule the spec carries nowhere else.
+- [ ] **(author)** Where the spec introduces a vocabulary, what belongs in it was put to a
+      person before anything about a member was decided, and every member is answered wherever
+      its siblings are. The lint decides the second half.
 - [ ] **(author)** Where the spec draws a screen, the mock was built and shown before the spec's
       text was written, and `## Screens` was written from it.
 
@@ -174,6 +177,11 @@ governs** — it is what the loop enforces — and the disagreement is a defect 
       versa.
 - [ ] **(author)** Every error message in the spec appears in the Error Messages table, and every
       row of that table names its `packages/validation` export and the route that emits it.
+- [ ] **(author)** Every rule taken from another area was read from the newest document that
+      states it — the patch notes superseding that area included — and the ones it depends on are
+      cited. The lint decides whether any was cited at all.
+- [ ] **(blocks)** Refusals are one decision table over the principal kind and the capability. No
+      two rules whose conditions can both hold answer the same caller differently.
 - [ ] **(note)** Every "asserted absent" has a presence twin — the same selector or field asserted
       present where the rule says it should be.
 - [ ] **(note)** Every `##` section has at least one test case, or an explicit note saying it has
