@@ -42,11 +42,13 @@ interface NavSession {
  * rows are destinations. `Documents` follows the system's own `All reports` construction —
  * the landing row is named for the whole rather than repeating the group's title.
  *
- * **A row the system named that no route serves is not shipped.** `Policies`, `Team
- * overview`, `ToDo / Teams`, `My organization` and `Subscription` are all in the default
- * set and none has a screen, so none is drawn: a dead link promises a page no spec defines.
- * The same rule empties a whole group — a section with no visible rows is dropped title and
- * all, so `viewer` never meets a `Documents` heading that opens onto nothing.
+ * **A row the system named that no route serves is not shipped.** `Policies`, `ToDo /
+ * Teams`, `My organization` and `Subscription` are all in the default set and none has a
+ * screen, so none is drawn: a dead link promises a page no spec defines. `Team overview`
+ * left that list once REQ-01-003 gave it a screen — the organization root, first in the
+ * rail, for every staff role. The same rule empties a whole group — a section with no
+ * visible rows is dropped title and all, so `viewer` never meets a `Documents` heading
+ * that opens onto nothing.
  *
  * Every row is gated on what the caller may actually do, and each is **omitted** rather than
  * drawn-and-disabled. Three gates are not roles:
@@ -82,6 +84,17 @@ function navigation(orgId: string, session: NavSession, badgeCount: number): Sid
   if (principal === 'client') {
     return [{ type: 'submenu', title: 'People', Icon: PeopleIcon, subs: [requestsRow] }];
   }
+
+  // REQ-01-003 — every staff role holds ViewPortalHome, so this row carries no capability
+  // gate. It is placed after the client-contact early return above: the org layout answers
+  // a contact 404 for the organization root, and a row onto a 404 is a dead link.
+  items.push({
+    type: 'link',
+    title: 'Team overview',
+    Icon: OrgIcon,
+    href: at(''),
+    testId: 'nav-portal',
+  });
 
   // The system draws Timesheets as a top-level link, and it is right to: the daily-driver
   // surface is one destination, and a group of one is a click in front of a page.

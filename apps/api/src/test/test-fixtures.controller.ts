@@ -189,4 +189,36 @@ export class TestFixturesController {
     });
     return { id: tx.id };
   }
+
+  /**
+   * Backdates the active membership of the account behind `email` to `joinedAt` (a
+   * 'YYYY-MM-DD' date). Portal spec 01's E2E needs precise join-date preconditions
+   * (member-joined entries, anniversaries), but there is no product-facing way to
+   * fast-forward a join date and E2E tests have no direct database access — this is the
+   * only way to manufacture that precondition over HTTP. `Membership.accountId` is
+   * `@unique`, so `account.memberships[0]` is the whole answer.
+   */
+  @Post('membership/backdate-joined')
+  @HttpCode(204)
+  async backdateJoined(
+    @Body() body: { email?: unknown; joinedAt?: unknown },
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.guard(authorization);
+    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const joinedAt = typeof body?.joinedAt === 'string' ? body.joinedAt.trim() : '';
+    if (!email || !joinedAt) throw new NotFoundException();
+
+    const account = await this.prisma.account.findUnique({
+      where: { email },
+      include: { memberships: true },
+    });
+    const membership = account?.memberships[0];
+    if (!membership) throw new NotFoundException();
+
+    await this.prisma.membership.update({
+      where: { id: membership.id },
+      data: { joinedAt: new Date(`${joinedAt}T00:00:00.000Z`) },
+    });
+  }
 }

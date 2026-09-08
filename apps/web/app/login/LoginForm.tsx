@@ -51,14 +51,17 @@ async function destination(organizationId: string): Promise<string> {
     if (next?.startsWith(`/org/${organizationId}/`)) return next;
   }
 
-  return `/org/${organizationId}/${await landingFor(organizationId)}`;
+  const path = await landingFor(organizationId);
+  return path ? `/org/${organizationId}/${path}` : `/org/${organizationId}`;
 }
 
 /**
  * Which screen the signed-in principal lands on. A client contact is refused the members
  * destination (REQ-03-019), so the kind decides — read from `/api/me`, the endpoint that
  * answers it, exactly as the shell and the accept screen already resolve it. The sign-in
- * response body is not amended for this.
+ * response body is not amended for this. Every other principal — every staff role — lands
+ * on the organization root, REQ-01-001's portal home; the empty string is that root and
+ * `destination` joins it without a trailing slash.
  */
 async function landingFor(organizationId: string): Promise<string> {
   try {
@@ -70,10 +73,10 @@ async function landingFor(organizationId: string): Promise<string> {
       }
     }
   } catch {
-    // The members destination is what every principal but a contact lands on, and the
+    // The organization root is what every principal but a contact lands on, and the
     // shell resolves the identity again on arrival.
   }
-  return 'members';
+  return '';
 }
 
 export function LoginForm() {

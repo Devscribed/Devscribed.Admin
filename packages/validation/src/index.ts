@@ -3816,3 +3816,4 @@ export * from './hiring-autosave';
 export * from './hiring-libraries';
 export * from './hiring-candidates';
 export * from './hiring-interviews';
+export * from './portal';

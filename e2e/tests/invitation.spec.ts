@@ -2,6 +2,7 @@ import { expect, test, type Page } from './fixtures';
 import {
   VALID,
   acceptInvitationViaApi,
+  clickNav,
   latestInvitationToken,
   sendInvitation,
   signupOrg,
@@ -14,7 +15,7 @@ async function signInUi(page: Page, email: string, password: string = VALID.pass
   await page.getByTestId('login-email-input').fill(email);
   await page.getByTestId('login-password-input').fill(password);
   await page.getByTestId('login-submit-button').click();
-  await page.waitForURL('**/members');
+  await page.waitForURL(/\/org\/[^/]+\/?$/);
 }
 
 test.describe('03 — User Invitation', () => {
@@ -27,6 +28,11 @@ test.describe('03 — User Invitation', () => {
     await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
 
     await signInUi(page, adminEmail);
+
+    // `invite-open-button` lives on the members page, not the portal REQ-01-001 now lands
+    // on — get there explicitly.
+    await clickNav(page, 'People', 'nav-members');
+    await page.waitForURL('**/members');
 
     await page.getByTestId('invite-open-button').click();
     const inviteeEmail = uniqueEmail('new');
@@ -73,6 +79,11 @@ test.describe('03 — User Invitation', () => {
     });
 
     await signInUi(page, managerEmail);
+
+    // `invite-open-button` lives on the members page, not the portal REQ-01-001 now lands
+    // on — get there explicitly.
+    await clickNav(page, 'People', 'nav-members');
+    await page.waitForURL('**/members');
 
     await page.getByTestId('invite-open-button').click();
     await expect(page.getByTestId('invite-form')).toBeVisible();

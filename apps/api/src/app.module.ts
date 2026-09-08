@@ -44,6 +44,7 @@ import { OrganizationCountryController } from './organizations/organization-coun
 import { OrganizationCountryService } from './organizations/organization-country.service';
 import { HolidaySourcingSettingsController } from './organizations/holiday-sourcing-settings.controller';
 import { HolidaySourcingSettingsService } from './organizations/holiday-sourcing-settings.service';
+import { PortalModule } from './portal/portal.module';
 import { ReportsModule } from './reports/reports.module';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
@@ -194,6 +195,10 @@ const calendarProvider = {
     // aggregation surface is self-contained and both slices ahead will fold
     // into it.
     ReportsModule,
+    // Portal spec 01 — the /portal route group (home, feed, entry page, settings). Own
+    // module for the same reason ReportsModule is: a self-contained aggregation surface
+    // with its own four services, rather than more controllers flattened into this list.
+    PortalModule,
   ],
   controllers: [
     // First, so that a reader looking for "what does the load balancer call" finds it

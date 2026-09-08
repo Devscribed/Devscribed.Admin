@@ -62,6 +62,33 @@ export async function expectNoScrollGrowth(
 }
 
 /**
+ * UI-01 — a set of elements share one edge, regardless of what varies inside each of them.
+ *
+ * Where `expectHoldsBox` proves one control does not move as a *consequence* of an action,
+ * this proves a set of controls that never coexist in one interaction — one row per
+ * organization, one row per length of the same field — start (or end) at the same
+ * coordinate, because a fixed grid column put them there and not their own content. A
+ * title column at `minmax(0,1fr)` should hold its left edge whether the text inside is one
+ * word or two hundred characters; a value column that follows it at `auto` should hold its
+ * right edge the same way. Passing `locators` from more than one live page is how two
+ * organizations seeded with a short and a long value are compared without navigating away
+ * from either mid-measurement.
+ */
+export async function expectSharedEdge(locators: Locator[], edge: 'left' | 'right'): Promise<void> {
+  const edges = await Promise.all(
+    locators.map(async (locator) => {
+      const box = await locator.boundingBox();
+      if (!box) throw new Error('the element has no box — it is not rendered, or it is display:none');
+      return Math.round(edge === 'left' ? box.x : box.x + box.width);
+    }),
+  );
+  expect(
+    new Set(edges).size,
+    `the elements do not share a ${edge} edge: ${edges.join(', ')} (UI-01)`,
+  ).toBe(1);
+}
+
+/**
  * UI-03 — what is on screen survives a re-read of the same question.
  *
  * `sample` reads something only the current answer can produce — a row's text, a cell count.

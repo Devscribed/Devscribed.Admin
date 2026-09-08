@@ -219,6 +219,9 @@ model Organization {
   /// include-organization-country setting. Both cascade with the organization.
   holidayImports       HolidayImport[]
   holidaySourcing      OrganizationHolidaySourcing?
+  /// Portal spec 01 — which news groups the portal feed derives entries for. Absent for
+  /// every organization until an admin turns one off.
+  portalSettings       OrganizationPortalSettings?
   /// Requests spec 01 — the organization's requests.
   requests             Request[]
   /// Requests spec 02 — the organization's own catalogue of request topics.
@@ -996,6 +999,21 @@ model OrganizationHolidaySourcing {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   updatedBy    Account      @relation("HolidaySourcingUpdatedBy", fields: [updatedByAccountId], references: [id])
+}
+
+/// Portal spec 01 REQ-01-048 — the three news groups an admin can switch off for the
+/// whole organization. One row per organization, created on the first PUT and never at
+/// signup: the absence of a row reads as all three enabled (REQ-01-049), which is what
+/// makes the migration additive with no backfill.
+model OrganizationPortalSettings {
+  id             String   @id @default(uuid())
+  organizationId String   @unique
+  peopleEnabled  Boolean  @default(true)
+  hiringEnabled  Boolean  @default(true)
+  workEnabled    Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 /// Spec 13 — a column on a project's Kanban board. Lazy-created on first `GET /board`

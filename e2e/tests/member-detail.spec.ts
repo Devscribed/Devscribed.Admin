@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   API,
   VALID,
+  clickNav,
   findMember,
   inviteAndAcceptViaApi,
   login,
@@ -15,7 +16,7 @@ async function signInUi(page: Page, email: string, password: string = VALID.pass
   await page.getByTestId('login-email-input').fill(email);
   await page.getByTestId('login-password-input').fill(password);
   await page.getByTestId('login-submit-button').click();
-  await page.waitForURL('**/members');
+  await page.waitForURL(/\/org\/[^/]+\/?$/);
 }
 
 /**
@@ -70,6 +71,9 @@ test.describe('05 — Member Detail: About', () => {
     const target = await findMember(request, org.organizationId, memberEmail);
 
     await signInUi(page, adminEmail);
+    // The member row lives on the members page, not the portal REQ-01-001 now lands on.
+    await clickNav(page, 'People', 'nav-members');
+    await page.waitForURL('**/members');
     await page.getByTestId(`member-row-${target.id}`).click();
 
     await expect(page).toHaveURL(new RegExp(`/org/${org.organizationId}/members/${target.id}$`));
@@ -89,6 +93,9 @@ test.describe('05 — Member Detail: About', () => {
     const admin = await findMember(request, org.organizationId, adminEmail);
 
     await signInUi(page, adminEmail);
+    // The member row lives on the members page, not the portal REQ-01-001 now lands on.
+    await clickNav(page, 'People', 'nav-members');
+    await page.waitForURL('**/members');
     await page.getByTestId(`member-row-${admin.id}`).click();
     await page.waitForURL(new RegExp(`/members/${admin.id}$`));
 
@@ -111,6 +118,9 @@ test.describe('05 — Member Detail: About', () => {
     const managerEmail = await addMember(request, adminEmail, 'manager', 'Mo', 'Manager');
 
     await signInUi(page, managerEmail);
+    // The member row lives on the members page, not the portal REQ-01-001 now lands on.
+    await clickNav(page, 'People', 'nav-members');
+    await page.waitForURL('**/members');
     await page.getByTestId(`member-row-${admin.id}`).click();
     await page.waitForURL(new RegExp(`/members/${admin.id}$`));
 

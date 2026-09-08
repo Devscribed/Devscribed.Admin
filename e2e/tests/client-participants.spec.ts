@@ -23,20 +23,28 @@ import {
  * already exists; nothing here is a fixture of its own.
  */
 
-/** Signs in through the UI and waits for the destination this principal lands on. */
-async function signInUi(page: Page, email: string, destination: 'members' | 'requests'): Promise<void> {
+/**
+ * Signs in through the UI and waits for the destination this principal lands on.
+ * `''` is the organization root — REQ-01-001's portal, and every staff principal's
+ * landing — while `'requests'` is the client contact's, unchanged by REQ-01-002.
+ */
+async function signInUi(page: Page, email: string, destination: '' | 'requests'): Promise<void> {
   await page.goto('/login');
   await page.getByTestId('login-email-input').fill(email);
   await page.getByTestId('login-password-input').fill(VALID.password);
   await page.getByTestId('login-submit-button').click();
-  await page.waitForURL(`**/${destination}`);
+  if (destination === '') {
+    await page.waitForURL(/\/org\/[^/]+\/?$/);
+  } else {
+    await page.waitForURL(`**/${destination}`);
+  }
 }
 
 /** Drops the cookie and signs in as somebody else. */
 async function switchUi(
   page: Page,
   email: string,
-  destination: 'members' | 'requests',
+  destination: '' | 'requests',
 ): Promise<void> {
   await page.context().clearCookies();
   await signInUi(page, email, destination);
@@ -177,7 +185,7 @@ test.describe('Client participants (requests spec 03)', () => {
 
     const contactEmail = uniqueEmail('c03contact');
 
-    await signInUi(page, adminEmail, 'members');
+    await signInUi(page, adminEmail, '');
     await page.goto(`/org/${organizationId}/clients/${clientId}`);
     await expect(page.getByTestId('client-contacts-section')).toBeVisible();
     await expect(page.getByTestId('client-contacts-empty-state')).toBeVisible();
@@ -224,7 +232,7 @@ test.describe('Client participants (requests spec 03)', () => {
     await expect(page.getByTestId('requests-new-btn')).toHaveCount(0);
 
     // Back as the admin: the same address again keeps the modal open with the error.
-    await switchUi(page, adminEmail, 'members');
+    await switchUi(page, adminEmail, '');
     await page.goto(`/org/${organizationId}/clients/${clientId}`);
     await page.getByTestId('client-contact-invite-btn').click();
     await page.getByTestId('client-contact-invite-email').fill(contactEmail);
@@ -279,7 +287,7 @@ test.describe('Client participants (requests spec 03)', () => {
     await page.goto(`/org/${organizationId}/requests`);
     await expect(page.getByTestId('requests-page')).toBeVisible();
 
-    await switchUi(page, adminEmail, 'members');
+    await switchUi(page, adminEmail, '');
     await openNavSection(page, 'People');
     await expect(page.getByTestId('nav-members')).toBeVisible();
     await openNavSection(page, 'Project management');
@@ -338,7 +346,7 @@ test.describe('Client participants (requests spec 03)', () => {
         await contactPage.goto(`/org/${organizationId}/requests/${requestId}`);
         await expect(contactPage.getByTestId('request-detail-page')).toBeVisible();
 
-        await signInUi(adminPage, adminEmail, 'members');
+        await signInUi(adminPage, adminEmail, '');
         await adminPage.goto(`/org/${organizationId}/clients/${clientId}`);
         await expect(adminPage.getByTestId(`client-contact-row-${contact.id}`)).toBeVisible();
         await expect(
@@ -388,7 +396,7 @@ test.describe('Client participants (requests spec 03)', () => {
     await inviteAndAcceptContact(request, organizationId, clientId, contactEmail);
     await login(request, adminEmail);
 
-    await signInUi(page, adminEmail, 'members');
+    await signInUi(page, adminEmail, '');
     await page.goto(`/org/${organizationId}/requests`);
     await page.getByTestId('requests-new-btn').click();
 
@@ -562,7 +570,7 @@ test.describe('Client participants (requests spec 03)', () => {
     await inviteAndAcceptContact(request, organizationId, clientId, contactEmail);
     await login(request, adminEmail);
 
-    await signInUi(page, adminEmail, 'members');
+    await signInUi(page, adminEmail, '');
     await page.goto(`/org/${organizationId}/requests`);
     await page.getByTestId('requests-new-btn').click();
     await expect(page.getByTestId('request-new-modal')).toBeVisible();

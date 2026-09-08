@@ -85,6 +85,9 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ExportReports',
         // Time off spec 01: the vacation calendar.
         'ViewTimeOffCalendar',
+        // Portal spec 01: the home screen and the settings only an admin may change.
+        'ViewPortalHome',
+        'ManagePortalSettings',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -123,6 +126,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ExportReports',
         // Time off spec 01: the same row as an admin.
         'ViewTimeOffCalendar',
+        // Portal spec 01: the home screen, without settings.
+        'ViewPortalHome',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       // Requests spec 01 is the first spec to put anything in these two rows: everybody
@@ -137,9 +142,12 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ExportReports',
         // Time off spec 01: a user opens the calendar; who is away is not privileged.
         'ViewTimeOffCalendar',
+        // Portal spec 01: the home screen is drawn for every staff principal.
+        'ViewPortalHome',
       ],
       // Spec reports/01 also gives a viewer their own time-off calendar; no export.
-      viewer: ['ViewOwnRequests', 'ViewMyTimeOff'],
+      // Portal spec 01: the home screen, without settings.
+      viewer: ['ViewOwnRequests', 'ViewMyTimeOff', 'ViewPortalHome'],
     });
   });
 });
@@ -204,6 +212,8 @@ describe('capabilitiesFor', () => {
       'ViewTimeAndActivitySpent',
       'ExportReports',
       'ViewTimeOffCalendar',
+      'ViewPortalHome',
+      'ManagePortalSettings',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -232,6 +242,7 @@ describe('capabilitiesFor', () => {
       'ViewTimeAndActivityBilled',
       'ExportReports',
       'ViewTimeOffCalendar',
+      'ViewPortalHome',
     ]);
     // `member` normalizes to `user`, and `null` to `viewer` — both rows are non-empty
     // since requests spec 01, so each is asserted against the role it normalizes to
@@ -245,9 +256,10 @@ describe('capabilitiesFor', () => {
       'ViewMyTimeOff',
       'ExportReports',
       'ViewTimeOffCalendar',
+      'ViewPortalHome',
     ]);
     expect(capabilitiesFor(null)).toEqual(capabilitiesFor('viewer'));
-    expect(capabilitiesFor(null)).toEqual(['ViewOwnRequests', 'ViewMyTimeOff']);
+    expect(capabilitiesFor(null)).toEqual(['ViewOwnRequests', 'ViewMyTimeOff', 'ViewPortalHome']);
   });
 });
 
@@ -296,7 +308,11 @@ describe('TC-02-UNIT-06: Capability map', () => {
 
   it('grants an unknown role no more than a viewer, because normalization lands there', () => {
     expect(capabilitiesFor('superadmin')).toEqual(capabilitiesFor('viewer'));
-    expect(capabilitiesFor('superadmin')).toEqual(['ViewOwnRequests', 'ViewMyTimeOff']);
+    expect(capabilitiesFor('superadmin')).toEqual([
+      'ViewOwnRequests',
+      'ViewMyTimeOff',
+      'ViewPortalHome',
+    ]);
   });
 
   it('leaves the spec 01 capabilities exactly as they were', () => {
@@ -364,7 +380,7 @@ describe('spec 03 profile capabilities', () => {
     // authorised via `isSelf`, so neither of these narrow capabilities widens
     // the profile surface for anyone.
     expect(capabilitiesFor('self')).toEqual(capabilitiesFor('viewer'));
-    expect(capabilitiesFor('self')).toEqual(['ViewOwnRequests', 'ViewMyTimeOff']);
+    expect(capabilitiesFor('self')).toEqual(['ViewOwnRequests', 'ViewMyTimeOff', 'ViewPortalHome']);
   });
 });
 
@@ -543,5 +559,25 @@ describe('TC-01-UNIT-04: ViewTimeOffCalendar / view-time-off-calendar', () => {
     // falls through to false and refuses the page to a member whose sidebar row is drawn
     // — the dead navigation REQ-01-004 forbids.
     expect(can('member' as unknown as Role, 'view-time-off-calendar')).toBe(false);
+  });
+});
+
+/**
+ * Portal spec 01 — `ViewPortalHome` and `ManagePortalSettings`, asked of every role a
+ * `Membership.role` column can hold today, plus the legacy `member` value that
+ * normalizes to `user`.
+ */
+describe('TC-01-UNIT-06: ViewPortalHome / ManagePortalSettings', () => {
+  it('grants ViewPortalHome to admin, manager, user, viewer and the legacy member', () => {
+    for (const role of ['admin', 'manager', 'user', 'viewer', 'member']) {
+      expect(hasCapability(role, 'ViewPortalHome')).toBe(true);
+    }
+  });
+
+  it('grants ManagePortalSettings to admin alone', () => {
+    expect(hasCapability('admin', 'ManagePortalSettings')).toBe(true);
+    for (const role of ['manager', 'user', 'viewer', 'member']) {
+      expect(hasCapability(role, 'ManagePortalSettings')).toBe(false);
+    }
   });
 });

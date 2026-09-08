@@ -14,14 +14,14 @@ import {
 /**
  * Signs in through the UI and waits for the app shell to settle — mirrors the helper in
  * `vacation-accrual.spec.ts` / `vacation-financials.spec.ts` (sign in the way the product
- * does, then land on the members list).
+ * does, then land on the portal, REQ-01-001).
  */
 async function signInUi(page: Page, email: string, password: string = VALID.password): Promise<void> {
   await page.goto('/login');
   await page.getByTestId('login-email-input').fill(email);
   await page.getByTestId('login-password-input').fill(password);
   await page.getByTestId('login-submit-button').click();
-  await page.waitForURL('**/members');
+  await page.waitForURL(/\/org\/[^/]+\/?$/);
 }
 
 /**

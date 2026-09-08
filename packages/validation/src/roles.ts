@@ -120,7 +120,16 @@ export type Capability =
   // through `hasCapability(role, ...)`, the other is what the page's gate and the
   // endpoint's read through `can(normalizeRole(role), ...)`, and both must answer alike
   // or the rail draws a row onto a 404.
-  | 'ViewTimeOffCalendar';
+  | 'ViewTimeOffCalendar'
+  // Portal spec 01 — the home screen and its feed. Not duplicated in the lowercase-dashed
+  // `MemberCapability` union: nothing calls `can(role, 'view-portal-home')`, and the rail
+  // row for the portal is drawn for every staff principal without a capability gate
+  // (REQ-01-003). Both are asked with `hasCapability(role, ...)` inside the portal
+  // service directly, never through a `@RequireCapability` decorator, because
+  // `settingsForbidden` must carry `PORTAL_MESSAGES.settingsForbidden` and
+  // `CapabilityGuard`'s refusal message is fixed.
+  | 'ViewPortalHome'
+  | 'ManagePortalSettings';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -172,6 +181,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // Time off spec 01's matrix — the calendar is admin, manager and user; a viewer is
     // refused it, because reports/01 already settles what a viewer sees of time off.
     'ViewTimeOffCalendar',
+    // Portal spec 01 — an admin sees the home screen and may change the portal settings.
+    'ViewPortalHome',
+    'ManagePortalSettings',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -219,6 +231,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ExportReports',
     // Time off spec 01's matrix — same row as admin.
     'ViewTimeOffCalendar',
+    // Portal spec 01 — a manager sees the home screen but does not manage settings,
+    // which is admin only.
+    'ViewPortalHome',
   ],
   // Requests spec 01 is the first spec to put anything in these two rows. A member
   // reading and editing *their own* contract details is still authorized below by
@@ -236,11 +251,14 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // Time off spec 01's matrix — a user opens the calendar and sees every member it is
     // scoped to; who is away is not a privileged fact inside one organization.
     'ViewTimeOffCalendar',
+    // Portal spec 01 — the home screen is drawn for every staff principal.
+    'ViewPortalHome',
   ],
   // Being asked something is not a privilege: a `viewer` sees the requests they raised
   // or that are addressed to them, and may not raise one. Reports/01 adds "My Time Off"
   // — the calendar that affects their own schedule — and no export.
-  viewer: ['ViewOwnRequests', 'ViewMyTimeOff'],
+  // Portal spec 01 — a viewer still sees the home screen; only settings are admin only.
+  viewer: ['ViewOwnRequests', 'ViewMyTimeOff', 'ViewPortalHome'],
 };
 
 /* ------------------------------------------------------------------ *
