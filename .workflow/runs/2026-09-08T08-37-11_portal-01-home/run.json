@@ -5,7 +5,7 @@
   "task": "portal-01-home",
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
-  "headAtInit": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+  "headAtInit": "3bba8e34152e503501c14b13d728cdf6d3ef9317",
   "status": "halted",
   "track": "spec",
   "shapes": {
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T08:50:59.232Z",
+  "updatedAt": "2026-09-08T09:50:02.278Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -28,10 +28,10 @@
     },
     "pre_implement": {
       "status": "blocked",
-      "attempts": 1,
-      "startedAt": "2026-09-08T08:37:11.327Z",
-      "endedAt": "2026-09-08T08:50:59.183Z",
-      "lastVerdict": "blocked"
+      "attempts": 2,
+      "startedAt": "2026-09-08T09:31:05.770Z",
+      "lastVerdict": "blocked",
+      "endedAt": "2026-09-08T09:50:02.194Z"
     },
     "implement": {
       "status": "pending",
@@ -57,7 +57,10 @@
   },
   "findingHistory": {
     "spec/contradiction@specs/portal/01-home.md#REQ-01-004": 1,
-    "spec/incomplete-decision@specs/portal/01-home.md#REQ-01-038": 1
+    "spec/incomplete-decision@specs/portal/01-home.md#REQ-01-038": 1,
+    "spec/contradiction@specs/portal/01-home.md#Acceptance Criteria, criterion 5": 1,
+    "spec/contradiction@specs/portal/01-home.cases.md#TC-01-E2E-03": 1,
+    "spec/untestable-case@specs/portal/01-home.cases.md#TC-01-INT-14": 1
   },
   "carriedFindings": [],
   "carriedFrom": null,
@@ -80,11 +83,6 @@
       "demoted": "witness kind \"rule\" needs a source (file:line)"
     }
   ],
-  "halt": {
-    "reason": "spec-defect",
-    "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/incomplete-decision (specs/portal/01-home.md)",
-    "at": "2026-09-08T08:50:59.232Z"
-  },
   "preflight": {
     "at": "2026-09-08T08:37:11.282Z",
     "checks": [
@@ -168,5 +166,28 @@
       "20260904120000_time_off_01_vacation_calendar",
       "20260907120000_time_off_02_holiday_sourcing"
     ]
+  },
+  "pendingSpecSha": "e913c6052939ee528b25f0dc3b5e913548eda710cd31a054fa37282de9694746",
+  "resumes": [
+    {
+      "at": "2026-09-08T09:30:41.666Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/incomplete-decision (specs/portal/01-home.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+        "to": "3bba8e34152e503501c14b13d728cdf6d3ef9317"
+      },
+      "specSha": {
+        "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+        "pendingUntilReplan": "e913c6052939ee528b25f0dc3b5e913548eda710cd31a054fa37282de9694746"
+      }
+    }
+  ],
+  "halt": {
+    "reason": "spec-defect",
+    "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/contradiction (specs/portal/01-home.cases.md); spec/untestable-case (specs/portal/01-home.cases.md)",
+    "at": "2026-09-08T09:50:02.277Z"
   }
 }

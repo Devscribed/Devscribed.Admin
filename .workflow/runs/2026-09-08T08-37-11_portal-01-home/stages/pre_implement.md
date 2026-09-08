@@ -1,185 +1,108 @@
-# pre_implement — portal/01 Home
+# pre_implement — portal/01 Home (attempt 2)
 
-Run `2026-09-08T08-37-11_portal-01-home` · spec `specs/portal/01-home.md` (bundle: contracts,
-cases, mock) · shape `strict` · base `7a6e059`.
+Spec: `specs/portal/01-home.md` (sha `e913c605…`, the bundle as commit `4e49f1f` left it)
+Verdict: **blocked** — three findings, all `spec`.
 
-**Verdict: blocked.** Three findings, all addressed to `spec`. The handoff is written in full
-anyway — the plan is executable the moment those three are settled, and two of the three sit
-inside tasks that are otherwise ready, so the plan names where they land rather than routing
-around them.
+Attempt 1 blocked on three defects. Commit `4e49f1f` repaired all three, and I re-read the bundle
+from the top rather than diffing: REQ-01-004 is now a total decision table over principal and
+capability and agrees with `OrgScopeGuard`; REQ-01-018/019 resolve the holiday country from the
+membership alone, which is what `resolveMemberHolidayCountry` and `HolidaysService` already do
+after PATCH-012; the `client-added` kind is gone from the derivation, the visibility table, the
+groups and the mock. Those three are settled and are not raised again.
 
----
-
-## What I read, and in what order
-
-`run.json`; the three-file bundle and the mock; `specs/portal/README.md` (product decisions,
-blast radius, backward compatibility, shared rules, related areas); `CLAUDE.md`;
-`packages/ds/README.md` by way of `packages/ds/src/index.ts`. Then the code, before the plan:
-
-- the guard stack — `session.guard.ts`, `org-scope.guard.ts`, `capability.guard.ts`,
-  `allow-client-principal.decorator.ts`, `principal.ts`;
-- `packages/validation/src/roles.ts` in full — the `Capability` union, `ROLE_CAPABILITIES`,
-  `normalizeRole`, `capabilitiesForPrincipal`;
-- the schema: `Account`, `Organization`, `Membership`, `MemberFinancials`, `Project`,
-  `ProjectMember`, `Client`, `Holiday`, `TimeEntry`, `Request`, `Vacancy`;
-- the four services the feed and the personal half read around — `reports.service.ts`,
-  `requests.service.ts`, `holidays.service.ts`, `projects.service.ts`, `vacation.service.ts`;
-- `test-fixtures.controller.ts` and `test-support/fixture-gate.ts`;
-- the web side — `LoginForm.tsx`, `Sidebar.tsx`, `session-context.tsx`, `me.controller.ts`,
-  the `app/org/[orgId]/` tree;
-- `e2e/tests/helpers.ts`, `ui-invariants.ts`, and the 33 `**/members` waits;
-- `infra/deploy.sh`, `PATCH-012`, `scripts/handoff-coverage.mjs`, `scripts/spec-lint.mjs`.
-
-`node scripts/spec-lint.mjs specs/portal/01-home.md` is clean: 51 requirements, 33 cases, 6
-routes, 10 messages, 25 testids. `node scripts/handoff-coverage.mjs` is clean.
-
----
+What the repair left behind, and what re-reading the whole bundle turned up instead, is below.
 
 ## The three blockers
 
-### P1 — the client contact and the settings pair: 404 or 403
+**P1 — Acceptance Criterion 5 still describes the feed the repair deleted.** The criterion asks
+for a `user` and an `admin` to be answered *different* feeds whose difference is *exactly the
+client entries*. REQ-01-032 now derives no entry from a `Client` at all, REQ-01-034's table marks
+every remaining kind Drawn for every reader, and TC-01-INT-10 — the case the criterion names as
+its own observer — asserts that all four roles are answered the same set. Nothing can satisfy the
+criterion and the requirement together, and this is not a stale pointer a reader can route around:
+the acceptance criteria are what QA reads at the end of the run.
 
-REQ-01-004 is unconditional: *"IF a client contact requests any route in this spec, THEN THE
-SYSTEM SHALL answer `404`."* TC-01-INT-01 signs in as a client contact, calls all four
-organization routes, and asserts the settings route answers **403**
-`TEMPLATE_MESSAGES.generic.forbidden`. Both are the spec. No implementation satisfies both.
+**P2 — the holidays block is inside the reserve block, and one E2E case needs it outside.**
+`timeOff` in the home body carries `availableDays`… *and* `countryCode` *and* `holidays`;
+REQ-01-016 and the contract make the whole object `null` when the membership has no
+`MemberFinancials` row, and TC-01-INT-05 asserts exactly that. TC-01-E2E-03 then signs in a member
+with no financials and asserts both that `portal-timeoff-panel` is absent in full **and** that
+`portal-holidays-no-country` is visible — a message the screen has no field left to decide, drawn
+inside a panel the same case has just removed. TC-01-INT-06 and TC-01-INT-07 read holidays without
+saying financials exist, so they lean the same way. The question underneath is a product one — does
+a member nobody has configured a salary for see the holidays that reach them? — and it is a
+person's to answer, in the document.
 
-It is not a wording slip that resolves in the contracts' favour, because the reason the
-contracts give for the 403 is false for this principal. `OrgScopeGuard` (org-scope.guard.ts:44)
-refuses a client principal a bare 404 on **every** `/api/organizations/:orgId` route that does
-not carry `@AllowClientPrincipal()`, and it runs *before* `CapabilityGuard`. So
-"`CapabilityGuard` has already proven the caller is a member of this organization" — the
-contracts' and the README's shared rule — describes a member without the capability, not a
-client contact, and reaching the 403 for a contact would mean adding
-`@AllowClientPrincipal()` to the settings routes: opening a door this spec's own Security
-section says is shut.
+**P3 — four cases count feed entries as if the organization had no members.** REQ-01-027 derives a
+`member-joined` entry from every active `Membership`, and every organization in an E2E or
+integration run has at least the admin who created it, plus one membership per role a case signs in
+as. TC-01-INT-14 expects "exactly one entry, `vacancy-opened`"; TC-01-INT-11 expects five projects
+to page 2/2/1; TC-01-INT-10 expects "the same three entries" from four role-callers; TC-01-E2E-07
+expects `feedEmptyBody` exactly once while only Work and Hiring are switched off. None of the four
+can pass. The repair is a decision about the cases — switch People off in the ones that count, or
+restate the counts relative to the memberships present — and an implementer who quietly picks one
+has rewritten the spec's own arithmetic.
 
-Which way it goes is a person's decision, and it is a real one — the settings pair leaking
-"this organization exists and you are not allowed in" to a contact is a different disclosure
-from leaking nothing. I will not settle it by preferring the requirement over the case.
+None of the three is repaired by adding a route, a column, a lock or a screen, so none is growth.
 
-### P2 — REQ-01-018 reinstates a country chain the product removed
+## What compiled cleanly
 
-REQ-01-018 makes a holiday reach the caller when its `countryCode` is null, **or** equals the
-membership's country, **or** — where the membership states none — equals
-`Organization.countryCode`. REQ-01-019 and TC-01-INT-07 both encode that third link. The
-README presents it as a restatement: *"specs/time-off/ — owns the country-resolution chain the
-holidays block uses: a country stated on the membership, falling back to
-`Organization.countryCode`. `REQ-01-018` states that chain in full rather than pointing at it."*
+The plan is ten tasks with disjoint file globs (T1 validation, T2 the migration, T3/T4/T5 the API
+in three services behind one controller, T6 integration, T7/T8 the web screens, T9 the landing and
+the rail, T10 e2e). All 51 requirements and all 33 live cases are assigned; `handoff-coverage`
+comes back clean on 7/7 sections.
 
-That chain does not exist any more. `PATCH-012` — *"nobody inherits a country"* — removed it
-product-wide, at the product owner's explicit direction, because a company registered in one
-country whose people are all in another was paying and sourcing the wrong holidays.
-`resolveMemberHolidayCountry` (packages/validation/src/reports.ts:566-573) reads the membership
-and nothing else, and `holidays.service.ts:111-118` answers a member who states no country the
-global rows only.
+The route group needs strikingly little new authorization code. `OrgScopeGuard` already answers a
+client principal a bare 404 on every `:orgId` route that does not carry `@AllowClientPrincipal()`,
+and it runs ahead of `CapabilityGuard` — so REQ-01-004's first two rows are satisfied by *not
+writing something*, which is recorded in T3 as a prohibition rather than left to be discovered.
+The `member/notHeld` row is `CapabilityGuard`'s existing 403 with the existing message.
 
-So the spec's stated premise is refuted by the code, and its rule, implemented, would give the
-product two answers to "which country is this member in": the time-off calendar and Amounts
-Owed would count a blank-country member for global holidays, and the portal would count them
-for the organization's. The newest document does govern — but this one says it is restating,
-not changing, and a change of this kind belongs to whoever took the PATCH-012 decision.
+H-07 turned up seven shipping surfaces. Six are governed by requirements in this spec. The seventh
+is the interesting one and is **not** a finding: the entry page answers a `user` and a `viewer` a
+vacancy's title, description, categories, interviewer and booking link — facts both hiring reads
+refuse them today with a 403 that the spec's own rehearsal observed. That widening is deliberate,
+argued in the README's Product decisions and in Acceptance Criterion 8, and bounded to the five
+fields REQ-01-042/043 name. It is written down as a surface so the next spec that narrows a vacancy
+finds the second reader.
 
-### P3 — `client-added` is derived, filtered and drawn, and nothing says what it says
+Concurrency is thin by construction: every route but one is a read, and REQ-01-054 forbids writing
+on a read. The single writer is the settings upsert, keyed by the unique `organizationId`, and Edge
+case 18 already settles its race as last-write-wins on a whole-record replacement.
 
-The kind is fully specified on the way in: REQ-01-032 derives it from every `Client` at
-`createdAt`, REQ-01-034 draws it for `admin` and `manager` and withholds it from `user` and
-`viewer`, REQ-01-036 puts it in the Work group, TC-01-INT-10 asserts an admin is answered four
-entries and a `user` three, and REQ-01-038 gives every entry a page.
+The migration is one additive table and no change to any existing one, which is what makes the
+rollback direction safe; the order is read from `infra/deploy.sh:27` and stated in T2's note.
 
-Nothing specifies it on the way out. REQ-01-042 says what a vacancy's page carries, REQ-01-045
-a person's, REQ-01-046 and REQ-01-047 a project's — and no requirement says what a
-`client-added` page carries. `facts` is ordered by the server, so this is a server decision the
-spec has to make and does not. The mock's nine states contain no `client-added` entry, the
-contracts' feed example carries none, and every other kind's sentence exists only in the mock —
-so the one string a reader of this feed will see for the kind is written nowhere at all.
+## Judgement calls recorded rather than raised
 
-Two implementations — a page naming the client and its creation date, versus one naming its
-projects and its contacts — both satisfy every sentence in the bundle, and no case distinguishes
-them. This is exactly the shape of a decision the spec owes: a single requirement and a single
-sentence of copy, not another route, writer, lock or screen.
+Thirteen notes are in the handoff. Four are worth naming here.
 
----
+*The mock draws more than the contract answers.* A third month figure ("Yesterday 5h 22m"), a
+per-project percentage bar, a project row reading "Aurora — Northwind Ltd". No field behind any of
+them, no testid for any of them, and the Geometry row counts the mock's three figures. Built to the
+contract: two figures. This is a note because the contract and the testid table agree with each
+other and only the drawing disagrees.
 
-## What is *not* blocking, and why
+*"Open requests" means `status = 'open'`.* The requests area's own waiting-on-me counter spans
+`['open','answered']`. The spec names the status the schema names, and TC-01-INT-08 seeds five rows
+in that state, so an `answered` request is not drawn on this panel.
 
-Ten notes are in the handoff (`notes`). The four worth naming here:
+*The stale sentences the client removal left.* §Roles & Permission Matrix still says "what varies
+is which entries the answer contains, and that is REQ-01-040's table" — wrong id, and after the
+repair nothing varies; the area README still lists the projection as being over "Membership,
+Vacancy, Project and Client" and still carries a "Client entries — withheld from user and viewer"
+row; TC-01-INT-10 attributes the `clientName` difference to TC-01-INT-11, which covers paging.
+None of them changes what is built, because the requirements they contradict are unambiguous. They
+are in note N11 so one repair pass can take them with P1.
 
-- **The mock draws more than the contract answers.** A third "Yesterday" figure, a percentage
-  bar per project, and a project row reading "Aurora — Northwind Ltd". None is answerable from
-  the `GET .../portal/home` body, and no requirement asks for any of them. The contract and
-  REQ-01-011/012/014 are complete on their own and the E2E case asserts only the two figures
-  that exist, so this is a note and the plan builds to the contract. The Geometry & motion row
-  that says "the two figures beside it" counts the mock's three; the layout rule it states —
-  the figure grows rightwards into a fixed-gap band's slack — holds at two.
-- **The entry response has no `detail`.** REQ-01-039 requires the page to be headed by the
-  sentence the feed drew, and that sentence needs `jobTitle`, `years`, `clientName`. Composing
-  it from `facts` on the page and from `detail` in the feed would be one value with two
-  sources. T4 answers `detail` on the entry body as well — additive, contradicting nothing the
-  contract states — and T7 writes one composer both screens import.
-- **TC-01-E2E-08 names probes that do not exist.** `ui-invariants.ts` exports five, and none
-  measures a shared left edge across rows or a shared right edge across cells. The case is
-  still runnable, and the honest repair is to add the two probes where the case says they live.
-  T10 does.
-- **A panel that is a control is a design-system gap the spec's own table does not list.**
-  `## Screens` requires each feed entry to be a `Card variant="panel"` that is an `<a>` and
-  takes the hover a static card withholds; `Card` renders a `div`, has no `as` prop, and
-  hovers nothing by design (Card.tsx:33-38, 52-77). H-15 puts it in `dsGaps`, which is where I
-  have written it, with the interim shape stated so it is improvised once and recorded, not
-  reinvented per screen.
+*A panel that is a control.* `## Screens` requires each feed entry to be a `Card variant="panel"`
+that is an `<a>` and hovers. `Card` renders a `div`, has no `as` prop, and withholds hover on
+purpose. That is a design-system gap the spec's own DS gaps table does not carry; it is in the
+handoff's `dsGaps` with the interim shape (an anchor around the card, existing tokens only) so the
+improvisation is on the record rather than in the diff.
 
-I also declined to raise three things that look like findings and are not. A concurrency the
-spec is silent on is planned with the lock the repository already uses — here the settings row
-is a single-row upsert on a unique index and Edge case 18 settles the race as last-write-wins,
-so no `FOR UPDATE` is invented. The settings screen's missing `## Screens` state and geometry
-row is a note: its content is fixed copy and three switches, so no box on it is sized by data.
-And the five other paths that still land a person on the members list (signup, invitation
-acceptance, the wordmark, four unauthorized-visitor redirects) are left alone and recorded —
-REQ-01-001 governs signing in, and moving the rest is a decision rather than a consequence.
+## Compile checklist
 
----
-
-## The shape of the plan
-
-Ten tasks, globs disjoint except where a dependency makes them serial anyway.
-
-| | Task | Files | Depends on |
-|---|---|---|---|
-| T1 | capabilities, `PORTAL_MESSAGES`, id/cursor codecs, anniversary maths, validators | `packages/validation/src/portal*.ts`, `roles*.ts`, `index.ts` | — |
-| T2 | the migration — `OrganizationPortalSettings` | `schema.prisma`, one migration | — |
-| T3 | the `/portal` group and the personal half | `apps/api/src/portal/{module,controller,home,types}`, `app.module.ts` | T1 |
-| T4 | the projection, its visibility, the entry page | `apps/api/src/portal/{feed,entry,visibility}` | T1, T3 |
-| T5 | the three switches, and the backdate fixture | `apps/api/src/portal/settings`, `test-fixtures.controller.ts` | T1, T2, T3 |
-| T6 | integration cases | `apps/api/test/portal*.spec.ts` | T3, T4, T5 |
-| T7 | the home screen | `app/org/[orgId]/page.tsx`, `src/portal/**` | T1 |
-| T8 | the entry page and the settings screen | two `page.tsx` | T7 |
-| T9 | the landing moves, the rail gains a row | `LoginForm.tsx`, `Sidebar.tsx`, 28 e2e files | — |
-| T10 | e2e cases and two new probes | `portal.spec.ts`, `ui-invariants.ts` | T7, T8, T9 |
-
-T1/T2/T9 have no dependencies and no overlapping files, so the first wave is three-wide. T9 is
-the wide one: 33 `waitForURL('**/members')` waits across 28 e2e files, of which two
-(`authentication.spec.ts:23,86`) are behavioural assertions to amend rather than scaffolding to
-move. The reviewer will see a diff touching almost every e2e file in the repository, which is
-why T9 carries the grep that enumerates them and the rule that decides each one.
-
-**H-07's answer, written down.** `shippingSurfaces` has seven rows. Six carry a governing
-requirement; the seventh is P3 — `client-added`, governed by nothing on the way out — and it is
-`"planned": "blocked"` rather than a blank `governedBy`. The two new capability values force
-all four `ROLE_CAPABILITIES` rows to be revisited by the type system; the new table has exactly
-one writer and cascades with the organization; a backdated `joinedAt` is a value the column
-already permits and no reader of it branches on its age; and the new route group is refused to
-a client principal by a guard that already exists.
-
-**H-11.** One migration, additive: one new table, no column added to an existing one, nothing
-renamed, nothing dropped, no new `NOT NULL`. The order note is read from `infra/deploy.sh:27` —
-migrations run before the Terraform rollout, on the new image — and not restated from `CLAUDE.md`.
-
-**H-12.** Every authorization decision in the plan runs through `normalizeRole`, by way of
-`hasCapability`, so a stored `admin`/`member` is judged as `admin`/`user` and the target set
-`admin | manager | user | viewer` is what the tables are keyed by. A client principal holds no
-role and is refused before any role-keyed helper is asked — which is `capabilitiesForPrincipal`'s
-whole reason for existing, and why nothing in this plan calls `hasCapability` on a contact.
-
-**H-13/H-14.** No external contract and no double: every route in this spec is this repository's
-own, behind the session cookie, and the spec's own rehearsal ran with no credential beyond a
-signed-up account.
+Every id answered in `pre_implement.verdict.json#compiled`. `H-07` is `ok` this time — every new
+value's shipping paths are listed with the rule that governs them. The findings sit on `H-02`
+(three live cases that cannot pass as written) and on the Acceptance Criteria section.
