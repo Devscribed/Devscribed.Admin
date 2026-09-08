@@ -181,6 +181,26 @@ Use the `spec` skill (`/spec`). Every spec covers edge cases, blast radius, back
 acceptance criteria, test cases through E2E, and a verification route walked before those cases
 were written. Specs are written in English.
 
+**What the product does is settled with a person before the spec is written, not shown to them
+after.** `/spec` opens on the code and then on the decisions: everything that changes what the
+product *does* — what happens to work somebody abandoned half-done, who else is affected and how
+they find out, what can be undone and what warns where nothing can, where a person goes when the
+answer is nothing — goes to a person, and everything the code, a convention here or a shipped
+screen already answers is decided by the author without asking. There is no quota either way: a
+surface that changes nothing about the product raises no question, and an obvious answer to a
+product question is a guess about somebody else's business. Where the spec draws a screen, the
+mock is built and looked at **before** the spec's text, and `## Screens` is written from the mock
+— reading order, the level of a heading and where an explanation sits are settled by looking, and
+asking about them costs more than the look.
+
+**Every product decision is recorded with who made it.** The cases file carries
+`## Behaviour Walkthrough`: one row per decision, what was decided, `human` or `agent`, and the
+requirement, edge case, contract row or mock state that now carries the rule. `spec:lint` checks
+that a bundle drawing a screen has the section and that every row names a decider — the shape of
+the record, never its truth, because no script can know whether a person was asked. A table of
+nothing but `agent` is what a spec written without that conversation looks like, and it is meant
+to be read as one.
+
 **A spec is judged by somebody who did not write it.** `/spec` ends by dispatching the
 `spec-reviewer` agent on a clean context — it is given the spec path and the request, and nothing
 else — which asks three questions the author cannot ask of their own work: is every claim about
