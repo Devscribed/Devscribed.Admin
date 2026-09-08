@@ -5,7 +5,7 @@
   "task": "portal-01-home",
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
-  "headAtInit": "f3b0cec639f869bd01813c73066cc7db4e8c0908",
+  "headAtInit": "546f6291def7c3fc43934ca3d7614e455f4ee481",
   "status": "halted",
   "track": "spec",
   "shapes": {
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T13:31:44.983Z",
+  "updatedAt": "2026-09-08T14:13:57.758Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,24 +34,22 @@
       "endedAt": "2026-09-08T10:25:22.607Z"
     },
     "implement": {
-      "status": "passed",
-      "attempts": 6,
-      "startedAt": "2026-09-08T13:11:15.717Z",
+      "status": "running",
+      "attempts": 7,
+      "startedAt": "2026-09-08T13:34:24.895Z",
       "lastVerdict": "pass",
-      "endedAt": "2026-09-08T13:14:18.844Z"
+      "endedAt": "2026-09-08T14:13:57.702Z"
     },
     "static_gate": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 2,
       "startedAt": "2026-09-08T13:14:19.166Z",
-      "endedAt": "2026-09-08T13:14:23.842Z",
       "lastVerdict": "blocked"
     },
     "review": {
-      "status": "blocked",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-08T13:14:24.153Z",
-      "endedAt": "2026-09-08T13:31:44.924Z",
       "lastVerdict": "blocked"
     },
     "qa": {
@@ -755,11 +753,25 @@
         "from": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
         "to": "f3b0cec639f869bd01813c73066cc7db4e8c0908"
       }
+    },
+    {
+      "at": "2026-09-08T13:34:17.383Z",
+      "stage": "implement",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: spec/contradiction (specs/portal/01-home.cases.md)",
+      "reason": "TC-01-INT-09 restated against REQ-01-026; review's 12 code blockers go back to implement",
+      "headAtInit": {
+        "from": "f3b0cec639f869bd01813c73066cc7db4e8c0908",
+        "to": "546f6291def7c3fc43934ca3d7614e455f4ee481"
+      },
+      "specEdits": [
+        "specs/portal/01-home.cases.md"
+      ]
     }
   ],
   "halt": {
-    "reason": "spec-defect",
-    "detail": "review found a defect in the spec: spec/contradiction (specs/portal/01-home.cases.md)",
-    "at": "2026-09-08T13:31:44.982Z"
+    "reason": "gate-authority",
+    "detail": "implement produced findings outside its authority: implement may not address \"self\" (allowed: spec)",
+    "at": "2026-09-08T14:13:57.757Z"
   }
 }
