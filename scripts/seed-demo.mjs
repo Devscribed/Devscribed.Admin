@@ -2,16 +2,17 @@
 /**
  * Builds a demo organization on a running environment, so somebody can sign in and walk
  * the whole product without setting anything up first: four people with contract details
- * filled in, three published templates, and four envelopes sitting in four different
- * states — including one that is already signed by everybody and has a PDF behind it.
+ * filled in, three published templates, four envelopes sitting in four different states —
+ * including one that is already signed by everybody and has a PDF behind it — and a portal
+ * home with something in every panel it draws.
  *
- * It drives the **public API only**, exactly as the browser does, plus the two fixture
- * routes an E2E run uses for the same reasons it uses them: there is no invite flow yet, so
- * a second person can only be put into an organization through `POST /api/test/memberships`,
- * and the signing link exists nowhere but inside the email, so completing an envelope means
- * reading `GET /api/test/mail`. Both are fenced — see `apps/api/src/test-support/
- * fixture-gate.ts` — so against a deployment this needs the token, and against an
- * environment where the fixtures are shut it will refuse rather than half-build something.
+ * It drives the **public API only**, exactly as the browser does, plus the fixture routes
+ * an E2E run uses for the same reasons it uses them: mail exists nowhere but inside the
+ * sink, so both accepting an invitation and completing an envelope mean reading
+ * `GET /api/test/mail`, and there is no product-facing way to move a join date into the
+ * past, which the feed's anniversaries need. They are fenced — see
+ * `apps/api/src/test-support/fixture-gate.ts` — so against a deployment this needs the
+ * token, and where the fixtures are shut it refuses rather than half-building something.
  *
  * Nothing here writes to the database. That is deliberate: a seeder that inserts rows can
  * produce states the product itself cannot, and then the demo is of the seeder.
@@ -113,27 +114,71 @@ async function register({ firstName, lastName, email, orgName }) {
   };
 }
 
+/** The invitation token, read out of the sink exactly as the invitee reads their inbox. */
+async function invitationToken(email) {
+  const response = await call(
+    `/api/test/mail/latest?email=${encodeURIComponent(email)}&type=invitation`,
+    { fixture: true },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `The mail sink refused the read for ${email} (${response.status}). `
+        + 'Without it there is no way to reach an invitation token — pass --token, or run this '
+        + 'against an environment with the fixtures open.',
+    );
+  }
+  return response.json.token;
+}
+
+/** The member row for `email`, which is where the membership id comes from. */
+async function findMember(admin, email) {
+  const listed = await expect(
+    `list the members of ${admin.orgId}`,
+    call(`/api/organizations/${admin.orgId}/members`, { cookies: admin.cookies }),
+  );
+  const member = listed.json.members.find((m) => m.email === email);
+  if (!member) throw new Error(`${email} is not in the member list after accepting the invitation`);
+  return member;
+}
+
 /**
- * Signup, then move the membership signup just created into the demo organization. Two
- * calls because that is genuinely what the product forces today: signup always mints an
- * organization of its own, and `Membership.accountId` is unique, so there is no such thing
- * as joining a second one. The invite flow replaces both with one call.
+ * Invite, then accept — the product's own flow, and the only one there is.
+ *
+ * This used to sign the person up into a holding organization and move the membership with
+ * a fixture, because there was no invite flow to use. That fixture is gone and the flow is
+ * here, so the two calls are the two a person makes: the admin sends the invitation, and
+ * the invitee accepts it with the token their mail carried. The accepted account arrives
+ * already in this organization, at the role the invitation named.
  */
 async function addTeammate(admin, { firstName, lastName, local, role, profile }) {
   const email = address(local);
-  await register({ firstName, lastName, email, orgName: `Holding org for ${local}` });
 
-  const moved = await expect(
-    `move ${email} into the demo org`,
-    call('/api/test/memberships', {
+  await expect(
+    `invite ${email} as ${role}`,
+    call('/api/invitations', {
       method: 'POST',
       cookies: admin.cookies,
-      fixture: true,
-      body: { orgId: admin.orgId, email, role },
+      body: { email, role },
     }),
   );
 
-  const member = { ...moved.json, role, name: `${firstName} ${lastName}` };
+  const token = await invitationToken(email);
+
+  await expect(
+    `accept the invitation for ${email}`,
+    call('/api/invitations/accept', {
+      method: 'POST',
+      body: { token, firstName, lastName, password: PASSWORD, timezone: 'Europe/Minsk' },
+    }),
+  );
+
+  const row = await findMember(admin, email);
+  const member = {
+    membershipId: row.id,
+    email,
+    role,
+    name: `${firstName} ${lastName}`,
+  };
 
   if (profile) {
     await expect(
@@ -437,6 +482,142 @@ const INCOME = {
  * The run
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * The portal
+ * ------------------------------------------------------------------ */
+
+/** `YYYY-MM-DD`, `days` before today, in UTC — the shape every date field here takes. */
+const daysAgo = (days) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+const daysAhead = (days) => daysAgo(-days);
+
+/**
+ * What the portal home draws, which is a projection of six other areas rather than a thing
+ * of its own — so seeding it means seeding them.
+ *
+ * The feed reads a 365-day window, and the two join dates below are chosen against it: one
+ * inside, which draws a joining; one just outside, whose first anniversary lands five days
+ * ago and is therefore the only entry that member contributes. A demo where everybody
+ * joined today shows one kind of entry and hides the other.
+ */
+async function seedPortal(admin, adminEmail, people) {
+  const adminRow = await findMember(admin, adminEmail);
+  const org = `/api/organizations/${admin.orgId}`;
+  const post = (path, body, cookies = admin.cookies) =>
+    call(`${org}${path}`, { method: 'POST', cookies, body });
+
+  // --- the feed: joinings and an anniversary --------------------------------
+  for (const [who, joinedAt] of [[people.alex, daysAgo(200)], [people.marina, daysAgo(370)]]) {
+    await expect(
+      `backdate ${who.email} to ${joinedAt}`,
+      call('/api/test/membership/backdate-joined', {
+        method: 'POST',
+        fixture: true,
+        cookies: admin.cookies,
+        body: { email: who.email, joinedAt },
+      }),
+    );
+  }
+  step(`joinings: ${people.alex.name} 200 days ago, ${people.marina.name} 370 — one anniversary`);
+
+  // --- the feed: hiring and work -------------------------------------------
+  const vacancy = await expect(
+    'open a vacancy',
+    post('/hiring/vacancies', {
+      title: 'Senior React Engineer',
+      description: 'Портал, дизайн-система и всё, что видит человек.',
+      interviewerAccountId: admin.accountId,
+      durationMinutes: 60,
+    }),
+  );
+  step(`vacancy: ${vacancy.json.title}`);
+
+  const client = await expect('create a client', post('/clients', { name: 'Северное сияние' }));
+  const project = await expect(
+    'start a project',
+    post('/projects', { name: 'Портал сотрудника', clientId: client.json.client.id }),
+  );
+  await expect(
+    'staff the project',
+    post(`/projects/${project.json.id}/members`, {
+      membershipIds: [adminRow.id, people.alex.membershipId, people.marina.membershipId],
+    }),
+  );
+  step(`project: ${project.json.name} for ${client.json.client.name}, three people on it`);
+
+  // --- the personal half: holidays -----------------------------------------
+  for (const holiday of [
+    { name: 'Новый год', date: daysAhead(30), paidHours: 8, countryCode: null },
+    { name: 'День Конституции', date: daysAhead(12), paidHours: 8, countryCode: 'BY' },
+  ]) {
+    await expect(`holiday ${holiday.name}`, post('/holidays', holiday));
+  }
+  step('holidays: one global, one Belarusian');
+
+  // --- the personal half: the time-off figures ------------------------------
+  await expect(
+    'configure the vacation financials',
+    call(`${org}/members/${adminRow.id}/vacation/financials`, {
+      method: 'PUT',
+      cookies: admin.cookies,
+      body: {
+        monthlySalary: 4200,
+        clientHourlyRate: 45,
+        vacationDaysPerYear: 24,
+        currency: 'USD',
+        isReservePercentManual: false,
+      },
+    }),
+  );
+  await expect(
+    'seed a vacation reserve credit',
+    call('/api/test/vacation/seed-credit', {
+      method: 'POST',
+      fixture: true,
+      cookies: admin.cookies,
+      body: { email: adminEmail, amount: 1350 },
+    }),
+  );
+  step('time off: financials configured and a reserve credit standing');
+
+  // --- the personal half: requests -----------------------------------------
+  const topics = await expect('list the request topics', call(`${org}/request-topics`, { cookies: admin.cookies }));
+  /* A topic carries the audience it serves, and a request to a member is refused under a
+     topic meant for a client. The seeded set holds both, so the audience is what picks. */
+  const staffTopics = (topics.json.topics ?? topics.json).filter((t) => t.audience === 'staff');
+  const topicId = staffTopics[0]?.id;
+  if (topicId) {
+    for (const title of ['Доступ к VPN', 'Замена ноутбука']) {
+      await expect(
+        `request "${title}"`,
+        post('/requests', {
+          topicId,
+          title,
+          assigneeKind: 'member',
+          assigneeMembershipId: adminRow.id,
+        }),
+      );
+    }
+    step('requests: two open, both on the admin');
+  } else {
+    step('requests: skipped — this organization has no request topics');
+  }
+
+  // --- the month panel ------------------------------------------------------
+  for (const [days, minutes] of [[1, 480], [2, 390], [3, 465], [7, 240]]) {
+    await expect(
+      `time entry ${daysAgo(days)}`,
+      post('/time-entries', {
+        membershipId: adminRow.id,
+        projectId: project.json.id,
+        date: daysAgo(days),
+        durationMinutes: minutes,
+        description: 'Портал',
+      }),
+    );
+  }
+  step('month: four time entries on the project');
+}
+
 async function main() {
   process.stdout.write(`\nSeeding a demo organization on ${BASE}\n\n`);
 
@@ -575,6 +756,9 @@ async function main() {
   const rendered = await waitForPdf(admin, done);
   step(`${done.title} — completed${rendered ? ', PDF ready' : ', PDF not ready yet'}`);
 
+  process.stdout.write('\nPortal\n');
+  await seedPortal(admin, adminEmail, { alex, marina, pavel, olga });
+
   /* ---------------------------------------------------------------- */
 
   process.stdout.write(`
@@ -591,6 +775,7 @@ Done.
     ${pavel.email}  user     — empty contract details, to see autofill find nothing
     ${olga.email}  viewer   — the narrowest role there is
 
+  Portal     ${BASE}/org/${admin.orgId}
   Templates  ${BASE}/org/${admin.orgId}/documents/templates
   Documents  ${BASE}/org/${admin.orgId}/documents
 
