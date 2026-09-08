@@ -170,12 +170,17 @@ the first execution.
 whoever is working. Filter Jest with a positional path; never `--testPathPatterns`, which this
 version ignores in silence and runs everything while your log says you filtered.
 
-**A command that has not answered is a finding, not something to wait out.** Never spend a turn
-to pass time: `echo poll`, `date`, `sleep`, `until … do sleep`, or re-listing processes are not
-work, and a command still silent after two checks has hung. Say so in your report, naming the
-command and what you did see — a hung suite is a defect in the suite. Never hunt the process
-table and never kill a pid: the only processes you may end are ones you started and can name
-from the command that started them.
+**Every wait carries a deadline, and a wait that expires is a finding.** Waiting for a command
+is ordinary; waiting without a bound is the defect, whatever shape it wears — `until … do sleep`
+with no counter waits forever for a marker a hung suite will never print. Give the wait a limit
+in the command itself, and when it expires stop waiting and report: name the command, the limit,
+and the last output you did see. A suite that finishes its tests and does not return is a defect
+in the suite, and saying so is worth more than any number of further checks.
+
+**Never spend a turn to pass time.** `echo poll`, `date`, `echo idle`, re-listing processes:
+none of these is work, and a stream of them is the shape of an agent with nothing to do but
+something to wait for. **Never hunt the process table and never kill a pid** — the only process
+you may end is one you started and can name from the command that started it.
 
 **Where your diff draws, measure it.** For every row of the document's `## Geometry & motion`
 table, drive the varying content to its extreme — the longest option, the largest count, the
