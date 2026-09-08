@@ -236,11 +236,14 @@ state in the table and printed what came back. What it found, and what changed b
 - **Level:** Integration
 - **Covers:** REQ-01-027, REQ-01-028, REQ-01-029
 - **Asserts:** `GET /api/organizations/{orgId}/portal/news` → 200
-- **Steps:** Invite and accept two members; remove one. Backdate the remaining one's `joinedAt` by
-  two years and a day through the fixture. Call the route.
-- **Expected Result:** One `member-joined` entry for the remaining member, at its backdated
-  moment, and two `member-anniversary` entries for it with `detail.years` 1 and 2. The removed
-  member appears in no entry of any kind.
+- **Steps:** Invite and accept three members; remove one. Backdate one remaining member's
+  `joinedAt` by two years and a day through the fixture, and leave the other remaining member's
+  joining at the run's today. Call the route.
+- **Expected Result:** A `member-joined` entry whose subject is the member who joined today, at
+  its moment. No `member-joined` entry whose subject is the backdated member — its joining is 731
+  days ago, outside REQ-01-026's window — and exactly one `member-anniversary` entry for it, with
+  `detail.years` 2; its first anniversary falls 366 days ago and is outside the window too. The
+  removed member appears in no entry of any kind.
 
 ### TC-01-INT-10
 
