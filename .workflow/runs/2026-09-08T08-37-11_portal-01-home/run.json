@@ -1,12 +1,12 @@
 {
   "runId": "2026-09-08T08-37-11_portal-01-home",
   "spec": "specs/portal/01-home.md",
-  "specSha": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+  "specSha": "40eca1daf21f6500a23ef3cd2ffba63df41fcc440547eb2b8286518476102261",
   "task": "portal-01-home",
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
-  "headAtInit": "69bba60c334e5ef2656d8fb90e2243e00861d26a",
-  "status": "halted",
+  "headAtInit": "413177bc0b8b9eb21e38a038d22c285ee84ccf7e",
+  "status": "implement",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,18 +20,18 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T10:16:50.875Z",
+  "updatedAt": "2026-09-08T10:25:22.656Z",
   "stages": {
     "preflight": {
       "status": "passed",
       "attempts": 1
     },
     "pre_implement": {
-      "status": "blocked",
-      "attempts": 3,
-      "startedAt": "2026-09-08T09:58:41.779Z",
-      "lastVerdict": "blocked",
-      "endedAt": "2026-09-08T10:16:50.821Z"
+      "status": "passed",
+      "attempts": 4,
+      "startedAt": "2026-09-08T10:18:19.977Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-08T10:25:22.607Z"
     },
     "implement": {
       "status": "pending",
@@ -205,12 +205,26 @@
         "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
         "pendingUntilReplan": "45d79cf712f413e1ddbfce9ffa9594059a8520632fda9c8143195beadcbf67bf"
       }
+    },
+    {
+      "at": "2026-09-08T10:18:19.853Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "pre_implement found a defect in the spec: spec/stale-statement (specs/portal/01-home.contracts.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "69bba60c334e5ef2656d8fb90e2243e00861d26a",
+        "to": "413177bc0b8b9eb21e38a038d22c285ee84ccf7e"
+      },
+      "specEdits": [
+        "specs/portal/01-home.cases.md",
+        "specs/portal/01-home.contracts.md",
+        "specs/portal/01-home.md"
+      ],
+      "specSha": {
+        "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+        "pendingUntilReplan": "40eca1daf21f6500a23ef3cd2ffba63df41fcc440547eb2b8286518476102261"
+      }
     }
-  ],
-  "pendingSpecSha": "45d79cf712f413e1ddbfce9ffa9594059a8520632fda9c8143195beadcbf67bf",
-  "halt": {
-    "reason": "spec-defect",
-    "detail": "pre_implement found a defect in the spec: spec/stale-statement (specs/portal/01-home.contracts.md)",
-    "at": "2026-09-08T10:16:50.874Z"
-  }
+  ]
 }
