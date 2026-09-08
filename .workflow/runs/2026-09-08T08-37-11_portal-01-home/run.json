@@ -6,7 +6,7 @@
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
   "headAtInit": "e9670bf46594ed9b17df140c667492b5f07dbbb5",
-  "status": "review",
+  "status": "qa",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T14:48:05.848Z",
+  "updatedAt": "2026-09-08T14:53:02.954Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -48,11 +48,11 @@
       "endedAt": "2026-09-08T14:48:05.790Z"
     },
     "review": {
-      "status": "pending",
-      "attempts": 2,
-      "startedAt": "2026-09-08T14:16:06.145Z",
-      "lastVerdict": "blocked",
-      "endedAt": "2026-09-08T14:29:47.963Z"
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-08T14:48:06.153Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-08T14:53:02.896Z"
     },
     "qa": {
       "status": "pending",
@@ -866,6 +866,43 @@
         "source": "specs/portal/01-home.md"
       },
       "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "sweep 11 — a mechanism applied at some call sites and not the rest",
+      "file": "apps/api/src/portal/portal-home.service.ts",
+      "symbol": "tzOf",
+      "line": 137,
+      "claim": "the home route still resolves the caller's zone with the guard the two feed routes just stopped using, and echoes an unresolvable identifier back in month.timezone as the zone the month was computed in — while the month was in fact computed in UTC",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Same input as review 2's F1 — an account whose Account.timezone holds 'Europe/Warszawa', which POST /api/invitations/accept and PUT /api/account/settings both accept because validateTimezone checks non-emptiness alone (packages/validation/src/index.ts:1060-1064). That member calls GET /api/organizations/{orgId}/portal/home. tzOf (portal-home.service.ts:137-140) applies `typeof … === 'string' && trim().length > 0`, so it answers 'Europe/Warszawa' unchanged; :116 hands it to localDateInTz, which goes through wallClockParts and falls back to UTC parts on the RangeError (index.ts:2994-3016), so `today`, `startDate` and `endDate` are the UTC month — correct, and no 500. But the same raw string is carried into the response at :226 and answered as `month.timezone`, which the contracts sample presents as the zone the month was resolved in (specs/portal/01-home.contracts.md:33-36, Q1 at :261 — 'the calendar month of their today in Account.timezone'). So the body states a zone the computation did not use. Nothing renders it today — the web's only two date formatters over this block pass a literal timeZone: 'UTC' (portal-types.ts:124, :134) — which is why this is a note and not a blocker; the defect is a false claim in a contract-visible field, and the next reader of that field inherits it. The docstring on the new resolver says 'Every reader of a stored Account.timezone needs this, not just the writer' (hiring-time.ts:64-71), and this reader, inside the same diff, does not ask it.",
+        "source": "apps/api/src/portal/portal-home.service.ts:137"
+      },
+      "suggestedFix": "call resolvedTimeZone in tzOf, so the zone the month block reports is the zone the month was actually resolved in — one line, and it makes the resolver the single answer this run's diff gives for the column"
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing; test cases are numbered in the specs and the code references those ids",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "answers 200 for the feed and an entry page when Account.timezone cannot be resolved",
+      "line": 1198,
+      "claim": "the second review-driven integration case carries a review finding id in place of a TC id, because the cases register has no case for an unresolvable stored zone — the same gap pass 2 recorded for the zone-boundary case, now doubled",
+      "witness": {
+        "kind": "test",
+        "test": "no id",
+        "detail": "portal.spec.ts:1189-1196 heads the case 'Review F1 — an unresolvable Account.timezone reads 200, not 500' and :1198 titles it without any TC id; the neighbouring case at :857 is titled 'REQ-01-026 keeps a row inside the caller's own today…' with no id either, while every case the bundle specifies names one (:698 TC-01-INT-09, :1155 TC-01-INT-18). `grep -n 'Account.timezone' specs/portal/01-home.cases.md` returns nothing, and Edge case 12 of the contracts (specs/portal/01-home.contracts.md:348) covers 'unset' only, not 'set to something Intl cannot build' — which is why two rounds of a suite seeded with valid zones never saw either defect. Both tests are right to exist and neither can be given an id without editing a frozen bundle. Recording it so the coverage is deliberate rather than incidental.",
+        "source": "specs/portal/01-home.cases.md"
+      },
+      "suggestedFix": "for a person: give the unresolvable zone and the non-UTC window boundary numbered cases in whichever document next speaks about the portal feed, and say there what an unresolvable Account.timezone means — REQ-01-010 names only 'unset'"
     }
   ],
   "preflight": {
