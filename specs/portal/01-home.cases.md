@@ -285,7 +285,7 @@ state in the table and printed what came back. What it found, and what changed b
 - **Covers:** REQ-01-036, REQ-01-048, REQ-01-049, REQ-01-050, REQ-01-051
 - **Asserts:** `GET /api/organizations/{orgId}/portal/settings` → 200;
   `PUT /api/organizations/{orgId}/portal/settings` → 200;
-  `PUT /api/organizations/{orgId}/portal/settings` → 403 TEMPLATE_MESSAGES.generic.forbidden;
+  `PUT /api/organizations/{orgId}/portal/settings` → 403 PORTAL_MESSAGES.settingsForbidden;
   `PUT /api/organizations/{orgId}/portal/settings` → 422 PORTAL_MESSAGES.groupsInvalid;
   `GET /api/organizations/{orgId}/portal/news` → 200
 - **Steps:** Seed one member, one vacancy and one project. Read the settings before anything was

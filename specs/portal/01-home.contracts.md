@@ -9,8 +9,8 @@ Rules live in [01-home.md](01-home.md) and are referenced here by id.
 | `GET /api/organizations/{orgId}/portal/home` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ViewPortalHome')` in the service | `200` | `404` (a client principal; wrong organization) |
 | `GET /api/organizations/{orgId}/portal/news` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ViewPortalHome')` in the service | `200` | `404` (a client principal; wrong organization) · `422` `PORTAL_MESSAGES.limitInvalid` · `422` `PORTAL_MESSAGES.cursorInvalid` |
 | `GET /api/organizations/{orgId}/portal/news/{entryId}` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ViewPortalHome')` in the service | `200` | `404` (a client principal; wrong organization; an entry this caller's feed would not contain; a malformed, unknown or vanished id) |
-| `GET /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`, `CapabilityGuard('ManagePortalSettings')` | `200` | `403` `TEMPLATE_MESSAGES.generic.forbidden` (a member of this organization without the capability) · `404` (a client principal; wrong organization) |
-| `PUT /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`, `CapabilityGuard('ManagePortalSettings')` | `200` | `403` `TEMPLATE_MESSAGES.generic.forbidden` (a member of this organization without the capability) · `404` (a client principal; wrong organization) · `422` `PORTAL_MESSAGES.groupsInvalid` |
+| `GET /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ManagePortalSettings')` in the service | `200` | `403` `PORTAL_MESSAGES.settingsForbidden` (a member of this organization without the capability) · `404` (a client principal; wrong organization) |
+| `PUT /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ManagePortalSettings')` in the service | `200` | `403` `PORTAL_MESSAGES.settingsForbidden` (a member of this organization without the capability) · `404` (a client principal; wrong organization) · `422` `PORTAL_MESSAGES.groupsInvalid` |
 | `POST /api/test/membership/backdate-joined` | `assertFixturesOpen`; refused in production | `204` | `404` (production) |
 
 **The refusal discipline is one rule over the caller, and `REQ-01-004` states it.** Every route
@@ -173,7 +173,7 @@ membership of that account. Test-support only, behind `assertFixturesOpen` exact
 | `PORTAL_MESSAGES.limitInvalid` | `GET /api/organizations/{orgId}/portal/news` | Ask for between 1 and 50 entries. | yes |
 | `PORTAL_MESSAGES.cursorInvalid` | `GET /api/organizations/{orgId}/portal/news` | That page marker is not one this feed issued. | yes |
 | `PORTAL_MESSAGES.groupsInvalid` | `PUT /api/organizations/{orgId}/portal/settings` | Say true or false for People, Hiring and Work. | yes |
-| `TEMPLATE_MESSAGES.generic.forbidden` | `GET /api/organizations/{orgId}/portal/settings`, `PUT /api/organizations/{orgId}/portal/settings` | You do not have permission to do that. | no |
+| `PORTAL_MESSAGES.settingsForbidden` | `GET /api/organizations/{orgId}/portal/settings`, `PUT /api/organizations/{orgId}/portal/settings` | You do not have permission to change the portal settings. | yes |
 | `PORTAL_MESSAGES.feedEmptyTitle` | — | Nothing has happened yet | yes |
 | `PORTAL_MESSAGES.feedEmptyBody` | — | When somebody joins, a vacancy opens or a project starts, it shows up here. | yes |
 | `PORTAL_MESSAGES.monthEmpty` | — | No time tracked yet this month. | yes |

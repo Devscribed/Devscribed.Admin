@@ -105,7 +105,7 @@ THE SYSTEM SHALL refuse a caller on every route in this spec as the table below 
 | otherOrganization | held | `404`. The `orgId` does not match the session, so the organization is not confirmed to exist. |
 | otherOrganization | notHeld | `404`. Same reason, and it is answered identically so neither refusal confirms the other. |
 | member | held | Not refused — the route answers. |
-| member | notHeld | `403` `TEMPLATE_MESSAGES.generic.forbidden` on the settings pair, which is the only pair a capability guards. Refusing a member of this organization leaks nothing about what is inside it. |
+| member | notHeld | `403` `PORTAL_MESSAGES.settingsForbidden` on the settings pair, which is the only pair a capability gates. Refusing a member of this organization leaks nothing about what is inside it. |
 
 ### The personal half — the month
 
@@ -380,9 +380,17 @@ every group as enabled.
 #### REQ-01-050 — who may change them
 
 WHEN a member of this organization without `manage-portal-settings` requests
-`PUT .../portal/settings`, THE SYSTEM SHALL answer `403` `TEMPLATE_MESSAGES.generic.forbidden`.
+`PUT .../portal/settings`, THE SYSTEM SHALL answer `403` `PORTAL_MESSAGES.settingsForbidden`.
 A caller who is not a member of this organization is refused by `REQ-01-004` before this rule is
 reached.
+
+`Decided:` the refusal is raised in the service, not by `CapabilityGuard`. The guard's message is
+fixed at the generic forbidden string the documents area owns
+(`packages/validation/src/documents.ts`), which reads "You do not have permission to manage
+templates" — a sentence about templates on a portal screen. `ManageRequestTopics` is raised in its
+own service for the same reason. `Rejected:`
+rewording the shared export, which is a better product and a change to five other areas' refusals
+and two shipped assertions; it is owed a document of its own, and this spec changes none of them.
 
 #### REQ-01-051 — a write creates the row
 
