@@ -276,10 +276,13 @@ contests halts the run for a person instead of spending another attempt. The run
 The pipeline stops at a green branch. It never merges and never pushes — see the note about
 `main` above.
 
-**A run refuses to start on a spec nothing admitted.** `wf init` reads the spec's refine ledger:
-a loop that is not a `pass`, or a bundle that changed after the round that judged it, stops the
-run before any model is paid. `--accept-unrefined "<why>"` overrides it and the reason is
-recorded in `run.json`.
+**A refine ledger is no longer an entry condition.** `shipConfig.spec.requiresRefine` is `false`,
+so `wf init` starts a run on whatever bundle is on disk. The bundle is written right the first
+time, and `pre_implement` is the judgement it meets — a stage that already halts the run on a
+spec defect, and one the run is paying for anyway. Where a track does set `requiresRefine`, `wf
+init` reads the ledger and a loop that is not a `pass`, or a bundle that changed after the round
+that judged it, stops the run before any model is paid; `--accept-unrefined "<why>"` overrides
+that and the reason is recorded in `run.json`.
 
 **The pipeline is configuration, and it is checked before it runs.**
 `.claude/ai-workflow.config.json` is keyed by track: `shipConfig.<track>` names the paths it
