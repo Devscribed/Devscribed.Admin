@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>portal/01 — Home · Meridian mockup</title>
+<link rel="stylesheet" href="../../packages/ds/src/styles.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--surface-well);color:var(--text-primary);
+            font-family:var(--font-family-base);font-size:var(--font-size-s)}
+
+  /* This spec asks the design system for nothing it does not already have. The two
+     custom properties below are layout of this screen, not tokens: the width the feed
+     column reads at, and the rung it stops being a column at. Both are stated in the
+     spec's Geometry & motion table rather than left in a stylesheet. */
+  :root{
+    --feed-col: 400px;
+  }
+
+  .page{padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-10);align-items:center}
+  .legendtxt{width:100%;max-width:1400px;color:var(--text-secondary);line-height:1.6}
+  .legendtxt h1{font-size:var(--headline-4-size);line-height:var(--headline-4-line);
+                letter-spacing:var(--headline-4-tracking);font-weight:var(--headline-4-weight);
+                color:var(--text-primary);margin:0 0 var(--space-2)}
+  .legendtxt h2{font-size:var(--font-size-base);margin:var(--space-7) 0 var(--space-2);color:var(--text-primary)}
+  .legendtxt code{font-family:var(--font-family-mono);font-size:var(--font-size-xs);color:var(--text-link)}
+  .legendtxt ul{margin:var(--space-2) 0;padding-left:var(--space-7)}
+  .state{width:100%;max-width:1400px;display:flex;flex-direction:column;gap:var(--space-3)}
+  .state-label{font-size:var(--font-size-xs);letter-spacing:.08em;text-transform:uppercase;
+               color:var(--text-secondary);font-weight:var(--font-weight-medium)}
+  .state-note{font-size:var(--font-size-xs);color:var(--text-tertiary);line-height:1.6;margin:0 0 var(--space-1)}
+  .stage{background:var(--surface-page);border:1px solid var(--border-default);
+         border-radius:var(--radius-xl);overflow:hidden}
+  .stage.narrow{max-width:390px}
+
+  /* ---- app shell ---- */
+  .shell{display:flex;background:var(--surface-well)}
+  .side{width:var(--layout-sidebar-width);flex-shrink:0;background:var(--surface-page);
+        border-right:1px solid var(--border-default);display:flex;flex-direction:column}
+  .side-head{height:var(--layout-navbar-height-desktop);display:flex;align-items:center;
+             padding:0 var(--space-8);border-bottom:1px solid var(--border-default)}
+  .mark{font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);letter-spacing:-.5px}
+  .mark b{color:var(--text-link);font-weight:var(--font-weight-bold)}
+  .nav{padding:var(--space-6) var(--space-5);display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:var(--space-5);padding:var(--space-4) var(--space-5);
+         border-radius:var(--radius-l);color:var(--text-tertiary);text-decoration:none;
+         font-weight:var(--font-weight-medium);font-size:var(--font-size-base)}
+  .nav a.on{background:var(--color-blue-tint);color:var(--text-link)}
+  .ic{width:20px;height:20px;flex:0 0 20px;border-radius:5px;background:currentColor;opacity:.35}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:var(--layout-navbar-height-desktop);border-bottom:1px solid var(--border-default);
+       background:var(--surface-page);display:flex;align-items:center;justify-content:flex-end;
+       gap:var(--space-5);padding:0 var(--space-8)}
+  .who{display:flex;align-items:center;gap:var(--space-4);color:var(--text-secondary)}
+  .content{padding:var(--space-7) var(--space-8) var(--space-10);min-width:0}
+
+  /* ---- page head ---- */
+  .phead{margin-bottom:var(--space-7)}
+  .ptitle{font-size:var(--headline-4-size);line-height:var(--headline-4-line);
+          letter-spacing:var(--headline-4-tracking);font-weight:var(--headline-4-weight);margin:0}
+  .psub{color:var(--text-secondary);margin:var(--space-1) 0 0}
+
+  /* ---- the two columns ---- */
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) var(--feed-col);gap:var(--space-8);align-items:start}
+  .cols.stacked{grid-template-columns:minmax(0,1fr)}
+  .colL{display:flex;flex-direction:column;gap:var(--space-8);min-width:0}
+  .colR{display:flex;flex-direction:column;gap:var(--space-5);min-width:0}
+
+  /* Card variant="panel" (§66): the other white surface — 20px radius over a soft lift,
+     no border. A section as wide as its own column has nothing beside it, so a hairline
+     would be an outline drawn around the page. */
+  .panel{background:var(--surface-page);border-radius:var(--radius-xl);
+         box-shadow:var(--shadow-card-soft);padding:var(--space-8)}
+  .panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-5);
+              margin-bottom:var(--space-6)}
+  .panel h2{font-size:var(--headline-6-size);line-height:var(--headline-6-line);
+            letter-spacing:var(--headline-6-tracking);font-weight:var(--headline-6-weight);margin:0}
+  .panel-link{color:var(--text-link);text-decoration:none;font-size:var(--font-size-s);
+              font-weight:var(--font-weight-medium);white-space:nowrap}
+
+  /* ---- the figure band (§82): one band, never a row of bordered tiles ---- */
+  .band{display:flex;gap:var(--space-10);flex-wrap:wrap}
+  .fig{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .fig .n{font-size:32px;font-weight:var(--font-weight-light);line-height:1.1;
+          font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+  .fig .n s{text-decoration:none;font-size:var(--font-size-base);font-weight:var(--font-weight-regular);
+            color:var(--text-secondary);margin-left:3px}
+  .fig .k{font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-secondary)}
+  .fig.muted .n{color:var(--text-tertiary)}
+
+  /* ---- project split ---- */
+  .split{margin-top:var(--space-7);display:flex;flex-direction:column;gap:var(--space-5)}
+  .srow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-5);align-items:center}
+  .sname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .shrs{font-variant-numeric:tabular-nums;color:var(--text-secondary);white-space:nowrap}
+  .sbar{grid-column:1/-1;height:6px;border-radius:var(--radius-pill);background:var(--surface-sunken);overflow:hidden}
+  /* One blue for every bar. A second, paler fill was a distinction nothing on this screen
+     is making, and at 14% it read as an empty track — a bar that says "no hours" beside a
+     number that says fourteen. */
+  .sbar i{display:block;height:100%;background:var(--color-blue);border-radius:var(--radius-pill)}
+
+  /* ---- holidays ---- */
+  .hol{margin-top:var(--space-7);border-top:1px solid var(--border-subtle);padding-top:var(--space-6);
+       display:flex;flex-direction:column;gap:var(--space-4)}
+  .hol .cap{font-size:var(--font-size-xs);letter-spacing:.06em;text-transform:uppercase;
+            color:var(--text-tertiary);font-weight:var(--font-weight-medium)}
+  .hrow{display:flex;align-items:center;gap:var(--space-5)}
+  .hdate{flex:0 0 auto;min-width:74px;font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+  .hdot{width:8px;height:8px;flex:0 0 8px;border-radius:var(--radius-circle);background:var(--color-holiday)}
+  .hname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .haway{margin-left:auto;color:var(--text-tertiary);font-size:var(--font-size-xs);white-space:nowrap}
+
+  /* ---- request rows ---- */
+  /* The title is the first column and the status the last. Drawn the other way round — a
+     status of its own width, then the title — every row starts its title at a different x,
+     because each row's first column is sized by its own content. Same mechanism PATCH-008
+     closed on a field label and its message. */
+  .reqs{display:flex;flex-direction:column}
+  .req{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--space-5);
+       align-items:center;padding:var(--space-5) 0;border-top:1px solid var(--border-subtle)}
+  .req:first-child{border-top:0;padding-top:0}
+  .req .t{min-width:0}
+  .req .t b{font-weight:var(--font-weight-medium);display:block;overflow:hidden;
+            text-overflow:ellipsis;white-space:nowrap}
+  .req .t span{color:var(--text-secondary);font-size:var(--font-size-xs)}
+  .due{color:var(--text-secondary);font-size:var(--font-size-xs);white-space:nowrap;
+       font-variant-numeric:tabular-nums}
+  .due.late{color:var(--status-error);font-weight:var(--font-weight-medium)}
+
+  /* ---- badges (§32, §59) ---- */
+  .badge{display:inline-flex;align-items:center;height:22px;padding:0 var(--space-4);
+         border-radius:var(--radius-s);font-size:var(--font-size-xs);
+         font-weight:var(--font-weight-medium);white-space:nowrap}
+  .badge.info{background:var(--color-info-tint);color:var(--status-info)}
+  .badge.warn{background:var(--color-holiday-tint);color:var(--text-primary)}
+  .badge.err{background:var(--color-error-tint);color:var(--status-error)}
+  .badge.neutral{background:var(--surface-sunken);color:var(--text-secondary);
+                 box-shadow:inset 0 0 0 1px var(--border-subtle);font-weight:var(--font-weight-regular)}
+
+  /* ---- avatars (§93): initials on one of six grounds ---- */
+  .av{width:36px;height:36px;flex:0 0 36px;border-radius:var(--radius-circle);
+      display:flex;align-items:center;justify-content:center;font-size:var(--font-size-xs);
+      font-weight:var(--font-weight-semibold);letter-spacing:.02em}
+  .av.a1{background:var(--avatar-1-surface);color:var(--avatar-1-text)}
+  .av.a2{background:var(--avatar-2-surface);color:var(--avatar-2-text)}
+  .av.a3{background:var(--avatar-3-surface);color:var(--avatar-3-text)}
+  .av.a4{background:var(--avatar-4-surface);color:var(--avatar-4-text)}
+  .av.a5{background:var(--avatar-5-surface);color:var(--avatar-5-text)}
+  .av.a6{background:var(--avatar-6-surface);color:var(--avatar-6-text)}
+  .av.sm{width:28px;height:28px;flex:0 0 28px}
+
+  /* A feed entry about a thing rather than a person takes a tinted square with a glyph —
+     NavigationCard's construction (§84), so five entries cannot each invent their own tile. */
+  .tile{width:36px;height:36px;flex:0 0 36px;border-radius:var(--radius-l);
+        display:flex;align-items:center;justify-content:center}
+  .tile i{width:16px;height:16px;border-radius:3px;background:currentColor;opacity:.55}
+  .tile.hire{background:var(--color-blue-tint);color:var(--text-link)}
+  .tile.work{background:var(--color-info-tint);color:var(--status-info)}
+
+  /* ---- feed ---- */
+  .feedhead{display:flex;align-items:center;justify-content:space-between;gap:var(--space-5);
+            padding:0 var(--space-1)}
+  .feedhead h2{font-size:var(--headline-6-size);line-height:var(--headline-6-line);
+               letter-spacing:var(--headline-6-tracking);font-weight:var(--headline-6-weight);margin:0}
+  .gear{width:32px;height:32px;border-radius:var(--radius-l);border:1px solid var(--border-default);
+        background:var(--surface-page);display:flex;align-items:center;justify-content:center;
+        color:var(--text-secondary);cursor:pointer}
+  .gear i{width:16px;height:16px;border-radius:4px;background:currentColor;opacity:.5}
+  .daysep{font-size:var(--font-size-xs);letter-spacing:.06em;text-transform:uppercase;
+          color:var(--text-tertiary);font-weight:var(--font-weight-medium);
+          padding:var(--space-4) var(--space-1) 0}
+  .entry{background:var(--surface-page);border-radius:var(--radius-xl);
+         box-shadow:var(--shadow-card-soft);padding:var(--space-6);
+         display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--space-5);align-items:start}
+  .entry .body{min-width:0}
+  .entry .line{line-height:var(--line-height-base)}
+  .entry .line b{font-weight:var(--font-weight-semibold)}
+  /* The whole entry is the link to its own page, so it takes the hover §12 declined for a
+     static card — this one is a control. */
+  a.entry{text-decoration:none;color:inherit;transition:var(--transition-card-hover)}
+  a.entry:hover{box-shadow:var(--shadow-card-hover)}
+  .entry .meta{margin-top:var(--space-2);color:var(--text-tertiary);font-size:var(--font-size-xs)}
+  .entry .extra{margin-top:var(--space-4);display:flex;gap:var(--space-3);flex-wrap:wrap}
+  .more{align-self:center;margin-top:var(--space-2)}
+
+  /* ---- buttons ---- */
+  .btn{height:var(--control-height);padding:0 var(--space-7);border-radius:var(--radius-l);
+       border:var(--border-width-control) solid transparent;font-family:inherit;
+       font-size:var(--font-size-base);font-weight:var(--font-weight-button);cursor:pointer;
+       display:inline-flex;align-items:center;justify-content:center;gap:var(--space-4)}
+  .btn.primary{background:var(--action-primary);color:var(--action-primary-text)}
+  .btn.ghost{background:var(--surface-page);border-color:var(--border-default);color:var(--text-primary)}
+  .btn.s{height:36px;font-size:var(--font-size-s);padding:0 var(--space-6)}
+
+  /* ---- empty state (§28, §65) ---- */
+  .empty{padding:var(--space-10) var(--space-8);text-align:center;display:flex;
+         flex-direction:column;align-items:center;gap:var(--space-5)}
+  .empty .ttl{font-size:var(--font-size-xl);font-weight:var(--font-weight-medium)}
+  .empty p{margin:0;color:var(--text-secondary);max-width:34ch;line-height:1.6}
+  .empty.inpanel{padding:var(--space-8) 0 var(--space-3)}
+
+  /* ---- preloader (§23, §69) ---- */
+  .skel{background:var(--surface-sunken);border-radius:var(--radius-s);
+        animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+  .skel.line{height:12px}
+  .skel.big{height:34px;width:120px;border-radius:var(--radius-m)}
+  .skel.av{width:36px;height:36px;border-radius:var(--radius-circle)}
+
+  /* ---- settings ---- */
+  .setrow{display:flex;align-items:center;justify-content:space-between;gap:var(--space-7);
+          padding:var(--space-6) 0;border-top:1px solid var(--border-subtle)}
+  .setrow:first-of-type{border-top:0}
+  .setrow .lab b{display:block;font-weight:var(--font-weight-medium)}
+  .setrow .lab span{color:var(--text-secondary);font-size:var(--font-size-xs)}
+  .sw{width:44px;height:24px;border-radius:var(--radius-pill);background:var(--color-gray-light);
+      position:relative;flex:0 0 44px}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;
+             border-radius:var(--radius-circle);background:var(--color-white)}
+  .sw.on{background:var(--action-primary)}
+  .sw.on::after{left:23px}
+
+  /* ---- entry detail ---- */
+  .read{max-width:720px}
+  .backto{display:inline-flex;align-items:center;gap:var(--space-3);color:var(--text-link);
+          text-decoration:none;font-size:var(--font-size-s);font-weight:var(--font-weight-medium);
+          margin-bottom:var(--space-6)}
+  .ehead{display:flex;gap:var(--space-6);align-items:flex-start;margin-bottom:var(--space-6)}
+  .ehead .av,.ehead .tile{width:56px;height:56px;flex:0 0 56px;font-size:var(--font-size-base)}
+  .ehead .tile i{width:24px;height:24px}
+  .etitle{font-size:var(--headline-5-size);line-height:var(--headline-5-line);
+          letter-spacing:var(--headline-5-tracking);font-weight:var(--headline-5-weight);margin:0}
+  .estamp{color:var(--text-tertiary);font-size:var(--font-size-xs);margin:var(--space-2) 0 0}
+  .facts{display:grid;grid-template-columns:150px minmax(0,1fr);gap:var(--space-5) var(--space-7);
+         margin:0;padding:var(--space-6) 0 0;border-top:1px solid var(--border-subtle)}
+  .facts dt{color:var(--text-secondary)}
+  .facts dd{margin:0}
+  .prose{margin-top:var(--space-6);padding-top:var(--space-6);border-top:1px solid var(--border-subtle);
+         line-height:1.7;color:var(--text-primary)}
+  .prose p{margin:0 0 var(--space-5)}
+  .prose p:last-child{margin-bottom:0}
+  .share{margin-top:var(--space-6);padding-top:var(--space-6);border-top:1px solid var(--border-subtle);
+         display:flex;gap:var(--space-5);align-items:center;flex-wrap:wrap}
+  .share code{flex:1;min-width:0;font-family:var(--font-family-mono);font-size:var(--font-size-xs);
+              background:var(--surface-sunken);border-radius:var(--radius-l);
+              padding:var(--space-4) var(--space-5);overflow:hidden;text-overflow:ellipsis;
+              white-space:nowrap;color:var(--text-secondary)}
+  .reserved{margin-top:var(--space-6);border:1px dashed var(--border-default);
+            border-radius:var(--radius-l);padding:var(--space-6);color:var(--text-tertiary);
+            font-size:var(--font-size-xs);line-height:1.6}
+
+  /* ---- phone ---- */
+  .phone .top{height:var(--layout-navbar-height-mobile);justify-content:space-between;padding:0 var(--space-6)}
+  .phone .content{padding:var(--space-6) var(--space-6) var(--space-10)}
+  .phone .panel{padding:var(--space-6);border-radius:var(--radius-l)}
+  .phone .entry{padding:var(--space-5);border-radius:var(--radius-l)}
+  .phone .band{gap:var(--space-8)}
+  .phone .fig .n{font-size:26px}
+  .burger{width:32px;height:32px;border-radius:var(--radius-l);display:flex;align-items:center;
+          justify-content:center;color:var(--text-secondary)}
+  .burger i{width:18px;height:2px;background:currentColor;box-shadow:0 -5px 0 currentColor,0 5px 0 currentColor}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="legendtxt">
+  <h1>portal/01 — Home</h1>
+  <p>The screen a signed-in member lands on. Two halves: what is <b>mine</b> on the left,
+  what the <b>organization</b> did on the right. Drawn from the design system's own
+  components — <code>Card variant="panel"</code> (§66), <code>Avatar</code> (§93),
+  <code>Badge</code> (§32, §59), <code>EmptyState</code> (§28, §65),
+  <code>Preloader</code> (§23) — and from tokens only.</p>
+
+  <h2>What the mock is asking you to look at</h2>
+  <ul>
+    <li><b>The heading.</b> Drawn here as a greeting with the person's name. The alternative
+      is a heading that names the page (<i>Home</i>, or the organization) and puts the name
+      nowhere — a portal greets, a report does not.</li>
+    <li><b>Which half leads.</b> Personal on the left, feed on the right at 400px. The feed
+      column is bounded rather than stretched because an entry is a sentence, and a sentence
+      has a width at which it reads (§84's argument, on a feed).</li>
+    <li><b>Days, never money.</b> A <code>user</code> reading their own vacation is answered
+      days and a <code>null</code> balance (<code>apps/api/src/vacation/vacation.service.ts:108</code>).
+      Drawing money here would make this screen role-dependent for no product reason.</li>
+    <li><b>The empty feed.</b> State 2 is the day the feature ships into an organization that
+      has just been created. State 3 is the same screen after an admin has switched two of the
+      three groups off.</li>
+    <li><b>Whether an entry is a card at all.</b> Each is drawn as its own panel. The
+      alternative is one panel holding a divided list, which is quieter and reads faster but
+      leaves nothing for spec 03 to hang a reaction on.</li>
+    <li><b>Every entry opens.</b> States 6–8 are the page behind one. It is the portal's own
+      page rather than a jump to the source record, because the source records are gated:
+      <code>manage-projects</code> and <code>canManageHiring</code> are admin and manager, so a
+      link to a project or a vacancy would be a dead end for the role the feed is mostly read
+      by. Where the reader may open the record, the page offers it as a link.</li>
+    <li><b>What a trimmed page does not say.</b> State 8 draws less than state 7 and says
+      nothing about it. A page that named what it was withholding would be telling a reader
+      about a door they cannot open.</li>
+  </ul>
+</div>
+
+<!-- ============================================================ STATE 1 -->
+<div class="state">
+  <div class="state-label">1 · Answered — a member with hours, a reserve and two open requests</div>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav">
+          <a class="on" href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a>
+          <a href="#"><span class="ic"></span>Project management</a>
+          <a href="#"><span class="ic"></span>People</a>
+          <a href="#"><span class="ic"></span>Reports</a>
+          <a href="#"><span class="ic"></span>Time off</a>
+          <a href="#"><span class="ic"></span>Documents</a>
+          <a href="#"><span class="ic"></span>Hiring</a>
+        </div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Ivan Demchenko</span><span class="av a3">ID</span></div></div>
+        <div class="content">
+
+          <div class="phead">
+            <h1 class="ptitle">Hello, Ivan</h1>
+            <p class="psub">Monday, 8 September</p>
+          </div>
+
+          <div class="cols">
+            <!-- ---------------- left: mine ---------------- -->
+            <div class="colL">
+
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>This month</h2>
+                  <a class="panel-link" href="#">Time &amp; activity →</a>
+                </div>
+                <div class="band">
+                  <div class="fig"><span class="n">96<s>h</s> 40<s>m</s></span><span class="k">Tracked in September</span></div>
+                  <div class="fig"><span class="n">18</span><span class="k">Days with an entry</span></div>
+                  <div class="fig muted"><span class="n">5<s>h</s> 22<s>m</s></span><span class="k">Yesterday</span></div>
+                </div>
+                <div class="split">
+                  <div class="srow"><span class="sname">Aurora — Northwind Ltd</span><span class="shrs">54h 10m</span>
+                    <span class="sbar"><i style="width:56%"></i></span></div>
+                  <div class="srow"><span class="sname">Meridian design system</span><span class="shrs">28h 30m</span>
+                    <span class="sbar"><i style="width:29%"></i></span></div>
+                  <div class="srow"><span class="sname">Internal — recruitment</span><span class="shrs">14h 00m</span>
+                    <span class="sbar"><i class="q" style="width:14%"></i></span></div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>Time off</h2>
+                  <a class="panel-link" href="#">My time off →</a>
+                </div>
+                <div class="band">
+                  <div class="fig"><span class="n">17.5</span><span class="k">Days available</span></div>
+                  <div class="fig"><span class="n">6.5</span><span class="k">Used this year</span></div>
+                  <div class="fig muted"><span class="n">4</span><span class="k">Pending approval</span></div>
+                </div>
+                <div class="hol">
+                  <div class="cap">Next holidays · Poland</div>
+                  <div class="hrow"><span class="hdate">1 Nov</span><span class="hdot"></span>
+                    <span class="hname">All Saints' Day</span><span class="haway">in 54 days</span></div>
+                  <div class="hrow"><span class="hdate">11 Nov</span><span class="hdot"></span>
+                    <span class="hname">National Independence Day</span><span class="haway">in 64 days</span></div>
+                  <div class="hrow"><span class="hdate">25 Dec</span><span class="hdot"></span>
+                    <span class="hname">Christmas Day</span><span class="haway">in 108 days</span></div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>My requests</h2>
+                  <a class="panel-link" href="#">All requests →</a>
+                </div>
+                <div class="reqs">
+                  <div class="req">
+                    <span class="t"><b>VPN profile for the Northwind staging network</b>
+                      <span>Asked of Marta Kowalska · 3 days ago</span></span>
+                    <span class="due late">2 days late</span>
+                    <span class="badge err">Overdue</span>
+                  </div>
+                  <div class="req">
+                    <span class="t"><b>Repository access — meridian-ds</b>
+                      <span>Asked by Anna Petrova · yesterday</span></span>
+                    <span class="due">by 12 Sep</span>
+                    <span class="badge info">Waiting on you</span>
+                  </div>
+                  <div class="req">
+                    <span class="t"><b>Figma seat</b>
+                      <span>Asked of Northwind Ltd · 6 days ago</span></span>
+                    <span class="due">by 19 Sep</span>
+                    <span class="badge neutral">Open</span>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+
+            <!-- ---------------- right: the organization ---------------- -->
+            <div class="colR">
+              <div class="feedhead">
+                <h2>What's new</h2>
+                <span class="gear" title="Feed settings"><i></i></span>
+              </div>
+
+              <div class="daysep">Today</div>
+
+              <a class="entry" href="#">
+                <span class="av a1">AP</span>
+                <div class="body">
+                  <div class="line"><b>Anna Petrova</b> joined the team as a Frontend Engineer.</div>
+                  <div class="meta">2 hours ago</div>
+                </div>
+              </a>
+
+              <a class="entry" href="#">
+                <span class="tile hire"><i></i></span>
+                <div class="body">
+                  <div class="line">A vacancy is open: <b>Senior React Developer</b>.</div>
+                  <div class="extra"><span class="badge neutral">React</span><span class="badge neutral">Senior</span></div>
+                  <div class="meta">5 hours ago · interviews with Marta Kowalska</div>
+                </div>
+              </a>
+
+              <div class="daysep">Earlier this week</div>
+
+              <a class="entry" href="#">
+                <span class="tile work"><i></i></span>
+                <div class="body">
+                  <div class="line"><b>Aurora</b> started for Northwind Ltd.</div>
+                  <div class="meta">Friday</div>
+                </div>
+              </a>
+
+              <a class="entry" href="#">
+                <span class="av a3">ID</span>
+                <div class="body">
+                  <div class="line"><b>Ivan Demchenko</b> has been with the team for 2 years.</div>
+                  <div class="meta">Thursday</div>
+                </div>
+              </a>
+
+              <a class="entry" href="#">
+                <span class="av a5">MK</span>
+                <div class="body">
+                  <div class="line"><b>Marta Kowalska</b> joined the team as a Recruiter.</div>
+                  <div class="meta">Tuesday</div>
+                </div>
+              </a>
+
+              <button class="btn ghost s more">Show earlier</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 2 -->
+<div class="state">
+  <div class="state-label">2 · A new organization — nothing has happened yet</div>
+  <p class="state-note">The day the feature reaches an organization created this morning. The
+  feed is a projection over rows that already exist, so an organization with history has one
+  from the first render — this is the only case that does not, and it is the case a stored
+  event table would have produced for <i>everybody</i>.</p>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav">
+          <a class="on" href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a>
+          <a href="#"><span class="ic"></span>People</a>
+        </div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Ivan Demchenko</span><span class="av a3">ID</span></div></div>
+        <div class="content">
+          <div class="phead">
+            <h1 class="ptitle">Hello, Ivan</h1>
+            <p class="psub">Monday, 8 September</p>
+          </div>
+          <div class="cols">
+            <div class="colL">
+              <section class="panel">
+                <div class="panel-head"><h2>This month</h2><a class="panel-link" href="#">Time &amp; activity →</a></div>
+                <!-- The zero figures were drawn here beside this sentence, and the two said
+                     the same thing: "0h 00m tracked in September" and "no time tracked yet
+                     this month" are one message on one screen, twice. The figures go. -->
+                <div class="empty inpanel">
+                  <p>No time tracked yet this month.</p>
+                  <button class="btn primary s">Start the timer</button>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head"><h2>Time off</h2><a class="panel-link" href="#">My time off →</a></div>
+                <div class="band">
+                  <div class="fig"><span class="n">0</span><span class="k">Days available</span></div>
+                  <div class="fig muted"><span class="n">0</span><span class="k">Used this year</span></div>
+                </div>
+                <!-- The figures stay here, unlike the panel above: zero days available is an
+                     answer about a reserve that exists, not an absence of one. -->
+                <div class="hol">
+                  <div class="cap">Next holidays</div>
+                  <p class="state-note" style="margin:0">Nobody has stated your country, so no
+                  holiday calendar reaches you. <a class="panel-link" href="#">Set it on your profile →</a></p>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head"><h2>My requests</h2><a class="panel-link" href="#">All requests →</a></div>
+                <div class="empty inpanel">
+                  <p>Nothing is waiting on you, and you have asked for nothing.</p>
+                </div>
+              </section>
+            </div>
+
+            <div class="colR">
+              <div class="feedhead"><h2>What's new</h2><span class="gear" title="Feed settings"><i></i></span></div>
+              <div class="panel">
+                <div class="empty">
+                  <div class="ttl">Nothing has happened yet</div>
+                  <p>When somebody joins, a vacancy opens or a project starts, it shows up here.</p>
+                  <button class="btn ghost s">Invite somebody</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 3 -->
+<div class="state">
+  <div class="state-label">3 · Two groups switched off — People only</div>
+  <p class="state-note">An admin has turned <i>Hiring</i> and <i>Work</i> off. Nothing says so on
+  this screen: a reader who cannot change the setting is not told what they are not being shown,
+  because a line explaining an absence is an absence twice.</p>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav"><a class="on" href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a><a href="#"><span class="ic"></span>People</a></div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Anna Petrova</span><span class="av a1">AP</span></div></div>
+        <div class="content">
+          <div class="phead"><h1 class="ptitle">Hello, Anna</h1><p class="psub">Monday, 8 September</p></div>
+          <div class="cols">
+            <div class="colL">
+              <section class="panel">
+                <div class="panel-head"><h2>This month</h2><a class="panel-link" href="#">Time &amp; activity →</a></div>
+                <div class="band">
+                  <div class="fig"><span class="n">12<s>h</s> 15<s>m</s></span><span class="k">Tracked in September</span></div>
+                  <div class="fig"><span class="n">3</span><span class="k">Days with an entry</span></div>
+                  <div class="fig muted"><span class="n">4<s>h</s> 05<s>m</s></span><span class="k">Yesterday</span></div>
+                </div>
+                <div class="split">
+                  <div class="srow"><span class="sname">Meridian design system</span><span class="shrs">12h 15m</span>
+                    <span class="sbar"><i style="width:100%"></i></span></div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head"><h2>Time off</h2><a class="panel-link" href="#">My time off →</a></div>
+                <div class="band">
+                  <div class="fig"><span class="n">20</span><span class="k">Days available</span></div>
+                  <div class="fig muted"><span class="n">0</span><span class="k">Used this year</span></div>
+                </div>
+                <div class="hol">
+                  <div class="cap">Next holidays · Poland</div>
+                  <div class="hrow"><span class="hdate">1 Nov</span><span class="hdot"></span>
+                    <span class="hname">All Saints' Day</span><span class="haway">in 54 days</span></div>
+                  <div class="hrow"><span class="hdate">11 Nov</span><span class="hdot"></span>
+                    <span class="hname">National Independence Day</span><span class="haway">in 64 days</span></div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head"><h2>My requests</h2><a class="panel-link" href="#">All requests →</a></div>
+                <div class="reqs">
+                  <div class="req">
+                    <span class="t"><b>Repository access — meridian-ds</b>
+                      <span>Asked of Ivan Demchenko · yesterday</span></span>
+                    <span class="due">by 12 Sep</span>
+                    <span class="badge neutral">Open</span>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <div class="colR">
+              <div class="feedhead"><h2>What's new</h2></div>
+              <div class="daysep">Today</div>
+              <a class="entry" href="#">
+                <span class="av a1">AP</span>
+                <div class="body">
+                  <div class="line"><b>Anna Petrova</b> joined the team as a Frontend Engineer.</div>
+                  <div class="meta">2 hours ago</div>
+                </div>
+              </a>
+              <div class="daysep">Earlier this week</div>
+              <a class="entry" href="#">
+                <span class="av a3">ID</span>
+                <div class="body">
+                  <div class="line"><b>Ivan Demchenko</b> has been with the team for 2 years.</div>
+                  <div class="meta">Thursday</div>
+                </div>
+              </a>
+              <a class="entry" href="#">
+                <span class="av a5">MK</span>
+                <div class="body">
+                  <div class="line"><b>Marta Kowalska</b> joined the team as a Recruiter.</div>
+                  <div class="meta">Tuesday</div>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 4 -->
+<div class="state">
+  <div class="state-label">4 · Loading — the first paint, before either question has answered</div>
+  <p class="state-note">Two questions, two waits: the personal half and the feed answer
+  independently, so neither holds the other. The wait is drawn only where there is nothing to
+  draw — the headings and the column frame are already known and are painted immediately.</p>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav"><a class="on" href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a><a href="#"><span class="ic"></span>People</a></div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Ivan Demchenko</span><span class="av a3">ID</span></div></div>
+        <div class="content">
+          <div class="phead"><h1 class="ptitle">Hello, Ivan</h1><p class="psub">Monday, 8 September</p></div>
+          <div class="cols">
+            <div class="colL">
+              <section class="panel">
+                <div class="panel-head"><h2>This month</h2></div>
+                <div class="band">
+                  <div class="fig"><span class="skel big"></span><span class="skel line" style="width:120px;margin-top:8px"></span></div>
+                  <div class="fig"><span class="skel big" style="width:56px"></span><span class="skel line" style="width:96px;margin-top:8px"></span></div>
+                </div>
+                <div class="split">
+                  <div class="srow"><span class="skel line" style="width:180px"></span><span class="skel line" style="width:52px"></span>
+                    <span class="sbar"></span></div>
+                  <div class="srow"><span class="skel line" style="width:140px"></span><span class="skel line" style="width:52px"></span>
+                    <span class="sbar"></span></div>
+                </div>
+              </section>
+              <section class="panel">
+                <div class="panel-head"><h2>Time off</h2></div>
+                <div class="band">
+                  <div class="fig"><span class="skel big" style="width:64px"></span><span class="skel line" style="width:100px;margin-top:8px"></span></div>
+                  <div class="fig"><span class="skel big" style="width:64px"></span><span class="skel line" style="width:100px;margin-top:8px"></span></div>
+                </div>
+              </section>
+            </div>
+            <div class="colR">
+              <div class="feedhead"><h2>What's new</h2></div>
+              <!-- A wait is not a link: these are `div`s, and they become anchors only when
+                   there is an entry behind them to open. -->
+              <div class="entry"><span class="skel av"></span>
+                <div class="body"><span class="skel line" style="width:100%;display:block"></span>
+                  <span class="skel line" style="width:60%;display:block;margin-top:8px"></span></div></div>
+              <div class="entry"><span class="skel av"></span>
+                <div class="body"><span class="skel line" style="width:85%;display:block"></span>
+                  <span class="skel line" style="width:45%;display:block;margin-top:8px"></span></div></div>
+              <div class="entry"><span class="skel av"></span>
+                <div class="body"><span class="skel line" style="width:92%;display:block"></span>
+                  <span class="skel line" style="width:52%;display:block;margin-top:8px"></span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 5 -->
+<div class="state">
+  <div class="state-label">5 · Feed settings — what an admin decides for the whole organization</div>
+  <p class="state-note">Reached from the gear beside <i>What's new</i>, and from the settings
+  area. Three switches, one per group; the groups are the vocabulary the request settled, not one
+  switch per source table.</p>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav"><a href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a><a class="on" href="#"><span class="ic"></span>Settings</a></div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Ivan Demchenko</span><span class="av a3">ID</span></div></div>
+        <div class="content">
+          <div class="phead"><h1 class="ptitle">Portal</h1>
+            <p class="psub">What the organization sees on the home screen.</p></div>
+          <div style="max-width:720px">
+            <section class="panel">
+              <div class="panel-head"><h2>What's new</h2></div>
+              <div class="setrow">
+                <span class="lab"><b>People</b>
+                  <span>Somebody joins the team, and the years they have been here.</span></span>
+                <span class="sw on"></span>
+              </div>
+              <div class="setrow">
+                <span class="lab"><b>Hiring</b>
+                  <span>A vacancy opens. Candidates, interviews and assessments never appear here.</span></span>
+                <span class="sw on"></span>
+              </div>
+              <div class="setrow">
+                <span class="lab"><b>Work</b>
+                  <span>A project starts, a client is added. A client's name is shown only to
+                  those who may already see it.</span></span>
+                <span class="sw"></span>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 6 -->
+<div class="state">
+  <div class="state-label">6 · An entry's own page — somebody joined</div>
+  <p class="state-note">Reached by opening the entry. The heading is the sentence the feed
+  drew, so a reader who followed a link arrives at the thing they clicked rather than at a
+  differently-worded page. Everything under it is what the record already holds.</p>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav"><a class="on" href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a><a href="#"><span class="ic"></span>People</a></div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Ivan Demchenko</span><span class="av a3">ID</span></div></div>
+        <div class="content">
+          <a class="backto" href="#">← What's new</a>
+          <div class="read">
+            <section class="panel">
+              <div class="ehead">
+                <span class="av a1">AP</span>
+                <div>
+                  <h1 class="etitle">Anna Petrova joined the team as a Frontend Engineer.</h1>
+                  <p class="estamp">Today at 09:14</p>
+                </div>
+              </div>
+              <dl class="facts">
+                <dt>Role</dt><dd>Frontend Engineer</dd>
+                <dt>First day</dt><dd>8 September 2026</dd>
+                <dt>Teams</dt><dd>Meridian design system</dd>
+                <dt>Member card</dt><dd><a class="panel-link" href="#">Anna Petrova →</a></dd>
+              </dl>
+              <div class="reserved">Reactions and comments land here — <b>portal/03</b>. Nothing
+              is drawn for them in this spec, because a control whose effect the screen will not
+              show is a control that lies.</div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 7 -->
+<div class="state">
+  <div class="state-label">7 · An entry's own page — a vacancy, read by a <code>user</code></div>
+  <p class="state-note">This is the page that pays for the whole Hiring group. A
+  <code>user</code> cannot reach a vacancy anywhere else in the product — <code>canManageHiring</code>
+  is admin and manager — and here they get its description and the public link to forward,
+  which is what makes the group a referral hook rather than an announcement nobody can act on.
+  The interviewer's calendar, the applications and the board stay where they are.</p>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav"><a class="on" href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a><a href="#"><span class="ic"></span>People</a></div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Anna Petrova</span><span class="av a1">AP</span></div></div>
+        <div class="content">
+          <a class="backto" href="#">← What's new</a>
+          <div class="read">
+            <section class="panel">
+              <div class="ehead">
+                <span class="tile hire"><i></i></span>
+                <div>
+                  <h1 class="etitle">A vacancy is open: Senior React Developer.</h1>
+                  <p class="estamp">Today at 06:02</p>
+                </div>
+              </div>
+              <dl class="facts">
+                <dt>Interviews with</dt><dd>Marta Kowalska</dd>
+                <dt>Interview length</dt><dd>45 minutes</dd>
+                <dt>Tags</dt><dd><span class="badge neutral">React</span>
+                  <span class="badge neutral">Senior</span></dd>
+              </dl>
+              <div class="prose">
+                <p>We are looking for an engineer to lead the front end of Aurora — a long-running
+                client build in React and TypeScript, with a design system of its own.</p>
+                <p>You would own the component layer end to end: what goes in it, what stays out,
+                and how the screens that use it are checked. Five years of React, and a real
+                opinion about state.</p>
+              </div>
+              <div class="share">
+                <code>https://app.teammerly.com/book/senior-react-developer-h7Kq2vRt</code>
+                <button class="btn ghost s">Copy link</button>
+              </div>
+              <div class="reserved">Reactions and comments land here — <b>portal/03</b>.</div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 8 -->
+<div class="state">
+  <div class="state-label">8 · The same kind of page, trimmed — a project the reader is not on</div>
+  <p class="state-note">A <code>user</code> who is not a member of Aurora. The page exists and
+  the sentence is the same; the roster and the client's other work are not drawn, and nothing
+  says they were withheld. The alternative — a page that refuses — would make the feed a list
+  of doors, some of which do not open.</p>
+  <div class="stage">
+    <div class="shell">
+      <div class="side">
+        <div class="side-head"><div class="mark">team<b>merly</b></div></div>
+        <div class="nav"><a class="on" href="#"><span class="ic"></span>Team overview</a>
+          <a href="#"><span class="ic"></span>Timesheets</a><a href="#"><span class="ic"></span>People</a></div>
+      </div>
+      <div class="main">
+        <div class="top"><div class="who"><span>Anna Petrova</span><span class="av a1">AP</span></div></div>
+        <div class="content">
+          <a class="backto" href="#">← What's new</a>
+          <div class="read">
+            <section class="panel">
+              <div class="ehead">
+                <span class="tile work"><i></i></span>
+                <div>
+                  <h1 class="etitle">Aurora started.</h1>
+                  <p class="estamp">Friday at 14:31</p>
+                </div>
+              </div>
+              <!-- No Client row. Anna is not on Aurora and does not hold `view-clients`, so
+                   REQ-01-035 withholds the client's name — the sentence above says "Aurora
+                   started." and this page says when. -->
+              <dl class="facts">
+                <dt>Started</dt><dd>5 September 2026</dd>
+              </dl>
+              <div class="reserved">Reactions and comments land here — <b>portal/03</b>.</div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ STATE 9 -->
+<div class="state">
+  <div class="state-label">9 · Phone — one column, mine first</div>
+  <p class="state-note">Below the rung the columns stack, and the personal half leads: it is why
+  the person opened the app. The feed keeps its own heading so the two halves do not read as one
+  long list.</p>
+  <div class="stage narrow phone">
+    <div class="main">
+      <div class="top"><span class="burger"><i></i></span><div class="mark">team<b>merly</b></div>
+        <span class="av a3 sm">ID</span></div>
+      <div class="content">
+        <div class="phead"><h1 class="ptitle" style="font-size:var(--headline-5-size)">Hello, Ivan</h1>
+          <p class="psub">Monday, 8 September</p></div>
+        <div class="cols stacked">
+          <div class="colL">
+            <section class="panel">
+              <div class="panel-head"><h2>This month</h2></div>
+              <div class="band">
+                <div class="fig"><span class="n">96<s>h</s> 40<s>m</s></span><span class="k">Tracked</span></div>
+                <div class="fig"><span class="n">18</span><span class="k">Days</span></div>
+              </div>
+              <div class="split">
+                <div class="srow"><span class="sname">Aurora — Northwind Ltd</span><span class="shrs">54h 10m</span>
+                  <span class="sbar"><i style="width:56%"></i></span></div>
+                <div class="srow"><span class="sname">Meridian design system</span><span class="shrs">28h 30m</span>
+                  <span class="sbar"><i style="width:29%"></i></span></div>
+              </div>
+              <div style="margin-top:var(--space-6)"><a class="panel-link" href="#">Time &amp; activity →</a></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head"><h2>Time off</h2></div>
+              <div class="band">
+                <div class="fig"><span class="n">17.5</span><span class="k">Available</span></div>
+                <div class="fig"><span class="n">6.5</span><span class="k">Used</span></div>
+              </div>
+              <div class="hol">
+                <div class="cap">Next holidays · Poland</div>
+                <div class="hrow"><span class="hdate">1 Nov</span><span class="hdot"></span>
+                  <span class="hname">All Saints' Day</span></div>
+                <div class="hrow"><span class="hdate">11 Nov</span><span class="hdot"></span>
+                  <span class="hname">National Independence Day</span></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head"><h2>My requests</h2></div>
+              <div class="reqs">
+                <div class="req" style="grid-template-columns:minmax(0,1fr) auto">
+                  <span class="t"><b>VPN profile for Northwind staging</b>
+                    <span>Marta Kowalska · 3 days ago</span></span>
+                  <span class="badge err">Overdue</span>
+                </div>
+                <div class="req" style="grid-template-columns:minmax(0,1fr) auto">
+                  <span class="t"><b>Repository access — meridian-ds</b>
+                    <span>Anna Petrova · yesterday</span></span>
+                  <span class="badge info">On you</span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="colR">
+            <div class="feedhead"><h2>What's new</h2></div>
+            <div class="daysep">Today</div>
+            <a class="entry" href="#">
+              <span class="av a1">AP</span>
+              <div class="body"><div class="line"><b>Anna Petrova</b> joined the team as a Frontend Engineer.</div>
+                <div class="meta">2 hours ago</div></div>
+            </a>
+            <a class="entry" href="#">
+              <span class="tile hire"><i></i></span>
+              <div class="body"><div class="line">A vacancy is open: <b>Senior React Developer</b>.</div>
+                <div class="extra"><span class="badge neutral">React</span><span class="badge neutral">Senior</span></div>
+                <div class="meta">5 hours ago</div></div>
+            </a>
+            <button class="btn ghost s more">Show earlier</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
