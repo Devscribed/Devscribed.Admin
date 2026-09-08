@@ -6,7 +6,7 @@
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
   "headAtInit": "e9670bf46594ed9b17df140c667492b5f07dbbb5",
-  "status": "review",
+  "status": "implement",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T14:16:05.856Z",
+  "updatedAt": "2026-09-08T14:29:48.019Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,7 +34,7 @@
       "endedAt": "2026-09-08T10:25:22.607Z"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 7,
       "startedAt": "2026-09-08T13:34:24.895Z",
       "lastVerdict": "pass"
@@ -47,10 +47,11 @@
       "endedAt": "2026-09-08T14:16:05.802Z"
     },
     "review": {
-      "status": "pending",
-      "attempts": 1,
-      "startedAt": "2026-09-08T13:14:24.153Z",
-      "lastVerdict": "blocked"
+      "status": "blocked",
+      "attempts": 2,
+      "startedAt": "2026-09-08T14:16:06.145Z",
+      "lastVerdict": "blocked",
+      "endedAt": "2026-09-08T14:29:47.963Z"
     },
     "qa": {
       "status": "pending",
@@ -58,7 +59,7 @@
     }
   },
   "budget": {
-    "codeAttempts": 1,
+    "codeAttempts": 2,
     "handoffReplans": 0,
     "infra": 2
   },
@@ -82,7 +83,9 @@
     "specs/portal/01-home.contracts.md §Required data-testid Attributes@e2e/tests/portal.spec.ts#TC-01-E2E-02": 1,
     "specs/portal/01-home.contracts.md §Required data-testid Attributes — nav-portal@e2e/tests/client-participants.spec.ts#client contact navigation case": 1,
     "sweep 8 — a test cannot fail for the defect it exists to catch@e2e/tests/portal.spec.ts#TC-01-E2E-08": 1,
-    "specs/portal/01-home.contracts.md §States — 'Q1 failed'@apps/web/app/org/[orgId]/page.tsx#PortalHomePage": 1
+    "specs/portal/01-home.contracts.md §States — 'Q1 failed'@apps/web/app/org/[orgId]/page.tsx#PortalHomePage": 1,
+    "sweep 11 — a mechanism applied at some call sites and not the rest@apps/api/src/portal/portal-entry.types.ts#computePortalWindow": 1,
+    "sweep 11 — a mechanism applied at some call sites and not the rest@apps/web/app/org/[orgId]/PortalFeed.tsx#localYmd": 1
   },
   "carriedFindings": [],
   "carriedFrom": null,
@@ -665,6 +668,115 @@
         "source": "specs/portal/01-home.md"
       },
       "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-25",
+      "rule": "sweep 8 — the test no longer performs its case's Steps",
+      "file": "e2e/tests/portal.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 396,
+      "claim": "the rewritten case seeds requests in one organization only, while its own Steps seed a request in both and its Expected Result asserts the invariant 'in both organizations'",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.cases.md TC-01-E2E-08 Steps: 'Seed a project whose name is 100 characters, a holiday whose name is 80, and a request whose title is 200 … Then seed short-named equivalents in a second organization and record the same three.' Expected Result: 'In both organizations the request title's left edge is identical across every row.' portal.spec.ts:333 returns from seedGeometryOrg without raising any request, and seedVariedRequests is called once, for longOrg only (:396). The short organization therefore draws portal-requests-empty and the 'in both organizations' clause is vacuous for it. The within-organization comparison the fix added is the one that discriminates, so this is a note rather than a blocker — but the case as written is not what runs, and the bundle is frozen, so the divergence has nowhere to be recorded.",
+        "source": "specs/portal/01-home.cases.md:455"
+      },
+      "suggestedFix": "call seedVariedRequests for the short organization too with short titles and assert the same shared left edge there, which is what the case's own text asks for"
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — an assertion that cannot fail for the defect its own comment claims it catches",
+      "file": "e2e/tests/portal.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 417,
+      "claim": "the new right-edge probe cannot see an untruncated title, contrary to the comment beside it",
+      "witness": {
+        "kind": "scenario",
+        "detail": "portal.spec.ts:417-420 says 'A long title that was not truncated (the defect this case is also built to catch) would push that cell out of place.' It would not. The row is `gridTemplateColumns: 'minmax(0,1fr) auto auto'` (PortalRequestsPanel.tsx:33) and the title sits inside the first track's grid item, itself `minWidth: 0` (:89). A `<b>` left at display:inline with white-space:nowrap — precisely the state before this attempt's one-line fix at :43 — overflows its containing block with overflow:visible; it contributes nothing to the 1fr track's minimum, which is 0, so the auto tracks and the badge's right edge are exactly where they were. The probe passes either way. The left-edge probe above it is the one doing the work.",
+        "source": "apps/web/app/org/[orgId]/PortalRequestsPanel.tsx:33"
+      },
+      "suggestedFix": "either delete the claim from the comment, or assert the truncation directly — compare the `<b>`'s clientWidth against its scrollWidth on the 200-character row"
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "a comment cites a requirement that says something else",
+      "file": "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "symbol": "formatRelativeTime",
+      "line": 96,
+      "claim": "the new docstring anchors the timezone rule to REQ-01-037, which is about not announcing a disabled group",
+      "witness": {
+        "kind": "rule",
+        "detail": "PortalFeed.tsx:99-100: 'drawn in the caller's own Account.timezone … never the device's zone (REQ-01-037, portal-types.ts today)'. specs/portal/01-home.md:206 REQ-01-037 reads 'THE SYSTEM SHALL NOT state on the home screen that any group is switched off.' The requirement that governs the caller's date is REQ-01-010, which portal-types.ts:113-122 already names as the reason the greeting must not use new Date(). A reader following the citation lands on the wrong rule.",
+        "source": "specs/portal/01-home.md:206"
+      },
+      "suggestedFix": "cite REQ-01-010"
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "contracts §What the screen borrows — 'findable by a test' has no expressible form here",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "What the screen borrows — Preloader",
+      "line": 308,
+      "claim": "the Preloader borrow demands a wait that is findable by a test, but the contracts' testid table names no id for either wait and CLAUDE.md forbids adding one the spec does not name, so no test can assert a loading state on this screen",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts §What the screen borrows: '| Preloader (§23) | role=\"status\", findable by a test | Each of Q1 and Q2 draws its own |'. The role half is now met (PortalFeed.tsx:394, page.tsx:59/:65/:71). The findable half is not: `grep -rn \"status\\\"\\\\|Loading \" e2e/tests/portal.spec.ts` matches no loading assertion, §Required data-testid Attributes carries no preloader row, CLAUDE.md — Testing says 'Selectors are data-testid only, and the ids are named in the specs', and CR-27 blocks a test id the spec does not name. The demand cannot be closed in code alone. Separately, Q2's wait draws three regions all carrying role=\"status\" and the identical aria-label 'Loading what's new' (PortalFeed.tsx:391-396), so a screen reader is told the same sentence three times; §States asks for three Preloader entries, not three announcements.",
+        "source": "specs/portal/01-home.contracts.md:308"
+      },
+      "suggestedFix": "a person decides: either name a wait id in the contracts' testid table, or drop 'findable by a test' from the borrow; and give the three Q2 blocks one announced region rather than three"
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "a message and its table",
+      "file": "packages/validation/src/portal.ts",
+      "symbol": "PORTAL_MESSAGES",
+      "line": 25,
+      "claim": "the five new failure sentences are exported but appear in no table in the bundle, so the contracts' Error Messages list and the export no longer enumerate the same set",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:170-181 lists exactly ten PORTAL_MESSAGES rows and nothing else; packages/validation/src/portal.ts:9-30 now exports fifteen. Moving the sentences into the package was required (CR-07) and the spec names no string for a failed read anywhere, so the text had to be invented — but the table a future reader consults to learn what this spec's messages are is now short by five, and the spec is frozen, so nothing in the bundle records them.",
+        "source": "specs/portal/01-home.contracts.md:170"
+      },
+      "suggestedFix": "for a person: record the five in whichever document next speaks about the portal's messages, since this bundle may not be edited"
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing; test cases are numbered in the specs and the code references those ids",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "REQ-01-026 caller's own today",
+      "line": 857,
+      "claim": "the new integration case carries a requirement id but no TC id, because the cases register has no case for the zone boundary it proves",
+      "witness": {
+        "kind": "test",
+        "test": "no id",
+        "detail": "portal.spec.ts:857 is titled 'REQ-01-026 keeps a row inside the caller's own today even after the UTC day has rolled over'; every other case in the file names a TC id (e.g. :698 TC-01-INT-09, :1155 TC-01-INT-18). `grep -n 'TC-01-INT' specs/portal/01-home.cases.md` lists no case covering a non-UTC caller's window, which is exactly why the defect survived four passes of a UTC-run suite. The test is right to exist; it simply has nowhere in the register to point at, and the bundle is frozen.",
+        "source": "specs/portal/01-home.cases.md"
+      },
+      "suggestedFix": "for a person: give the boundary a numbered case in whichever document next speaks about the feed window, so the coverage is recorded rather than incidental"
     }
   ],
   "preflight": {
