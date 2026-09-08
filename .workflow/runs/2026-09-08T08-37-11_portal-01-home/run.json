@@ -6,7 +6,7 @@
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
   "headAtInit": "f3b0cec639f869bd01813c73066cc7db4e8c0908",
-  "status": "static_gate",
+  "status": "implement",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T13:11:10.691Z",
+  "updatedAt": "2026-09-08T13:11:15.444Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,15 +34,18 @@
       "endedAt": "2026-09-08T10:25:22.607Z"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 5,
       "startedAt": "2026-09-08T13:06:10.801Z",
       "lastVerdict": "pass",
       "endedAt": "2026-09-08T13:11:10.638Z"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "blocked",
+      "attempts": 1,
+      "startedAt": "2026-09-08T13:11:10.964Z",
+      "endedAt": "2026-09-08T13:11:15.390Z",
+      "lastVerdict": "blocked"
     },
     "review": {
       "status": "pending",
@@ -54,7 +57,7 @@
     }
   },
   "budget": {
-    "codeAttempts": 0,
+    "codeAttempts": 1,
     "handoffReplans": 0,
     "infra": 2
   },
@@ -64,7 +67,8 @@
     "spec/contradiction@specs/portal/01-home.md#Acceptance Criteria, criterion 5": 1,
     "spec/contradiction@specs/portal/01-home.cases.md#TC-01-E2E-03": 1,
     "spec/untestable-case@specs/portal/01-home.cases.md#TC-01-INT-14": 1,
-    "spec/stale-statement@specs/portal/01-home.contracts.md#Error Messages, row TEMPLATE_MESSAGES.generic.forbidden": 1
+    "spec/stale-statement@specs/portal/01-home.contracts.md#Error Messages, row TEMPLATE_MESSAGES.generic.forbidden": 1,
+    "pipeline/no-detector-weakening@apps/api/src/portal/portal-home.service.ts#-": 1
   },
   "carriedFindings": [],
   "carriedFrom": null,
@@ -121,6 +125,22 @@
         "source": "specs/portal/README.md"
       },
       "suggestedFix": "Where a blast radius is offered as a grep, the grep has to be the one that finds the parameterised call sites too, and it cannot find an assertion that depends on the landing without naming it. The plan's T9 allCallSites carried the true enumeration for the waits; responsive.spec.ts was in neither."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/reports/reports.service.ts",
+      "symbol": "`PORTAL_MESSAGES.noProject`",
+      "claim": "\"`PORTAL_MESSAGES.noProject`\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"(No project)\" -- apps\napps/api/src/reports/reports.service.ts",
+        "source": "specs/portal/01-home.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
     }
   ],
   "preflight": {
