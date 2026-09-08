@@ -239,6 +239,13 @@ function classify(stage, findings) {
   for (const f of findings ?? []) {
     if (!f.target) { rejected.push({ f, why: 'finding has no target' }); continue; }
     if (!allowed.includes(f.target)) {
+      /* Authority is over where a stage may send work, and a note sends none — it is written
+         down and read by a person. A stage that records something outside its remit, an
+         environment failure that read as a product defect or a document it may not edit, is
+         reporting rather than routing, and halting the whole run over the record loses both
+         the record and every hour the stage spent before writing it. A blocker still may not
+         name an address the stage does not own: that one routes. */
+      if (f.severity === 'note') { notes.push(f); continue; }
       rejected.push({ f, why: `${stage} may not address "${f.target}" (allowed: ${allowed.join(', ')})` });
       continue;
     }
