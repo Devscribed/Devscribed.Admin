@@ -5,7 +5,7 @@
   "task": "portal-01-home",
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
-  "headAtInit": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
+  "headAtInit": "f3b0cec639f869bd01813c73066cc7db4e8c0908",
   "status": "implement",
   "track": "spec",
   "shapes": {
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T12:18:10.912Z",
+  "updatedAt": "2026-09-08T13:06:10.487Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -35,10 +35,10 @@
     },
     "implement": {
       "status": "running",
-      "attempts": 3,
-      "startedAt": "2026-09-08T11:33:03.628Z",
-      "endedAt": "2026-09-08T12:18:10.860Z",
-      "lastVerdict": "error"
+      "attempts": 4,
+      "startedAt": "2026-09-08T12:21:03.214Z",
+      "lastVerdict": "error",
+      "endedAt": "2026-09-08T13:06:10.435Z"
     },
     "static_gate": {
       "status": "pending",
@@ -56,7 +56,7 @@
   "budget": {
     "codeAttempts": 0,
     "handoffReplans": 0,
-    "infra": 1
+    "infra": 2
   },
   "findingHistory": {
     "spec/contradiction@specs/portal/01-home.md#REQ-01-004": 1,
@@ -249,6 +249,17 @@
       "headAtInit": {
         "from": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
         "to": "2202f8265d1ddd348dd59249531a33dcbae2ce2a"
+      }
+    },
+    {
+      "at": "2026-09-08T12:20:55.744Z",
+      "stage": "implement",
+      "from": "aborted",
+      "detail": "the run has been going 221 minutes, past the 180-minute breaker (breakers.runTimeoutMin)",
+      "reason": null,
+      "headAtInit": {
+        "from": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
+        "to": "f3b0cec639f869bd01813c73066cc7db4e8c0908"
       }
     }
   ]
