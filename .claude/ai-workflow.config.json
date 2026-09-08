@@ -3,10 +3,10 @@
   "shipConfig": {
     "$comment": "A track is a weight of document, resolved from its path by `match` or named with --track. Stage order is fixed: preflight, pre_implement, implement, static_gate, review, qa. Every track lists all six; one it does not run is `enabled: false` rather than absent, so a reader never needs the full list to see what is missing. `static_gate` and `qa` may not be disabled on any track — a lighter document buys speed against the stages that read intent, never against the ones that check the result. Change what a stage runs by changing its `use`; override it for a single run with --plan-shape, --implement-shape or --review-shape.",
     "spec": {
-      "$comment": "A three-file spec bundle that the refine loop admitted. The full pipeline.",
+      "$comment": "A three-file spec bundle. The full pipeline. The bundle is written right the first time and pre_implement is the judgement it meets; the refine loop is no longer an entry condition, so a run starts on whatever is on disk.",
       "match": "^specs/(?!bugs/|patches/)",
       "branchPrefix": "spec/",
-      "requiresRefine": true,
+      "requiresRefine": false,
       "stages": {
         "preflight": {
           "enabled": true
