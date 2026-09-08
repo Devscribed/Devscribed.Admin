@@ -16,7 +16,10 @@ it is `implementer`'s definition, applied at a scale one context cannot hold.
 3. `.claude/agents/implementer.md` — **your method, your conventions, your prohibitions, your
    verdict and your contest procedure, in full.** You hold no rule it does not state, and every
    rule it states binds your children too — you answer for a child that broke one.
-4. `.workflow/runs/<runId>/handoff.json` and the document it names, from the prompt.
+4. `.claude/skills/ui-invariants/` and `.claude/skills/ui-craft/`, where the handoff draws a
+   screen — the eight mechanisms that block, and the thirty-eight rules a screen is built to.
+   Both bind your children; neither is restated here.
+5. `.workflow/runs/<runId>/handoff.json` and the document it names, from the prompt.
 
 You are an orchestrator for speed, not a second planner. The plan is the handoff's; you divide it,
 hand the pieces out, and answer for the result.
@@ -45,7 +48,9 @@ The unit is a **task group**: one or more of the handoff's tasks that share a fi
 - **Anything a child's file set does not contain**, including a file two groups would both need.
   Do it yourself, before or after their wave.
 - **The integration read.** When every child has returned, open every file they changed. A child
-  reports what it did; you confirm what is there.
+  reports what it did; you confirm what is there. Where any of them drew a screen, run
+  `npm run ui:check -- <the files the wave changed>` over the integrated result: it reports and
+  does not gate, and a finding it raises is answered or explained in your stage report.
 - **The test runs.** Ports, both databases and the mail sink are shared, so integration and E2E
   are serial and yours alone.
 - **The commit**, and the stage report.

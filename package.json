@@ -39,6 +39,7 @@
     "ds:equiv": "node scripts/ds-equiv.js",
     "ds:tokens": "node scripts/ds-token-resolve.js",
     "ds:check": "node scripts/ds-adherence.js",
+    "ui:check": "node scripts/ui-check.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:teams": "node scripts/seed-teams.mjs",
     "seed:db": "node scripts/seed-db.mjs"

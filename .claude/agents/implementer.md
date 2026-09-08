@@ -94,6 +94,30 @@ Write the rule for the **mechanism**, not for the control in front of you: befor
 screen task done, list the other call sites of the component you changed and the other controls
 of the same kind, and say what each does now.
 
+## Building a screen
+
+Thirty-eight rules, in `.claude/skills/ui-craft/`. Read them before the first line and hold
+them while you write. They cover what the invariants above do not:
+
+- **A request has a lifecycle and every path through it ends.** Clear an in-flight flag in
+  `finally`, never on the paths you remembered. Give every request a failure path that reaches
+  the person. An `async` body inside an effect handles its own rejection — a catalogue that
+  failed to load is not an empty catalogue.
+- **A label belongs to its control by element; a heading's level comes from depth and its size
+  from a token.** A control is controlled or uncontrolled, never both, and state is owned by the
+  lowest element that needs it.
+- **DOM order is reading order.** Never reorder in CSS what belongs reordered in the tree.
+- **Animate `transform` and `opacity`.** Keys are stable ids. An identity handed to many
+  children is stable. State derived from props is derived during render, not in an effect.
+- **Motion answers an action**, leaves by the axis it arrived on, and respects
+  `prefers-reduced-motion` by removing the movement and not the change.
+- **Adapt by the rule, not by the width**, and never branch on anything the server cannot know.
+- **Find the screen that already does this and follow it.** Two screens solving one problem two
+  ways is the defect, whichever is better.
+
+Run `npm run ui:check -- <the files you touched>` before calling the task done. It reports and
+does not gate; a finding it raises is answered or explained, never ignored silently.
+
 ## Writes, boundaries and predicates
 
 - **Before a predicate-guarded write, write two sentences:** the rule the predicate is there to

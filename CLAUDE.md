@@ -90,6 +90,17 @@ its width* closes one picker. *No box has a size its own content decides* closes
 including the ones not built yet — and a "not in this patch" that defers the same mechanism to
 another control is not a deferral, it is the next patch already written.
 
+**A screen is built to thirty-eight rules, and none of them is about how it looks.**
+[.claude/skills/ui-craft/](.claude/skills/ui-craft/SKILL.md) is what `implementer` and
+`implementer-lead` build to, in seven families: a request lifecycle where every path ends, where
+a label and a heading go and who owns a control's value, the tree that carries the hierarchy,
+what the browser has to redo, motion that answers an action, one screen at every width, and the
+screen that already solved this. How the product *looks* is `packages/ds/README.md` and
+`specs/design-system/`, and the skill restates neither. `npm run ui:check` decides four of the
+rules mechanically — a request with no failure path, a flag cleared outside `finally`, a
+transition that lays out, a key that is a position — and **reports rather than gates**, for the
+reason `ds:check` does.
+
 **A screen defect is held by a measurement, not a screenshot.** A rectangle that did not move, a
 scroll box that did not grow, a message counted once — the probes are `e2e/tests/ui-invariants.ts`.
 **A `data-testid` proves presence, never uniqueness**: assert a user-facing message with a count,
