@@ -4,7 +4,8 @@ import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Avatar, Badge, Button, Card, EmptyState, InfoBanner, Preloader, SettingsIcon } from '@devscribed/ds';
-import { PORTAL_MESSAGES } from '@devscribed/validation';
+import { can, PORTAL_MESSAGES, type Role } from '@devscribed/validation';
+import { useSession } from '@/layout/session-context';
 import type { PortalFeedEntry, PortalNewsResponse } from './portal-types';
 
 const colStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', minWidth: 0 };
@@ -83,8 +84,24 @@ type NewsState =
   | { status: 'error' }
   | { status: 'ready'; entries: PortalFeedEntry[]; nextCursor?: string; loadingMore: boolean };
 
-/** `'in 2 hours'` in reverse — a moment already in the past, in the reader's own clock. */
-function formatRelativeTime(iso: string): string {
+/** `'2026-11-08'` in the given zone — the caller's `Account.timezone`, never the device's. */
+function localYmd(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(instant);
+}
+
+/** `'2026-11-08'` → the UTC midnight it names, for pure calendar-day arithmetic. */
+function ymdToUtcMillis(ymd: string): number {
+  const [year, month, day] = ymd.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+/**
+ * `'in 2 hours'` in reverse — a moment already in the past. The elapsed-time steps (minutes,
+ * hours) are zone-independent, but the weekday and day/month fallbacks are dates and are
+ * drawn in the caller's own `Account.timezone` — one value, one source with `month.today`
+ * and `dayLabel` below, never the device's zone (REQ-01-037, portal-types.ts `today`).
+ */
+function formatRelativeTime(iso: string, timeZone: string): string {
   const then = new Date(iso).getTime();
   const diffMs = Math.max(0, Date.now() - then);
   const minutes = Math.floor(diffMs / 60_000);
@@ -93,25 +110,32 @@ function formatRelativeTime(iso: string): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(new Date(iso));
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(iso));
+  if (days < 7) return new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone }).format(new Date(iso));
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone }).format(new Date(iso));
 }
 
-/** `'Today'` / `'Earlier this week'` / `'Earlier'` — the day separator's own three words. */
-function dayLabel(iso: string): string {
-  const entry = new Date(iso);
-  const now = new Date();
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diffDays = Math.round((startOfDay(now) - startOfDay(entry)) / 86_400_000);
+/**
+ * `'Today'` / `'Earlier this week'` / `'Earlier'` — the day separator's own three words,
+ * resolved from the calendar day each moment falls on **in the caller's own timezone**, not
+ * the device's. `Account.timezone` is nullable; UTC is the fallback, exactly as the API
+ * resolves `month.today`.
+ */
+function dayLabel(iso: string, timeZone: string): string {
+  const entryYmd = localYmd(new Date(iso), timeZone);
+  const todayYmd = localYmd(new Date(), timeZone);
+  const diffDays = Math.round((ymdToUtcMillis(todayYmd) - ymdToUtcMillis(entryYmd)) / 86_400_000);
   if (diffDays <= 0) return 'Today';
   if (diffDays < 7) return 'Earlier this week';
   return 'Earlier';
 }
 
-function groupByDay(entries: PortalFeedEntry[]): { label: string; entries: PortalFeedEntry[] }[] {
+function groupByDay(
+  entries: PortalFeedEntry[],
+  timeZone: string,
+): { label: string; entries: PortalFeedEntry[] }[] {
   const groups: { label: string; entries: PortalFeedEntry[] }[] = [];
   for (const entry of entries) {
-    const label = dayLabel(entry.occurredAt);
+    const label = dayLabel(entry.occurredAt, timeZone);
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.entries.push(entry);
     else groups.push({ label, entries: [entry] });
@@ -145,8 +169,8 @@ interface FeedSentence {
 /** Every kind's own sentence, built only from fields the entry actually carries — no field
  * this spec's contract does not name (the "Aurora — Northwind Ltd" style caption, an
  * activity percentage) is invented here. */
-function feedSentence(entry: PortalFeedEntry): FeedSentence {
-  const relative = formatRelativeTime(entry.occurredAt);
+function feedSentence(entry: PortalFeedEntry, timeZone: string): FeedSentence {
+  const relative = formatRelativeTime(entry.occurredAt, timeZone);
   const name = entry.subject.name;
 
   if (entry.kind === 'member-joined') {
@@ -202,9 +226,17 @@ function feedSentence(entry: PortalFeedEntry): FeedSentence {
   };
 }
 
-function FeedEntryCard({ orgId, entry }: { orgId: string; entry: PortalFeedEntry }) {
+function FeedEntryCard({
+  orgId,
+  entry,
+  timeZone,
+}: {
+  orgId: string;
+  entry: PortalFeedEntry;
+  timeZone: string;
+}) {
   const [hovered, setHovered] = useState(false);
-  const sentence = feedSentence(entry);
+  const sentence = feedSentence(entry, timeZone);
 
   return (
     // DS gap — `Card` renders a `div` and takes no `as` prop, so the control this entry needs
@@ -257,11 +289,14 @@ function FeedEntryCard({ orgId, entry }: { orgId: string; entry: PortalFeedEntry
  * error and empty states, entirely independent of Q1: a Q1 failure never touches this column
  * and a Q2 failure never touches the personal half.
  *
- * `canManageSettings` comes from Q1's body (REQ-01-052) — while Q1 has not yet answered the
- * gear is not drawn, which is the same "nothing to draw yet" the loading state already holds
- * for everything else on this column.
+ * `canManageSettings` is derived from the session's own role (REQ-01-052), not from Q1's
+ * body, so a Q1 failure or a still-loading Q1 never takes the settings link away from an
+ * admin whose feed answered fine.
  */
 export function PortalFeed({ orgId, canManageSettings }: { orgId: string; canManageSettings: boolean }) {
+  const session = useSession();
+  const timeZone = session.account.timezone ?? 'UTC';
+  const canInvite = can(session.role as Role, 'invite');
   const [state, setState] = useState<NewsState>({ status: 'loading' });
 
   const fetchPage = useCallback(
@@ -354,25 +389,33 @@ export function PortalFeed({ orgId, canManageSettings }: { orgId: string; canMan
 
       {state.status === 'loading' &&
         [0, 1, 2].map((key) => (
-          // A wait is not a link: these are `div`s, findable as `role="status"` through Preloader.
+          // A wait is not a link: these are `div`s, findable by `role="status"`, which
+          // `Preloader` does not set on its own and must be given here.
           <div key={key} style={loadingEntryStyle}>
-            <Preloader size={8} margin={5} />
+            <Preloader size={8} margin={5} role="status" aria-label="Loading what's new" />
           </div>
         ))}
 
       {state.status === 'error' && (
-        <InfoBanner variant="error">Something went wrong loading what&apos;s new. Try reloading the page.</InfoBanner>
+        <InfoBanner variant="error">{PORTAL_MESSAGES.feedLoadFailed}</InfoBanner>
       )}
 
       {state.status === 'ready' && state.entries.length === 0 && (
         <Card variant="panel">
           <EmptyState data-testid="portal-feed-empty">
-            <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-medium)' }}>
-              {PORTAL_MESSAGES.feedEmptyTitle}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-5)' }}>
+              <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-medium)' }}>
+                {PORTAL_MESSAGES.feedEmptyTitle}
+              </div>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', maxWidth: '34ch', lineHeight: 1.6, textAlign: 'center' }}>
+                {PORTAL_MESSAGES.feedEmptyBody}
+              </p>
+              {canInvite && (
+                <Button as="a" href={`/org/${orgId}/members`}>
+                  Invite somebody
+                </Button>
+              )}
             </div>
-            <p style={{ margin: 'var(--space-5) 0 0', color: 'var(--text-secondary)', maxWidth: '34ch', lineHeight: 1.6 }}>
-              {PORTAL_MESSAGES.feedEmptyBody}
-            </p>
           </EmptyState>
         </Card>
       )}
@@ -382,11 +425,11 @@ export function PortalFeed({ orgId, canManageSettings }: { orgId: string; canMan
           {/* `dayLabel` only ever moves forward with time, and the source list is sorted by
               moment descending — so each label appears in one contiguous run and is a safe,
               stable key on its own. */}
-          {groupByDay(state.entries).map((group) => (
+          {groupByDay(state.entries, timeZone).map((group) => (
             <div key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
               <div style={daySepStyle}>{group.label}</div>
               {group.entries.map((entry) => (
-                <FeedEntryCard key={entry.id} orgId={orgId} entry={entry} />
+                <FeedEntryCard key={entry.id} orgId={orgId} entry={entry} timeZone={timeZone} />
               ))}
             </div>
           ))}

@@ -3,6 +3,7 @@
 import type { CSSProperties } from 'react';
 import { use, useEffect, useState } from 'react';
 import { Card, InfoBanner, PageTitle, Preloader, useBreakpoint } from '@devscribed/ds';
+import { hasCapability, PORTAL_MESSAGES } from '@devscribed/validation';
 import { useSession } from '@/layout/session-context';
 import { PortalFeed } from './PortalFeed';
 import { PortalMonthPanel } from './PortalMonthPanel';
@@ -55,19 +56,19 @@ function PersonalHalfLoading() {
       <Card variant="panel">
         <h2 style={panelHeadingStyle}>This month</h2>
         <div style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-3) 0' }}>
-          <Preloader />
+          <Preloader role="status" aria-label="Loading this month" />
         </div>
       </Card>
       <Card variant="panel">
         <h2 style={panelHeadingStyle}>Time off</h2>
         <div style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-3) 0' }}>
-          <Preloader />
+          <Preloader role="status" aria-label="Loading time off" />
         </div>
       </Card>
       <Card variant="panel">
         <h2 style={panelHeadingStyle}>My requests</h2>
         <div style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-3) 0' }}>
-          <Preloader />
+          <Preloader role="status" aria-label="Loading my requests" />
         </div>
       </Card>
     </>
@@ -80,6 +81,11 @@ function PersonalHalfLoading() {
  * to `GET .../portal/home`; Q2 is the organization's feed, owned entirely by `PortalFeed`. A
  * Q1 failure replaces the three left-hand panels with one `InfoBanner` and leaves the feed
  * column untouched, and the reverse holds for a Q2 failure — neither wait holds the other.
+ *
+ * `canManageSettings` is derived from the session's own role (REQ-01-052,
+ * `hasCapability(role, 'ManagePortalSettings')`, exactly as `Sidebar.tsx` gates every row)
+ * rather than from Q1's body, so a Q1 failure — or Q1 still loading — never takes
+ * `portal-feed-settings-link` away from an admin whose feed answered fine.
  */
 export default function PortalHomePage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
@@ -143,9 +149,7 @@ export default function PortalHomePage({ params }: { params: Promise<{ orgId: st
           {homeState.status === 'loading' && <PersonalHalfLoading />}
 
           {homeState.status === 'error' && (
-            <InfoBanner variant="error">
-              Something went wrong loading your month. Try reloading the page.
-            </InfoBanner>
+            <InfoBanner variant="error">{PORTAL_MESSAGES.monthLoadFailed}</InfoBanner>
           )}
 
           {homeState.status === 'ready' && (
@@ -164,7 +168,7 @@ export default function PortalHomePage({ params }: { params: Promise<{ orgId: st
 
         <PortalFeed
           orgId={orgId}
-          canManageSettings={homeState.status === 'ready' && homeState.data.canManageSettings}
+          canManageSettings={hasCapability(session.role, 'ManagePortalSettings')}
         />
       </div>
     </div>

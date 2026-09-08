@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import type { CSSProperties, ReactNode } from 'react';
 import { use, useCallback, useEffect, useState } from 'react';
 import { Avatar, Badge, Button, Card, InfoBanner, Preloader } from '@devscribed/ds';
+import { PORTAL_MESSAGES } from '@devscribed/validation';
 
 /**
  * `GET /api/organizations/{orgId}/portal/news/{entryId}` — the shape this page consumes
@@ -252,13 +253,13 @@ export default function PortalEntryPage({
         ← What&apos;s new
       </Link>
 
-      {state.status === 'error' && <InfoBanner variant="error">Something went wrong loading this entry. Try reloading the page.</InfoBanner>}
+      {state.status === 'error' && <InfoBanner variant="error">{PORTAL_MESSAGES.entryLoadFailed}</InfoBanner>}
 
       {(state.status === 'loading' || entry) && (
         <Card variant="panel">
           {state.status === 'loading' && (
             <div style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-3) 0' }}>
-              <Preloader />
+              <Preloader role="status" aria-label="Loading this entry" />
             </div>
           )}
 

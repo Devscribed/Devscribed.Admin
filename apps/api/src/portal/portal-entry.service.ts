@@ -60,7 +60,7 @@ export class PortalEntryService {
 
     const groups = await this.settings.readGroups(organizationId);
     const today = todayInTimeZone(caller.timezone);
-    const { start, end } = computePortalWindow(today);
+    const { start, end } = computePortalWindow(today, caller.timezone);
 
     switch (parsed.kind) {
       case 'vacancy-opened': {
@@ -301,7 +301,7 @@ export class PortalEntryService {
     const clientName = canSeeClient && project.client ? project.client.name : null;
 
     const canSeeRoster = can(caller.role, 'manage-projects') || isProjectMember;
-    let members: PortalEntryMemberRefDto[] | null = null;
+    let members: PortalEntryMemberRefDto[] | undefined;
     if (canSeeRoster) {
       const rows = await this.prisma.projectMember.findMany({
         where: { projectId: project.id },

@@ -132,7 +132,7 @@ export class PortalFeedService {
     }
 
     const today = todayInTimeZone(caller.timezone);
-    const { start, end } = computePortalWindow(today);
+    const { start, end } = computePortalWindow(today, caller.timezone);
     // Edge case 15 — a cursor from before a group changed still parses and pages from
     // that moment; the window's own end is never widened by a cursor, only narrowed,
     // so this is a bound, not a second source of truth for "today".

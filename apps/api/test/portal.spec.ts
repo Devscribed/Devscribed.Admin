@@ -7,7 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { InMemoryMailService } from '../src/mail/in-memory-mail.service';
 import { MailService } from '../src/mail/mail.service';
-import { normalizeEmail } from '@devscribed/validation';
+import { normalizeEmail, parseIsoDate, todayInTimeZone, zonedTimeToUtc } from '@devscribed/validation';
 import { PrismaService } from '../src/prisma.service';
 
 /** Cheap in tests — the policy under bcrypt doesn't depend on the cost factor. */
@@ -695,12 +695,21 @@ describe('Portal (spec 01 — home)', () => {
     const admin = await signupAdmin('admin9@acme.test', 'Acme Inc');
     const orgId = admin.organizationId;
     const removed = await createMember(orgId, { email: 'removed9@acme.test', role: 'user' });
-    const remaining = await createMember(orgId, { email: 'remaining9@acme.test', role: 'user' });
+    const backdated = await createMember(orgId, { email: 'backdated9@acme.test', role: 'user' });
+    const today = await createMember(orgId, { email: 'today9@acme.test', role: 'user' });
 
     await prisma.membership.update({ where: { id: removed.membershipId }, data: { status: 'removed' } });
-    // Exactly two calendar years ago: both whole-year anniversaries land on the
-    // window's own boundaries (inclusive), while the joining itself falls outside it.
-    await backdateJoined(remaining.email, ymdUtcYearsAgo(2));
+    // Two years back, then one more day: the joining itself is 731 days ago — outside
+    // REQ-01-026's 365-day window — while the second (Y=2) anniversary, 366 days ago,
+    // falls inside it. The first (Y=1) anniversary is far outside the window too.
+    const now = new Date();
+    const twoYearsAndADayAgo = new Date(
+      Date.UTC(now.getUTCFullYear() - 2, now.getUTCMonth(), now.getUTCDate() - 1),
+    )
+      .toISOString()
+      .slice(0, 10);
+    await backdateJoined(backdated.email, twoYearsAndADayAgo);
+    await backdateJoined(today.email, ymdUtc(0));
 
     const response = await news(admin, orgId);
     expect(response.status).toBe(200);
@@ -711,13 +720,14 @@ describe('Portal (spec 01 — home)', () => {
     }>;
 
     const memberJoined = entries.filter((e) => e.kind === 'member-joined');
-    expect(memberJoined).toHaveLength(1);
-    expect(memberJoined[0].subject.id).toBe(admin.membershipId);
+    expect(memberJoined.some((e) => e.subject.id === today.membershipId)).toBe(true);
+    expect(memberJoined.some((e) => e.subject.id === backdated.membershipId)).toBe(false);
 
-    const anniversaries = entries.filter((e) => e.kind === 'member-anniversary');
-    expect(anniversaries).toHaveLength(2);
-    for (const a of anniversaries) expect(a.subject.id).toBe(remaining.membershipId);
-    expect(anniversaries.map((a) => a.detail.years).sort()).toEqual([1, 2]);
+    const anniversaries = entries.filter(
+      (e) => e.kind === 'member-anniversary' && e.subject.id === backdated.membershipId,
+    );
+    expect(anniversaries).toHaveLength(1);
+    expect(anniversaries[0].detail.years).toBe(2);
 
     expect(entries.some((e) => e.subject.id === removed.membershipId)).toBe(false);
   });
@@ -838,6 +848,48 @@ describe('Portal (spec 01 — home)', () => {
           e.kind === 'member-anniversary' && e.subject.id === outside.membershipId && e.detail.years === 1,
       ),
     ).toBe(true);
+  });
+
+  /* ================================================================ *
+   * REQ-01-026 — the window ends at the caller's own today, not UTC's
+   * ================================================================ */
+
+  it('REQ-01-026 keeps a row inside the caller’s own today even after the UTC day has rolled over', async () => {
+    const admin = await signupAdmin('admin26@acme.test', 'Acme Inc');
+    const orgId = admin.organizationId;
+    // A zone behind UTC — the only kind that can expose a UTC-anchored end as too
+    // early, since a zone ahead of (or equal to) UTC never has this gap.
+    const zone = 'America/Los_Angeles';
+    const westCoast = await createMember(orgId, { email: 'westcoast26@acme.test', role: 'user', timezone: zone });
+
+    const vacancy = await createVacancy(admin, { title: 'Frontend Engineer' });
+
+    // The caller's own "today", read exactly as the production code reads it, then
+    // a moment 3 hours after *UTC's* end of that date — inside the caller's actual
+    // local day (which, behind UTC, ends several hours later) and therefore a moment
+    // a UTC-anchored window drops but the caller's own window must keep.
+    const now = new Date();
+    const today = todayInTimeZone(zone, now);
+    const utcEndOfToday = new Date(`${today}T23:59:59.999Z`).getTime();
+    const insideLocalTodayAfterUtcRollover = new Date(utcEndOfToday + 3 * 60 * 60 * 1000);
+    // Sanity on the fixture itself: this moment must still be within the caller's
+    // true local day, or the case would prove nothing.
+    const { year, month, day } = parseIsoDate(today);
+    const trueLocalEnd = zonedTimeToUtc(year, month, day + 1, 0, 0, zone).getTime() - 1;
+    expect(insideLocalTodayAfterUtcRollover.getTime()).toBeLessThanOrEqual(trueLocalEnd);
+
+    await prisma.vacancy.update({
+      where: { id: vacancy.id },
+      data: { createdAt: insideLocalTodayAfterUtcRollover },
+    });
+
+    const feed = await news(westCoast, orgId);
+    expect(feed.status).toBe(200);
+    const entries = feed.body.entries as Array<{ kind: string; subject: { id: string } }>;
+    expect(entries.some((e) => e.kind === 'vacancy-opened' && e.subject.id === vacancy.id)).toBe(true);
+
+    const entryPage = await newsEntry(westCoast, orgId, `vacancy-opened:${vacancy.id}`);
+    expect(entryPage.status).toBe(200);
   });
 
   /* ================================================================ *
@@ -1124,7 +1176,10 @@ describe('Portal (spec 01 — home)', () => {
 
     const unassignedPage = await newsEntry(unassignedUser, orgId, `project-started:${project.id}`);
     expect(unassignedPage.status).toBe(200);
-    expect(unassignedPage.body.members).toBeNull();
+    // REQ-01-056 — the roster is omitted, not nulled, for a reader who holds neither
+    // `manage-projects` nor a `ProjectMember` row: the key itself must be absent so
+    // this case cannot be told apart from a project whose roster is `[]`.
+    expect(unassignedPage.body).not.toHaveProperty('members');
     expect(unassignedPage.body.link).toBeNull();
     expect(
       (unassignedPage.body.facts as Array<{ key: string }>).some((f) => f.key === 'client'),

@@ -40,6 +40,7 @@ const reqRowStyle: CSSProperties = {
 const reqRowFirstStyle: CSSProperties = { ...reqRowStyle, borderTop: 0, paddingTop: 0 };
 
 const reqTitleStyle: CSSProperties = {
+  display: 'block',
   minWidth: 0,
   fontWeight: 'var(--font-weight-medium)',
   overflow: 'hidden',

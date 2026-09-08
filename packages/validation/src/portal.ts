@@ -1,8 +1,10 @@
 /**
- * Portal spec 01 (Home) — the vocabulary shared by the API and the web app: the ten
+ * Portal spec 01 (Home) — the vocabulary shared by the API and the web app: the
  * user-facing messages, the entry-id and cursor codecs, the anniversary-date rule, and
- * the two request validators. Every message below is verbatim from
- * specs/portal/01-home.contracts.md, "Error Messages".
+ * the two request validators. The ten messages through `noCountry` are verbatim from
+ * specs/portal/01-home.contracts.md, "Error Messages"; the five `*Failed` messages below
+ * them are client-only — no route emits them — and exist so the four portal screens draw
+ * one sentence per failure instead of each screen inlining its own.
  */
 
 export const PORTAL_MESSAGES = {
@@ -16,6 +18,16 @@ export const PORTAL_MESSAGES = {
   monthEmpty: 'No time tracked yet this month.',
   requestsEmpty: 'Nothing is waiting on you, and you have asked for nothing.',
   noCountry: 'Nobody has stated your country, so no holiday calendar reaches you.',
+
+  /* Client-only failure sentences — no server route emits these. Each screen falls back
+   * to its own sentence here only when the failed response carried none of its own
+   * (settings' PUT answers a `422` with `groupsInvalid` in `fields.groups`, which is
+   * shown as the server wrote it). */
+  monthLoadFailed: 'Something went wrong loading your month. Try reloading the page.',
+  feedLoadFailed: "Something went wrong loading what's new. Try reloading the page.",
+  entryLoadFailed: 'Something went wrong loading this entry. Try reloading the page.',
+  settingsLoadFailed: 'Something went wrong loading the portal settings. Try reloading the page.',
+  settingsSaveFailed: 'Something went wrong saving the portal settings. Try again.',
 } as const;
 
 /* ------------------------------------------------------------------ *

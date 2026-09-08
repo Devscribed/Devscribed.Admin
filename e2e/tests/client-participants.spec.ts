@@ -265,6 +265,9 @@ test.describe('Client participants (requests spec 03)', () => {
     await expect(page.getByTestId('nav-members')).toHaveCount(0);
     await expect(page.getByTestId('nav-projects')).toHaveCount(0);
     await expect(page.getByTestId('nav-clients')).toHaveCount(0);
+    // `nav-portal` is present for a staff principal and absent for a client contact — the
+    // contracts' §Required data-testid Attributes row for it names both halves.
+    await expect(page.getByTestId('nav-portal')).toHaveCount(0);
 
     // A destination the caller cannot use is not reachable by typing either, and NO
     // screen renders behind it: not the list, and not the chrome around it — the search

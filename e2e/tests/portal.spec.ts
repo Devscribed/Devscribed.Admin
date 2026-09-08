@@ -153,6 +153,7 @@ test.describe('Portal — Home', () => {
     await signInUi(page, adminEmail);
 
     await expect(page.getByTestId('portal-month-total')).toHaveText(formatDurationHuman(150));
+    await expect(page.getByTestId('portal-month-days')).toBeVisible();
     await expect(page.getByTestId('portal-month-project-row')).toHaveCount(2);
     await expect(page.getByTestId('portal-timeoff-available')).toBeVisible();
     await expect(page.getByTestId('portal-holiday-row')).toHaveCount(2);
@@ -195,8 +196,13 @@ test.describe('Portal — Home', () => {
 
     await expect(page.getByTestId('portal-entry-title')).toBeVisible();
     await expect(page.getByTestId('portal-entry-title')).toHaveText(`A vacancy is open: ${vacancy.title}.`);
+    await expect(page.getByTestId('portal-entry-back')).toBeVisible();
     await expect(page.getByTestId('portal-entry-body')).toHaveText(description);
     await expect(page.getByTestId('portal-entry-share')).toContainText(vacancy.publicSlug);
+    // The vacancy carries exactly two facts (REQ-01-042): the interviewer and the interview
+    // length. `createVacancy` seeds both — the default duration and the admin as interviewer —
+    // so the count is the number this entry's kind actually carries, not merely nonzero.
+    await expect(page.getByTestId('portal-entry-fact')).toHaveCount(2);
 
     // The vacancy's own screen answers this `user` the app's not-found — this page is the
     // only one that reached them (REQ-01-042's premise).
@@ -305,8 +311,8 @@ test.describe('Portal — Home', () => {
     request,
     browser,
   }) => {
-    /** Seeds one organization whose project, holiday and request names are either long or short. */
-    async function seedGeometryOrg(requestCtx: APIRequestContext, long: boolean): Promise<{ orgId: string; adminEmail: string }> {
+    /** Seeds one organization whose project and holiday names are either long or short. */
+    async function seedGeometryOrg(requestCtx: APIRequestContext, long: boolean): Promise<{ orgId: string; adminEmail: string; adminId: string }> {
       const adminEmail = uniqueEmail(long ? 'portal-geo-long' : 'portal-geo-short');
       const org = await registerOrganization(requestCtx, adminEmail);
       const admin = await findMember(requestCtx, org.orgId, adminEmail);
@@ -327,13 +333,60 @@ test.describe('Portal — Home', () => {
         countryCode: null,
       });
 
+      return { orgId: org.orgId, adminEmail, adminId: admin.id };
+    }
+
+    /**
+     * Backdates a request's `neededBy` straight through the API — the only route to a past
+     * date, since creation itself refuses one. Mirrors `requests.spec.ts`'s own local helper;
+     * not shared, because that file owns it.
+     */
+    async function backdateNeededBy(
+      requestCtx: APIRequestContext,
+      orgId: string,
+      requestId: string,
+      neededBy: string,
+    ): Promise<void> {
+      const response = await requestCtx.patch(`${API}/api/organizations/${orgId}/requests/${requestId}`, {
+        data: { neededBy },
+      });
+      if (!response.ok()) {
+        throw new Error(
+          `Precondition failed: could not backdate request (${response.status()} ${await response.text()})`,
+        );
+      }
+    }
+
+    /**
+     * Seeds three requests in one organization whose titles, due dates and badges all
+     * differ — a long `Overdue` title, a medium `Waiting on you` title with no due date, and
+     * a short `Open` title raised by the admin themself. REQ-01-020 caps the panel at three
+     * rows, so this fills it exactly. Because the three badges are three different widths, a
+     * panel drawn badge-first (the defect §Geometry & motion warns against) would start each
+     * row's title at a different x; drawn title-first, as required, every title starts at the
+     * same x regardless of the badge beside it — the comparison this case exists to make.
+     */
+    async function seedVariedRequests(requestCtx: APIRequestContext, orgId: string, adminEmail: string, adminId: string): Promise<void> {
+      await login(requestCtx, adminEmail);
+      const topicId = await requestTopicIdViaApi(requestCtx, orgId);
+
       const colleagueEmail = uniqueEmail('portal-geo-colleague');
       await inviteAndAcceptViaApi(requestCtx, colleagueEmail, 'user');
-      const topicId = await requestTopicIdViaApi(requestCtx, org.orgId);
-      const requestTitle = long ? 'R'.repeat(200) : 'Req';
-      await createRequestOnMember(requestCtx, org.orgId, admin.id, requestTitle, { topicId });
+      // Signed in as the colleague: raising this on the admin makes the admin's direction
+      // "assigned", so once backdated it draws `Overdue`.
+      const overdue = await createRequestOnMember(requestCtx, orgId, adminId, 'R'.repeat(200), {
+        topicId,
+        neededBy: daysFromToday(2),
+      });
+      // Still the colleague, still assigned to the admin, no due date — draws `Waiting on you`.
+      await createRequestOnMember(requestCtx, orgId, adminId, 'W'.repeat(60), { topicId });
 
-      return { orgId: org.orgId, adminEmail };
+      await login(requestCtx, adminEmail);
+      await backdateNeededBy(requestCtx, orgId, overdue.id, '2020-01-01');
+      const colleague = await findMember(requestCtx, orgId, colleagueEmail);
+      // Signed in as the admin: raising this on the colleague makes the admin's own direction
+      // "raised", not overdue, not waiting on them — draws the plain `Open` badge.
+      await createRequestOnMember(requestCtx, orgId, colleague.id, 'Req', { topicId });
     }
 
     const longCtx = request;
@@ -341,6 +394,7 @@ test.describe('Portal — Home', () => {
     try {
       const longOrg = await seedGeometryOrg(longCtx, true);
       const shortOrg = await seedGeometryOrg(shortCtx, false);
+      await seedVariedRequests(longCtx, longOrg.orgId, longOrg.adminEmail, longOrg.adminId);
 
       // Two independent browser contexts: both admins must be signed in at once, which one
       // shared context (and so one cookie jar) could not hold.
@@ -350,16 +404,29 @@ test.describe('Portal — Home', () => {
         await signInUi(page, longOrg.adminEmail);
         await signInUi(shortPage, shortOrg.adminEmail);
 
-        await expect(page.getByTestId('portal-request-row')).toHaveCount(1);
-        await expect(shortPage.getByTestId('portal-request-row')).toHaveCount(1);
+        const longRows = page.getByTestId('portal-request-row');
+        await expect(longRows).toHaveCount(3);
 
+        // The title's left edge is identical across rows whose badges are three different
+        // widths (`Overdue`, `Waiting on you`, `Open`) — the comparison that discriminates a
+        // badge-first layout from the required title-first one.
         await expectSharedEdge(
-          [
-            page.getByTestId('portal-request-row').first().locator('b'),
-            shortPage.getByTestId('portal-request-row').first().locator('b'),
-          ],
+          [longRows.nth(0).locator('b'), longRows.nth(1).locator('b'), longRows.nth(2).locator('b')],
           'left',
         );
+        // The row itself spans the full card width regardless of content, so its last cell —
+        // the badge or the due text, whichever a row draws last — ends flush with the same
+        // right edge on every row. A long title that was not truncated (the defect this case
+        // is also built to catch) would push that cell out of place.
+        await expectSharedEdge(
+          [
+            longRows.nth(0).locator('> *').last(),
+            longRows.nth(1).locator('> *').last(),
+            longRows.nth(2).locator('> *').last(),
+          ],
+          'right',
+        );
+
         await expectSharedEdge(
           [
             page.getByTestId('portal-month-project-row').first().locator('span').last(),
