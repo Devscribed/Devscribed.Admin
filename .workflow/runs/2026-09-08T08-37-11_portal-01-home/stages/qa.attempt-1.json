@@ -1,0 +1,66 @@
+{
+  "stage": "qa",
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1476,
+      "failed": 0,
+      "ms": 1990
+    },
+    "int": {
+      "passed": 20,
+      "failed": 0,
+      "ms": 10988,
+      "files": [
+        "apps/api/test/portal.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 62,
+      "failed": 0,
+      "ms": 186400,
+      "files": [
+        "e2e/tests/portal.spec.ts",
+        "e2e/tests/regressions.spec.ts",
+        "e2e/tests/authentication.spec.ts",
+        "e2e/tests/app-shell.spec.ts",
+        "e2e/tests/invitation.spec.ts",
+        "e2e/tests/member-detail.spec.ts",
+        "e2e/tests/members-list.spec.ts",
+        "e2e/tests/client-participants.spec.ts",
+        "e2e/tests/org-scope.spec.ts",
+        "e2e/tests/responsive.spec.ts",
+        "e2e/tests/requests-page.spec.ts"
+      ]
+    }
+  },
+  "flaky": [
+    {
+      "test": "tests/client-participants.spec.ts:248 — draws the requests entry and nothing else for a contact, and every entry for an admin",
+      "detail": "page.goto('/login') timed out at 30s when run alongside 8 other heavy e2e files in one Playwright invocation (Next dev-server compile contention). Isolated re-run of tests/client-participants.spec.ts alone: 6/6 passed, this case included, in 41.7s."
+    },
+    {
+      "test": "tests/client-participants.spec.ts:305 — removal › removing a contact ends their live session on the next call",
+      "detail": "Same batch, same cause (browserContext.close: Test ended after a prior goto timeout in the same worker). Passed in the isolated re-run."
+    },
+    {
+      "test": "tests/client-participants.spec.ts:167 — invites a contact, signs them in on their requests, and refuses a second invitation",
+      "detail": "Failed (not flaky-and-passed) in the 9-file batch after Playwright's own retry, same page.goto timeout under server contention. Passed cleanly, alone, on both the first attempt and the retry in the isolated re-run of the same file (28.5s) — confirming the batch failure was contention from co-running 9 heavy suites in one invocation, not the product."
+    },
+    {
+      "test": "tests/members-list.spec.ts:79 — 04 — Member List & Management › user sees the list but no actions menu",
+      "detail": "POST /api/signup: ECONNRESET on the first attempt inside the 8-file batch; passed on Playwright's own retry. Not re-isolated separately — a single ECONNRESET on a signup call has no relation to anything this diff touches."
+    }
+  ],
+  "findings": [],
+  "notes": [
+    "Targeted suites only, per the harness's own port/database claim (E2E_WEB_PORT=3100, E2E_API_PORT=4100, CI=1), never the whole int or e2e suite.",
+    "apps/api/test/portal.spec.ts covers all 20 TC-01-INT-* cases and the two unlabeled discriminating cases the implementer added (REQ-01-026 rollover, and the unresolvable-timezone repair from review pass 2) — all 20 named tests pass.",
+    "packages/validation/src/portal.test.ts and roles.test.ts (TC-01-UNIT-01..06) run inside the full unit suite and pass.",
+    "e2e/tests/portal.spec.ts covers all 9 TC-01-E2E-* cases named in the spec (01 through 09) — all pass, including the geometry probe (TC-01-E2E-08, ui-invariants.ts) and the settings round trip (TC-01-E2E-09).",
+    "e2e/tests/regressions.spec.ts run in full alongside portal.spec.ts, as required on every targeted run — 9/9 pass.",
+    "The diff also edits 21 other e2e spec files (2-31 lines each) purely to update the post-sign-in destination assertion from /org/{orgId}/members to /org/{orgId} (REQ-01-001). Ran the 9 that touch the most sensitive paths — sign-in itself, the app shell/rail, invitation acceptance, member detail/list, client-participant sign-in, org-scope refusal, responsive breakpoints and the requests page — 39/39 tests pass (one flake, isolated and confirmed environmental). The remaining 12 files' edits are a one-line literal-string change of the same kind (`/members` → the bare org route) already exercised structurally by TC-01-E2E-01 and by authentication.spec.ts.",
+    "Walked the product by hand beyond the suites: a throwaway Playwright spec (from qa-look.template.ts, deleted after the pass) seeded an org with admin/manager/user/viewer and a vacancy, then looked at the home screen as each role, the settings screen, and the vacancy's entry page. Confirmed by screenshot: the settings gear is drawn only for the admin (REQ-01-052) and the four roles read an identical feed (REQ-01-034) with the same relative-time labels and initials; the empty month and empty-country holiday sentences render cleanly (no console error, no failed request — the fixtures guard was live throughout); the entry page heads with the feed's own sentence (REQ-01-039) and carries the share link. No defect found this way.",
+    "Acceptance criteria 1-12 all map to TC-* cases that exist and pass: #1 TC-01-E2E-01, #2 TC-01-INT-01, #3 TC-01-INT-04, #4 TC-01-INT-07, #5 TC-01-INT-10/15, #6 TC-01-INT-13, #7 TC-01-INT-14, #8 TC-01-E2E-04, #9 TC-01-INT-16, #10 TC-01-E2E-06, #11 TC-01-E2E-07, #12 TC-01-E2E-08."
+  ]
+}

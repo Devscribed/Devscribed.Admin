@@ -6,7 +6,7 @@
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
   "headAtInit": "e9670bf46594ed9b17df140c667492b5f07dbbb5",
-  "status": "qa",
+  "status": "ready",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T14:53:02.954Z",
+  "updatedAt": "2026-09-08T15:04:04.479Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -55,8 +55,11 @@
       "endedAt": "2026-09-08T14:53:02.896Z"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-08T14:53:03.278Z",
+      "endedAt": "2026-09-08T15:04:04.424Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
