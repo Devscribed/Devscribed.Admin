@@ -340,19 +340,17 @@ async function runAgentStage(stage, run) {
 
   const prompt = promptFor(stage, run, verdictPath);
 
-  /* The implementer resumes its own session between attempts; every other agent starts cold.
-     The asymmetry is the point. Converging on working code is helped by remembering what you
-     already tried — and three gates downstream catch it if the memory carries a mistake. A
-     reviewer's judgement is not helped by remembering what it already ruled: it would be
-     defending a position rather than re-deriving one, and two passes over the same diff must
-     be able to disagree. See `code-reviewer.md`, "Reviewing again". */
-  const resume = stage === 'implement' && run.stages[stage].attempts > 0
-    ? lastSessionId(run, stage)
-    : null;
+  /* The two stages that build something resume their own session between attempts; every
+     gate starts cold. The asymmetry is the point. Converging on working code is helped by
+     remembering what you already tried — and three gates downstream catch it if the memory
+     carries a mistake. A reviewer's judgement is not helped by remembering what it already
+     ruled: it would be defending a position rather than re-deriving one, and two passes over
+     the same diff must be able to disagree. See `code-reviewer.md`, "Reviewing again". */
+  const resume = resumesSession(run, stage) ? lastSessionId(run, stage) : null;
 
   const via = nested ? 'sdk' : 'cli';
   note(`${via === 'sdk' ? 'sdk query' : 'claude -p'} --agent ${agent}${model ? ` --model ${model}` : ''}  (fuse ${timeoutMin}m)`);
-  if (resume) note(`resuming session ${resume.slice(0, 8)} — the implementer keeps what it already learned`);
+  if (resume) note(`resuming session ${resume.slice(0, 8)} — ${stage} keeps what it already learned`);
   if (dryRun) return { status: 'pass', findings: [], dryRun: true };
 
   const started = Date.now();
@@ -503,6 +501,37 @@ async function runViaSDK({ stage, agent, model, prompt, resume, timeoutMin, stem
  *
  * The agent's own report of its session is not a heuristic and cannot be contaminated.
  */
+/**
+ * Whether this attempt continues the previous one's session, or starts cold.
+ *
+ * The implementer always continues: it is converging on working code, and what it already
+ * tried is the cheapest thing it knows.
+ *
+ * The planner continues only when its *own* previous attempt blocked on the spec. That is the
+ * one case where the compile was sound and a document, not the plan, was what stopped it: the
+ * person corrects the passage and the planner has only to re-read it, keeping the reading of
+ * the codebase it already paid for. Every other way back into `pre_implement` is a replan — a
+ * later stage rejected the plan — and there the plan itself is what was wrong, so remembering
+ * it is the opposite of what the run needs.
+ *
+ * Read from the previous verdict on disk rather than from `run.halt`, which `wf resume`
+ * deletes before this ever runs. Attempts are walked backwards because an attempt that was
+ * killed leaves a log but no verdict.
+ */
+function resumesSession(run, stage) {
+  const attempts = run.stages[stage].attempts ?? 0;
+  if (!attempts) return false;
+  if (stage === 'implement') return true;
+  if (stage !== 'pre_implement') return false;
+  for (let n = attempts; n >= 1; n--) {
+    const p = join(run.dir, 'stages', `${stage}.attempt-${n}.json`);
+    if (!existsSync(p)) continue;
+    const v = JSON.parse(readFileSync(p, 'utf8'));
+    return (v.findings ?? []).some((f) => f.severity !== 'note' && f.target === 'spec');
+  }
+  return false;
+}
+
 function lastSessionId(run, stage) {
   for (let n = run.stages[stage].attempts ?? 0; n >= 1; n--) {
     const log = join(run.dir, 'stages', `${stage}.attempt-${n}.log`);
