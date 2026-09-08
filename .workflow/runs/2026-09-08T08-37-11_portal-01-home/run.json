@@ -5,8 +5,8 @@
   "task": "portal-01-home",
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
-  "headAtInit": "546f6291def7c3fc43934ca3d7614e455f4ee481",
-  "status": "halted",
+  "headAtInit": "e9670bf46594ed9b17df140c667492b5f07dbbb5",
+  "status": "review",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T14:13:57.758Z",
+  "updatedAt": "2026-09-08T14:16:05.856Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,17 +34,17 @@
       "endedAt": "2026-09-08T10:25:22.607Z"
     },
     "implement": {
-      "status": "running",
+      "status": "passed",
       "attempts": 7,
       "startedAt": "2026-09-08T13:34:24.895Z",
-      "lastVerdict": "pass",
-      "endedAt": "2026-09-08T14:13:57.702Z"
+      "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 2,
-      "startedAt": "2026-09-08T13:14:19.166Z",
-      "lastVerdict": "blocked"
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-08T14:15:55.854Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-08T14:16:05.802Z"
     },
     "review": {
       "status": "pending",
@@ -577,6 +577,94 @@
         "source": "apps/api/src/vacation/vacation.service.ts:379"
       },
       "suggestedFix": "extract the aggregation once and call it from both, or state in the document that the portal owns its own copy"
+    },
+    {
+      "stage": "implement",
+      "id": "L3",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-027",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/01-home.cases.md",
+      "symbol": "TC-01-INT-09",
+      "line": 234,
+      "claim": "The review's F3 blocked on a contradiction between TC-01-INT-09 and REQ-01-026 quoting text that no longer exists. The cases file changed after this run's plan was compiled; the case now agrees with REQ-01-026 and is implementable, so the finding was withdrawn rather than settled or halted on.",
+      "witness": {
+        "kind": "command",
+        "detail": "Hashing the bundle against the shas the handoff recorded: specs/portal/01-home.contracts.md UNCHANGED; specs/portal/01-home.cases.md CHANGED, bf9ec62e925706174a57fa4266ef8b1a2f68b95dca1a4a1731f5d25ba9f42de8 → a03bcc84669732febdd561e3c38f3927453ec38003bdb7281c59166e9d95acd9; specs/portal/01-home.md unchanged at 40eca1daf21f6500a23ef3cd2ffba63df41fcc440547eb2b8286518476102261. The review quoted TC-01-INT-09 as expecting 'two member-anniversary entries with detail.years 1 and 2' and a member-joined for the backdated member. The current text reads: 'No member-joined entry whose subject is the backdated member — its joining is 731 days ago, outside REQ-01-026's window — and exactly one member-anniversary entry for it, with detail.years 2; its first anniversary falls 366 days ago and is outside the window too.' The test was rewritten to that.",
+        "source": "specs/portal/01-home.cases.md:234"
+      },
+      "suggestedFix": "Nothing in the documents needs to change. Recorded because a gate blocked on a revision that had already been repaired, and because a run whose plan pins bundle shas can be handed findings written against a different revision — the shas are the cheap check that says so."
+    },
+    {
+      "stage": "implement",
+      "id": "L4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-052",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Error Messages",
+      "line": 168,
+      "claim": "Closing the review's CR-07 finding required five new PORTAL_MESSAGES keys for failure text, and the contracts' Error Messages table enumerates ten rows, none of them a failure sentence. The table no longer lists every message the area exports.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md §Error Messages lists ten rows — noProject, limitInvalid, cursorInvalid, groupsInvalid, settingsForbidden, feedEmptyTitle, feedEmptyBody, monthEmpty, requestsEmpty, noCountry — and every one is a success-path or refusal string. The review's blocking finding required that six inline sentences such as the Q1 failure banner's move into packages/validation, on the convention every other area follows (SIGNING_PROVIDER settings.saveFailed, HOLIDAY toastServerError, ENVELOPE_MESSAGES.generic). packages/validation/src/portal.ts now exports monthLoadFailed, feedLoadFailed, entryLoadFailed, settingsLoadFailed and settingsSaveFailed, which the table does not carry.",
+        "source": "specs/portal/01-home.contracts.md:168"
+      },
+      "suggestedFix": "Either add the five failure rows to §Error Messages, or state that the table enumerates the messages the spec decides and that transport-failure text follows the shared convention without being listed. The second is probably right — no other area's spec lists its generic failure string — but it should be said once rather than inferred."
+    },
+    {
+      "stage": "implement",
+      "id": "L1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-019",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Screens, states table, row \"Q1 answered, no country\"",
+      "line": 286,
+      "claim": "The screen replaces the holidays list with PORTAL_MESSAGES.noCountry whenever no country is stated, while REQ-01-019 answers that same caller the global holidays. On an organization holding a global holiday the screen says no calendar reaches the caller while discarding rows the body carried. Unchanged since attempt 5 and still true.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:286 — 'Q1 answered, no country | The holidays list is replaced by PORTAL_MESSAGES.noCountry and a link to the profile.' specs/portal/01-home.md:175 — 'IF the caller's membership states no country, THEN THE SYSTEM SHALL answer only the holidays whose countryCode is null.' Concrete case: an organization with one holiday whose countryCode is null, and a member whose membership states no country. GET .../portal/home answers holidays.countryCode null and holidays.upcoming carrying that row — TC-01-INT-07 asserts it. The screen draws the sentence in place of the list and never draws the row.",
+        "source": "specs/portal/01-home.contracts.md:286"
+      },
+      "suggestedFix": "Either draw the sentence only when holidays.upcoming is empty, or stop answering global rows to a member with no country. The implementation follows the states table because that table is determinate; no case distinguishes the readings, because every case with no country also has no global holiday."
+    },
+    {
+      "stage": "implement",
+      "id": "L5",
+      "target": "self",
+      "severity": "note",
+      "criterion": "CR-16",
+      "rule": "pipeline/environment",
+      "file": "e2e/environment.ts",
+      "symbol": "FALLBACK_DATABASE_URL",
+      "line": 81,
+      "claim": "A foreign Postgres took port 5433 mid-session — the port every suite here is configured for — and produced E2E failures that read as product defects: 30-second navigation timeouts while the dev server logged 200s for the same URL. It also took the integration suite down between two runs of it.",
+      "witness": {
+        "kind": "command",
+        "detail": "`netstat -ano | grep \":5433\" | grep LISTENING` returns two different PIDs (7152 and 5528). A direct pg connect from the host: `postgresql://devscribed:devscribed@127.0.0.1:5433/devscribed_dev` fails authentication, while `postgresql://devscribed:devscribed@127.0.0.1:5434/devscribed_dev` connects and answers `current_user = devscribed` — 5434 being the second port the project's own docker-compose publishes for the same container. `docker exec psql` succeeds against the container regardless, because it uses the container socket, which is why the container looked healthy. Before the workaround: integration `Error: P1000: Authentication failed` and e2e `client-participants` 3 failed. After pointing the untracked apps/api/.env at 5434: integration 19/19, and the targeted e2e 24 passed with no failures and no flakes.",
+        "source": "e2e/environment.ts:81"
+      },
+      "suggestedFix": "Nothing in the product. Recorded because the failure was indistinguishable from a product defect for several runs, and because the lever already exists: both apps/api/test/database-url.ts and e2e/environment.ts honour TEST_DATABASE_URL and E2E_DATABASE_URL, and both fall back to apps/api/.env. A person who wants 5433 back needs to find what took it; nothing here killed it."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/reports/reports.service.ts",
+      "symbol": "`PORTAL_MESSAGES.noProject`",
+      "claim": "\"`PORTAL_MESSAGES.noProject`\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"(No project)\" -- apps\napps/api/src/reports/reports.service.ts",
+        "source": "specs/portal/01-home.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
     }
   ],
   "preflight": {
@@ -767,11 +855,17 @@
       "specEdits": [
         "specs/portal/01-home.cases.md"
       ]
+    },
+    {
+      "at": "2026-09-08T14:15:33.945Z",
+      "stage": "implement",
+      "from": "gate-authority",
+      "detail": "implement produced findings outside its authority: implement may not address \"self\" (allowed: spec)",
+      "reason": "a note outside authority halted a stage that passed; the router now records it",
+      "headAtInit": {
+        "from": "546f6291def7c3fc43934ca3d7614e455f4ee481",
+        "to": "e9670bf46594ed9b17df140c667492b5f07dbbb5"
+      }
     }
-  ],
-  "halt": {
-    "reason": "gate-authority",
-    "detail": "implement produced findings outside its authority: implement may not address \"self\" (allowed: spec)",
-    "at": "2026-09-08T14:13:57.757Z"
-  }
+  ]
 }
