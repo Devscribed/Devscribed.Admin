@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>consent/01 — Cookies and storage · Meridian mockup</title>
+<link rel="stylesheet" href="../../packages/ds/src/styles.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--surface-well);color:var(--text-primary);
+            font-family:var(--font-family-base);font-size:var(--font-size-s)}
+
+  /* No custom colour, no custom radius, no custom shadow. Every value below is a token the
+     design system already names, which is why the DS gaps table of this spec carries one row
+     and it is about a *behaviour* (a dialog with no way out) rather than about a value. */
+
+  .page{padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-10);align-items:center}
+  .legendtxt{width:100%;max-width:1180px;color:var(--text-secondary);line-height:1.6}
+  .legendtxt h1{font-size:var(--headline-4-size);line-height:var(--headline-4-line);
+                letter-spacing:var(--headline-4-tracking);font-weight:var(--headline-4-weight);
+                color:var(--text-primary);margin:0 0 var(--space-2)}
+  .legendtxt p{margin:0 0 var(--space-3)}
+  .legendtxt code{font-family:var(--font-family-mono);font-size:var(--font-size-xs);color:var(--text-link)}
+  .state{width:100%;max-width:1180px;display:flex;flex-direction:column;gap:var(--space-3)}
+  .state-label{font-size:var(--font-size-xs);letter-spacing:.08em;text-transform:uppercase;
+               font-weight:var(--font-weight-semibold);color:var(--text-tertiary)}
+  .state-note{font-size:var(--font-size-xs);color:var(--text-secondary);line-height:1.5;margin:0}
+  .stage{position:relative;border:var(--border-width-hairline) solid var(--border-default);
+         border-radius:var(--radius-l);overflow:hidden;background:var(--surface-well)}
+
+  /* ---- the booking page behind the dialog ------------------------------------------------ */
+  .book{min-height:720px;padding:var(--space-9) var(--space-6) var(--space-6);
+        display:flex;flex-direction:column;align-items:center;gap:var(--space-8)}
+  .book.blurred > .book-body{filter:blur(1.5px);opacity:.55}
+  .book-body{width:100%;max-width:640px;display:flex;flex-direction:column;gap:var(--space-6)}
+  .wordmark{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold);letter-spacing:-.02em}
+  .wordmark b{color:var(--color-blue);font-weight:var(--font-weight-semibold)}
+  .vac-title{font-size:var(--headline-4-size);line-height:var(--headline-4-line);
+             letter-spacing:var(--headline-4-tracking);font-weight:var(--headline-4-weight);
+             color:var(--text-primary);margin:0}
+  .badge{display:inline-flex;align-items:center;padding:2px var(--space-3);border-radius:var(--radius-pill);
+         background:var(--surface-sunken);color:var(--text-secondary);font-size:var(--font-size-xs);
+         font-weight:var(--font-weight-medium)}
+  .card{background:var(--surface-card);border:var(--border-width-hairline) solid var(--border-default);
+        border-radius:var(--radius-l);padding:var(--space-7)}
+  .card h2{font-size:var(--headline-6-size);line-height:var(--headline-6-line);
+           font-weight:var(--headline-6-weight);margin:0 0 var(--space-5);color:var(--text-primary)}
+  .slot-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);
+             margin-bottom:var(--space-5)}
+  .fmt{display:inline-flex;border:var(--border-width-hairline) solid var(--border-default);
+       border-radius:var(--radius-m);overflow:hidden}
+  .fmt button{border:0;background:var(--surface-card);color:var(--text-secondary);
+              font:inherit;font-size:var(--font-size-xs);padding:var(--space-2) var(--space-4);cursor:pointer}
+  .fmt button[aria-pressed="true"]{background:var(--color-blue-tint);color:var(--color-blue);
+                                   font-weight:var(--font-weight-medium)}
+  .slots{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-3)}
+  .slot{height:var(--control-height);border:var(--border-width-control) solid var(--border-default);
+        border-radius:var(--radius-m);background:var(--surface-card);color:var(--text-primary);
+        font:inherit;font-size:var(--font-size-s);display:flex;align-items:center;justify-content:center}
+  .field{display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-4)}
+  .field label{font-size:var(--font-size-xs);color:var(--text-secondary);font-weight:var(--font-weight-medium)}
+  .field .box{height:var(--control-height);border:var(--border-width-control) solid var(--border-default);
+              border-radius:var(--radius-m);background:var(--surface-card)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}
+
+  /* ---- the footer this spec adds --------------------------------------------------------- */
+  .site-footer{width:100%;max-width:640px;display:flex;justify-content:center;
+               padding-top:var(--space-5);border-top:var(--border-width-hairline) solid var(--border-subtle)}
+  .footer-link{background:none;border:0;padding:0;font:inherit;font-size:var(--font-size-xs);
+               color:var(--text-secondary);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+  .footer-link:hover{color:var(--text-link)}
+
+  /* ---- the dialog ------------------------------------------------------------------------ */
+  .scrim{position:absolute;inset:0;background:var(--color-overlay-scrim);
+         display:flex;align-items:center;justify-content:center;padding:var(--space-6)}
+  .dialog{width:520px;max-width:100%;background:var(--surface-overlay);box-shadow:var(--shadow-modal);
+          border:var(--border-width-hairline) solid var(--border-default);border-radius:var(--radius-l);
+          padding:var(--space-8);max-height:100%;overflow:auto}
+  .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);
+               margin-bottom:var(--space-6)}
+  .dialog-title{font-size:var(--font-size-xl);line-height:var(--line-height-m);
+                font-weight:var(--font-weight-semibold);color:var(--text-tertiary)}
+  .dialog-close{width:13px;height:13px;border:0;background:none;padding:0;cursor:pointer;
+                color:var(--text-secondary);font-size:13px;line-height:1}
+  .lede{margin:0 0 var(--space-6);color:var(--text-secondary);line-height:var(--line-height-base)}
+  .current{margin:0 0 var(--space-6);padding:var(--space-4) var(--space-5);border-radius:var(--radius-m);
+           background:var(--color-info-tint);color:var(--text-primary);line-height:var(--line-height-base);
+           font-size:var(--font-size-s)}
+
+  .cat{display:grid;grid-template-columns:1fr auto;gap:var(--space-2) var(--space-4);
+       padding:var(--space-5) 0;border-top:var(--border-width-hairline) solid var(--border-subtle)}
+  .cat:last-of-type{border-bottom:var(--border-width-hairline) solid var(--border-subtle);
+                    margin-bottom:var(--space-6)}
+  .cat-name{font-weight:var(--font-weight-semibold);color:var(--text-primary)}
+  /* A reserved slot, not a min-width: the four strings this cell can hold — "Always on",
+     "Your choice", "On", "Off" — differ by 60px, and without a fixed width the category name
+     beside it starts at a different place in each state (UI-01). */
+  .cat-state{width:92px;text-align:right;font-size:var(--font-size-xs);color:var(--text-secondary);
+             white-space:nowrap;align-self:center}
+  .cat-state.on{color:var(--color-success);font-weight:var(--font-weight-medium)}
+  .cat-state.off{color:var(--text-tertiary);font-weight:var(--font-weight-medium)}
+  .cat-what{grid-column:1 / -1;margin:0;color:var(--text-secondary);line-height:var(--line-height-base);
+            font-size:var(--font-size-xs)}
+  .cat-what code{font-family:var(--font-family-mono);font-size:11px;color:var(--text-tertiary)}
+
+  /* **Equal weight, and it is the point.** Same fill, same border, same type, same width — the
+     two buttons are one choice, not an action and its escape hatch. A blue Accept beside a grey
+     outlined Reject is the asymmetry regulators name specifically, and it would be the first
+     thing anyone reviewing this screen objected to. `flex: 1 1 0` is what makes the widths
+     equal rather than content-decided (UI-01). */
+  .actions{display:flex;gap:var(--space-4)}
+  .actions > .btn{flex:1 1 0;min-width:0}
+  .btn{height:var(--control-height);padding:0 var(--space-5);border-radius:var(--radius-m);
+       font:inherit;font-size:var(--font-size-s);font-weight:var(--font-weight-button);cursor:pointer;
+       display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);white-space:nowrap;
+       background:var(--action-primary);color:var(--action-primary-text);
+       border:var(--border-width-control) solid var(--action-primary)}
+
+  /* ---- the sheet form, below sm ---------------------------------------------------------- */
+  .narrow{width:420px}
+  .narrow .stage{border-radius:var(--radius-l)}
+  .phone{min-height:640px;position:relative;padding:var(--space-6) var(--space-4);
+         display:flex;flex-direction:column;gap:var(--space-5);background:var(--surface-well)}
+  .phone.blurred > *:not(.sheet-scrim){filter:blur(1.5px);opacity:.55}
+  .sheet-scrim{position:absolute;inset:0;background:var(--color-overlay-scrim);
+               display:flex;align-items:flex-end}
+  .sheet{width:100%;max-height:88%;display:flex;flex-direction:column;
+         background:var(--surface-overlay);border-radius:var(--radius-l) var(--radius-l) 0 0;
+         box-shadow:var(--shadow-modal)}
+  .sheet-head{flex:0 0 auto;padding:var(--space-8) var(--space-6) 0}
+  .sheet-body{flex:1 1 auto;overflow:auto;padding:0 var(--space-6)}
+  .sheet-actions{flex:0 0 auto;display:flex;gap:var(--space-4);
+                 padding:var(--space-6);border-top:var(--border-width-hairline) solid var(--border-subtle);
+                 background:var(--surface-overlay)}
+  .sheet-actions > *{flex:1 1 0;min-width:0}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="legendtxt">
+    <h1>consent/01 — Cookies and storage</h1>
+    <p>The consent dialog, on the public surfaces only: <code>/book/{slug}</code>,
+    <code>/manage/{slug}/{token}</code>, <code>/sign/{token}</code> and the six signed-out
+    account screens. Two categories, because two is what the product actually writes: the
+    <code>ds_session</code> cookie, and the one preference key in <code>localStorage</code>.</p>
+    <p>The backdrop is the booking page, chosen deliberately — the 24h/12h control in
+    <em>Pick a time</em> is the functional storage this dialog is asking about, so the thing at
+    stake is visible behind the thing asking.</p>
+  </div>
+
+  <!-- ============================= 1 — first visit ============================= -->
+  <div class="state">
+    <div class="state-label">1 · First visit — no decision recorded</div>
+    <p class="state-note">There is no ×, <kbd>Escape</kbd> does nothing, and clicking the scrim
+      does nothing. A dialog asking for consent must not have a way out that records no answer —
+      and that is the one thing the design system's <code>Modal</code> cannot do today.</p>
+    <div class="stage">
+      <div class="book blurred">
+        <div class="book-body">
+          <div class="wordmark">Teamm<b>erly</b></div>
+          <div>
+            <h1 class="vac-title">Senior Backend Engineer</h1>
+            <div style="margin-top:var(--space-3)"><span class="badge">45 min</span></div>
+          </div>
+          <div class="card">
+            <div class="slot-head">
+              <h2 style="margin:0">Pick a time</h2>
+              <div class="fmt">
+                <button type="button" aria-pressed="true">24h</button>
+                <button type="button" aria-pressed="false">12h</button>
+              </div>
+            </div>
+            <div class="slots">
+              <div class="slot">09:00</div><div class="slot">09:45</div>
+              <div class="slot">11:15</div><div class="slot">14:00</div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Your details</h2>
+            <div class="row2">
+              <div class="field"><label>First name</label><div class="box"></div></div>
+              <div class="field"><label>Last name</label><div class="box"></div></div>
+            </div>
+            <div class="field"><label>Email</label><div class="box"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scrim">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="t1">
+          <div class="dialog-head">
+            <div class="dialog-title" id="t1">Cookies and storage</div>
+          </div>
+          <p class="lede">This site keeps two kinds of thing in your browser. Nothing here is
+            used for advertising and nothing follows you to another site. Whatever you
+            choose, we will ask again in twelve months.</p>
+
+          <div class="cat">
+            <div class="cat-name">Necessary</div>
+            <div class="cat-state on">Always on</div>
+            <p class="cat-what">One sign-in cookie, <code>ds_session</code>, so the site knows
+              it is still you between pages. Without it the site does not work, so it cannot be
+              turned off.</p>
+          </div>
+          <div class="cat">
+            <div class="cat-name">Functional</div>
+            <div class="cat-state">Your choice</div>
+            <p class="cat-what">One preference kept on this device: whether interview times are shown
+              as 24h or 12h. It is never used to identify or track you.</p>
+          </div>
+
+          <div class="actions">
+            <button class="btn" type="button">Reject non-essential</button>
+            <button class="btn" type="button">Accept</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= 2 — decided ============================= -->
+  <div class="state">
+    <div class="state-label">2 · Decided — the page, and the way back</div>
+    <p class="state-note">The dialog is gone for twelve months. The footer row is the whole of
+      the new surface: one link, under the content, on every public page.</p>
+    <div class="stage">
+      <div class="book">
+        <div class="book-body">
+          <div class="wordmark">Teamm<b>erly</b></div>
+          <div>
+            <h1 class="vac-title">Senior Backend Engineer</h1>
+            <div style="margin-top:var(--space-3)"><span class="badge">45 min</span></div>
+          </div>
+          <div class="card">
+            <div class="slot-head">
+              <h2 style="margin:0">Pick a time</h2>
+              <div class="fmt">
+                <button type="button" aria-pressed="false">24h</button>
+                <button type="button" aria-pressed="true">12h</button>
+              </div>
+            </div>
+            <div class="slots">
+              <div class="slot">9:00 AM</div><div class="slot">9:45 AM</div>
+              <div class="slot">11:15 AM</div><div class="slot">2:00 PM</div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Your details</h2>
+            <div class="row2">
+              <div class="field"><label>First name</label><div class="box"></div></div>
+              <div class="field"><label>Last name</label><div class="box"></div></div>
+            </div>
+            <div class="field"><label>Email</label><div class="box"></div></div>
+          </div>
+        </div>
+        <div class="site-footer">
+          <button class="footer-link" type="button">Cookie settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= 3 — reopened ============================= -->
+  <div class="state">
+    <div class="state-label">3 · Reopened from the footer — accepted twelve months ago</div>
+    <p class="state-note">The same dialog and the same two buttons, with two differences, each
+      because a decision already exists: a line states what is on now and when it was chosen, and
+      there <strong>is</strong> a × — leaving without changing anything is a real answer once an
+      answer is on file. The current setting is stated in prose and in the category row, never by
+      changing a button's label: a control whose text depends on state is a control that moves.</p>
+    <div class="stage">
+      <div class="book blurred">
+        <div class="book-body">
+          <div class="wordmark">Teamm<b>erly</b></div>
+          <div>
+            <h1 class="vac-title">Senior Backend Engineer</h1>
+            <div style="margin-top:var(--space-3)"><span class="badge">45 min</span></div>
+          </div>
+          <div class="card">
+            <div class="slot-head">
+              <h2 style="margin:0">Pick a time</h2>
+              <div class="fmt">
+                <button type="button" aria-pressed="false">24h</button>
+                <button type="button" aria-pressed="true">12h</button>
+              </div>
+            </div>
+            <div class="slots">
+              <div class="slot">9:00 AM</div><div class="slot">9:45 AM</div>
+              <div class="slot">11:15 AM</div><div class="slot">2:00 PM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scrim">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="t3">
+          <div class="dialog-head">
+            <div class="dialog-title" id="t3">Cookies and storage</div>
+            <button class="dialog-close" type="button" aria-label="Close dialog">✕</button>
+          </div>
+
+          <p class="current"><strong>Functional storage is on.</strong> You accepted it on this
+            device, and we will ask again in twelve months.</p>
+
+          <div class="cat">
+            <div class="cat-name">Necessary</div>
+            <div class="cat-state on">Always on</div>
+            <p class="cat-what">One sign-in cookie, <code>ds_session</code>, so the site knows
+              it is still you between pages. Without it the site does not work, so it cannot be
+              turned off.</p>
+          </div>
+          <div class="cat">
+            <div class="cat-name">Functional</div>
+            <div class="cat-state on">On</div>
+            <p class="cat-what">One preference kept on this device: whether interview times are shown
+              as 24h or 12h. Rejecting clears it.</p>
+          </div>
+
+          <div class="actions">
+            <button class="btn" type="button">Reject non-essential</button>
+            <button class="btn" type="button">Accept</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= 4 — narrow ============================= -->
+  <div class="state narrow">
+    <div class="state-label">4 · Below <code>sm</code> — the sheet</div>
+    <p class="state-note">The design system's <code>Modal</code> becomes a bottom sheet under
+      640px on its own, from CSS, with a sticky actions row while the body scrolls under it. The
+      two buttons then share the row equally — which is what the Accept/Reject pair wanted
+      anyway.</p>
+    <div class="stage">
+      <div class="phone blurred">
+        <div class="wordmark" style="font-size:var(--font-size-l)">Teamm<b>erly</b></div>
+        <h1 class="vac-title" style="font-size:var(--headline-6-size)">Senior Backend Engineer</h1>
+        <div class="card" style="padding:var(--space-5)">
+          <h2 style="margin:0 0 var(--space-4);font-size:var(--font-size-base)">Pick a time</h2>
+          <div class="slots" style="grid-template-columns:repeat(2,1fr)">
+            <div class="slot">09:00</div><div class="slot">09:45</div>
+          </div>
+        </div>
+
+        <div class="sheet-scrim">
+          <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="t4">
+            <div class="sheet-head">
+              <div class="dialog-head">
+                <div class="dialog-title" id="t4">Cookies and storage</div>
+              </div>
+            </div>
+            <div class="sheet-body">
+              <p class="lede" style="margin-bottom:var(--space-5)">This site keeps two kinds of
+                thing in your browser. Nothing here is used for advertising.</p>
+              <div class="cat">
+                <div class="cat-name">Necessary</div>
+                <div class="cat-state on">Always on</div>
+                <p class="cat-what">One sign-in cookie, <code>ds_session</code>, so the site
+                  knows it is still you between pages.</p>
+              </div>
+              <div class="cat">
+                <div class="cat-name">Functional</div>
+                <div class="cat-state">Your choice</div>
+                <p class="cat-what">One preference kept on this device: 24h or 12h for
+                  interview times.</p>
+              </div>
+            </div>
+            <div class="sheet-actions">
+              <button class="btn" type="button">Reject non-essential</button>
+              <button class="btn" type="button">Accept</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
