@@ -201,9 +201,17 @@ function promptFor(stage, run, verdictPath) {
     : '';
 
   switch (stage) {
-    case 'pre_implement':
+    case 'pre_implement': {
+      /* A resumed planner wrote its own findings and still has them; repeating them here would
+         be telling it what it already said. What it cannot know is that the document changed
+         under it after it stopped. */
+      const again = resumesSession(run, 'pre_implement')
+        ? `\n\`${run.spec}\` has been corrected where you blocked. Re-read those passages, confirm each is `
+          + `settled, and compile. Block again only for what is still open.\n`
+        : '';
       return `${head}\nCompile the spec into \`.workflow/runs/${run.id}/handoff.json\` and write your reasoning to `
-        + `\`.workflow/runs/${run.id}/stages/pre_implement.md\`.${back}`;
+        + `\`.workflow/runs/${run.id}/stages/pre_implement.md\`.${back}${again}`;
+    }
     case 'implement': {
       /* The shape reaches the lead as configuration, not as a choice: two runs of one handoff
          must split it the same way, or a comparison between them measures the split. How to
@@ -522,17 +530,27 @@ async function runViaSDK({ stage, agent, model, prompt, resume, timeoutMin, stem
  * killed leaves a log but no verdict.
  */
 function resumesSession(run, stage) {
-  const attempts = run.stages[stage].attempts ?? 0;
-  if (!attempts) return false;
+  if (!(run.stages[stage].attempts ?? 0)) return false;
   if (stage === 'implement') return true;
-  if (stage !== 'pre_implement') return false;
-  for (let n = attempts; n >= 1; n--) {
-    const p = join(run.dir, 'stages', `${stage}.attempt-${n}.json`);
+  return stage === 'pre_implement' && lastSpecBlockers(run).length > 0;
+}
+
+/**
+ * The spec-targeted blockers from the planner's own most recent *completed* attempt.
+ *
+ * `lastBlockers` reads the gates only, so a stage that blocked itself was never told what it
+ * had said — and a planner that resumes its session remembers the finding but not that the
+ * document has been corrected since. Attempts are walked backwards because a killed attempt
+ * leaves a log and no verdict.
+ */
+function lastSpecBlockers(run) {
+  for (let n = run.stages.pre_implement?.attempts ?? 0; n >= 1; n--) {
+    const p = join(run.dir, 'stages', `pre_implement.attempt-${n}.json`);
     if (!existsSync(p)) continue;
     const v = JSON.parse(readFileSync(p, 'utf8'));
-    return (v.findings ?? []).some((f) => f.severity !== 'note' && f.target === 'spec');
+    return (v.findings ?? []).filter((f) => f.severity !== 'note' && f.target === 'spec');
   }
-  return false;
+  return [];
 }
 
 /*
