@@ -8,7 +8,8 @@ every requirement covered by a case, every acceptance criterion naming an observ
 every status and message a case asserts declared by the contract, every `data-testid` in both
 places, every decision table complete over its declared domains, no rule carried by reference to
 another document, no count in prose about a table, no line number into code, no path that does not
-exist. A clean lint is the precondition for reading this list, not a substitute for it.
+exist, and — for a bundle that draws a screen — a `## Behaviour Walkthrough` whose every row names
+a decider. A clean lint is the precondition for reading this list, not a substitute for it.
 
 What is left below is judgement — the part no script reaches.
 
@@ -49,6 +50,21 @@ governs** — it is what the loop enforces — and the disagreement is a defect 
 - [ ] **(note)** Test cases exist at all three levels, and every edge case has one.
 - [ ] **(note)** Known Gaps exists, and each row says why it is acceptable now and what closes it.
 - [ ] **(note)** Out of Scope lists what a reader would reasonably expect and will not get.
+
+## Product behaviour
+
+- [ ] **(author)** Every decision that changes what the product does — abandoned work, who else
+      is affected, what can be undone, where a person goes when the answer is nothing — was put
+      to a person, not settled because the answer looked obvious.
+- [ ] **(author)** Nothing was put to a person that the code, a CLAUDE.md convention or a screen
+      already shipped answers.
+- [ ] **(author)** `## Behaviour Walkthrough` has a row per product decision, each with
+      `Decided by` filled and a `Where it lives` that names the requirement, edge case, contract
+      row or mock state carrying the rule. The lint decides the first half; no judge files
+      against this.
+- [ ] **(author)** No row of that table states a rule the spec carries nowhere else.
+- [ ] **(author)** Where the spec draws a screen, the mock was built and shown before the spec's
+      text was written, and `## Screens` was written from it.
 
 ## Verification
 

@@ -853,6 +853,63 @@ function checkAcceptance(lines, cases, file) {
   }
 }
 
+/* ── the behaviour walkthrough ────────────────────────────────────────────── */
+
+const DECIDED_BY = new Set(['human', 'agent']);
+
+/**
+ * The record of who settled what the product does.
+ *
+ * A bundle that draws a screen carries the table, and every row names its decider. The check is
+ * on the shape of the record and never on its truth: no script can know whether a person was
+ * asked. What it buys is that the omission is written rather than absent — a table of nothing
+ * but `agent` is a spec whose product decisions nobody was consulted on, and it reads as one.
+ */
+function checkWalkthrough(lines, files, drawsAScreen) {
+  const secs = sections(lines.cases, 2).filter((s) =>
+    plain(s.title).toLowerCase().startsWith('behaviour walkthrough'),
+  );
+  if (!secs.length) {
+    if (drawsAScreen) {
+      add('walkthrough/missing', files.cases, 1,
+        'the bundle draws a screen and the cases file has no "## Behaviour Walkthrough"',
+        'record each decision about what the product does, and whether a person or you decided it');
+    }
+    return;
+  }
+  for (const sec of secs) {
+    const { rows, header } = tableAfter(sec.body, 0);
+    const ci = (n) => header.findIndex((h) => plain(h).toLowerCase().startsWith(n));
+    const [cWhat, cBy] = [ci('what was decided'), ci('decided by')];
+    if (cBy === -1) {
+      add('walkthrough/no-decider-column', files.cases, sec.line,
+        'the Behaviour Walkthrough table has no "Decided by" column',
+        'say per row whether a person decided it or you did');
+      continue;
+    }
+    if (!rows.length) {
+      add('walkthrough/empty', files.cases, sec.line,
+        'the Behaviour Walkthrough carries no rows',
+        'a spec that settled no product decision says so in the section instead of tabling none');
+      continue;
+    }
+    for (const row of rows) {
+      const subject = plain(row.cells[0] ?? '') || '(unnamed row)';
+      const by = plain(row.cells[cBy] ?? '');
+      if (!DECIDED_BY.has(by.toLowerCase())) {
+        add('walkthrough/undecided', files.cases, sec.start + row.line + 1,
+          `"${subject}" gives "${by}" as its decider`,
+          'a decision is settled by "human" or by "agent"; there is no third answer');
+      }
+      if (cWhat !== -1 && !plain(row.cells[cWhat] ?? '')) {
+        add('walkthrough/undecided', files.cases, sec.start + row.line + 1,
+          `"${subject}" records no decision`,
+          'state what was decided, or drop the row');
+      }
+    }
+  }
+}
+
 function checkBudget(lines, file, requirementCount) {
   const budget = BUDGET.scaffold + BUDGET.perRequirement * requirementCount;
   const n = lines.length;
@@ -920,6 +977,14 @@ for (const [k, f] of Object.entries(files)) {
   if (matrix.length) checkMatrixIsServed(contracts, matrix, f, (lines.contracts ?? []).join(String.fromCharCode(10)));
 }
 for (const [k, f] of Object.entries(files)) checkVerificationPlan(lines[k], f);
+
+/* A bundle draws a screen when its contracts file has a `## Screens` section with anything in
+   it. That is also what decides whether the product decisions behind the screen are owed a
+   record — a bundle that draws nothing may still settle them, and says where. */
+const screensSection = sections(lines.contracts, 2).find((s) =>
+  plain(s.title).toLowerCase().startsWith('screens'),
+);
+checkWalkthrough(lines, files, Boolean(screensSection?.body.some((l) => l.trim())));
 
 checkBudget(lines.behaviour, files.behaviour, reqs.size);
 checkGrowth(specPath);

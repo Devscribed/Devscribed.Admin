@@ -48,14 +48,43 @@ too: probe it, in the state the product will meet it in, and record what came ba
 and a plausible reading of an API are not observations. What you cannot probe is written down as
 unproven rather than as fact.
 
-### 2. Resolve the forks with the user
+### 2. Settle the product behaviour with the user
 
-Identify the two to four genuine architectural forks — the ones where different answers produce
-materially different specs. Ask them with `AskUserQuestion`, each option carrying its real
-trade-off, and put your recommendation first with the reason.
+A spec is written after a person has decided what the product does — not after you have decided
+and they have read it. This step is where product behaviour, business logic and the shape of the
+experience are settled; everything else in this document assumes they already are.
 
-Do not ask about things a careful colleague would just decide. Do not guess on things that change
-the whole shape.
+**Bring the person every decision that changes what the product does, and settle the rest
+yourself.** A decision goes to them when both of these hold:
+
+- it changes **what the product does** for whoever uses it, rather than how it is built; and
+- it is left open by the code, by the conventions in CLAUDE.md, and by every screen already
+  shipped.
+
+A decision that fails either test is yours. Make it, and record it — step 5 says where.
+
+**Which half is whose.** Craft is yours: what is drawn while a request is in flight, where focus
+lands, which status refuses, which component carries a control, how a message is worded once the
+rule behind it is settled. Product is theirs: what happens to work somebody abandoned half-done,
+who else is affected and how they find out, what can be undone and what warns where nothing can,
+where a person goes when the answer is nothing, and what tells the person using this that they
+got what they came for.
+
+**Ask with `AskUserQuestion`** — your recommendation first with its reason, every option carrying
+its real trade-off. The architectural forks, the two to four where different answers produce
+materially different specs, are these same questions and not a separate round.
+
+**The number of questions is decided by the spec, never by a quota.** A surface that changes
+nothing about what the product does raises none. Do not manufacture a question to look thorough,
+and do not settle one of theirs because the answer looks obvious — an obvious answer to a product
+question is a guess about somebody else's business.
+
+**Then show the screen, once.** Where the spec draws one, build `NN-name.mock.html` before the
+spec's text — the answered state, and each state a decision above reached — and bring it in one
+message asking what is wrong with it. Reading order, the level of a heading, where an explanation
+sits relative to what it explains, what a control says: these are settled by looking, and asking
+about them costs more than the look. `## Screens` is then written from the mock, rather than the
+mock being drawn from `## Screens`.
 
 If the user's framing rests on a wrong premise, say so in a sentence and then answer what they
 actually asked. (Example from this repository: a third-party e-signature vendor gives no stronger
@@ -167,6 +196,13 @@ never named, a migration, a change to a route that already ships. An addition no
 is a scope finding for the refiner. Before adding one, ask whether the request works without
 it: a curated list of six words does not need reordering, restoring or a lock to be the feature
 that was asked for, and every route added is paid for by every caller and every later spec.
+
+**Every product decision step 2 settled is written down with who settled it.** The cases file
+carries `## Behaviour Walkthrough` — one row per decision about what the product does, what was
+decided, and whether a person decided it or you did. It is the record of the step, not a second
+statement of the rules: the rule itself lives in a requirement, a contract row or an edge case,
+and the row points at it. A table of decisions nobody was asked about is the honest shape of a
+spec written without step 2, and it is meant to be read as one.
 
 **Run the lint as you write, not at the end:**
 
@@ -408,6 +444,11 @@ second as something not to reproduce.
 ## Anti-patterns
 
 - Writing the spec before reading the code.
+- Settling a product question yourself because the answer looked obvious.
+- Asking a question to look thorough, when the code, a convention or a shipped screen already
+  answers it.
+- Writing the text of a screen before the person has seen the screen.
+- A `## Behaviour Walkthrough` that restates the rules instead of recording who decided them.
 - E2E cases written for a screen nobody reached.
 - A precondition no route reaches — "an expired envelope exists", with nothing that makes one.
 - Leaving QA to obtain access this stage could have obtained.

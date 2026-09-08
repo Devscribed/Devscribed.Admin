@@ -324,6 +324,34 @@ name — `| Gap | Impact | What closes it |`. Every `--token` the mock declares 
 colour with no name to declare carries `@literal <reason>` on its own line. A name improvised on
 one screen is improvised again on the next.
 
+## `## Behaviour Walkthrough`
+
+What the product does, who decided it, and where the decision now lives. One row per decision
+about product behaviour, business logic or the experience — never one per requirement.
+
+```
+| Decision | What was decided | Decided by | Where it lives |
+|---|---|---|---|
+| What happens to a half-filled request when the author leaves the screen | Discarded; the form opens empty next time, and nothing is stored until Send | human | REQ-04-012, Edge case 7 |
+| Who learns that a topic was renamed | Nobody is notified; the new name is simply what the next reader sees | human | REQ-04-019 |
+| Where a reader goes from the empty calendar | The empty state carries the control that adds the first absence | human | Screens, mock state `empty` |
+| Which status refuses a window wider than the bound | 422 with the shared bound message | agent | REQ-03-004 |
+```
+
+**`Decided by`** is `human` or `agent`, and nothing else. `human` is a decision a person was
+actually asked and actually answered; anything you settled yourself is `agent`, including a
+decision that was easy and a decision you are sure of.
+
+**`Where it lives`** names the requirement, edge case, contract row or mock state that carries the
+rule. The rule is stated there once — this table records the decision, and a row that states a
+rule the spec does not carry elsewhere is a rule in the wrong file.
+
+Required of every bundle that draws a screen. A bundle that draws none keeps the section wherever
+it decides product behaviour, and says in one line where it does not.
+
+**A table of nothing but `agent` is what a spec written without step 2 looks like**, and it is
+readable as one. The lint checks that the column is filled, never that it is true.
+
 ## `## Verification Plan`
 
 The rig the cases run on, walked **before** they were written. Every cell is what happened, not

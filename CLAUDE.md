@@ -90,6 +90,17 @@ its width* closes one picker. *No box has a size its own content decides* closes
 including the ones not built yet — and a "not in this patch" that defers the same mechanism to
 another control is not a deferral, it is the next patch already written.
 
+**A screen is built to thirty-eight rules, and none of them is about how it looks.**
+[.claude/skills/ui-craft/](.claude/skills/ui-craft/SKILL.md) is what `implementer` and
+`implementer-lead` build to, in seven families: a request lifecycle where every path ends, where
+a label and a heading go and who owns a control's value, the tree that carries the hierarchy,
+what the browser has to redo, motion that answers an action, one screen at every width, and the
+screen that already solved this. How the product *looks* is `packages/ds/README.md` and
+`specs/design-system/`, and the skill restates neither. `npm run ui:check` decides four of the
+rules mechanically — a request with no failure path, a flag cleared outside `finally`, a
+transition that lays out, a key that is a position — and **reports rather than gates**, for the
+reason `ds:check` does.
+
 **A screen defect is held by a measurement, not a screenshot.** A rectangle that did not move, a
 scroll box that did not grow, a message counted once — the probes are `e2e/tests/ui-invariants.ts`.
 **A `data-testid` proves presence, never uniqueness**: assert a user-facing message with a count,
@@ -180,6 +191,26 @@ suite unrunnable because a port was taken. `npm run reap:dry` says what the reap
 Use the `spec` skill (`/spec`). Every spec covers edge cases, blast radius, backward compatibility,
 acceptance criteria, test cases through E2E, and a verification route walked before those cases
 were written. Specs are written in English.
+
+**What the product does is settled with a person before the spec is written, not shown to them
+after.** `/spec` opens on the code and then on the decisions: everything that changes what the
+product *does* — what happens to work somebody abandoned half-done, who else is affected and how
+they find out, what can be undone and what warns where nothing can, where a person goes when the
+answer is nothing — goes to a person, and everything the code, a convention here or a shipped
+screen already answers is decided by the author without asking. There is no quota either way: a
+surface that changes nothing about the product raises no question, and an obvious answer to a
+product question is a guess about somebody else's business. Where the spec draws a screen, the
+mock is built and looked at **before** the spec's text, and `## Screens` is written from the mock
+— reading order, the level of a heading and where an explanation sits are settled by looking, and
+asking about them costs more than the look.
+
+**Every product decision is recorded with who made it.** The cases file carries
+`## Behaviour Walkthrough`: one row per decision, what was decided, `human` or `agent`, and the
+requirement, edge case, contract row or mock state that now carries the rule. `spec:lint` checks
+that a bundle drawing a screen has the section and that every row names a decider — the shape of
+the record, never its truth, because no script can know whether a person was asked. A table of
+nothing but `agent` is what a spec written without that conversation looks like, and it is meant
+to be read as one.
 
 **A spec is judged by somebody who did not write it.** `/spec` ends by dispatching the
 `spec-reviewer` agent on a clean context — it is given the spec path and the request, and nothing
