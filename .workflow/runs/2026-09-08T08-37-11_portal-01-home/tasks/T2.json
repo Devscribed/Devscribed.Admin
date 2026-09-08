@@ -1,0 +1,19 @@
+{
+ "id": "T2",
+ "title": "The migration: OrganizationPortalSettings, one additive table",
+ "files": [
+  "apps/api/prisma/schema.prisma",
+  "apps/api/prisma/migrations/20260908120000_portal_01_home/migration.sql"
+ ],
+ "requirements": [
+  "REQ-01-048",
+  "REQ-01-049",
+  "REQ-01-051"
+ ],
+ "dependsOn": [],
+ "migration": {
+  "additive": true,
+  "note": "One new table and one back-relation on Organization. No column is added to an existing table, nothing is renamed, nothing is dropped and no existing column gains NOT NULL. infra/deploy.sh:27 states the order this run must survive: 'Migrations run BEFORE the rollout, and the order is the whole point' — infra/migrate.sh runs `prisma migrate deploy` as a one-off task on the new image before Terraform rolls the services, so the table exists before any code queries it. The additive shape is what makes the reverse safe too: rolled-back code simply never selects a table it does not know about, and REQ-01-049 reads the table's absence, and every organization's absent row, as all three groups enabled — so the migration backfills nothing and signup is not amended."
+ },
+ "detail": "model OrganizationPortalSettings { id String @id @default(uuid()); organizationId String @unique; peopleEnabled Boolean @default(true); hiringEnabled Boolean @default(true); workEnabled Boolean @default(true); updatedAt DateTime @updatedAt; organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade) }, and the matching back-relation on Organization. The @unique on organizationId is what makes REQ-01-051's create-or-update a single-row upsert. Follow the directory convention of apps/api/prisma/migrations — the last one recorded in the run's baseline is 20260907120000_time_off_02_holiday_sourcing."
+}

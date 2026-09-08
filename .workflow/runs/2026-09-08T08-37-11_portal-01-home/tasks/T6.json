@@ -1,0 +1,22 @@
+{
+ "id": "T6",
+ "title": "Integration cases for the portal API",
+ "files": [
+  "apps/api/test/portal.spec.ts"
+ ],
+ "requirements": [
+  "REQ-01-004",
+  "REQ-01-010",
+  "REQ-01-016",
+  "REQ-01-026",
+  "REQ-01-034",
+  "REQ-01-040",
+  "REQ-01-049"
+ ],
+ "dependsOn": [
+  "T3",
+  "T4",
+  "T5"
+ ],
+ "detail": "TC-01-INT-01 through TC-01-INT-18 in one file, each with its id in the test name, following the shape of apps/api/test/requests.spec.ts. Run it with `npm test -- test/portal.spec.ts` from apps/api — Jest here is 29 and the file filter is a positional path. Three things the cases turn on, and every one of them is the spec's own arithmetic rather than an inference: (a) **every organization an integration case creates has at least the admin's own active Membership, and every role a case signs in as adds another, so every one of them draws a member-joined entry.** TC-01-INT-11 switches People and Hiring off before seeding its five projects so that project-started is the only kind derived; TC-01-INT-14 asserts exactly one vacancy-opened and no entry of any kind but member-joined beside it; TC-01-INT-10 asserts the four bodies are identical entry set and field for field, and does not assert a count. (b) TC-01-INT-05's first call is made by a member with no MemberFinancials row and asserts `timeOff` null **and `holidays` an object in the same body** — the reserve being absent withholds nothing from the holidays. (c) TC-01-INT-07's second leg clears the membership's country and sets the organization's, and asserts the global holiday alone with countryCode null: the organization's country is not inherited, which is what PATCH-012 already made true of the calendar. TC-01-INT-09 and TC-01-INT-12 both need POST /api/test/membership/backdate-joined, which T5 builds. TC-01-INT-16's hard-deleted project is deleted through Prisma directly — the product exposes no hard delete for a project (schema.prisma:816-817)."
+}

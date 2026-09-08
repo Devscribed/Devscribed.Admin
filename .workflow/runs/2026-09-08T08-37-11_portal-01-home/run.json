@@ -5,7 +5,7 @@
   "task": "portal-01-home",
   "branch": "spec/portal-home",
   "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
-  "headAtInit": "413177bc0b8b9eb21e38a038d22c285ee84ccf7e",
+  "headAtInit": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
   "status": "implement",
   "track": "spec",
   "shapes": {
@@ -20,7 +20,7 @@
     "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
   },
   "createdAt": "2026-09-08T08:37:11.158Z",
-  "updatedAt": "2026-09-08T10:25:22.656Z",
+  "updatedAt": "2026-09-08T12:18:10.912Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -34,8 +34,11 @@
       "endedAt": "2026-09-08T10:25:22.607Z"
     },
     "implement": {
-      "status": "pending",
-      "attempts": 0
+      "status": "running",
+      "attempts": 3,
+      "startedAt": "2026-09-08T11:33:03.628Z",
+      "endedAt": "2026-09-08T12:18:10.860Z",
+      "lastVerdict": "error"
     },
     "static_gate": {
       "status": "pending",
@@ -53,7 +56,7 @@
   "budget": {
     "codeAttempts": 0,
     "handoffReplans": 0,
-    "infra": 0
+    "infra": 1
   },
   "findingHistory": {
     "spec/contradiction@specs/portal/01-home.md#REQ-01-004": 1,
@@ -224,6 +227,28 @@
       "specSha": {
         "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
         "pendingUntilReplan": "40eca1daf21f6500a23ef3cd2ffba63df41fcc440547eb2b8286518476102261"
+      }
+    },
+    {
+      "at": "2026-09-08T11:30:02.789Z",
+      "stage": "implement",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": null,
+      "headAtInit": {
+        "from": "413177bc0b8b9eb21e38a038d22c285ee84ccf7e",
+        "to": "2202f8265d1ddd348dd59249531a33dcbae2ce2a"
+      }
+    },
+    {
+      "at": "2026-09-08T11:32:56.008Z",
+      "stage": "implement",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": null,
+      "headAtInit": {
+        "from": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
+        "to": "2202f8265d1ddd348dd59249531a33dcbae2ce2a"
       }
     }
   ]

@@ -1,0 +1,56 @@
+{
+ "id": "T4",
+ "title": "API: the feed projection, the group switches, field-level withholding, and the entry page",
+ "files": [
+  "apps/api/src/portal/portal-feed.service.ts",
+  "apps/api/src/portal/portal-entry.service.ts",
+  "apps/api/src/portal/portal-entry.types.ts"
+ ],
+ "requirements": [
+  "REQ-01-022",
+  "REQ-01-023",
+  "REQ-01-024",
+  "REQ-01-025",
+  "REQ-01-026",
+  "REQ-01-027",
+  "REQ-01-028",
+  "REQ-01-029",
+  "REQ-01-030",
+  "REQ-01-031",
+  "REQ-01-032",
+  "REQ-01-033",
+  "REQ-01-034",
+  "REQ-01-035",
+  "REQ-01-036",
+  "REQ-01-038",
+  "REQ-01-039",
+  "REQ-01-040",
+  "REQ-01-041",
+  "REQ-01-042",
+  "REQ-01-043",
+  "REQ-01-044",
+  "REQ-01-045",
+  "REQ-01-046",
+  "REQ-01-047",
+  "REQ-01-054",
+  "REQ-01-055",
+  "REQ-01-056"
+ ],
+ "dependsOn": [
+  "T1",
+  "T2"
+ ],
+ "allCallSites": [
+  "apps/api/src/portal/portal-feed.service.ts#listNews — the one place REQ-01-027's 'every Membership', REQ-01-030's 'every Vacancy' and REQ-01-031's 'every Project' are read",
+  "apps/api/src/portal/portal-entry.service.ts#getEntry — the one place REQ-01-038's per-entry read is answered",
+  "apps/api/src/portal/portal-feed.service.ts#deriveMemberEntries — REQ-01-027 and REQ-01-029 over Membership where status = 'active'",
+  "apps/api/src/portal/portal-feed.service.ts#deriveVacancyEntries — REQ-01-030 over Vacancy, whatever its status",
+  "apps/api/src/portal/portal-feed.service.ts#deriveProjectEntries — REQ-01-031 over Project, whatever its status"
+ ],
+ "concurrency": {
+  "rows": [],
+  "lock": "none — REQ-01-054 forbids writing a row when an entry comes into being and when one is read. The projection issues SELECTs against Membership, Vacancy and Project and writes nothing anywhere; TC-01-INT-02 proves it by counting rows in every source table before and after ten calls.",
+  "reread": []
+ },
+ "detail": "Four kinds and no more. member-joined from every Membership whose status is 'active', at joinedAt (REQ-01-027); status 'removed' derives nothing, of any kind (REQ-01-028, Edge case 1). member-anniversary for every whole year Y >= 1 since joinedAt whose anniversary date falls in the window, id `member-anniversary:{membershipId}:{year}` (REQ-01-029). vacancy-opened from every Vacancy at createdAt whatever its status (REQ-01-030, Edge case 5). project-started from every Project at createdAt whatever its status (REQ-01-031, Edge case 7). **No entry is derived from a Client** (REQ-01-032) and none from Candidate, Application, ApplicationScheduleEvent, ApplicationCriterion or ApplicationCv (REQ-01-033) — a prohibition, not an omission. Window: source rows whose moment falls in the 365 days ending at the caller's own today (REQ-01-026). Order: moment descending, ties broken by entry id ascending (REQ-01-024). Paging: entries strictly after the cursor in that order, at most `limit`, `nextCursor` present only when more remain (REQ-01-025); a cursor the feed never issued is 422 PORTAL_MESSAGES.cursorInvalid (Edge case 16) and a cursor from before a group changed still parses and pages from that moment (Edge case 15). Groups: people covers member-joined and member-anniversary, hiring covers vacancy-opened, work covers project-started; a switched-off group derives no entry of its kinds (REQ-01-036), and no absent group is ever named in a response (REQ-01-037). **Visibility by kind is uniform** — REQ-01-034's table marks all four kinds Drawn for admin, manager, user and viewer, so the reader's role removes no entry from the feed. The single field a role changes: `detail.clientName` on project-started is the project's client name where the reader holds `view-clients` (can(normalizeRole(role), 'view-clients') — true for admin and manager, packages/validation/src/index.ts:703/748) or is a ProjectMember of that project, and is **null rather than absent** otherwise (REQ-01-035, REQ-01-055), so a body cannot distinguish a project with no client from one whose client is not the reader's to see. The entry page: an id whose kind this spec derives nothing for, a malformed id, a vanished source row and a row the caller's own feed would not contain all answer 404 with identical bodies (REQ-01-040, REQ-01-041, Edge cases 6 and 9), and visibility is decided after the source row is loaded in every case so there is no timing branch (§Security). Facts are ordered by the server. A vacancy-opened page carries title, description as `body`, durationMinutes, categories and the interviewer's name (REQ-01-042), plus `shareUrl` built from Vacancy.publicSlug while status is 'open' and null once 'closed' (REQ-01-043, REQ-01-044). A member page carries display name, jobTitle, joinedAt and the active projects the reader may already see, with `link` to /org/{orgId}/members/{id} (REQ-01-045). A project page carries name, createdAt, the client under REQ-01-035's condition, and the roster only where the reader holds `manage-projects` or is a ProjectMember — omitted, with link null, otherwise (REQ-01-046, REQ-01-047, REQ-01-056, Edge case 8). REQ-01-039: the page's subject.name is the same string the feed's own entry carried."
+}

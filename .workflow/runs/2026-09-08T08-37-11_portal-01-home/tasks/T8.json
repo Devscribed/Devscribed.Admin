@@ -1,0 +1,25 @@
+{
+ "id": "T8",
+ "title": "Web: the entry page and the portal settings screen",
+ "files": [
+  "apps/web/app/org/[orgId]/news/[entryId]/page.tsx",
+  "apps/web/app/org/[orgId]/settings/portal/page.tsx"
+ ],
+ "requirements": [
+  "REQ-01-038",
+  "REQ-01-039",
+  "REQ-01-042",
+  "REQ-01-043",
+  "REQ-01-044",
+  "REQ-01-045",
+  "REQ-01-046",
+  "REQ-01-047",
+  "REQ-01-048",
+  "REQ-01-052",
+  "REQ-01-056"
+ ],
+ "dependsOn": [
+  "T1"
+ ],
+ "detail": "The entry page reads GET .../portal/news/{entryId}. `portal-entry-back` is painted immediately, because it needs no answer; the panel's frame carries Preloader blocks while Q3 is in flight; a 404 renders the app's own not-found screen and there is no 'this entry is not for you' state (REQ-01-040). `portal-entry-title` carries the feed's own sentence at heading size in a reading column capped at 720px; `portal-entry-body` is drawn only where `body` is non-null, which is vacancy-opened alone; `portal-entry-share` is drawn only where `shareUrl` is non-null, as a flex: 1; min-width: 0 code box with ellipsis beside an auto copy button, so a long slug never pushes the button off the panel; `portal-entry-fact` is one per row of `facts`, in the server's order — the page decides nothing about what comes first. A trimmed body draws fewer facts, no link and no roster, and says nothing about anything having been withheld. The settings screen at /org/{orgId}/settings/portal reads and writes GET/PUT .../portal/settings with three Switch controls — `portal-settings-group-people`, `-hiring`, `-work` — and `portal-settings-save`. **The save button is never disabled for validation**: all three values are booleans the screen owns, so there is nothing to be invalid; disable it only as an in-flight guard, cleared in a finally. Follow apps/web/app/org/[orgId]/settings/signing/page.tsx for the shape of an organization settings screen, including its gate: that page calls `notFound()` when `hasCapability(role, 'ViewSigningSettings')` is false (line 40), so the portal settings page calls `notFound()` when the caller does not hold `ManagePortalSettings`. The screen therefore never draws `PORTAL_MESSAGES.settingsForbidden` — it is the API's answer to a direct call, asserted by TC-01-INT-13 and by nothing on a screen. The sidebar gains no row for this page; `portal-feed-settings-link` on the home screen is the only way in, and REQ-01-052 draws it only for a holder, so there is no dead link."
+}

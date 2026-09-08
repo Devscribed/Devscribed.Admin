@@ -1,0 +1,22 @@
+{
+ "id": "T1",
+ "title": "Shared vocabulary: two capabilities, PORTAL_MESSAGES, the entry-id and cursor codecs, anniversary dates, and the three validators",
+ "files": [
+  "packages/validation/src/portal.ts",
+  "packages/validation/src/portal.test.ts",
+  "packages/validation/src/roles.ts",
+  "packages/validation/src/roles.test.ts",
+  "packages/validation/src/index.ts"
+ ],
+ "requirements": [
+  "REQ-01-004",
+  "REQ-01-013",
+  "REQ-01-023",
+  "REQ-01-025",
+  "REQ-01-029",
+  "REQ-01-048",
+  "REQ-01-050"
+ ],
+ "dependsOn": [],
+ "detail": "Add 'ViewPortalHome' and 'ManagePortalSettings' to the `Capability` union in packages/validation/src/roles.ts and to all four rows of `ROLE_CAPABILITIES` — ViewPortalHome in admin, manager, user and viewer; ManagePortalSettings in admin alone. The union is `Record<NormalizedRole, readonly Capability[]>`, so the compiler forces every row to be revisited; `hasCapability` already normalizes, so a stored legacy `member` reads as `user` (roles.ts:44, LEGACY_ALIASES) and any unrecognised value reads as `viewer`. Add NOTHING to the lowercase-dashed `MemberCapability` union or to `CAPABILITY_MATRIX`: nothing in this spec calls `can(role, 'view-portal-home')`, and REQ-01-003 draws the rail row for every staff principal without a gate. The dashed spellings in §Roles & Permission Matrix are that table's prose labels; the contracts' Routes column and TC-01-UNIT-06 both name the PascalCase pair, and that pair is what is built. Neither new capability is named by any `@RequireCapability` decorator: `ViewPortalHome` and `ManagePortalSettings` are both asked with `hasCapability(role, …)` inside a portal service, so `CapabilityGuard`'s fixed message is never reached from this spec. New module packages/validation/src/portal.ts, re-exported from index.ts, holding: (a) `PORTAL_MESSAGES`, all ten strings of §Error Messages verbatim — every row of that table is `New: yes` and every one of them is a member of this object, `settingsForbidden` ('You do not have permission to change the portal settings.') included; (b) `composeEntryId(kind, sourceId, year?)` and `parseEntryId(value)` for REQ-01-023 — `{kind}:{sourceId}`, and `member-anniversary:{membershipId}:{year}`; parse returns null, never throws, for '', 'member-joined', 'nope:abc', 'member-anniversary:abc' and 'member-anniversary:abc:zero'; (c) `composeCursor(instant, entryId)` / `parseCursor(value)` for REQ-01-025, `{ISO-8601}|{entryId}`, both halves parseable or null; (d) `anniversaryDate(joinedAt, year)` for REQ-01-029 and Edge case 4 — a 29 February joining lands on 1 March in a non-leap year and on 29 February in a leap one, and year 0 is never produced; (e) `validateFeedLimit(value)` — integer 1..50, undefined defaults to 20, everything else `PORTAL_MESSAGES.limitInvalid`; (f) `validatePortalGroups(body)` — all three of people/hiring/work required and strictly boolean, else `PORTAL_MESSAGES.groupsInvalid`."
+}
