@@ -346,7 +346,10 @@ async function runAgentStage(stage, run) {
      carries a mistake. A reviewer's judgement is not helped by remembering what it already
      ruled: it would be defending a position rather than re-deriving one, and two passes over
      the same diff must be able to disagree. See `code-reviewer.md`, "Reviewing again". */
-  const resume = resumesSession(run, stage) ? lastSessionId(run, stage) : null;
+  /* The planner resumes the attempt that *finished* — see `lastSessionId`. */
+  const resume = resumesSession(run, stage)
+    ? lastSessionId(run, stage, stage === 'pre_implement')
+    : null;
 
   const via = nested ? 'sdk' : 'cli';
   note(`${via === 'sdk' ? 'sdk query' : 'claude -p'} --agent ${agent}${model ? ` --model ${model}` : ''}  (fuse ${timeoutMin}m)`);
@@ -532,8 +535,16 @@ function resumesSession(run, stage) {
   return false;
 }
 
-function lastSessionId(run, stage) {
+/*
+ * `completedOnly` skips attempts that wrote no verdict. An attempt that was killed still
+ * leaves a log with a session in it, so the newest session is not always the one that knows
+ * anything: a cold attempt killed a minute in, and a third attempt resuming *it*, both point
+ * away from the attempt that actually did the compile. Resuming a truncated transcript
+ * inherits the truncation and pays for the reading again.
+ */
+function lastSessionId(run, stage, completedOnly = false) {
   for (let n = run.stages[stage].attempts ?? 0; n >= 1; n--) {
+    if (completedOnly && !existsSync(join(run.dir, 'stages', `${stage}.attempt-${n}.json`))) continue;
     const log = join(run.dir, 'stages', `${stage}.attempt-${n}.log`);
     if (!existsSync(log)) continue;
     const m = readFileSync(log, 'utf8').match(/"session_id"\s*:\s*"([0-9a-fA-F-]{36})"/);
