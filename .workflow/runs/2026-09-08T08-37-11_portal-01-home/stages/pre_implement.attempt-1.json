@@ -1,0 +1,82 @@
+{
+  "status": "blocked",
+  "stage": "pre_implement",
+  "spec": "specs/portal/01-home.md",
+  "handoff": ".workflow/runs/2026-09-08T08-37-11_portal-01-home/handoff.json",
+  "report": ".workflow/runs/2026-09-08T08-37-11_portal-01-home/stages/pre_implement.md",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "finding",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "n/a",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok",
+    "H-18": "ok",
+    "H-19": "ok",
+    "H-20": "ok"
+  },
+  "compiledNotes": {
+    "H-07": "Seven shipping surfaces are listed with the rule that governs each. The seventh — the `client-added` entry kind — is governed by nothing on the way out, which is finding P3.",
+    "H-13": "The bundle has no External Contracts section: every route in this spec is this repository's own, behind the session cookie, and the spec's rehearsal ran with no credential beyond a signed-up account.",
+    "H-14": "No double is planned, because no external contract is depended on.",
+    "H-15": "Three DS gaps recorded: the two in the spec's own table, plus a panel that is a control — `## Screens` requires each feed entry to be a `Card variant=\"panel\"` that is an `<a>` and hovers, and `Card` renders a `div`, has no `as` prop and hovers nothing by design (packages/ds/src/components/core/Card.tsx:33-38,52-77).",
+    "H-18": "Eleven rows, each a line of T7 or T8: what varies, what holds it, and what moves if it does not. No row's holder is a `min-width` or a `min-height`. Two notes recorded rather than raised — the `portal-month-total` row counts the mock's three figures where the contract answers two (N1), and the settings screen has no row (N6), its content being fixed copy and three switches with no box sized by data.",
+    "H-19": "Nothing on these screens is drawn outside its own flow. `## Screens` states the day separator is a block in the column's flow with its own top padding and never overlays an entry; the feed entry, the panels and the settings rows are all in flow; the only absolutely-positioned box any of them can open is a `Select` list, which the design system portals (§95) and which no ancestor's overflow counts. Recorded on T7.",
+    "H-20": "Each of the nine drawn messages names the single element that draws it — `portal-month-empty`, `portal-requests-empty`, `portal-holidays-no-country`, `portal-feed-empty` — and TC-01-E2E-07 counts four of them exactly once rather than asserting visibility. The empty month draws no figures beside its sentence, which is what keeps that message from being said twice."
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.md",
+      "symbol": "REQ-01-004",
+      "claim": "REQ-01-004 says every route in this spec answers a client contact 404; TC-01-INT-01 asserts the settings pair answers that same client contact 403. No implementation satisfies both, and the reason the contracts give for the 403 does not hold for a client principal.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "REQ-01-004: 'IF a client contact requests any route in this spec, THEN THE SYSTEM SHALL answer 404.' TC-01-INT-01: 'Sign in as a client contact of an organization and call all four routes' → 'GET /api/organizations/{orgId}/portal/settings → 403 TEMPLATE_MESSAGES.generic.forbidden'; the same split is in contracts §Routes and in README §Shared Rules. The contracts justify it with 'CapabilityGuard has already proven the caller is a member of this organization' — but OrgScopeGuard (apps/api/src/auth/org-scope.guard.ts:44-50) throws a bare NotFoundException for `request.principal?.kind === 'client'` on every /api/organizations/:orgId route whose handler or class does not carry @AllowClientPrincipal(), and it runs before CapabilityGuard in every controller's @UseGuards list. So one implementation registers the settings routes like every other organization route and answers the contact 404, satisfying REQ-01-004 and failing TC-01-INT-01; the other adds @AllowClientPrincipal() to the settings pair so CapabilityGuard is reached and answers 403, satisfying TC-01-INT-01, failing REQ-01-004, and contradicting contracts §Security's 'A client principal reaches nothing here.'"
+      },
+      "suggestedFix": "One sentence deciding it: either REQ-01-004 gains an exception naming the settings pair and contracts §Security is amended to say a contact reaches the guard there, or TC-01-INT-01's settings assertion becomes 404 and the README's Shared Rule is narrowed to 'a member of this organization who lacks the capability'."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/README.md",
+      "symbol": "REQ-01-018",
+      "claim": "REQ-01-018 falls back to Organization.countryCode for a member who states no country, and the README presents that chain as the one time-off already owns. PATCH-012 removed that fallback from the product and the code holds no such chain, so the portal would answer a different country than every other screen for the same member.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/README.md §Related Areas: 'specs/time-off/ — owns the country-resolution chain the holidays block uses: a country stated on the membership, falling back to Organization.countryCode. REQ-01-018 states that chain in full rather than pointing at it.' specs/patches/PATCH-012-a-member-states-their-own-country-or-none.md §The rule: 'THE SYSTEM SHALL resolve a member's holiday country from the country stated on their own membership, and from nothing else' and 'THE SYSTEM SHALL pay a member with no resolved country the global holidays only — the rows carrying no country — in the Holidays summary, in the time-off calendar, in the holiday list read as mine, and in Amounts Owed.' The code agrees with the patch: packages/validation/src/reports.ts:566-573 (`resolveMemberHolidayCountry` reads only `membershipCountry` and returns null when it is blank) and apps/api/src/holidays/holidays.service.ts:111-118 ('PATCH-012 — the caller's own stated country. A caller who states none sees the global rows only, rather than the ones the organization's country would have lent them'). Scenario: an organization with countryCode 'US' and a member whose membership states none, with one US holiday and one global holiday seeded. GET .../holidays?scope=mine answers the global holiday alone; GET .../portal/home under REQ-01-018 answers both, and TC-01-INT-07 asserts it must."
+      },
+      "suggestedFix": "Either drop the third link — REQ-01-018 resolves the membership's country and nothing else, REQ-01-019 becomes 'a member who states no country', TC-01-INT-07's second leg changes — or state deliberately, in this spec's own text, that the portal reinstates the organization fallback that PATCH-012 removed and why one screen may answer a different country than the calendar and the payroll report do. The README's Related Areas sentence is false either way and must go."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/portal/01-home.md",
+      "symbol": "REQ-01-038",
+      "claim": "`client-added` is a first-class entry kind that is derived, group-switched, role-filtered, asserted by an integration case and given a page — and no requirement says what that page carries, no document states the sentence the feed draws for it, and no mock state draws one.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "REQ-01-032 derives a `client-added` entry from every Client at createdAt; REQ-01-034's table marks it Drawn for admin and manager; REQ-01-036 puts it in the Work group; TC-01-INT-10 asserts 'admin and manager are answered four entries' and 'user and viewer are answered three — the same set minus the client-added entry'; REQ-01-038 says every entry the caller's feed would contain has a page answering 'the facts its kind carries'. The facts-per-kind requirements are REQ-01-042 (vacancy-opened), REQ-01-045 (member-joined, member-anniversary) and REQ-01-046/047 (project-started). There is no requirement for client-added. Contracts §Routes shows `facts` 'ordered by the server, so the page never decides what to draw first', which makes its contents a server decision the spec must make. Separately, the sentence: 01-home.mock.html's nine states contain member-joined ('Anna Petrova joined the team as a Frontend Engineer.'), vacancy-opened ('A vacancy is open: Senior React Developer.'), project-started ('Aurora started for Northwind Ltd.') and member-anniversary ('Ivan Demchenko has been with the team for 2 years.') and no client-added entry at all, and the contracts' GET .../portal/news example body carries none either. Concretely: an admin seeds a client named 'Northwind Ltd' and opens `client-added:{clientId}`. One implementation answers facts [Added, by whom] with the sentence 'Northwind Ltd was added as a client.'; another answers facts [Projects, Contacts] with 'A new client: Northwind Ltd.' Both satisfy every sentence in the bundle, TC-01-INT-10 passes under both, and no case distinguishes them — which means the copy and the page are decided by whoever implements them first."
+      },
+      "suggestedFix": "One requirement beside REQ-01-042/045/046 saying what a `client-added` entry page answers, and the entry's sentence written down where the other four are — either a mock state or a line in `## Screens`. If the kind is not meant to have a page, say so in Out of Scope and state what REQ-01-038 does with its id."
+    }
+  ]
+}

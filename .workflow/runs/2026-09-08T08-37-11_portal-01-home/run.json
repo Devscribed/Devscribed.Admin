@@ -1,0 +1,172 @@
+{
+  "runId": "2026-09-08T08-37-11_portal-01-home",
+  "spec": "specs/portal/01-home.md",
+  "specSha": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+  "task": "portal-01-home",
+  "branch": "spec/portal-home",
+  "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+  "headAtInit": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+  "status": "halted",
+  "track": "spec",
+  "shapes": {
+    "pre_implement": "strict",
+    "implement": "orchestrated",
+    "static_gate": "script",
+    "review": "lead-open",
+    "qa": "targeted"
+  },
+  "unrefined": {
+    "reason": "user asked to skip refine",
+    "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
+  },
+  "createdAt": "2026-09-08T08:37:11.158Z",
+  "updatedAt": "2026-09-08T08:50:59.232Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "blocked",
+      "attempts": 1,
+      "startedAt": "2026-09-08T08:37:11.327Z",
+      "endedAt": "2026-09-08T08:50:59.183Z",
+      "lastVerdict": "blocked"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {
+    "spec/contradiction@specs/portal/01-home.md#REQ-01-004": 1,
+    "spec/incomplete-decision@specs/portal/01-home.md#REQ-01-038": 1
+  },
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/README.md",
+      "symbol": "REQ-01-018",
+      "claim": "REQ-01-018 falls back to Organization.countryCode for a member who states no country, and the README presents that chain as the one time-off already owns. PATCH-012 removed that fallback from the product and the code holds no such chain, so the portal would answer a different country than every other screen for the same member.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/README.md §Related Areas: 'specs/time-off/ — owns the country-resolution chain the holidays block uses: a country stated on the membership, falling back to Organization.countryCode. REQ-01-018 states that chain in full rather than pointing at it.' specs/patches/PATCH-012-a-member-states-their-own-country-or-none.md §The rule: 'THE SYSTEM SHALL resolve a member's holiday country from the country stated on their own membership, and from nothing else' and 'THE SYSTEM SHALL pay a member with no resolved country the global holidays only — the rows carrying no country — in the Holidays summary, in the time-off calendar, in the holiday list read as mine, and in Amounts Owed.' The code agrees with the patch: packages/validation/src/reports.ts:566-573 (`resolveMemberHolidayCountry` reads only `membershipCountry` and returns null when it is blank) and apps/api/src/holidays/holidays.service.ts:111-118 ('PATCH-012 — the caller's own stated country. A caller who states none sees the global rows only, rather than the ones the organization's country would have lent them'). Scenario: an organization with countryCode 'US' and a member whose membership states none, with one US holiday and one global holiday seeded. GET .../holidays?scope=mine answers the global holiday alone; GET .../portal/home under REQ-01-018 answers both, and TC-01-INT-07 asserts it must."
+      },
+      "suggestedFix": "Either drop the third link — REQ-01-018 resolves the membership's country and nothing else, REQ-01-019 becomes 'a member who states no country', TC-01-INT-07's second leg changes — or state deliberately, in this spec's own text, that the portal reinstates the organization fallback that PATCH-012 removed and why one screen may answer a different country than the calendar and the payroll report do. The README's Related Areas sentence is false either way and must go.",
+      "demoted": "witness kind \"rule\" needs a source (file:line)"
+    }
+  ],
+  "halt": {
+    "reason": "spec-defect",
+    "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/incomplete-decision (specs/portal/01-home.md)",
+    "at": "2026-09-08T08:50:59.232Z"
+  },
+  "preflight": {
+    "at": "2026-09-08T08:37:11.282Z",
+    "checks": [
+      {
+        "name": "config-valid",
+        "ok": true,
+        "detail": ".claude/ai-workflow.config.json parses and every track resolves"
+      },
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/portal-home\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-available",
+        "ok": true,
+        "detail": "the suite would take 3000/4000"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "32 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260825130709_hiring_vacancies_candidates_applications",
+      "20260826094500_application_cv_size",
+      "20260826121829_add_invitations_and_job_title",
+      "20260826150000_hiring_categories",
+      "20260826170000_hiring_criteria",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_manage_booking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260828170000_application_cv",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_candidate_soft_delete",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants",
+      "20260904120000_time_off_01_vacation_calendar",
+      "20260907120000_time_off_02_holiday_sourcing"
+    ]
+  }
+}

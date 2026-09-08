@@ -1,0 +1,606 @@
+{
+  "spec": {
+    "path": "specs/portal/01-home.md",
+    "sha256": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+    "bundle": {
+      "specs/portal/01-home.contracts.md": "6fff0c94433241626b60f8861820d5b21471d2e7e117cf95d9f0f091c2d582c6",
+      "specs/portal/01-home.cases.md": "62e9d8a381cb4d332c578602678034372b1d9256580b88e797ec095a4ec74bb8",
+      "specs/portal/01-home.mock.html": "e75936e034a5a7d801da8984db8c4dd485ed189032d757e3d3f96c0632162779"
+    },
+    "dependsOn": []
+  },
+  "summary": "A portal area: one new API route group (/portal) answering the caller's own month, reserve, holidays and open requests on one side, and a read-time projection over Membership, Vacancy, Project and Client as an organization news feed on the other; a page of its own for every feed entry; and three per-organization group switches an admin owns. Nothing writes a feed row — every entry is derived from a source row that already exists and is addressed `{kind}:{sourceId}`, computed per read and never stored. One additive migration adds `OrganizationPortalSettings` (absent reads as all three groups enabled, so no backfill). On the web side: a new screen at /org/{orgId}, an entry page at /org/{orgId}/news/{entryId}, a settings screen at /org/{orgId}/settings/portal, a `Team overview` row at the top of the rail, and a move of the post-sign-in destination from the members list to the portal — which is the one wide edit, 33 `waitForURL('**/members')` waits across 28 e2e files plus `signIn` in e2e/tests/helpers.ts. One new test-support fixture, POST /api/test/membership/backdate-joined, because no product route can move a membership's joinedAt and an anniversary needs one. THIS PLAN IS BLOCKED on three spec findings (P1, P2, P3) recorded in pre_implement.verdict.json; the tasks below are what would be executed once those are settled, and the two tasks touching them (T3 holidays, T4 client-added) are named in `risks`.",
+
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Shared vocabulary: two capabilities, PORTAL_MESSAGES, the entry-id and cursor codecs, anniversary dates, settings and paging validation",
+      "files": [
+        "packages/validation/src/portal.ts",
+        "packages/validation/src/portal.test.ts",
+        "packages/validation/src/roles.ts",
+        "packages/validation/src/roles.test.ts",
+        "packages/validation/src/index.ts"
+      ],
+      "requirements": [
+        "REQ-01-004",
+        "REQ-01-013",
+        "REQ-01-023",
+        "REQ-01-025",
+        "REQ-01-029",
+        "REQ-01-048",
+        "REQ-01-050"
+      ],
+      "dependsOn": [],
+      "detail": [
+        "Add `ViewPortalHome` and `ManagePortalSettings` to the `Capability` union in packages/validation/src/roles.ts and to every one of the four `ROLE_CAPABILITIES` rows. `ViewPortalHome` goes in admin, manager, user and viewer; `ManagePortalSettings` in admin alone (Roles & Permission Matrix). The map is `Record<NormalizedRole, readonly Capability[]>` typed against the union, so the compiler forces all four rows to be revisited — do not add a fifth key and do not add these to `MemberCapability`/`CAPABILITY_MATRIX`: nothing in this spec calls `can(role, ...)` for them.",
+        "Every check runs through `normalizeRole()` — `hasCapability(role, 'ViewPortalHome')` already does, so a stored legacy `member` normalizes to `user` and holds it (TC-01-INT-02, TC-01-UNIT-06). A client principal holds no role and must never reach a role-keyed helper (`capabilitiesForPrincipal`, roles.ts) — the API refusal is the guard's, not this table's.",
+        "New file packages/validation/src/portal.ts exporting `PORTAL_MESSAGES` with exactly the ten strings from contracts §Error Messages, verbatim: noProject '(No project)', limitInvalid 'Ask for between 1 and 50 entries.', cursorInvalid 'That page marker is not one this feed issued.', groupsInvalid 'Say true or false for People, Hiring and Work.', feedEmptyTitle 'Nothing has happened yet', feedEmptyBody 'When somebody joins, a vacancy opens or a project starts, it shows up here.', monthEmpty 'No time tracked yet this month.', requestsEmpty 'Nothing is waiting on you, and you have asked for nothing.', noCountry 'Nobody has stated your country, so no holiday calendar reaches you.'",
+        "`composeEntryId(kind, sourceId, years?)` / `parseEntryId(id)`: `{kind}:{sourceId}`, and `member-anniversary:{membershipId}:{years}` where `{years}` is the anniversary COUNT (contracts example `member-anniversary:43b4ff02-…:2` beside `detail.years: 2`), not a calendar year. `parseEntryId` returns null and never throws for '', 'member-joined', 'nope:abc', 'member-anniversary:abc', 'member-anniversary:abc:zero' (TC-01-UNIT-01).",
+        "`composeCursor(instant, entryId)` / `parseCursor(s)`: `{ISO-8601}|{entryId}`, both halves parseable, null on any malformation (contracts §Validation Rules row 2; TC-01-UNIT-02).",
+        "`anniversaryDate(joinedAt, years)`: a 29 February joining resolves to 1 March in a non-leap year and to 29 February in a leap one — the first day on or after the nominal date (Edge case 4); the lowest year produced is 1, never 0 (REQ-01-029, TC-01-UNIT-05).",
+        "`validatePortalGroups(body)`: all three of `people`, `hiring`, `work` required and strictly boolean — a missing key, a string 'false' and an empty object are each `PORTAL_MESSAGES.groupsInvalid` (TC-01-UNIT-03). `validateFeedLimit(v)`: integer 1–50, `undefined` defaults to 20, `0`/`51`/`'20'` carry `PORTAL_MESSAGES.limitInvalid` (TC-01-UNIT-04).",
+        "Export everything added from packages/validation/src/index.ts — the API and the web app both read it from the package root."
+      ],
+      "allCallSites": [
+        "packages/validation/src/roles.ts#ROLE_CAPABILITIES (all four rows)",
+        "apps/api/src/auth/capability.guard.ts#canActivate (reads the Capability union through hasCapability)",
+        "apps/web/src/layout/Sidebar.tsx#navigation (reads hasCapability for rail rows)"
+      ],
+      "concurrency": { "rows": [], "lock": "none — this task writes no row", "reread": [] }
+    },
+
+    {
+      "id": "T2",
+      "title": "The migration: OrganizationPortalSettings, one additive table",
+      "files": [
+        "apps/api/prisma/schema.prisma",
+        "apps/api/prisma/migrations/20260908120000_portal_01_home/migration.sql"
+      ],
+      "requirements": ["REQ-01-048", "REQ-01-049"],
+      "dependsOn": [],
+      "detail": [
+        "One model exactly as contracts §Data Model states: `id String @id @default(uuid())`, `organizationId String @unique` FK to Organization with `onDelete: Cascade`, `peopleEnabled/hiringEnabled/workEnabled Boolean @default(true)`, `updatedAt DateTime @updatedAt`. Add the back-relation field on `Organization` (the model already carries `holidaySourcing OrganizationHolidaySourcing?`, which is the shape to copy).",
+        "No column is added to any existing table, nothing is renamed or dropped, and no existing column becomes NOT NULL. The migration writes no rows: an organization with no row reads all three groups enabled (REQ-01-049), which is why signup is not amended and no backfill exists.",
+        "Run `prisma generate` from apps/api, never from the repository root."
+      ],
+      "migration": {
+        "additive": true,
+        "note": "One new table, no change to any existing one. infra/deploy.sh:27 states 'Migrations run BEFORE the rollout' and gives the reason: additive migrations make old-code-against-new-schema safe, which is why a rollback needs no database rollback, but say nothing about new code against an old schema — so the migration runs as a one-off task on the new image before the Terraform rollout of the services."
+      },
+      "allCallSites": [],
+      "concurrency": {
+        "rows": ["OrganizationPortalSettings"],
+        "lock": "none at migration time — the table is created empty",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T3",
+      "title": "API: the /portal route group and the personal half",
+      "files": [
+        "apps/api/src/portal/portal.module.ts",
+        "apps/api/src/portal/portal.controller.ts",
+        "apps/api/src/portal/portal-home.service.ts",
+        "apps/api/src/portal/portal.types.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "requirements": [
+        "REQ-01-004",
+        "REQ-01-010",
+        "REQ-01-011",
+        "REQ-01-012",
+        "REQ-01-013",
+        "REQ-01-014",
+        "REQ-01-015",
+        "REQ-01-016",
+        "REQ-01-017",
+        "REQ-01-018",
+        "REQ-01-019",
+        "REQ-01-020",
+        "REQ-01-021",
+        "REQ-01-053"
+      ],
+      "dependsOn": ["T1"],
+      "detail": [
+        "A module of its own, registered in app.module.ts. One controller at `@Controller('api/organizations/:orgId')` carrying all five portal routes and delegating to the three services (T3 home, T4 feed/entry, T5 settings). Guard stack per contracts §Routes: `@UseGuards(SessionGuard, OrgScopeGuard)` on the class; the three read routes check `hasCapability(role, 'ViewPortalHome')` in the service and throw NotFound when it is false; the settings pair additionally carries `CapabilityGuard` + `@RequireCapability('ManagePortalSettings')`.",
+        "Do NOT add `@AllowClientPrincipal()` anywhere in this controller. OrgScopeGuard (apps/api/src/auth/org-scope.guard.ts:44) already answers a client principal a bare 404 on every :orgId route that does not opt in, which is REQ-01-004 for four of the five routes and — see finding P1 — is what the settings pair will do too until P1 is settled.",
+        "Every query scopes by `session.organizationId`. The path `orgId` is proven equal by OrgScopeGuard and then never used as a selector (contracts §Security).",
+        "REQ-01-010: the month is the calendar month containing the caller's own today, resolved in `Account.timezone` (Account.timezone is nullable — schema.prisma:37) falling back to 'UTC'. Answer `month.today`, `startDate`, `endDate` and `timezone` so TC-01-INT-03 can compare two callers in one organization.",
+        "REQ-01-011/012/013/014: sum `TimeEntry.durationMinutes` for `membershipId = caller` and `date` in the month (TimeEntry.date is `@db.Date`, indexed `[membershipId, date]`). `byProject` is one row per project, ordered by minutes descending then project name; a null `projectId` becomes one row with `projectId: null` and `projectName: PORTAL_MESSAGES.noProject`. `daysWithEntry` is the count of distinct `date` values. Do not call ReportsService — that projection is shaped for the report screen and its column contract belongs to another spec.",
+        "REQ-01-015/016/053: the reserve block is days only — availableDays, usedDays, pendingDays, totalDaysPerYear — and `timeOff` is `null` in full when the membership has no `MemberFinancials` row. No monetary field is in the DTO type at all: `reserveBalance`, `monthlySalary` and `clientHourlyRate` are not conditionally omitted, they are not part of the contract (TC-01-INT-04 scans the serialised body for all three).",
+        "REQ-01-017/018/019: the next three `Holiday` rows on or after the caller's own today, ascending. Reachability is REQ-01-018's chain as written in this spec — countryCode null, OR equal to `Membership.countryCode`, OR (where the membership states none) equal to `Organization.countryCode` — and `timeOff.countryCode` is the resolved country or null. SEE FINDING P2: this chain is not the one the rest of the product uses. Do not call HolidaysService `scope=mine` and do not reuse `resolveMemberHolidayCountry` (packages/validation/src/reports.ts:566): PATCH-012 removed the organization fallback from both, so either would answer a different set than REQ-01-018 asks for.",
+        "REQ-01-020/021: at most three open `Request` rows where the caller is requester or assignee, ordered overdue first, then `neededBy` ascending nulls last, then `lastActivityAt` descending; `openTotal` is the count under the same filter. `overdue` is derived per the reading account's timezone and is never stored (schema.prisma Request.neededBy). Answer `counterpartName`, `direction` ('raised' | 'assigned'), `neededBy`, `overdue`, `waitingOnMe` as the contract's body shows. Reuse the requests serializer's own definitions of open and waiting-on-me rather than inventing a second one (apps/api/src/requests/requests.service.ts#listRequests).",
+        "`canManageSettings` on the home body is `hasCapability(role, 'ManagePortalSettings')` — it is what the screen gates the settings control on (REQ-01-052), so the web app never needs a second request to find out."
+      ],
+      "allCallSites": [
+        "apps/api/src/portal/portal.controller.ts — the only caller of PortalHomeService",
+        "apps/api/src/app.module.ts#imports — the only registration"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — every route in T3 is a read and REQ-01-054 forbids writing on a read",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T4",
+      "title": "API: the feed projection, its visibility rules, and the entry page",
+      "files": [
+        "apps/api/src/portal/portal-feed.service.ts",
+        "apps/api/src/portal/portal-entry.service.ts",
+        "apps/api/src/portal/portal-visibility.ts"
+      ],
+      "requirements": [
+        "REQ-01-022",
+        "REQ-01-023",
+        "REQ-01-024",
+        "REQ-01-025",
+        "REQ-01-026",
+        "REQ-01-027",
+        "REQ-01-028",
+        "REQ-01-029",
+        "REQ-01-030",
+        "REQ-01-031",
+        "REQ-01-032",
+        "REQ-01-033",
+        "REQ-01-034",
+        "REQ-01-035",
+        "REQ-01-036",
+        "REQ-01-038",
+        "REQ-01-039",
+        "REQ-01-040",
+        "REQ-01-041",
+        "REQ-01-042",
+        "REQ-01-043",
+        "REQ-01-044",
+        "REQ-01-045",
+        "REQ-01-046",
+        "REQ-01-047",
+        "REQ-01-054",
+        "REQ-01-055",
+        "REQ-01-056"
+      ],
+      "dependsOn": ["T1", "T3"],
+      "detail": [
+        "The feed is a read-time projection over four source tables and writes nothing, ever — no row on derivation, no row on read (REQ-01-022, REQ-01-054; TC-01-INT-02 counts rows in every source table before and after ten reads).",
+        "Kinds and their sources: `member-joined` from every `Membership` whose `status` is 'active' at `joinedAt` (a `removed` membership derives nothing, REQ-01-028); `member-anniversary` for every whole year Y >= 1 since an active membership's `joinedAt` whose anniversary date falls in the window; `vacancy-opened` from every `Vacancy` at `createdAt` whatever its `status`; `project-started` from every `Project` at `createdAt` whatever its `status`; `client-added` from every `Client` at `createdAt` whatever its `status`. Nothing is ever derived from Candidate, Application, ApplicationScheduleEvent, ApplicationCriterion or ApplicationCv (REQ-01-033 — a prohibition, so no join to those tables exists in this file).",
+        "Window: source moments in the 365 days ending at the caller's own today, inclusive at both ends — a membership joined exactly 365 days ago is inside (Edge case 3), 364 days is inside and 366 is outside (TC-01-INT-12), and a 366-day membership's first anniversary still falls inside and is drawn.",
+        "Order: moment descending, ties broken by entry id ascending. Paging: `cursor` = `{ISO}|{entryId}` (T1's codec) and the answer is the entries strictly after it in that order, at most `limit`, with `nextCursor` present only when more remain. `limit` and `cursor` are re-validated server-side and answer 422 with `PORTAL_MESSAGES.limitInvalid` / `cursorInvalid`.",
+        "Groups: people = {member-joined, member-anniversary}, hiring = {vacancy-opened}, work = {project-started, client-added}. A group switched off for the organization derives no entry of its kinds (REQ-01-036); the answer says nothing about a group being off (REQ-01-037) — there is no `disabledGroups` key on the body.",
+        "Visibility (REQ-01-034's decision table, all 20 rows): every kind is drawn for every reader except `client-added`, which is withheld from `user` and `viewer`. Decide it on `normalizeRole(Membership.role)`, so a legacy `member` row is judged as `user`.",
+        "REQ-01-035/055: `detail.clientName` on a `project-started` entry is the client's name where the reader holds `ViewClients` or is a `ProjectMember` of that project, and is `null` — present, not absent — otherwise, so a project with no client and a project whose client is withheld are indistinguishable in the body (TC-01-INT-15).",
+        "The entry route resolves the id, loads the source row, and only then decides visibility — there is no branch that answers before the load, so a malformed id, an unknown kind, a vanished row and a row this caller's feed would not contain are byte-identical 404s (REQ-01-040, REQ-01-041, contracts §Security; TC-01-INT-16 asserts identical bodies).",
+        "Entry bodies: `facts` is ordered by the server so the page never decides what to draw first. `vacancy-opened` carries title, `body` = description, categories, interview length and interviewer name, and `shareUrl` = the public booking URL while `Vacancy.status` is 'open', `null` once it is 'closed' (REQ-01-042/043/044; TC-01-INT-17 asserts the two bodies are otherwise identical). `member-joined`/`member-anniversary` carry display name, job title, joinedAt and the active projects the reader may already see them on — for admin/manager every active project the subject is on, for a `user` the intersection with their own ProjectMember rows, for a `viewer` none (apps/api/src/projects/projects.service.ts:155-183 is the shipped shape of 'projects this reader may see') — plus `link` to `/org/{orgId}/members/{id}`, which every staff role may open (REQ-01-045). `project-started` carries the project name, its createdAt, the client under REQ-01-035's condition, and the roster only where the reader holds `ManageProjects` or is a `ProjectMember`, omitted entirely otherwise with `link: null` (REQ-01-046/047/056). An archived project keeps its entry and its page draws `Archived` beside the name (Edge case 7).",
+        "The entry body carries the same `subject` and `detail` the feed entry carried, alongside `facts`/`body`/`categories`/`shareUrl`/`link`, so REQ-01-039's 'the same sentence the feed drew' is composed once from one pair of fields rather than twice from two different shapes (see note N4).",
+        "SEE FINDING P3: no requirement says what a `client-added` entry page carries and no document states the sentence the feed draws for one. Do not invent either — the kind is derived and filtered here (REQ-01-032/034 are plannable), but its page and its copy wait on P3."
+      ],
+      "allCallSites": [
+        "apps/api/src/portal/portal.controller.ts#news — GET /api/organizations/:orgId/portal/news",
+        "apps/api/src/portal/portal.controller.ts#entry — GET /api/organizations/:orgId/portal/news/:entryId"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — REQ-01-054 makes both routes pure reads, and an entry has no row to lock",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T5",
+      "title": "API: the three group switches, and the backdate-joined fixture",
+      "files": [
+        "apps/api/src/portal/portal-settings.service.ts",
+        "apps/api/src/test/test-fixtures.controller.ts"
+      ],
+      "requirements": ["REQ-01-048", "REQ-01-049", "REQ-01-050", "REQ-01-051"],
+      "dependsOn": ["T1", "T2", "T3"],
+      "detail": [
+        "GET/PUT `.../portal/settings` both answer `{ groups: { people, hiring, work } }`. Absence of the row reads as all three true (REQ-01-049) and the GET writes nothing to create one.",
+        "PUT takes all three booleans — a partial body is 422 `PORTAL_MESSAGES.groupsInvalid`, re-validated server-side through T1's validator — and creates the row in the same transaction as the write when none exists (REQ-01-051). A single-row upsert keyed by the unique `organizationId`; last write wins, which is Edge case 18's decision written down.",
+        "The capability refusal is `CapabilityGuard`'s 403 `TEMPLATE_MESSAGES.generic.forbidden` (REQ-01-050) — the guard already emits exactly that shape (apps/api/src/auth/capability.guard.ts:60), so no message is written here.",
+        "POST /api/test/membership/backdate-joined, in the existing test-fixtures controller, beside `financials/backdate`: body `{ email, joinedAt }`, sets `Membership.joinedAt` for that account's active membership, `204`. Fenced by `assertFixturesOpen(authorization)` exactly as every other route in that file is — `this.guard(authorization)` is the file's own wrapper (test-fixtures.controller.ts:35) — so it is 404 in production without the token. It reaches no product code path. `Membership.accountId` is `@unique` (schema.prisma:241), so 'the active membership of that account' is a single row and `findUnique({ where: { accountId } })` resolves it."
+      ],
+      "allCallSites": [
+        "apps/api/src/portal/portal.controller.ts#getSettings, #putSettings",
+        "e2e/tests/helpers.ts — the only caller of the fixture route"
+      ],
+      "concurrency": {
+        "rows": ["OrganizationPortalSettings", "Membership (the fixture only)"],
+        "lock": "single-row upsert on the `organizationId` unique index — no `SELECT … FOR UPDATE`. The row is one per organization, edited only by whoever administers it, and Edge case 18 settles the race as last-write-wins: the whole record is replaced, so a lost update is one switch re-flicked and never a half-written row. The fixture's write is a direct update outside the product's paths and takes no lock.",
+        "reread": []
+      }
+    },
+
+    {
+      "id": "T6",
+      "title": "Integration cases for the portal API",
+      "files": [
+        "apps/api/test/portal.spec.ts",
+        "apps/api/test/portal-feed.spec.ts",
+        "apps/api/test/portal-settings.spec.ts"
+      ],
+      "requirements": [
+        "REQ-01-002",
+        "REQ-01-004",
+        "REQ-01-010",
+        "REQ-01-016",
+        "REQ-01-017",
+        "REQ-01-021",
+        "REQ-01-026",
+        "REQ-01-034",
+        "REQ-01-041",
+        "REQ-01-051",
+        "REQ-01-056"
+      ],
+      "dependsOn": ["T3", "T4", "T5"],
+      "detail": [
+        "TC-01-INT-01..08 in portal.spec.ts (the landing refusal and the personal half), TC-01-INT-09..12 and 14..18 in portal-feed.spec.ts, TC-01-INT-13 in portal-settings.spec.ts. Each test's name carries its TC id.",
+        "Selectors are irrelevant here; assert status codes, message text read from `PORTAL_MESSAGES`/`TEMPLATE_MESSAGES` rather than retyped, and the body scans the cases ask for: TC-01-INT-04 scans the serialised home body for 'reserveBalance', 'monthlySalary' and 'clientHourlyRate'; TC-01-INT-14 scans the feed body for the candidate's email and name.",
+        "Jest here is 29 — the file filter is a positional path. Run `npm test -- test/portal.spec.ts` from apps/api; `--testPathPatterns` is the Jest 30 spelling and this version ignores it silently while running everything.",
+        "TC-01-INT-01's settings assertion is what finding P1 is about: as written it expects a client contact to be answered 403 by the settings pair, and OrgScopeGuard answers them 404 before CapabilityGuard runs. Do not weaken the case to make it pass and do not add `@AllowClientPrincipal()` to reach it — the run halts on P1 instead."
+      ],
+      "allCallSites": [],
+      "concurrency": { "rows": [], "lock": "none — tests", "reread": [] }
+    },
+
+    {
+      "id": "T7",
+      "title": "Web: the home screen at /org/{orgId}",
+      "files": [
+        "apps/web/app/org/[orgId]/page.tsx",
+        "apps/web/src/portal/PortalHome.tsx",
+        "apps/web/src/portal/PersonalHalf.tsx",
+        "apps/web/src/portal/Feed.tsx",
+        "apps/web/src/portal/entry-sentence.tsx",
+        "apps/web/src/portal/types.ts"
+      ],
+      "requirements": ["REQ-01-036", "REQ-01-037", "REQ-01-052"],
+      "dependsOn": ["T1"],
+      "detail": [
+        "There is no `apps/web/app/org/[orgId]/page.tsx` today — the route REQ-01-001 lands on does not exist and this task creates it. `'use client'`, no server action and no API route; fetch `/api/organizations/{orgId}/portal/...` with `credentials: 'same-origin'` (next.config.mjs rewrites to the API origin).",
+        "Two independent questions, two requests, two waits: Q1 (the personal half) and Q2 (the feed) are fetched separately and neither wait holds the other. Q1 failing replaces the three left panels with one `InfoBanner` and leaves the feed standing; Q2 failing shows an `InfoBanner` in the feed column alone. Every request has a failure path and every in-flight flag is cleared in `finally`.",
+        "Layout from contracts §Screens: above the `lg` rung a grid of `minmax(0, 1fr)` and a fixed 400px feed column; below it they stack with the personal half first. Each panel is `Card variant='panel'`. Each feed entry is its own panel inside an `<a>` to `/org/{orgId}/news/{entryId}`.",
+        "States, exactly as the table lists them: Q1 loading paints the panel headings and the column frame with `Preloader` blocks and never a previous answer; an empty month draws `PORTAL_MESSAGES.monthEmpty` and the timer control and draws NO figures (`portal-month-total` is absent, TC-01-E2E-03); a membership with no financials drops `portal-timeoff-panel` in full; no country replaces the holiday list with `PORTAL_MESSAGES.noCountry` and a link to the profile while the figures stand; no requests draws `PORTAL_MESSAGES.requestsEmpty`; Q2 loading draws three `Preloader` entries as `div`s, not anchors; an empty feed draws `EmptyState` with feedEmptyTitle/feedEmptyBody and the invite control for a caller who may invite; `portal-feed-more` appends and never replaces what is drawn.",
+        "REQ-01-037: nothing on this screen names a group as switched off. There is no copy, no tooltip and no empty-state variant that distinguishes 'off' from 'nothing happened' (TC-01-E2E-07 asserts no text on the page names Hiring or Work).",
+        "REQ-01-052: `portal-feed-settings-link` is drawn only when the home body's `canManageSettings` is true. The feed heading row is `justify-content: space-between` with the heading first, so the heading's left edge does not move when the control is absent (Geometry & motion; TC-01-E2E-06 measures it).",
+        "Geometry & motion is normative and each row is a line of this task: `portal-month-total` sits first in a flex band with a fixed `--space-10` gap and `tabular-nums` and grows rightwards into the band's slack; `portal-month-project-row` is a `minmax(0,1fr)` name with ellipsis and nowrap beside an `auto` minutes column; `portal-holiday-row` is a fixed 74px date, a `minmax(0,1fr)` ellipsised name and an `auto` trailing text, never wrapping; `portal-request-row` puts the title FIRST at `minmax(0,1fr)` with the due text and badge `auto` and last, so no row's title starts at a different x; each feed entry is a two-column grid, `auto` mark and `minmax(0,1fr)` body that wraps and grows downwards. No box gets a size its own content decides, and no `min-width`/`min-height` is used to hold one.",
+        "The day separator ('Today', 'Earlier this week') is a block in the column's flow with its own top padding — it never overlays an entry and nothing here is drawn outside its own flow, so no ancestor's overflow gains anything (the one absolute/portalled box on this screen is `Select`'s list, which is a portal already).",
+        "`entry-sentence.tsx` composes an entry's sentence from `kind` + `subject` + `detail` and is the ONE place it is written, used by the feed and by the entry page (T8), so REQ-01-039's 'the same sentence' has one source. The strings are the mock's, verbatim: '{name} joined the team as a {jobTitle}.', 'A vacancy is open: {title}.', '{project} started for {client}.' (and '{project} started.' where `clientName` is null), '{name} has been with the team for {years} years.'. No sentence for `client-added` is written until P3 settles.",
+        "No hardcoded colour or size: tokens only (`var(--space-3)`, `var(--font-size-s)`, `var(--text-secondary)`), imports from `@devscribed/ds` at the package root only.",
+        "Every testid from contracts §Required data-testid: portal-greeting, portal-month-total, portal-month-days, portal-month-project-row, portal-month-empty, portal-timeoff-available, portal-timeoff-panel, portal-holiday-row, portal-holidays-no-country, portal-request-row, portal-requests-empty, portal-feed-entry, portal-feed-empty, portal-feed-more, portal-feed-settings-link."
+      ],
+      "allCallSites": [],
+      "concurrency": { "rows": [], "lock": "none — the screen reads", "reread": [] }
+    },
+
+    {
+      "id": "T8",
+      "title": "Web: the entry page and the portal settings screen",
+      "files": [
+        "apps/web/app/org/[orgId]/news/[entryId]/page.tsx",
+        "apps/web/app/org/[orgId]/settings/portal/page.tsx"
+      ],
+      "requirements": ["REQ-01-038", "REQ-01-039", "REQ-01-052"],
+      "dependsOn": ["T7"],
+      "detail": [
+        "The entry page is headed by the sentence T7's `entry-sentence.tsx` composes, from the same `subject`/`detail` pair the feed carried (REQ-01-039). Under it: the timestamp, the server-ordered `facts` as a definition list, `categories` as `Badge` `neutral`, `body` as prose on a vacancy entry only, and `portal-entry-share` while `shareUrl` is non-null. `portal-entry-back` is painted immediately, before any answer, because it needs none. A 404 from the route renders the app's own not-found screen — there is no 'this entry is not for you' state (REQ-01-040).",
+        "Geometry: the reading column is capped at 720px and the title wraps inside it; the share URL is a `flex: 1; min-width: 0` code box with ellipsis beside an `auto` copy button, so a long slug never pushes the button off the panel. The copy control follows the shipped one at apps/web/app/org/[orgId]/hiring/vacancies/page.tsx:216 — a refused clipboard says so rather than failing silently.",
+        "The settings screen draws the three group switches (`Switch` from @devscribed/ds) with the mock's labels and descriptions and a save button. The submit button is never disabled for validation: the screen owns three booleans and always has a valid body. Testids: portal-settings-group-people, portal-settings-group-hiring, portal-settings-group-work, portal-settings-save; plus portal-entry-title, portal-entry-back, portal-entry-body, portal-entry-share, portal-entry-fact on the entry page.",
+        "The mock's settings state draws no save control while contracts and TC-01-E2E-09 both require `portal-settings-save`; build the save button — the contract and the case agree and the mock is the odd one out (note N5)."
+      ],
+      "allCallSites": [],
+      "concurrency": { "rows": [], "lock": "none — the PUT's lock is T5's", "reread": [] }
+    },
+
+    {
+      "id": "T9",
+      "title": "The landing moves, and the rail gains its first row",
+      "files": [
+        "apps/web/app/login/LoginForm.tsx",
+        "apps/web/src/layout/Sidebar.tsx",
+        "e2e/tests/helpers.ts",
+        "e2e/tests/authentication.spec.ts",
+        "e2e/tests/app-shell.spec.ts",
+        "e2e/tests/*.spec.ts"
+      ],
+      "requirements": ["REQ-01-001", "REQ-01-002", "REQ-01-003"],
+      "dependsOn": [],
+      "detail": [
+        "LoginForm.tsx: `landingFor()` returns 'members' today (line 76). A staff principal now lands on `/org/{orgId}` — i.e. `destination()` returns the bare organization path — and a client contact keeps 'requests' (REQ-01-002 is unchanged behaviour, so the client branch is left exactly as it is). The `?next` rule is untouched: it is honoured only when it starts with `/org/{organizationId}/`, which is what makes TC-01-E2E-01's `next=/org/{orgId}/members` still arrive at the members list.",
+        "Sidebar.tsx: a `Team overview` row of `type: 'link'` at the TOP of `items`, href `/org/{orgId}`, testId `nav-portal`, for every staff principal and with no capability gate — `ViewPortalHome` is held by all four normalized roles, so there is no role for which this row is a dead link. The client-principal branch returns before it (Sidebar.tsx:83) and keeps its group of one, so `nav-portal` is absent for a contact. The file's own comment naming `Team overview` as a design-system row no route serves is now false and is updated with the change.",
+        "e2e/tests/helpers.ts:157 `await page.waitForURL('**/members')` in `signIn` becomes the portal path. There are 33 such waits across 28 files — `grep -rn \"\\*\\*/members\" e2e/tests` is the whole list. Every one is a wait for the shell to settle and moves; a test that genuinely means to be on the members list navigates there instead.",
+        "authentication.spec.ts asserts the landing as behaviour rather than as scaffolding (lines 23 and 86). Those assertions are amended, not deleted: the login spec keeps a case saying where sign-in lands and the destination in it changes.",
+        "app-shell.spec.ts asserts the rail's contents. The new row is additive — no existing row leaves the rail — but any assertion about which row is first is amended.",
+        "Out of scope for this task, deliberately, because no requirement asks for it and each is a shipping path this change makes newly answerable: signup's `router.push('/org/{id}/members')` (SignupForm.tsx:101), the accept-invite landing, the sidebar's `logoHref` (Sidebar.tsx:290) and the four unauthorized-visitor `router.replace('.../members')` redirects. They keep pointing at the members list. See note N3."
+      ],
+      "allCallSites": [
+        "apps/web/app/login/LoginForm.tsx#landingFor — the only place the post-sign-in destination is decided",
+        "apps/web/src/layout/Sidebar.tsx#navigation — the only place the rail is built",
+        "e2e/tests/helpers.ts#signIn — the shared wait, plus 32 further waits across 27 spec files"
+      ],
+      "concurrency": { "rows": [], "lock": "none", "reread": [] }
+    },
+
+    {
+      "id": "T10",
+      "title": "E2E cases, and the two measurements they need",
+      "files": ["e2e/tests/portal.spec.ts", "e2e/tests/ui-invariants.ts"],
+      "requirements": [
+        "REQ-01-001",
+        "REQ-01-003",
+        "REQ-01-012",
+        "REQ-01-016",
+        "REQ-01-017",
+        "REQ-01-019",
+        "REQ-01-020",
+        "REQ-01-025",
+        "REQ-01-036",
+        "REQ-01-037",
+        "REQ-01-039",
+        "REQ-01-042",
+        "REQ-01-043",
+        "REQ-01-052"
+      ],
+      "dependsOn": ["T7", "T8", "T9"],
+      "detail": [
+        "TC-01-E2E-01..09 in one file, each test named with its TC id. Selectors are `data-testid` only, from contracts §Required data-testid — the single exception in this repository is a navigation control reached by its accessible name, and `nav-portal` is given a testid by the contract so it is asserted by id.",
+        "TC-01-E2E-07 asserts each of monthEmpty, requestsEmpty, noCountry and feedEmptyBody is matched EXACTLY ONCE on the page — use `expectMessageOnce` from e2e/tests/ui-invariants.ts (a testid proves presence, never uniqueness), and `expectMessageAbsent` for 'Hiring' and 'Work'.",
+        "TC-01-E2E-08 needs two measurements ui-invariants.ts does not have today: 'every row's first column starts at the same x' and 'these cells share a right edge'. Add them there as named probes rather than inlining bounding-box arithmetic in the spec file, and assert `scrollWidth <= clientWidth` on the page. See note N2 — the case says it uses the probes in that file and two of the three do not exist yet.",
+        "TC-01-E2E-09 drives the settings screen and returns to the portal; `portal-feed-entry`'s count drops by exactly one and no entry names the project.",
+        "Run targeted, never whole, and on this run's own ports: `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/portal.spec.ts tests/regressions.spec.ts` from e2e/. Never free a busy port by killing what holds it — under CI the suite claims its own pair and writes the choice to e2e/.last-ports.json."
+      ],
+      "allCallSites": [],
+      "concurrency": { "rows": [], "lock": "none — tests", "reread": [] }
+    }
+  ],
+
+  "reuse": [
+    { "what": "org scoping, and 404 rather than 403 for a URL that disagrees with the session", "where": "apps/api/src/auth/org-scope.guard.ts" },
+    { "what": "a client principal is answered a bare 404 on every :orgId route that does not carry @AllowClientPrincipal() — REQ-01-004 needs no new code for the three read routes", "where": "apps/api/src/auth/org-scope.guard.ts:44-50, apps/api/src/auth/allow-client-principal.decorator.ts" },
+    { "what": "403 TEMPLATE_MESSAGES.generic.forbidden for a member of the organization who lacks a capability", "where": "apps/api/src/auth/capability.guard.ts:60-65, apps/api/src/auth/require-capability.decorator.ts" },
+    { "what": "role normalization — the legacy `member` column value reads as `user`, an unknown value as `viewer`", "where": "packages/validation/src/roles.ts#normalizeRole, #hasCapability" },
+    { "what": "the capability union is typed against Record<NormalizedRole, readonly Capability[]>, so a new member forces every role's list to be revisited at compile time", "where": "packages/validation/src/roles.ts#ROLE_CAPABILITIES" },
+    { "what": "the test-fixture fence — three gates, and 404 rather than 401 so an invisible route stays invisible", "where": "apps/api/src/test-support/fixture-gate.ts#assertFixturesOpen, apps/api/src/test/test-fixtures.controller.ts:35" },
+    { "what": "the existing backdate fixture, the shape POST /api/test/membership/backdate-joined copies", "where": "apps/api/src/test/test-fixtures.controller.ts:130-153, e2e/tests/helpers.ts:1025" },
+    { "what": "what a reader may see of projects — admin/manager all, a user only the active ones they are assigned to, a viewer none (403)", "where": "apps/api/src/projects/projects.service.ts:154-190" },
+    { "what": "the open/waiting-on-me definitions and the overdue derivation the requests panel restates", "where": "apps/api/src/requests/requests.service.ts:238-311, apps/api/src/requests/requests.serializer.ts" },
+    { "what": "the copy-a-public-link control, including what a refused clipboard says", "where": "apps/web/app/org/[orgId]/hiring/vacancies/page.tsx:205-225" },
+    { "what": "Card variant='panel', Preloader (role=status), EmptyState (children is a node), Badge neutral/warning/error, Avatar, InfoBanner, Switch, BackTo, Button, CopyIcon — every control the screens borrow", "where": "packages/ds/src/index.ts" },
+    { "what": "the rail, its item shape and its client-principal branch", "where": "apps/web/src/layout/Sidebar.tsx#navigation" },
+    { "what": "the post-sign-in destination and the ?next rule", "where": "apps/web/app/login/LoginForm.tsx#destination, #landingFor" },
+    { "what": "message-counted-once and box-did-not-move probes", "where": "e2e/tests/ui-invariants.ts#expectMessageOnce, #expectMessageAbsent, #expectHoldsBox" }
+  ],
+
+  "buildFromZero": [
+    "apps/api/src/portal/ — the whole module: controller, three services, types. Nothing under /portal exists.",
+    "apps/web/app/org/[orgId]/page.tsx — the route REQ-01-001 lands on has no page today; /org/{orgId} is currently served by nothing.",
+    "apps/web/app/org/[orgId]/news/[entryId]/page.tsx and apps/web/app/org/[orgId]/settings/portal/page.tsx — neither route exists.",
+    "apps/web/src/portal/ — the screen's components and the one sentence composer.",
+    "packages/validation/src/portal.ts — PORTAL_MESSAGES, the entry-id and cursor codecs, the anniversary date rule, the groups and limit validators.",
+    "OrganizationPortalSettings — the model, the migration, and the read that treats its absence as all-enabled.",
+    "POST /api/test/membership/backdate-joined — proved absent by the spec's own rehearsal (404); no product route can move Membership.joinedAt.",
+    "e2e/tests/portal.spec.ts, apps/api/test/portal*.spec.ts — new test files.",
+    "Two probes in e2e/tests/ui-invariants.ts: shared left edge across rows, shared right edge across cells.",
+    "A `Team overview` rail row — the label exists in the design system's default set and has never been shipped, because until this spec no route served it (Sidebar.tsx:47-50)."
+  ],
+
+  "shippingSurfaces": [
+    {
+      "newValue": "Capability = 'ViewPortalHome'",
+      "path": "packages/validation/src/roles.ts#ROLE_CAPABILITIES (all four rows) → read by apps/api/src/auth/capability.guard.ts#canActivate and apps/web/src/layout/Sidebar.tsx#navigation",
+      "governedBy": "REQ-01-004, Roles & Permission Matrix — held by admin, manager, user and viewer; a client principal holds no role and is refused by OrgScopeGuard before any role-keyed helper is asked",
+      "planned": "T1"
+    },
+    {
+      "newValue": "Capability = 'ManagePortalSettings'",
+      "path": "packages/validation/src/roles.ts#ROLE_CAPABILITIES → apps/api/src/auth/capability.guard.ts#canActivate; and the home body's canManageSettings, read by apps/web/src/portal/Feed.tsx",
+      "governedBy": "REQ-01-050, REQ-01-052 — admin alone; a caller without it is 403 on PUT and is drawn no settings control",
+      "planned": "T1, T5, T7"
+    },
+    {
+      "newValue": "OrganizationPortalSettings row (a table no shipped code reads today)",
+      "path": "written only by apps/api/src/portal/portal-settings.service.ts#putSettings; read only by portal-settings.service.ts#getSettings and portal-feed.service.ts. Deleted by the Organization cascade.",
+      "governedBy": "REQ-01-048, REQ-01-049 (absent = all three enabled), REQ-01-051 (created in the write's own transaction), Edge case 18 (last write wins)",
+      "planned": "T2, T5"
+    },
+    {
+      "newValue": "A Membership row whose joinedAt is in the past by an arbitrary amount (reachable for the first time, through the fixture)",
+      "path": "apps/api/src/members/members.service.ts (the members list and member detail both draw joinedAt), apps/api/src/portal/portal-feed.service.ts (member-joined and member-anniversary), apps/api/src/accrual (reads MemberFinancialsSnapshot.effectiveFrom, not joinedAt — unaffected)",
+      "governedBy": "The fixture is test-support only, fenced by assertFixturesOpen and 404 in production, and reaches no product code path (contracts §Routes, README Blast Radius). A backdated joinedAt is a value the column already permits; every reader of it reads a date and none of them branches on how old it is.",
+      "planned": "T5"
+    },
+    {
+      "newValue": "A post-sign-in destination that is not /org/{orgId}/members",
+      "path": "apps/web/app/login/LoginForm.tsx#landingFor (changed); apps/web/app/signup/SignupForm.tsx:101, apps/web/app/accept-invite/AcceptInviteScreen.tsx, apps/web/src/layout/Sidebar.tsx:290 (logoHref), apps/web/app/org/[orgId]/clients/page.tsx:67,120, clients/[clientId]/page.tsx:53,72, settings/holidays/page.tsx:147,222, settings/request-topics/page.tsx:55 (all unchanged, still /members)",
+      "governedBy": "REQ-01-001 governs signing in and nothing else; REQ-01-002 keeps the client contact's landing; Out of Scope keeps `/` redirecting to /signup. No requirement speaks about signup, invitation acceptance, the wordmark or an unauthorized-visitor redirect, so all of them keep the members list — recorded as note N3 rather than changed silently.",
+      "planned": "T9"
+    },
+    {
+      "newValue": "A route group under /api/organizations/:orgId/portal, reachable by every staff role including viewer",
+      "path": "apps/api/src/auth/org-scope.guard.ts (client principals refused by default), apps/api/src/auth/session.guard.ts (securityStamp re-read per request)",
+      "governedBy": "contracts §Routes and §Security — every read route answers 404 for a principal who may not have it, every query scopes by session.organizationId, and no route here widens what a role can read: each kind's visibility is at most what the reader already holds elsewhere (REQ-01-034)",
+      "planned": "T3, T4"
+    },
+    {
+      "newValue": "client-added, a feed entry kind whose page and whose sentence no document states",
+      "path": "apps/api/src/portal/portal-entry.service.ts, apps/web/src/portal/entry-sentence.tsx",
+      "governedBy": "NOTHING — REQ-01-032 derives it, REQ-01-034 draws it for admin and manager and TC-01-INT-10 asserts it, REQ-01-038 gives it a page, and no requirement says what that page carries. This is finding P3.",
+      "planned": "blocked — P3"
+    }
+  ],
+
+  "testCases": {
+    "unit": [
+      "TC-01-UNIT-01",
+      "TC-01-UNIT-02",
+      "TC-01-UNIT-03",
+      "TC-01-UNIT-04",
+      "TC-01-UNIT-05",
+      "TC-01-UNIT-06"
+    ],
+    "int": [
+      "TC-01-INT-01",
+      "TC-01-INT-02",
+      "TC-01-INT-03",
+      "TC-01-INT-04",
+      "TC-01-INT-05",
+      "TC-01-INT-06",
+      "TC-01-INT-07",
+      "TC-01-INT-08",
+      "TC-01-INT-09",
+      "TC-01-INT-10",
+      "TC-01-INT-11",
+      "TC-01-INT-12",
+      "TC-01-INT-13",
+      "TC-01-INT-14",
+      "TC-01-INT-15",
+      "TC-01-INT-16",
+      "TC-01-INT-17",
+      "TC-01-INT-18"
+    ],
+    "e2e": [
+      "TC-01-E2E-01",
+      "TC-01-E2E-02",
+      "TC-01-E2E-03",
+      "TC-01-E2E-04",
+      "TC-01-E2E-05",
+      "TC-01-E2E-06",
+      "TC-01-E2E-07",
+      "TC-01-E2E-08",
+      "TC-01-E2E-09"
+    ]
+  },
+
+  "caseOwners": {
+    "TC-01-UNIT-01": "T1", "TC-01-UNIT-02": "T1", "TC-01-UNIT-03": "T1",
+    "TC-01-UNIT-04": "T1", "TC-01-UNIT-05": "T1", "TC-01-UNIT-06": "T1",
+    "TC-01-INT-01": "T6", "TC-01-INT-02": "T6", "TC-01-INT-03": "T6",
+    "TC-01-INT-04": "T6", "TC-01-INT-05": "T6", "TC-01-INT-06": "T6",
+    "TC-01-INT-07": "T6", "TC-01-INT-08": "T6", "TC-01-INT-09": "T6",
+    "TC-01-INT-10": "T6", "TC-01-INT-11": "T6", "TC-01-INT-12": "T6",
+    "TC-01-INT-13": "T6", "TC-01-INT-14": "T6", "TC-01-INT-15": "T6",
+    "TC-01-INT-16": "T6", "TC-01-INT-17": "T6", "TC-01-INT-18": "T6",
+    "TC-01-E2E-01": "T10", "TC-01-E2E-02": "T10", "TC-01-E2E-03": "T10",
+    "TC-01-E2E-04": "T10", "TC-01-E2E-05": "T10", "TC-01-E2E-06": "T10",
+    "TC-01-E2E-07": "T10", "TC-01-E2E-08": "T10", "TC-01-E2E-09": "T10"
+  },
+
+  "testIds": [
+    "nav-portal",
+    "portal-greeting",
+    "portal-month-total",
+    "portal-month-days",
+    "portal-month-project-row",
+    "portal-month-empty",
+    "portal-timeoff-available",
+    "portal-timeoff-panel",
+    "portal-holiday-row",
+    "portal-holidays-no-country",
+    "portal-request-row",
+    "portal-requests-empty",
+    "portal-feed-entry",
+    "portal-feed-empty",
+    "portal-feed-more",
+    "portal-feed-settings-link",
+    "portal-entry-title",
+    "portal-entry-back",
+    "portal-entry-body",
+    "portal-entry-share",
+    "portal-entry-fact",
+    "portal-settings-group-people",
+    "portal-settings-group-hiring",
+    "portal-settings-group-work",
+    "portal-settings-save"
+  ],
+
+  "sections": {
+    "Summary": "T3, T4 — the projection-not-a-table decision it states is what T4 is built to; no separate task.",
+    "Actors & Preconditions": "T1, T3 — the four staff roles and the client contact are the capability rows T1 writes and the refusals T3 wires.",
+    "Roles & Permission Matrix": "T1",
+    "Functional Requirements": "T1, T2, T3, T4, T5, T7, T8, T9 — every REQ id is named in a task's `requirements`.",
+    "Out of Scope": "no task — it forbids: no announcements, no reactions or comments, no publish-right setting, no notification of any kind, no absences in the feed, no per-member mute, and `/` still redirects to /signup. T7 and T8 draw no control for any of them.",
+    "Known Gaps": "no task — five accepted gaps (the 365-day window, an anniversary counted from a restored joinedAt, a `user` who can open no project screen, an entry with no external link, an unpaged projection past a few hundred entries). Each is a decision to build nothing.",
+    "Acceptance Criteria": "T6, T10 — all twelve criteria name a TC, and every one of those is claimed.",
+    "Routes": "T3 (the controller and its guard stack), T5 (the settings pair and the fixture)",
+    "Error Messages": "T1 — all ten strings; nine are new exports on PORTAL_MESSAGES and TEMPLATE_MESSAGES.generic.forbidden already exists and is emitted by CapabilityGuard.",
+    "Data Model": "T2",
+    "Validation Rules": "T1 (the five rules, client and server), T3/T4/T5 (re-run server-side on every request)",
+    "Required data-testid Attributes": "T7, T8, T9 — every id in `testIds`.",
+    "Screens": "T7, T8 — the layout, all fifteen states and the borrowed-component table.",
+    "Geometry & motion": "T7 (nine rows: the month figures, the project row, the holiday row, the request row and its badge, the feed entry, the settings link, the day separator), T8 (two rows: the entry title and the share URL).",
+    "Edge Cases": "T3 (12, 13, 14, 19, 20), T4 (1-9, 10, 15, 16, 17), T5 (18), T7 (11)",
+    "Security": "T3, T4, T5 — session-scoped queries, byte-identical refusals on the entry route, no widening of what a role can read, the twice-fenced fixture, and no monetary value on the wire.",
+    "DS gaps": "no task in this run — both rows are token gaps recorded for the design system (`--layout-reading-column`, and a Figure component or --figure-size/--figure-weight tokens). This spec's screens use the literals the mock declares and the gap table is the record. A third gap this plan found is in `dsGaps` below.",
+    "Behaviour Walkthrough": "no task — the record of who decided what. Seventeen rows, six of them `human`.",
+    "Verification Plan": "T5 — the one row marked as not existing today (POST /api/test/membership/backdate-joined, observed 404) is a task, and TC-01-INT-09 and TC-01-INT-12 depend on it.",
+    "Test Cases": "T1 (unit), T6 (integration), T10 (e2e)"
+  },
+
+  "messages": [
+    { "context": "A time entry with no project", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.noProject", "emittedBy": "apps/api/src/portal/portal-home.service.ts — and NOT apps/api/src/reports/reports.service.ts:770,1445, which keep their inline '(No project)' literal; this spec changes no report" },
+    { "context": "limit out of range on the feed", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.limitInvalid", "emittedBy": "apps/api/src/portal/portal.controller.ts#news → 422" },
+    { "context": "a cursor this feed never issued", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.cursorInvalid", "emittedBy": "apps/api/src/portal/portal.controller.ts#news → 422" },
+    { "context": "a settings body that is not three booleans", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.groupsInvalid", "emittedBy": "apps/api/src/portal/portal-settings.service.ts#putSettings → 422" },
+    { "context": "a member of the organization without ManagePortalSettings", "module": "packages/validation/src/index.ts#TEMPLATE_MESSAGES.generic.forbidden (exists)", "emittedBy": "apps/api/src/auth/capability.guard.ts#forbidden → 403 on GET and PUT .../portal/settings" },
+    { "context": "the feed has nothing in it", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.feedEmptyTitle, .feedEmptyBody", "emittedBy": "apps/web/src/portal/Feed.tsx — drawn by exactly one element, `portal-feed-empty`, and counted once by TC-01-E2E-07" },
+    { "context": "no time tracked this month", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.monthEmpty", "emittedBy": "apps/web/src/portal/PersonalHalf.tsx — one element, `portal-month-empty`; the figures are not drawn beside it, so the sentence is not said twice" },
+    { "context": "nothing is waiting on the caller", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.requestsEmpty", "emittedBy": "apps/web/src/portal/PersonalHalf.tsx — one element, `portal-requests-empty`" },
+    { "context": "nobody has stated the caller's country", "module": "packages/validation/src/portal.ts#PORTAL_MESSAGES.noCountry", "emittedBy": "apps/web/src/portal/PersonalHalf.tsx — one element, `portal-holidays-no-country`, replacing the holidays list rather than sitting under it" }
+  ],
+
+  "premises": [
+    { "claim": "migrations run before the Terraform rollout of the services, on the new image", "verifiedAt": "infra/deploy.sh:27" },
+    { "claim": "a client principal is answered a bare 404 on every /api/organizations/:orgId route that does not carry @AllowClientPrincipal(), before CapabilityGuard runs", "verifiedAt": "apps/api/src/auth/org-scope.guard.ts:44-50" },
+    { "claim": "CapabilityGuard's refusal is 403 with TEMPLATE_MESSAGES.generic.forbidden and never names the resource", "verifiedAt": "apps/api/src/auth/capability.guard.ts:60-65" },
+    { "claim": "ROLE_CAPABILITIES is Record<NormalizedRole, readonly Capability[]>, so adding a Capability member forces all four role lists to be revisited at compile time", "verifiedAt": "packages/validation/src/roles.ts#ROLE_CAPABILITIES" },
+    { "claim": "normalizeRole maps the legacy `member` to `user` and anything unrecognised to `viewer`", "verifiedAt": "packages/validation/src/roles.ts#normalizeRole" },
+    { "claim": "`Team overview` is a design-system rail label that has never been shipped because no route served it", "verifiedAt": "apps/web/src/layout/Sidebar.tsx:47-50" },
+    { "claim": "there is no page at /org/{orgId} — the route REQ-01-001 lands on does not exist", "verifiedAt": "apps/web/app/org/[orgId]/ contains only layout.tsx and twelve sub-directories" },
+    { "claim": "the post-sign-in destination is decided in one place and ?next is honoured only when it starts with /org/{organizationId}/", "verifiedAt": "apps/web/app/login/LoginForm.tsx:49-76" },
+    { "claim": "33 `**/members` waits across 28 e2e files, one of them `signIn` in helpers.ts", "verifiedAt": "grep -c over e2e/tests/*.ts; e2e/tests/helpers.ts:157" },
+    { "claim": "Membership.accountId is @unique, so an account has at most one membership and the fixture's 'the active membership of that account' is a single row", "verifiedAt": "apps/api/prisma/schema.prisma:241" },
+    { "claim": "Account.timezone is nullable, which is what REQ-01-010's UTC fallback is for", "verifiedAt": "apps/api/prisma/schema.prisma:37" },
+    { "claim": "'(No project)' is written inline by the reports service in two places and exists as no export", "verifiedAt": "apps/api/src/reports/reports.service.ts:770 and :1445" },
+    { "claim": "a `user` reading GET .../projects is answered only the active projects they are assigned to, and a `viewer` is answered 403", "verifiedAt": "apps/api/src/projects/projects.service.ts:154-190" },
+    { "claim": "there is no GET .../projects/{projectId} route at all", "verifiedAt": "apps/api/src/projects/projects.controller.ts — eight handlers, none of them a single-project read" },
+    { "claim": "the resolved holiday country reads the membership only; PATCH-012 removed the Organization.countryCode fallback product-wide", "verifiedAt": "packages/validation/src/reports.ts:566-573 and apps/api/src/holidays/holidays.service.ts:111-118" },
+    { "claim": "assertFixturesOpen returns immediately outside production and requires a bearer token in it, answering 404 either way when shut", "verifiedAt": "apps/api/src/test-support/fixture-gate.ts#assertFixturesOpen" },
+    { "claim": "every control the screens borrow — Card variant='panel', Avatar, Badge, EmptyState, Preloader, InfoBanner, Switch, BackTo, CopyIcon — is exported from the package root", "verifiedAt": "packages/ds/src/index.ts" },
+    { "claim": "Card renders a div and spreads rest onto it; there is no `as` prop, so a panel cannot itself be an anchor", "verifiedAt": "packages/ds/src/components/core/Card.tsx:52-77" },
+    { "claim": "spec-lint passes on this bundle: 51 requirements, 33 cases, 6 routes, 10 messages, 25 testids", "verifiedAt": "node scripts/spec-lint.mjs specs/portal/01-home.md" },
+    { "claim": "e2e/tests/ui-invariants.ts exports five probes and none of them measures a shared left or right edge across rows", "verifiedAt": "e2e/tests/ui-invariants.ts:32,51,71,99,107" }
+  ],
+
+  "doubleBehaviours": [],
+
+  "dsGaps": [
+    { "missing": "`--layout-reading-column` — a content-column width token. The mock declares `--feed-col` of its own and the entry page caps its reading column at 720px; the design system names `--layout-sidebar-width` and two navbar heights and no content-column width.", "resolution": "add to the design system, never per screen — recorded in the spec's own DS gaps table; this run uses the mock's literal and the gap stands" },
+    { "missing": "A headline figure's size and weight — `32px / var(--font-weight-light)`. The second place the pair is written: ReportSummaryBanner §82 already declares it a literal and cannot be borrowed here, because it draws its own outline and bottom margin sized for standing on the page ground rather than inside a panel.", "resolution": "add to the design system, never per screen — a `Figure` component owning the pair, or `--figure-size`/`--figure-weight` tokens both call sites read" },
+    { "missing": "A panel that is a control. `## Screens` requires each feed entry to be a `Card variant='panel'` that is an `<a>` and takes the hover a static card withholds. `Card` renders a `div` with no `as` prop (Card.tsx:52-77) and deliberately hovers nothing; `BoardCard` §42 is the system's card-that-is-a-control and is shaped for a board column, not a feed entry. This gap is NOT in the spec's DS gaps table.", "resolution": "add to the design system, never per screen — either an `as`/`href` affordance on Card or a linkable panel component. Until it lands, the entry is an `<a>` wrapping a `Card variant='panel'` with `--shadow-card-hover` on the anchor, using existing tokens only, and this row is the record that a control was improvised." }
+  ],
+
+  "risks": [
+    { "risk": "P1, P2 and P3 are blockers, and two of them sit inside tasks that are otherwise ready: T3 implements REQ-01-018's holiday chain and T4 derives the client-added kind. If the run were resumed without settling them, T3 would ship a second, contradictory answer to 'which country is this member in' and T4 would ship an entry kind whose page and whose sentence somebody invented.", "mitigation": "the verdict blocks; neither is planned around" },
+    { "risk": "T9 edits 33 lines across 28 e2e spec files that belong to other specs. A reviewer diffing baseRef...HEAD sees a change to almost every e2e file in the repository.", "mitigation": "T9's detail names the grep that enumerates them and states the rule — every one of those waits is scaffolding for the shell settling, and a test that genuinely means to be on the members list navigates there. The two behavioural assertions (authentication.spec.ts:23,86) are amended rather than deleted, which is the README's own instruction." },
+    { "risk": "The feed is five source tables unioned and paged in application code. Past a few hundred entries in one organization the projection is not paged efficiently.", "mitigation": "the spec records it as a Known Gap and argues against a materialised table; each source is indexed on organizationId and the window is one year. Do not add an index or a table beyond T2's." },
+    { "risk": "The month's figures and the project split are also computed by ReportsService, from the same TimeEntry rows. Two answers to one question is UI-07's shape at the API level.", "mitigation": "the spec's own decision: the reports projection is shaped for the report screen and parsing it here would bind this page to another spec's column contract. T3 computes from TimeEntry directly and touches no report; the duplicated string '(No project)' is recorded in the README's blast radius and in `messages` above." },
+    { "risk": "The entry page's heading and the feed's line are the same sentence drawn in two components — one value with two sources.", "mitigation": "T7 writes one composer in apps/web/src/portal/entry-sentence.tsx and T8 imports it; T4's entry body carries the same subject/detail pair the feed entry carries, so the composer has one input shape." },
+    { "risk": "The mock draws things the contract cannot answer — a third 'Yesterday' figure, a per-project percentage bar, and a project row reading 'Aurora — Northwind Ltd'. An implementer building from the mock will reach for fields that do not exist.", "mitigation": "note N1; the contract and REQ-01-011/012/014 are what T3 and T7 build to, and TC-01-E2E-02 asserts only portal-month-total and portal-month-days" }
+  ],
+
+  "notes": [
+    { "id": "N1", "note": "The mock's month panel draws three figures (tracked, days with an entry, and 'Yesterday 5h 22m'), a percentage bar per project, and a project row labelled 'Aurora — Northwind Ltd'. The contract answers `totalMinutes`, `daysWithEntry` and `byProject` rows of `{projectId, projectName, minutes}` — no yesterday figure and no client name — and REQ-01-011/012/014 ask for nothing more. The Geometry & motion row for `portal-month-total` says 'the two figures beside it', which counts the mock's three. Built to the contract: two figures, no bar-driven layout dependency, project name only." },
+    { "id": "N2", "note": "TC-01-E2E-08 says it 'uses the probes in e2e/tests/ui-invariants.ts'. That file exports five probes — expectHoldsBox, expectNoScrollGrowth, expectSurvivesReread, expectMessageOnce, expectMessageAbsent — and none of them measures a shared left edge across rows or a shared right edge across cells. T10 adds the two, in that file, rather than inlining the arithmetic in the spec file." },
+    { "id": "N3", "note": "Five further paths still send a person to the members list and no requirement speaks about any of them: signup (SignupForm.tsx:101), invitation acceptance (AcceptInviteScreen.tsx:314), the rail's wordmark (Sidebar.tsx:290), and the unauthorized-visitor redirects in clients, clients/[clientId], settings/holidays and settings/request-topics. They are left alone. A person may well want the wordmark and the signup landing to move too, but that is a decision, not a consequence." },
+    { "id": "N4", "note": "The entry contract's example body carries `subject`, `facts`, `categories`, `body`, `shareUrl` and `link` — and no `detail`. REQ-01-039 requires the page to be headed by the same sentence the feed drew, and that sentence is composed from `detail.jobTitle`, `detail.years` and `detail.clientName`. Composing it from `facts` instead would be a second, differently-shaped source for one string. T4 answers `detail` on the entry body too; it is additive and contradicts nothing the contract states." },
+    { "id": "N5", "note": "The mock's settings state draws three switches and no save control, while contracts §Required data-testid requires `portal-settings-save` and TC-01-E2E-09 presses it. Contract and case agree; the mock is the odd one out. Built with a save button." },
+    { "id": "N6", "note": "The settings screen is the mock's ninth state and has a route, four testids and an E2E case, but `## Screens` §States lists only Q1, Q2 and Q3, and `## Geometry & motion` has no row for it. Its content is fixed copy and three switches, so no box on it is sized by data — which is why this is a note and not a finding. T8 builds it from the mock." },
+    { "id": "N7", "note": "Contracts §Data Model cites REQ-01-015 for 'No monetary field appears anywhere in this body'. REQ-01-015 is 'the reserve is answered in days'; the no-money rule is REQ-01-053. A mis-citation, not a disagreement — both requirements point the same way." },
+    { "id": "N8", "note": "TC-01-INT-12 says a membership backdated 366 days has its first anniversary 'two days ago'. joinedAt + 1 year from 366 days ago falls one day ago, or today across a leap day. The arithmetic is off by one; the assertion — that the anniversary is inside the window and drawn — is unaffected. Write the case against the window, not against the literal 'two days'." },
+    { "id": "N9", "note": "REQ-01-021 answers `requests.openTotal` 'so the screen can say how many are not in the three', and nothing draws it: the mock's requests panel has three rows and an 'All requests →' link, there is no message for it in the Error Messages table and no testid. The field is answered and asserted at integration (TC-01-INT-08); the screen draws the link the mock draws." },
+    { "id": "N10", "note": "The feed's own copy — 'joined the team as a', 'A vacancy is open:', 'started for', 'has been with the team for N years' — exists only in the mock. It is product text, not validation text, and T7 puts it in one composer rather than inline in two components. The strings are taken verbatim from the mock; none is invented." }
+  ]
+}
