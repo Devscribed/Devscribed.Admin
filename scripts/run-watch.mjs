@@ -80,7 +80,12 @@ const wantedFirst = positional[0]
   ?? (currentIsOpenable ? current : (openable[0] ?? byRecency[0]).id);
 if (!allEntries.some((e) => e.id === wantedFirst)) die(`no such run or loop: ${wantedFirst}`);
 
-const PORT = Number(opt('port', 4300));
+/* Off the E2E ladder, deliberately. `scripts/ports.mjs` steps the API port from 4000 by 100
+   until a free pair answers, so 4300 is its fourth rung: the board and a run that had to step
+   three times want the same socket, and whoever asks second finds it taken. The board is the
+   thing a person is looking at while the run works, so it is the one that moves. Any port the
+   ladder cannot land on will do; this one is a rung short of the next. */
+const PORT = Number(opt('port', 4399));
 
 const isRefine = (id) => String(id).startsWith('refine:');
 const generator = (id) => (isRefine(id)

@@ -109,9 +109,9 @@
       "timeoutMin": {
         "$comment": "Fuses, not targets. A stage that runs past one understands nothing about why.",
         "pre_implement": 35,
-        "implement": 45,
-        "review": 20,
-        "qa": 30
+        "implement": 90,
+        "review": 35,
+        "qa": 45
       }
     },
     "bug": {
