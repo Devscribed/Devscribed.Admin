@@ -84,7 +84,7 @@ its own bookkeeping.
 | Rule | Defined in | Referenced by |
 |------|-----------|---------------|
 | Every portal query scopes by `session.organizationId`, never the path `orgId` | 01 | — |
-| A read route answers `404` — never `403` — for a principal who may not have it; the settings pair answers `403`, because `CapabilityGuard` has already proven the caller belongs to the organization | 01 | — |
+| Every route answers `404` — never `403` — to a client principal and to a wrong `orgId`, the settings pair included. `403` is answered to one caller only: a member of this organization who lacks the capability | 01 | — |
 | An entry is addressed `{kind}:{sourceId}`, computed and never stored | 01 | 02, 03 |
 | The feed writes nothing, ever | 01 | — |
 | No portal response carries a monetary value | 01 | — |
@@ -106,6 +106,7 @@ The portal reads `scope=mine` and never writes.
 
 [`specs/organization/`](../organization/README.md) — owns `Client` and `Holiday`.
 
-[`specs/time-off/`](../time-off/README.md) — owns the country-resolution chain the holidays block
-uses: a country stated on the membership, falling back to `Organization.countryCode`. `REQ-01-018`
-states that chain in full rather than pointing at it.
+[`specs/time-off/`](../time-off/README.md) — owns `Holiday` and the reserve the personal half
+reads. The country a holiday reaches somebody by is **not** that area's older chain: `PATCH-012`
+removed the organization fallback from the product, and a member's own membership is the whole
+resolution. `REQ-01-018` and `REQ-01-019` state it in full rather than pointing at it.

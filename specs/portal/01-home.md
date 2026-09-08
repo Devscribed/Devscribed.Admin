@@ -90,9 +90,20 @@ WHEN a client contact signs in, THE SYSTEM SHALL navigate them to `/org/{orgId}/
 THE SYSTEM SHALL draw a `Team overview` row at the top of the sidebar for every staff principal,
 linking to `/org/{orgId}`.
 
-#### REQ-01-004 — a client contact is refused the portal
+#### REQ-01-004 — who each route refuses, and with what
 
-IF a client contact requests any route in this spec, THEN THE SYSTEM SHALL answer `404`.
+THE SYSTEM SHALL refuse a caller on every route in this spec as the table below answers.
+
+`decision-table: keys=(principal, capability) domains=(principal: clientContact|otherOrganization|member, capability: held|notHeld)`
+
+| principal | capability | Outcome |
+|---|---|---|
+| clientContact | held | `404`. A client contact holds no capability here; the row exists because the table is total. |
+| clientContact | notHeld | `404`. `OrgScopeGuard` refuses a client principal before any capability is read, and not-found is what it answers. |
+| otherOrganization | held | `404`. The `orgId` does not match the session, so the organization is not confirmed to exist. |
+| otherOrganization | notHeld | `404`. Same reason, and it is answered identically so neither refusal confirms the other. |
+| member | held | Not refused — the route answers. |
+| member | notHeld | `403` `TEMPLATE_MESSAGES.generic.forbidden` on the settings pair, which is the only pair a capability guards. Refusing a member of this organization leaks nothing about what is inside it. |
 
 ### The personal half — the month
 
@@ -150,13 +161,17 @@ own today, ordered by date ascending.
 #### REQ-01-018 — which holidays reach the caller
 
 THE SYSTEM SHALL treat a holiday as reaching the caller when its `countryCode` is null, or equals
-the country stated on the caller's membership, or — where the membership states none — equals
-`Organization.countryCode`.
+the country stated on the caller's own membership, and from nothing else.
 
-#### REQ-01-019 — nobody has stated a country
+#### REQ-01-019 — a member who states no country
 
-IF neither the caller's membership nor the organization states a country, THEN THE SYSTEM SHALL
-answer only the holidays whose `countryCode` is null.
+IF the caller's membership states no country, THEN THE SYSTEM SHALL answer only the holidays
+whose `countryCode` is null.
+
+`Decided:` nobody inherits a country — `PATCH-012` removed that inheritance, and
+`resolveMemberHolidayCountry` (`packages/validation/src/reports.ts`) already resolves it this way.
+A fallback here would answer a different country than the calendar and Amounts Owed answer for
+the same person.
 
 ### The personal half — requests
 
@@ -230,10 +245,12 @@ whatever its current `status`.
 THE SYSTEM SHALL derive a `project-started` entry from every `Project`, at the moment `createdAt`,
 whatever its current `status`.
 
-#### REQ-01-032 — a client was added
+#### REQ-01-032 — a client is not news
 
-THE SYSTEM SHALL derive a `client-added` entry from every `Client`, at the moment `createdAt`,
-whatever its current `status`.
+THE SYSTEM SHALL derive no entry from a `Client`.
+
+`Decided:` a client being added is not news. What its arrival changes that people act on is a
+project starting, and `REQ-01-031` already draws that.
 
 #### REQ-01-033 — hiring says one thing and no more
 
@@ -246,7 +263,7 @@ THE SYSTEM SHALL derive no entry from a `Candidate`, an `Application`, an
 
 THE SYSTEM SHALL include an entry in a caller's feed only where the table below marks it drawn.
 
-`decision-table: keys=(kind, reader) domains=(kind: memberJoined|memberAnniversary|vacancyOpened|projectStarted|clientAdded, reader: admin|manager|user|viewer)`
+`decision-table: keys=(kind, reader) domains=(kind: memberJoined|memberAnniversary|vacancyOpened|projectStarted, reader: admin|manager|user|viewer)`
 
 | kind | reader | Outcome |
 |---|---|---|
@@ -266,10 +283,6 @@ THE SYSTEM SHALL include an entry in a caller's feed only where the table below 
 | projectStarted | manager | Drawn. |
 | projectStarted | user | Drawn. |
 | projectStarted | viewer | Drawn. |
-| clientAdded | admin | Drawn. |
-| clientAdded | manager | Drawn. |
-| clientAdded | user | Not drawn — `view-clients` is not held, and a client the reader cannot open is a name with nothing behind it. |
-| clientAdded | viewer | Not drawn — same reason. |
 
 #### REQ-01-035 — a project's client is named where the reader may see it
 
@@ -305,13 +318,13 @@ THE SYSTEM SHALL head the entry page with the same sentence the feed drew for it
 
 #### REQ-01-040 — an entry the caller may not see
 
-IF the entry id names a row the caller's own feed would not contain, THEN THE SYSTEM SHALL answer
-`404`.
+IF `GET .../portal/news/{entryId}` is asked for a row the caller's own feed would not contain,
+THEN THE SYSTEM SHALL answer `404`.
 
 #### REQ-01-041 — an id that names nothing
 
-IF the entry id is malformed, names an unknown kind, or names a source row that no longer exists,
-THEN THE SYSTEM SHALL answer `404`.
+IF `GET .../portal/news/{entryId}` is asked for an id that is malformed, names an unknown kind, or
+names a source row that no longer exists, THEN THE SYSTEM SHALL answer `404`.
 
 #### REQ-01-042 — a vacancy's page carries what a reader can act on
 
@@ -359,8 +372,10 @@ every group as enabled.
 
 #### REQ-01-050 — who may change them
 
-WHEN a caller without `manage-portal-settings` requests `PUT .../portal/settings`, THE SYSTEM
-SHALL answer `403` `TEMPLATE_MESSAGES.generic.forbidden`.
+WHEN a member of this organization without `manage-portal-settings` requests
+`PUT .../portal/settings`, THE SYSTEM SHALL answer `403` `TEMPLATE_MESSAGES.generic.forbidden`.
+A caller who is not a member of this organization is refused by `REQ-01-004` before this rule is
+reached.
 
 #### REQ-01-051 — a write creates the row
 
@@ -381,6 +396,8 @@ THE SYSTEM SHALL draw the feed's settings control only for a caller holding
 - **Notifying anybody.** The feed is read, never delivered. No mail, no badge, no unread state.
 - **Absences in the feed.** Approved vacations and public holidays are the personal half's
   business here and are deliberately not news — settled with the requester.
+- **A client being added.** Not a feed entry, not a page, and no sentence — settled with the
+  requester. `REQ-01-032` is where the kind was dropped.
 - **A per-member mute.** The switches are the organization's, not a reader's.
 - **`/` for a signed-in visitor.** The root still redirects to `/signup`; only the post-sign-in
   destination moves.
