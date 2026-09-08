@@ -1,0 +1,33 @@
+{
+ "id": "T7",
+ "title": "Web: the home screen at /org/{orgId}",
+ "files": [
+  "apps/web/app/org/[orgId]/page.tsx",
+  "apps/web/app/org/[orgId]/PortalMonthPanel.tsx",
+  "apps/web/app/org/[orgId]/PortalTimeOffPanel.tsx",
+  "apps/web/app/org/[orgId]/PortalRequestsPanel.tsx",
+  "apps/web/app/org/[orgId]/PortalFeed.tsx",
+  "apps/web/app/org/[orgId]/portal-types.ts"
+ ],
+ "requirements": [
+  "REQ-01-010",
+  "REQ-01-011",
+  "REQ-01-012",
+  "REQ-01-013",
+  "REQ-01-014",
+  "REQ-01-015",
+  "REQ-01-016",
+  "REQ-01-017",
+  "REQ-01-019",
+  "REQ-01-020",
+  "REQ-01-021",
+  "REQ-01-025",
+  "REQ-01-037",
+  "REQ-01-052",
+  "REQ-01-053"
+ ],
+ "dependsOn": [
+  "T1"
+ ],
+ "detail": "'use client', fetching /api/organizations/{orgId}/portal/home and /api/organizations/{orgId}/portal/news with credentials: 'same-origin' — no route handler and no server action. **Q1 and Q2 are two fetches with two independent states**: a Q1 failure replaces the three left-hand panels with one InfoBanner and leaves the feed alone, and a Q2 failure banners the feed column while the personal half still answers. Layout: above lg a grid of minmax(0, 1fr) and a fixed 400px feed column; below lg they stack, personal half first. Every panel is Card variant=\"panel\". The fifteen rows of §Screens are the states to build, and four of them are where a message would otherwise be drawn twice: an empty month draws `portal-month-empty` with PORTAL_MESSAGES.monthEmpty **and no figures at all** — `portal-month-total` is absent, not zero; a membership with no financials keeps `portal-timeoff-panel` and drops `portal-timeoff-figures` in full, with the holidays below it drawn exactly as always; no stated country replaces the holidays list with PORTAL_MESSAGES.noCountry in `portal-holidays-no-country` and leaves whatever the figures above are doing untouched; no requests draws `portal-requests-empty`. REQ-01-037: nothing on this screen says a group is switched off, and there is no state that distinguishes a disabled group from an empty one. REQ-01-052: `portal-feed-settings-link` is drawn only when the home body's `canManageSettings` is true. `portal-feed-more` appears only when nextCursor came back, and pressing it appends — nothing already drawn is replaced (TC-01-E2E-05). Ten Geometry & motion rows are lines of this task and each names what holds it: the month figure sits first in a flex band with a fixed --space-10 gap and no justify-content; the project row, the holiday row and the request row each put the variable text in a minmax(0,1fr) first column with text-overflow: ellipsis and white-space: nowrap and the fixed-width cell second, so the request title's left edge and the minutes' right edge are the same on every row; the request badge is last so its width is absorbed by the 1fr to its left; the feed entry is a two-column grid, auto for the mark and minmax(0,1fr) for the body, and grows downwards; the feed heading row is justify-content: space-between with the heading first, so the heading's left edge does not move when the settings link is absent; the day separator is a block in the column's flow with its own top padding and overlays nothing. **No box on this screen is drawn outside its own flow** — no absolute, transformed or portalled element, and the only positioned box any of these controls opens is a Select's list, which the design system portals (§95) and which no ancestor's overflow counts. Import from @devscribed/ds, the package root only, and use tokens: no hardcoded colour, and no size that is not a token except the two literals §DS gaps records."
+}

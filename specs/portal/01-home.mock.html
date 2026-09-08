@@ -504,12 +504,13 @@
 
               <section class="panel">
                 <div class="panel-head"><h2>Time off</h2><a class="panel-link" href="#">My time off →</a></div>
-                <div class="band">
-                  <div class="fig"><span class="n">0</span><span class="k">Days available</span></div>
-                  <div class="fig muted"><span class="n">0</span><span class="k">Used this year</span></div>
-                </div>
-                <!-- The figures stay here, unlike the panel above: zero days available is an
-                     answer about a reserve that exists, not an absence of one. -->
+                <!-- No figures: this membership has no MemberFinancials row at all, and a
+                     reserve nobody configured is not a zero reserve. A reserve that exists and
+                     stands at zero is a different state, and it does draw 0 — see state 1's
+                     panel, where the figures are the answer.
+                     The holidays below are drawn all the same. They say where this person
+                     works, not what they are owed, so the missing reserve withholds nothing
+                     from them — which is what keeps this panel on the screen at all. -->
                 <div class="hol">
                   <div class="cap">Next holidays</div>
                   <p class="state-note" style="margin:0">Nobody has stated your country, so no

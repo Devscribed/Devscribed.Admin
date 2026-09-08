@@ -9,16 +9,17 @@ Rules live in [01-home.md](01-home.md) and are referenced here by id.
 | `GET /api/organizations/{orgId}/portal/home` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ViewPortalHome')` in the service | `200` | `404` (a client principal; wrong organization) |
 | `GET /api/organizations/{orgId}/portal/news` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ViewPortalHome')` in the service | `200` | `404` (a client principal; wrong organization) · `422` `PORTAL_MESSAGES.limitInvalid` · `422` `PORTAL_MESSAGES.cursorInvalid` |
 | `GET /api/organizations/{orgId}/portal/news/{entryId}` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ViewPortalHome')` in the service | `200` | `404` (a client principal; wrong organization; an entry this caller's feed would not contain; a malformed, unknown or vanished id) |
-| `GET /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`, `CapabilityGuard('ManagePortalSettings')` | `200` | `403` `TEMPLATE_MESSAGES.generic.forbidden` · `404` (wrong organization) |
-| `PUT /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`, `CapabilityGuard('ManagePortalSettings')` | `200` | `403` `TEMPLATE_MESSAGES.generic.forbidden` · `404` (wrong organization) · `422` `PORTAL_MESSAGES.groupsInvalid` |
+| `GET /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ManagePortalSettings')` in the service | `200` | `403` `PORTAL_MESSAGES.settingsForbidden` (a member of this organization without the capability) · `404` (a client principal; wrong organization) |
+| `PUT /api/organizations/{orgId}/portal/settings` | `SessionGuard`, `OrgScopeGuard`; `hasCapability(role, 'ManagePortalSettings')` in the service | `200` | `403` `PORTAL_MESSAGES.settingsForbidden` (a member of this organization without the capability) · `404` (a client principal; wrong organization) · `422` `PORTAL_MESSAGES.groupsInvalid` |
 | `POST /api/test/membership/backdate-joined` | `assertFixturesOpen`; refused in production | `204` | `404` (production) |
 
-**The refusal discipline is not the same on both halves of this table, and that is deliberate.**
-Every read route answers **not-found, never forbidden**, when the caller may not have it — a client principal and a wrong `orgId` are answered
-identically, so neither confirms the other. The settings pair answers **forbidden**, because
-`CapabilityGuard` has already proven the caller is a member of this organization and refusing them
-leaks nothing about what is inside it. This is the split the guard stack already draws
-(`apps/api/src/auth/capability.guard.ts`), not a new one.
+**The refusal discipline is one rule over the caller, and `REQ-01-004` states it.** Every route
+here answers **not-found, never forbidden**, to a client principal and to a wrong `orgId` — the two
+are answered identically, so neither confirms the other. `OrgScopeGuard`
+(`apps/api/src/auth/org-scope.guard.ts`) draws that line before any capability is read, and it
+draws it on the settings pair exactly as it draws it on the reads. **Forbidden** is answered to one
+caller only: a member of this organization who lacks `ManagePortalSettings`, where refusing them
+leaks nothing about what is inside an organization they are already in.
 
 **`GET .../portal/news/{entryId}` answers not-found for an entry the caller cannot see** rather
 than forbidden, and answers it byte-identically to an id that names nothing: an entry id encodes a
@@ -44,9 +45,11 @@ source row, so a forbidden answer would confirm that a row with that id exists.
     "availableDays": 17.5,
     "usedDays": 6.5,
     "pendingDays": 4,
-    "totalDaysPerYear": 20,
+    "totalDaysPerYear": 20
+  },
+  "holidays": {
     "countryCode": "PL",
-    "holidays": [{ "id": "…", "date": "2026-11-01", "name": "All Saints' Day" }]
+    "upcoming": [{ "id": "…", "date": "2026-11-01", "name": "All Saints' Day" }]
   },
   "requests": {
     "openTotal": 5,
@@ -67,8 +70,10 @@ source row, so a forbidden answer would confirm that a row with that id exists.
 }
 ```
 
-`timeOff` is `null` in full when the membership has no `MemberFinancials` row (`REQ-01-016`), and
-`timeOff.countryCode` is `null` when nobody has stated one (`REQ-01-019`). **No monetary field
+`timeOff` is `null` in full when the membership has no `MemberFinancials` row (`REQ-01-016`).
+`holidays` is answered whatever the reserve says, because a public holiday is a fact about where
+somebody works and not about their days: `holidays.countryCode` is `null` when nobody has stated
+one, and `holidays.upcoming` then carries the global rows alone (`REQ-01-019`). **No monetary field
 appears anywhere in this body** (`REQ-01-015`) — `reserveBalance` is not omitted conditionally, it
 is not part of the contract.
 
@@ -168,7 +173,7 @@ membership of that account. Test-support only, behind `assertFixturesOpen` exact
 | `PORTAL_MESSAGES.limitInvalid` | `GET /api/organizations/{orgId}/portal/news` | Ask for between 1 and 50 entries. | yes |
 | `PORTAL_MESSAGES.cursorInvalid` | `GET /api/organizations/{orgId}/portal/news` | That page marker is not one this feed issued. | yes |
 | `PORTAL_MESSAGES.groupsInvalid` | `PUT /api/organizations/{orgId}/portal/settings` | Say true or false for People, Hiring and Work. | yes |
-| `TEMPLATE_MESSAGES.generic.forbidden` | `GET /api/organizations/{orgId}/portal/settings`, `PUT /api/organizations/{orgId}/portal/settings` | You do not have permission to do that. | no |
+| `PORTAL_MESSAGES.settingsForbidden` | `GET /api/organizations/{orgId}/portal/settings`, `PUT /api/organizations/{orgId}/portal/settings` | You do not have permission to change the portal settings. | yes |
 | `PORTAL_MESSAGES.feedEmptyTitle` | — | Nothing has happened yet | yes |
 | `PORTAL_MESSAGES.feedEmptyBody` | — | When somebody joins, a vacancy opens or a project starts, it shows up here. | yes |
 | `PORTAL_MESSAGES.monthEmpty` | — | No time tracked yet this month. | yes |
@@ -224,7 +229,8 @@ re-validates all five.**
 | `portal-month-project-row` | Home | one per project, counted |
 | `portal-month-empty` | Home | present when the month is empty, absent otherwise |
 | `portal-timeoff-available` | Home | present when financials exist, absent otherwise |
-| `portal-timeoff-panel` | Home | absent when the membership has no financials |
+| `portal-timeoff-figures` | Home | absent when the membership has no financials |
+| `portal-timeoff-panel` | Home | present — it carries the holidays, which no reserve gates |
 | `portal-holiday-row` | Home | one per holiday, counted |
 | `portal-holidays-no-country` | Home | present when no country is stated |
 | `portal-request-row` | Home | one per request, counted |
@@ -276,8 +282,8 @@ is an `<a>`, so it takes the hover §12 withholds from a static card — this ca
 |---|---|
 | Q1 loading | The three panel headings and the column frame are painted; each figure and each row is a `Preloader` block. No content from a previous answer is on screen, because Q1's only input is the caller and it does not change without a navigation. |
 | Q1 answered, month empty | The figures are **not drawn at all**; `portal-month-empty` carries `PORTAL_MESSAGES.monthEmpty` and the control that starts the timer. Zero figures beside that sentence would be one message twice. |
-| Q1 answered, no financials | `portal-timeoff-panel` is absent in full. A reserve nobody configured is not a zero reserve. |
-| Q1 answered, no country | The figures stand; the holidays list is replaced by `PORTAL_MESSAGES.noCountry` and a link to the profile. |
+| Q1 answered, no financials | The panel stands and `portal-timeoff-figures` is absent in full — a reserve nobody configured is not a zero reserve, and drawing it at zero would answer a question nobody asked. The holidays below it are drawn as they always are: they say where the caller works, not what they are owed. |
+| Q1 answered, no country | The holidays list is replaced by `PORTAL_MESSAGES.noCountry` and a link to the profile. Whatever the figures above are doing, they are unaffected — the two are answered independently. |
 | Q1 answered, no requests | The panel stands; `portal-requests-empty` carries `PORTAL_MESSAGES.requestsEmpty`. |
 | Q1 failed | The three panels are replaced by one `InfoBanner` in the left column. The feed is untouched — it answers a different question. |
 | Q2 loading | Three `Preloader` entries under the `What's new` heading. They are `div`s: a wait is not a link. |
@@ -336,7 +342,7 @@ the mock cannot see that the members list is no longer where a session begins.
 | 6 | A vacancy is deleted after the feed was rendered | Opening its entry answers `404` (`REQ-01-041`). The feed's own next read no longer contains it. |
 | 7 | A project was archived | The entry stays (`REQ-01-031`). Its page draws `Archived` beside the name. |
 | 8 | A `user` opens a `project-started` entry for a project they are not on | `200`. Name and date; no client, no roster (`REQ-01-035`, `REQ-01-047`). |
-| 9 | A `user` opens a `client-added` entry id they guessed | `404` — their feed would not contain it (`REQ-01-040`). |
+| 9 | Anybody opens an entry id whose kind this spec derives nothing for — a client, a candidate, an application | `404` — an unknown kind (`REQ-01-041`), answered identically to a malformed id. |
 | 10 | An admin switches Work off while a member has the feed open | The member's next read omits the group. Nothing already drawn is retracted, and the screen does not poll. |
 | 11 | Every group is switched off | The feed is empty and draws `PORTAL_MESSAGES.feedEmptyTitle`, exactly as an organization with no history does. An admin sees the same, and the settings screen is where the cause is. |
 | 12 | The caller's `Account.timezone` is unset | The month is computed in UTC (`REQ-01-010`). |
@@ -356,11 +362,12 @@ the mock cannot see that the members list is no longer where a session begins.
 - **Unknown and unauthorized are byte-identical on the entry route.** A `404` is answered for a
   malformed id, an unknown kind, a vanished row and a row this caller may not see. There is no
   timing branch: visibility is decided after the source row is loaded, in every case.
-- **The feed never widens what a role can read.** Each kind's visibility (`REQ-01-034`) is at most
-  what the reader already holds elsewhere, and `clientAdded` — the one kind whose subject is gated
-  — is withheld from `user` and `viewer` entirely.
-- **A client principal reaches nothing here.** `ClientMembership` holds no staff role, so
-  `hasCapability` answers false and the read routes answer `404`.
+- **The feed never widens what a role can read.** Every kind it derives (`REQ-01-034`) is drawn to
+  all four roles, and the one field that is not — a project's client name (`REQ-01-035`) — is
+  withheld from a reader who does not already hold it elsewhere.
+- **A client principal reaches nothing here, on any route.** `OrgScopeGuard` refuses it with `404`
+  before a capability is read, so the settings pair refuses it exactly as the reads do
+  (`REQ-01-004`).
 - **The test-support fixture is fenced twice**, by `assertFixturesOpen` and by the production
   environment check, exactly as `POST /api/test/financials/backdate` is.
 - **No monetary value crosses the wire** on `GET .../portal/home`, for any role.

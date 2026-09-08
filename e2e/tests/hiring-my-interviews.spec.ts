@@ -32,7 +32,7 @@ test.describe('Hiring — candidates, assigned to me', () => {
     await page.getByTestId('login-email-input').fill(email);
     await page.getByTestId('login-password-input').fill(VALID.password);
     await page.getByTestId('login-submit-button').click();
-    await page.waitForURL('**/members');
+    await page.waitForURL(/\/org\/[^/]+\/?$/);
     await expect(page.getByTestId('app-sidebar')).toBeVisible();
   }
 

@@ -1,0 +1,70 @@
+{
+  "stage": "review",
+  "status": "pass",
+  "reviewedUpTo": "53e45eab65df37bca38d7b8fe53cf5c98ed7035d",
+  "base": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+  "slice": "c4eb0fc..53e45ea — 5 files, 61 changed lines (review-slice.mjs, shape lead-open, pass 3)",
+  "covered": {
+    "scope": 5,
+    "read": [
+      "apps/api/test/portal.spec.ts",
+      "packages/validation/src/hiring-time.ts",
+      "packages/validation/src/hiring-time.test.ts",
+      "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "apps/api/src/portal/portal-entry.types.ts"
+    ],
+    "unreached": []
+  },
+  "priorBlockers": [
+    {
+      "id": "F1",
+      "claim": "computePortalWindow handed Account.timezone straight to Intl without the unknown-zone fallback, so an unresolvable stored zone turned both feed routes into a permanent 500",
+      "closed": true,
+      "how": "Closed, and closed as one rule rather than a local guard. packages/validation/src/hiring-time.ts:72 adds `resolvedTimeZone(id) = isValidTimeZone(id) ? id : 'UTC'`, built on the resolvability test that already existed at :54-62 rather than on a fourth try/catch, and portal-entry.types.ts:139 now reads `const zone = resolvedTimeZone(timezone)` in place of the null/blank check. I checked the witness rather than the report: `node -e \"new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Warszawa'})\"` still prints `RangeError`, and `isValidTimeZone` returns false for it because partsFormatter throws before FORMATTERS.set, so the resolver answers 'UTC'. computePortalWindow is the single shared window helper — portal-feed.service.ts:135 and portal-entry.service.ts:63 both call it — so one change covers the feed and every entry page, and the sibling read on the same lines (todayInTimeZone, requests.ts:639-652) already answers the UTC date for the same input, so the two halves of the window now agree on the same fallback instead of disagreeing. The case is discriminating: apps/api/test/portal.spec.ts:1198-1218 seeds a member whose Account.timezone column holds 'Europe/Warszawa' (createMember writes the column raw through Prisma, :127-128) and asserts 200 from both GET .../portal/news and GET .../portal/news/member-joined:{id}; before the fix the first line of computePortalWindow reached zonedTimeToUtc and both answered 500. The member's own joining is genuinely in the answer: deriveMemberEntries selects every active membership with joinedAt <= end (portal-feed.service.ts:172-176), and backdateJoined writes `${ymd}T00:00:00.000Z` (test-fixtures.controller.ts:221) which sits inside a UTC window ending at today 23:59:59.999Z."
+    },
+    {
+      "id": "F2",
+      "claim": "PortalFeed read session.account.timezone with a weaker guard than every shipped screen reading that column, so an unresolvable zone threw during render and took the whole /org/{orgId} screen down",
+      "closed": true,
+      "how": "Closed at the single point the zone enters the component: PortalFeed.tsx:298 is now `const timeZone = resolvedTimeZone(session.account.timezone)`, imported from the package root (:7), not a deep import. I enumerated the file's zone readers rather than trusting the one line — `grep -n 'timeZone' PortalFeed.tsx` gives localYmd (:88-89), formatRelativeTime (:104, :113, :114), dayLabel (:123-125), groupByDay (:134), feedSentence (:172), FeedEntryCard (:232-239), and every one of them takes the zone as a parameter fed from :298 or from :428/:432, so no Intl constructor in this file can now be handed a string the engine refuses. Nothing else in the change reads that field on the web: the greeting and the short dates format the server's already-resolved ymd with a literal `timeZone: 'UTC'` (portal-types.ts:124, :134), and the entry page's formatTimestamp (news/[entryId]/page.tsx:188-194) passes no timeZone option at all, so it cannot throw from this mechanism (it remains pass 1's N12, unchanged and not made worse)."
+    }
+  ],
+  "beyondTheRegister": "I asked what this pass's change is for and what could make it wrong that no criterion names. It is a two-line repair of a repair, and its shape of risk is that a fix expressed as a shared export changes behaviour for callers nobody was thinking about. It does not: `resolvedTimeZone` is purely additive to hiring-time.ts, `git grep` finds exactly two product call sites (portal-entry.types.ts:139, PortalFeed.tsx:298) plus the two test files, `packages/validation` typechecks clean, and no existing symbol is renamed or re-exported differently. The second risk is that the fix is now the repository's answer to this column while five other readers still carry the hand-rolled guard — that is N1 below, and it is a note rather than a blocker because I opened each of them: portal-home.service.ts's tzOf feeds only localDateInTz, and the four shipped screens feed only wallClockParts, both of which swallow any Intl failure and answer UTC parts (packages/validation/src/index.ts:2994-3016). So no other reader can 500 or throw; what is left is a payload field that names a zone that was not used. I also checked the one thing an additive resolver could get wrong on a server: isValidTimeZone caches into a module-level Map keyed by a caller-supplied string, but `FORMATTERS.set` runs only after the constructor returns (hiring-time.ts:31-44), so an attacker-supplied invalid zone caches nothing and the map stays bounded by the real IANA set.",
+  "findings": [
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "sweep 11 — a mechanism applied at some call sites and not the rest",
+      "file": "apps/api/src/portal/portal-home.service.ts",
+      "symbol": "tzOf",
+      "line": 137,
+      "claim": "the home route still resolves the caller's zone with the guard the two feed routes just stopped using, and echoes an unresolvable identifier back in month.timezone as the zone the month was computed in — while the month was in fact computed in UTC",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Same input as review 2's F1 — an account whose Account.timezone holds 'Europe/Warszawa', which POST /api/invitations/accept and PUT /api/account/settings both accept because validateTimezone checks non-emptiness alone (packages/validation/src/index.ts:1060-1064). That member calls GET /api/organizations/{orgId}/portal/home. tzOf (portal-home.service.ts:137-140) applies `typeof … === 'string' && trim().length > 0`, so it answers 'Europe/Warszawa' unchanged; :116 hands it to localDateInTz, which goes through wallClockParts and falls back to UTC parts on the RangeError (index.ts:2994-3016), so `today`, `startDate` and `endDate` are the UTC month — correct, and no 500. But the same raw string is carried into the response at :226 and answered as `month.timezone`, which the contracts sample presents as the zone the month was resolved in (specs/portal/01-home.contracts.md:33-36, Q1 at :261 — 'the calendar month of their today in Account.timezone'). So the body states a zone the computation did not use. Nothing renders it today — the web's only two date formatters over this block pass a literal timeZone: 'UTC' (portal-types.ts:124, :134) — which is why this is a note and not a blocker; the defect is a false claim in a contract-visible field, and the next reader of that field inherits it. The docstring on the new resolver says 'Every reader of a stored Account.timezone needs this, not just the writer' (hiring-time.ts:64-71), and this reader, inside the same diff, does not ask it.",
+        "source": "apps/api/src/portal/portal-home.service.ts:137"
+      },
+      "suggestedFix": "call resolvedTimeZone in tzOf, so the zone the month block reports is the zone the month was actually resolved in — one line, and it makes the resolver the single answer this run's diff gives for the column"
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing; test cases are numbered in the specs and the code references those ids",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "answers 200 for the feed and an entry page when Account.timezone cannot be resolved",
+      "line": 1198,
+      "claim": "the second review-driven integration case carries a review finding id in place of a TC id, because the cases register has no case for an unresolvable stored zone — the same gap pass 2 recorded for the zone-boundary case, now doubled",
+      "witness": {
+        "kind": "test",
+        "test": "no id",
+        "detail": "portal.spec.ts:1189-1196 heads the case 'Review F1 — an unresolvable Account.timezone reads 200, not 500' and :1198 titles it without any TC id; the neighbouring case at :857 is titled 'REQ-01-026 keeps a row inside the caller's own today…' with no id either, while every case the bundle specifies names one (:698 TC-01-INT-09, :1155 TC-01-INT-18). `grep -n 'Account.timezone' specs/portal/01-home.cases.md` returns nothing, and Edge case 12 of the contracts (specs/portal/01-home.contracts.md:348) covers 'unset' only, not 'set to something Intl cannot build' — which is why two rounds of a suite seeded with valid zones never saw either defect. Both tests are right to exist and neither can be given an id without editing a frozen bundle. Recording it so the coverage is deliberate rather than incidental.",
+        "source": "specs/portal/01-home.cases.md"
+      },
+      "suggestedFix": "for a person: give the unresolvable zone and the non-UTC window boundary numbered cases in whichever document next speaks about the portal feed, and say there what an unresolvable Account.timezone means — REQ-01-010 names only 'unset'"
+    }
+  ]
+}

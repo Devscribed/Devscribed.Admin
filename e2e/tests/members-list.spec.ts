@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   VALID,
+  clickNav,
   inviteAndAcceptViaApi,
   login,
   signupOrg,
@@ -13,7 +14,7 @@ async function signInUi(page: Page, email: string, password: string = VALID.pass
   await page.getByTestId('login-email-input').fill(email);
   await page.getByTestId('login-password-input').fill(password);
   await page.getByTestId('login-submit-button').click();
-  await page.waitForURL('**/members');
+  await page.waitForURL(/\/org\/[^/]+\/?$/);
 }
 
 /**
@@ -47,6 +48,9 @@ test.describe('04 — Member List & Management', () => {
     await addMember(request, adminEmail, 'user', 'Beth', 'Carter');
 
     await signInUi(page, adminEmail);
+    // The members list lives on the members page, not the portal REQ-01-001 now lands on.
+    await clickNav(page, 'People', 'nav-members');
+    await page.waitForURL('**/members');
     const list = page.getByTestId('members-list');
     await expect(list).toBeVisible();
     const rows = list.locator('[data-testid^="member-row-"]:not([data-testid^="member-row-actions-"])');
@@ -79,6 +83,9 @@ test.describe('04 — Member List & Management', () => {
       await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
 
       await signInUi(page, readOnlyEmail);
+      // The members list lives on the members page, not the portal REQ-01-001 now lands on.
+      await clickNav(page, 'People', 'nav-members');
+      await page.waitForURL('**/members');
       const list = page.getByTestId('members-list');
       await expect(list).toBeVisible();
 
@@ -109,7 +116,10 @@ test.describe('04 — Member List & Management', () => {
     await page.getByTestId('login-email-input').fill(adminEmail);
     await page.getByTestId('login-password-input').fill(VALID.password);
     await page.getByTestId('login-submit-button').click();
-    await page.waitForURL('**/members');
+    await page.waitForURL(/\/org\/[^/]+\/?$/);
+
+    // The delayed GET fires on the members page, not the portal REQ-01-001 now lands on.
+    await clickNav(page, 'People', 'nav-members');
 
     await expect(page.getByTestId('members-loading-skeleton')).toBeVisible();
     await expect(page.getByTestId('members-list')).toBeVisible();

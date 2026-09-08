@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { bookInterview, createVacancy, registerOrganization, signIn, uniqueEmail } from './helpers';
+import { bookInterview, clickNav, createVacancy, registerOrganization, signIn, uniqueEmail } from './helpers';
 
 /**
  * design-system 01 — Responsive & Pointer.
@@ -27,6 +27,11 @@ test.describe('the shell below xl', () => {
     const email = uniqueEmail('ds01-shell');
     await registerOrganization(request, email);
     await signIn(page, email);
+    /* Signing in lands on the portal home (portal/01 REQ-01-001), whose `<h1>` is
+       `portal-greeting`. This case is about the shell and the title's type ladder, not about
+       where a session begins, so it navigates to a screen carrying the shared `page-title`
+       rather than asserting whatever the landing happens to be. */
+    await clickNav(page, 'People', 'nav-members');
     await page.setViewportSize({ width: 360, height: 800 });
     await expect(page.getByTestId('page-title')).toBeVisible();
 

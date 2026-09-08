@@ -1,0 +1,47 @@
+{
+  "status": "pass",
+  "findings": [
+    {
+      "id": "L1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-019",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Screens, states table, row \"Q1 answered, no country\"",
+      "line": 286,
+      "claim": "The screen replaces the holidays list with PORTAL_MESSAGES.noCountry whenever no country is stated, while REQ-01-019 answers that same caller the global holidays. On an organization holding a global holiday the screen says no calendar reaches the caller while discarding rows the body carried.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:286 — 'Q1 answered, no country | The holidays list is replaced by PORTAL_MESSAGES.noCountry and a link to the profile.' specs/portal/01-home.md:175 — 'IF the caller's membership states no country, THEN THE SYSTEM SHALL answer only the holidays whose countryCode is null.' Concrete case: an organization with one holiday whose countryCode is null, and a member whose membership states no country. GET .../portal/home answers holidays.countryCode null and holidays.upcoming carrying that one row — the API is built and TC-01-INT-07 asserts exactly this. The screen, built to the states table, draws 'Nobody has stated your country, so no holiday calendar reaches you.' in place of the list and never draws the row. Both statements are implemented as written; they describe different screens for one body.",
+        "source": "specs/portal/01-home.contracts.md:286"
+      },
+      "suggestedFix": "Decide which is true and say so in one place: either the sentence is drawn only when holidays.upcoming is empty (and the list is drawn whenever it is not, whatever countryCode says), or REQ-01-019 stops answering global rows to a member with no country. The implementation follows the states table today because that table is determinate; no case in the bundle distinguishes the two readings, because every case with no country also has no global holiday."
+    },
+    {
+      "id": "L2",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-001",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/README.md",
+      "symbol": "Blast Radius",
+      "line": 1,
+      "claim": "The README calls the landing move 'mechanical and enumerable' and offers a grep as 'the whole list'. It is short by one file and six call sites, and short again by a file whose assertion the move invalidates.",
+      "witness": {
+        "kind": "command",
+        "detail": "`grep -rn \"waitForURL('\\*\\*/members')\" e2e/tests | wc -l` answers 33 across 28 files. It does not find e2e/tests/client-participants.spec.ts:32, whose signInUi waits `**/${destination}` and is called with 'members' at lines 180, 227, 282, 341, 391 and 565. Nor does it find e2e/tests/responsive.spec.ts:31, which asserts getByTestId('page-title') immediately after the shared signIn() helper — an id the portal home's <h1> does not carry, since it carries portal-greeting. That case failed on the first run of this stage and was repaired by navigating to a screen that has a page title.",
+        "source": "specs/portal/README.md"
+      },
+      "suggestedFix": "Where a blast radius is offered as a grep, the grep has to be the one that finds the parameterised call sites too, and it cannot find an assertion that depends on the landing without naming it. The plan's T9 allCallSites carried the true enumeration for the waits; responsive.spec.ts was in neither."
+    }
+  ],
+  "contested": [
+    {
+      "key": "pipeline/no-detector-weakening@apps/api/src/portal/portal-home.service.ts#-",
+      "reason": "No `as any` cast exists in the file. The detector at scripts/static-gate.mjs:137 tests /\\bas\\s+any\\b/ line-wise against added lines with no comment awareness, and matched prose inside a // comment: 'membership that somehow lacks it is answered the same as any other stranger.' — the English words 'the same as any other', not a type assertion. grep -n 'as any' on the file returns exactly one hit, line 111, and it begins with //; an `as any` assertion requires an expression to its left and the token there is the word 'same'; the file holds no @ts-ignore, @ts-expect-error, eslint-disable or 'as unknown as', and tsc --noEmit is clean. The same regex also matches lines 2422-2467 of this run's baseRef...HEAD diff, which are the gate's own committed verdict JSON quoting its own message — it is matching English, not code. Rewording the comment would green the gate without making the code any more correct and would leave the next 'as any other' to fail identically; the fix is one comment-aware condition in scripts/static-gate.mjs, which is machinery for a build/* branch and is not an implementer's to edit."
+    }
+  ],
+  "shardDecision": "No child was dispatched and no code changed. The gate returned one blocker and one note; the blocker is a false positive with a checkable counter-witness and is contested, and the note records a duplication the spec's own contracts file mandates. Dispatching an implementer to edit correct code so a prose-matching regex stops firing would have been the weakening the rule is named after.",
+  "shards": []
+}

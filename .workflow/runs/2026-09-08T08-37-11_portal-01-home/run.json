@@ -1,0 +1,1112 @@
+{
+  "runId": "2026-09-08T08-37-11_portal-01-home",
+  "spec": "specs/portal/01-home.md",
+  "specSha": "40eca1daf21f6500a23ef3cd2ffba63df41fcc440547eb2b8286518476102261",
+  "task": "portal-01-home",
+  "branch": "spec/portal-home",
+  "baseRef": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+  "headAtInit": "e9670bf46594ed9b17df140c667492b5f07dbbb5",
+  "status": "ready",
+  "track": "spec",
+  "shapes": {
+    "pre_implement": "strict",
+    "implement": "orchestrated",
+    "static_gate": "script",
+    "review": "lead-open",
+    "qa": "targeted"
+  },
+  "unrefined": {
+    "reason": "user asked to skip refine",
+    "why": "no refine ledger at .workflow/refine/portal-01.loop.json — this spec has not been judged"
+  },
+  "createdAt": "2026-09-08T08:37:11.158Z",
+  "updatedAt": "2026-09-08T15:04:04.479Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 4,
+      "startedAt": "2026-09-08T10:18:19.977Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-08T10:25:22.607Z"
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 8,
+      "startedAt": "2026-09-08T14:29:48.331Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-08T14:47:54.829Z"
+    },
+    "static_gate": {
+      "status": "passed",
+      "attempts": 4,
+      "startedAt": "2026-09-08T14:47:55.208Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-08T14:48:05.790Z"
+    },
+    "review": {
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-08T14:48:06.153Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-08T14:53:02.896Z"
+    },
+    "qa": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-08T14:53:03.278Z",
+      "endedAt": "2026-09-08T15:04:04.424Z",
+      "lastVerdict": "pass"
+    }
+  },
+  "budget": {
+    "codeAttempts": 2,
+    "handoffReplans": 0,
+    "infra": 2
+  },
+  "findingHistory": {
+    "spec/contradiction@specs/portal/01-home.md#REQ-01-004": 1,
+    "spec/incomplete-decision@specs/portal/01-home.md#REQ-01-038": 1,
+    "spec/contradiction@specs/portal/01-home.md#Acceptance Criteria, criterion 5": 1,
+    "spec/contradiction@specs/portal/01-home.cases.md#TC-01-E2E-03": 1,
+    "spec/untestable-case@specs/portal/01-home.cases.md#TC-01-INT-14": 1,
+    "spec/stale-statement@specs/portal/01-home.contracts.md#Error Messages, row TEMPLATE_MESSAGES.generic.forbidden": 1,
+    "pipeline/no-detector-weakening@apps/api/src/portal/portal-home.service.ts#-": 1,
+    "specs/portal/01-home.md REQ-01-026 — the window the feed reads@apps/api/src/portal/portal-entry.types.ts#computePortalWindow": 1,
+    "specs/portal/01-home.md REQ-01-056 — no roster where they may not@apps/api/src/portal/portal-entry.service.ts#buildProjectEntry": 1,
+    "spec/contradiction@specs/portal/01-home.cases.md#TC-01-INT-09": 1,
+    "CLAUDE.md — Validation; blocking-criteria CR-07@packages/validation/src/portal.ts#PORTAL_MESSAGES": 1,
+    "ui-invariants UI-07 — one value with two sources@apps/web/app/org/[orgId]/PortalFeed.tsx#dayLabel": 1,
+    "specs/portal/01-home.contracts.md §States and §What the screen borrows@apps/web/app/org/[orgId]/PortalFeed.tsx#PortalFeed": 1,
+    "specs/portal/01-home.contracts.md §What the screen borrows — Preloader@apps/web/app/org/[orgId]/PortalFeed.tsx#PortalFeed": 1,
+    "ui-craft — a request lifecycle where every path ends@apps/web/app/org/[orgId]/settings/portal/page.tsx#PortalSettingsPage": 1,
+    "sweep 11 — a mechanism applied at some call sites and not the rest@apps/web/app/org/[orgId]/PortalRequestsPanel.tsx#reqTitleStyle": 1,
+    "specs/portal/01-home.contracts.md §Required data-testid Attributes@e2e/tests/portal.spec.ts#TC-01-E2E-02": 1,
+    "specs/portal/01-home.contracts.md §Required data-testid Attributes — nav-portal@e2e/tests/client-participants.spec.ts#client contact navigation case": 1,
+    "sweep 8 — a test cannot fail for the defect it exists to catch@e2e/tests/portal.spec.ts#TC-01-E2E-08": 1,
+    "specs/portal/01-home.contracts.md §States — 'Q1 failed'@apps/web/app/org/[orgId]/page.tsx#PortalHomePage": 1,
+    "sweep 11 — a mechanism applied at some call sites and not the rest@apps/api/src/portal/portal-entry.types.ts#computePortalWindow": 1,
+    "sweep 11 — a mechanism applied at some call sites and not the rest@apps/web/app/org/[orgId]/PortalFeed.tsx#localYmd": 1
+  },
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [
+    {
+      "key": "pipeline/no-detector-weakening@apps/api/src/portal/portal-home.service.ts#-",
+      "reason": "There is no `as any` cast in the file. The detector's regex /\\bas\\s+any\\b/ (scripts/static-gate.mjs:137) is matched line-wise against added lines with no comment awareness, and the line it matched is prose inside a // comment: 'membership that somehow lacks it is answered the same as any other stranger.' — the English words 'the same as any other', not a type assertion. Checks: (1) `grep -n 'as any' apps/api/src/portal/portal-home.service.ts` returns exactly one hit, line 111, and that line begins with '//'; (2) a TypeScript 'as any' assertion requires an expression to its left, and the token to the left here is the word 'same'; (3) the file contains no @ts-ignore, no @ts-expect-error, no eslint-disable and no 'as unknown as', and `npx tsc --noEmit -p apps/api/tsconfig.json` is clean, so nothing in it suppresses a type error. The class of defect is demonstrable from the gate's own output: the same regex also matches lines 2422-2467 of this run's baseRef...HEAD diff, which are the static gate's previously committed verdict JSON quoting its own message — a detector that flags its own prose is matching English, not code. The mechanism fix belongs in scripts/static-gate.mjs (skip lines whose match falls inside a // or /* */ comment), on a build/* branch rather than this run's; rewording the comment would make this gate green while leaving the next occurrence of the words 'as any other' to fail the same way.",
+      "at": "2026-09-08T13:12:54.739Z"
+    }
+  ],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/README.md",
+      "symbol": "REQ-01-018",
+      "claim": "REQ-01-018 falls back to Organization.countryCode for a member who states no country, and the README presents that chain as the one time-off already owns. PATCH-012 removed that fallback from the product and the code holds no such chain, so the portal would answer a different country than every other screen for the same member.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/README.md §Related Areas: 'specs/time-off/ — owns the country-resolution chain the holidays block uses: a country stated on the membership, falling back to Organization.countryCode. REQ-01-018 states that chain in full rather than pointing at it.' specs/patches/PATCH-012-a-member-states-their-own-country-or-none.md §The rule: 'THE SYSTEM SHALL resolve a member's holiday country from the country stated on their own membership, and from nothing else' and 'THE SYSTEM SHALL pay a member with no resolved country the global holidays only — the rows carrying no country — in the Holidays summary, in the time-off calendar, in the holiday list read as mine, and in Amounts Owed.' The code agrees with the patch: packages/validation/src/reports.ts:566-573 (`resolveMemberHolidayCountry` reads only `membershipCountry` and returns null when it is blank) and apps/api/src/holidays/holidays.service.ts:111-118 ('PATCH-012 — the caller's own stated country. A caller who states none sees the global rows only, rather than the ones the organization's country would have lent them'). Scenario: an organization with countryCode 'US' and a member whose membership states none, with one US holiday and one global holiday seeded. GET .../holidays?scope=mine answers the global holiday alone; GET .../portal/home under REQ-01-018 answers both, and TC-01-INT-07 asserts it must."
+      },
+      "suggestedFix": "Either drop the third link — REQ-01-018 resolves the membership's country and nothing else, REQ-01-019 becomes 'a member who states no country', TC-01-INT-07's second leg changes — or state deliberately, in this spec's own text, that the portal reinstates the organization fallback that PATCH-012 removed and why one screen may answer a different country than the calendar and the payroll report do. The README's Related Areas sentence is false either way and must go.",
+      "demoted": "witness kind \"rule\" needs a source (file:line)"
+    },
+    {
+      "stage": "implement",
+      "id": "L1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-019",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Screens, states table, row \"Q1 answered, no country\"",
+      "line": 286,
+      "claim": "The screen replaces the holidays list with PORTAL_MESSAGES.noCountry whenever no country is stated, while REQ-01-019 answers that same caller the global holidays. On an organization holding a global holiday the screen says no calendar reaches the caller while discarding rows the body carried.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:286 — 'Q1 answered, no country | The holidays list is replaced by PORTAL_MESSAGES.noCountry and a link to the profile.' specs/portal/01-home.md:175 — 'IF the caller's membership states no country, THEN THE SYSTEM SHALL answer only the holidays whose countryCode is null.' Concrete case: an organization with one holiday whose countryCode is null, and a member whose membership states no country. GET .../portal/home answers holidays.countryCode null and holidays.upcoming carrying that one row — the API is built and TC-01-INT-07 asserts exactly this. The screen, built to the states table, draws 'Nobody has stated your country, so no holiday calendar reaches you.' in place of the list and never draws the row. Both statements are implemented as written; they describe different screens for one body.",
+        "source": "specs/portal/01-home.contracts.md:286"
+      },
+      "suggestedFix": "Decide which is true and say so in one place: either the sentence is drawn only when holidays.upcoming is empty (and the list is drawn whenever it is not, whatever countryCode says), or REQ-01-019 stops answering global rows to a member with no country. The implementation follows the states table today because that table is determinate; no case in the bundle distinguishes the two readings, because every case with no country also has no global holiday."
+    },
+    {
+      "stage": "implement",
+      "id": "L2",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-001",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/README.md",
+      "symbol": "Blast Radius",
+      "line": 1,
+      "claim": "The README calls the landing move 'mechanical and enumerable' and offers a grep as 'the whole list'. It is short by one file and six call sites, and short again by a file whose assertion the move invalidates.",
+      "witness": {
+        "kind": "command",
+        "detail": "`grep -rn \"waitForURL('\\*\\*/members')\" e2e/tests | wc -l` answers 33 across 28 files. It does not find e2e/tests/client-participants.spec.ts:32, whose signInUi waits `**/${destination}` and is called with 'members' at lines 180, 227, 282, 341, 391 and 565. Nor does it find e2e/tests/responsive.spec.ts:31, which asserts getByTestId('page-title') immediately after the shared signIn() helper — an id the portal home's <h1> does not carry, since it carries portal-greeting. That case failed on the first run of this stage and was repaired by navigating to a screen that has a page title.",
+        "source": "specs/portal/README.md"
+      },
+      "suggestedFix": "Where a blast radius is offered as a grep, the grep has to be the one that finds the parameterised call sites too, and it cannot find an assertion that depends on the landing without naming it. The plan's T9 allCallSites carried the true enumeration for the waits; responsive.spec.ts was in neither."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/reports/reports.service.ts",
+      "symbol": "`PORTAL_MESSAGES.noProject`",
+      "claim": "\"`PORTAL_MESSAGES.noProject`\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"(No project)\" -- apps\napps/api/src/reports/reports.service.ts",
+        "source": "specs/portal/01-home.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "implement",
+      "id": "L1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-019",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Screens, states table, row \"Q1 answered, no country\"",
+      "line": 286,
+      "claim": "The screen replaces the holidays list with PORTAL_MESSAGES.noCountry whenever no country is stated, while REQ-01-019 answers that same caller the global holidays. On an organization holding a global holiday the screen says no calendar reaches the caller while discarding rows the body carried.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:286 — 'Q1 answered, no country | The holidays list is replaced by PORTAL_MESSAGES.noCountry and a link to the profile.' specs/portal/01-home.md:175 — 'IF the caller's membership states no country, THEN THE SYSTEM SHALL answer only the holidays whose countryCode is null.' Concrete case: an organization with one holiday whose countryCode is null, and a member whose membership states no country. GET .../portal/home answers holidays.countryCode null and holidays.upcoming carrying that one row — the API is built and TC-01-INT-07 asserts exactly this. The screen, built to the states table, draws 'Nobody has stated your country, so no holiday calendar reaches you.' in place of the list and never draws the row. Both statements are implemented as written; they describe different screens for one body.",
+        "source": "specs/portal/01-home.contracts.md:286"
+      },
+      "suggestedFix": "Decide which is true and say so in one place: either the sentence is drawn only when holidays.upcoming is empty (and the list is drawn whenever it is not, whatever countryCode says), or REQ-01-019 stops answering global rows to a member with no country. The implementation follows the states table today because that table is determinate; no case in the bundle distinguishes the two readings, because every case with no country also has no global holiday."
+    },
+    {
+      "stage": "implement",
+      "id": "L2",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-001",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/README.md",
+      "symbol": "Blast Radius",
+      "line": 1,
+      "claim": "The README calls the landing move 'mechanical and enumerable' and offers a grep as 'the whole list'. It is short by one file and six call sites, and short again by a file whose assertion the move invalidates.",
+      "witness": {
+        "kind": "command",
+        "detail": "`grep -rn \"waitForURL('\\*\\*/members')\" e2e/tests | wc -l` answers 33 across 28 files. It does not find e2e/tests/client-participants.spec.ts:32, whose signInUi waits `**/${destination}` and is called with 'members' at lines 180, 227, 282, 341, 391 and 565. Nor does it find e2e/tests/responsive.spec.ts:31, which asserts getByTestId('page-title') immediately after the shared signIn() helper — an id the portal home's <h1> does not carry, since it carries portal-greeting. That case failed on the first run of this stage and was repaired by navigating to a screen that has a page title.",
+        "source": "specs/portal/README.md"
+      },
+      "suggestedFix": "Where a blast radius is offered as a grep, the grep has to be the one that finds the parameterised call sites too, and it cannot find an assertion that depends on the landing without naming it. The plan's T9 allCallSites carried the true enumeration for the waits; responsive.spec.ts was in neither."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/reports/reports.service.ts",
+      "symbol": "`PORTAL_MESSAGES.noProject`",
+      "claim": "\"`PORTAL_MESSAGES.noProject`\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"(No project)\" -- apps\napps/api/src/reports/reports.service.ts",
+        "source": "specs/portal/01-home.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — an assertion whose outcome is decided by the calendar",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "TC-01-INT-04",
+      "line": 540,
+      "claim": "TC-01-INT-04 seeds its in-month time entries at today−1, −2 and −3, which fall in the previous calendar month on the 1st, 2nd or 3rd, so the case fails against correct code on those days",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-INT-04",
+        "detail": "portal.spec.ts:540-542 creates entries at ymdUtc(-1), (-2) and (-3) and :549 asserts totalMinutes 270 and daysWithEntry 3. contracts Edge case 13 says 'Today is the 1st of the month — the month range is that single day so far; daysWithEntry is 0 or 1', so on 2026-10-01 the three entries land in September and totalMinutes is 0.",
+        "source": "specs/portal/01-home.contracts.md — Edge case 13"
+      },
+      "suggestedFix": "seed the three in-month entries at fixed days of month.startDate rather than at offsets from today"
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — an assertion whose outcome is decided by the calendar",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "TC-01-INT-09",
+      "line": 703,
+      "claim": "the expectation of exactly two anniversaries holds only when no leap day falls in the last twelve months",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-INT-09",
+        "detail": "portal.spec.ts:703 backdates joinedAt to the same month and day two calendar years ago and :710 asserts two anniversaries, while the window start is today − 365 days (portal-entry.types.ts:121-122). A run on 2028-03-01 puts the Y=1 anniversary at 2027-03-01, 366 days back and outside the window. Separate from F3 and it survives whatever the spec decides there.",
+        "source": "apps/api/src/portal/portal-entry.types.ts:121"
+      },
+      "suggestedFix": "backdate by a day count and assert the anniversaries the window then contains, or freeze the clock as TC-01-INT-03 does"
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — the assertion the case exists for is not the one written",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "TC-01-INT-13",
+      "line": 855,
+      "claim": "the 'no row in the table' clause is checked before the first settings read, so it cannot detect a read that writes one",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-INT-13",
+        "detail": "portal.spec.ts:855-856 asserts findUnique is null, then :858 performs the GET, and nothing re-reads the table. If readGroups were changed to upsert defaults — which REQ-01-049 and REQ-01-054 forbid — every assertion in the case would still pass. The same gap sits in TC-01-INT-02, whose before/after row counts at :460-464 and :470-474 cover Membership, Vacancy and Project but not OrganizationPortalSettings, the one table a news read touches, nor Client.",
+        "source": "specs/portal/01-home.md:200"
+      },
+      "suggestedFix": "move the row-absence check to after the GET, and add organizationPortalSettings and client to TC-01-INT-02's counts"
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing; contracts §Routes",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "TC-01-INT-13",
+      "line": 847,
+      "claim": "the 403 on GET .../portal/settings is asserted nowhere; only the PUT refusal is exercised",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts §Routes lists for GET .../portal/settings: '403 PORTAL_MESSAGES.settingsForbidden (a member of this organization without the capability)'. The only 403 assertion in portal.spec.ts is at :888-889 against putSettings. PortalSettingsService.readGroupsForManager (:57-62) carries the GET half and no case reaches it, so removing its requireManager call would break no test. TC-01-INT-13's Asserts list names the GET at 200 only, so this is a gap in the spec's case register as much as in the file.",
+        "source": "specs/portal/01-home.contracts.md — §Routes"
+      },
+      "suggestedFix": "add a manager GET .../portal/settings leg asserting 403 with PORTAL_MESSAGES.settingsForbidden"
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "sweep 5 — a stated fact of the case is not asserted",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "TC-01-INT-18",
+      "line": 1104,
+      "claim": "TC-01-INT-18 does not assert the joining date its Expected Result names",
+      "witness": {
+        "kind": "test",
+        "test": "TC-01-INT-18",
+        "detail": "The case's Expected Result: 'The member entry carries the name, the job title, the joining date and a link to that member's card.' portal.spec.ts:1101-1104 asserts subject.name, link and the jobTitle fact; nothing touches the joinedAt fact that portal-entry.service.ts:230 pushes, so dropping it would break nothing. REQ-01-045 names joinedAt as part of the answer.",
+        "source": "specs/portal/01-home.md:352"
+      },
+      "suggestedFix": "assert the joinedAt fact alongside the jobTitle fact"
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "contracts — facts[].value is the string the page draws",
+      "file": "apps/api/src/portal/portal-entry.service.ts",
+      "symbol": "buildMemberEntry",
+      "line": 230,
+      "claim": "the joinedAt fact carries a raw ISO instant and the entry page renders fact.value verbatim, so the screen shows '2024-09-08T00:00:00.000Z' where every other fact value is a human string",
+      "witness": {
+        "kind": "rule",
+        "detail": "portal-entry.service.ts:230 pushes `{ key: 'joinedAt', label: 'Joined', value: membership.joinedAt.toISOString() }`; apps/web/app/org/[orgId]/news/[entryId]/page.tsx:365 renders `<dd>{fact.value}</dd>` with no per-key formatting. The contract's facts example carries display-ready strings only ('Marta Kowalska', '45 minutes'), and the interview-length fact on the same route is already formatted server-side.",
+        "source": "specs/portal/01-home.contracts.md — GET .../portal/news/{entryId}"
+      },
+      "suggestedFix": "format the joining date server-side, as the duration fact already is"
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "contracts vs cases — what `link` carries on a project entry",
+      "file": "apps/api/src/portal/portal-entry.service.ts",
+      "symbol": "buildProjectEntry",
+      "line": 342,
+      "claim": "`link` is hardcoded null for every project entry and every reader, while the contract ties link to REQ-01-047 and TC-01-INT-18 pins it only for the unassigned reader",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts: 'link carries the in-app destination the reader may open — /org/{orgId}/members/{id} on a person's entry, null where the reader may open nothing (REQ-01-047)'. TC-01-INT-18: 'the unassigned reader's carries no roster, no client and link: null'. Known Gaps says only that a user can open no project screen. The three do not settle what an assigned reader or a manage-projects holder is answered, so the implementation's choice is unguarded either way.",
+        "source": "specs/portal/01-home.contracts.md — GET .../portal/news/{entryId}"
+      },
+      "suggestedFix": "state in the document whether a reader holding REQ-01-047's test is answered a project link, or that link is null for the kind outright"
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "REQ-01-020/021 — what 'open' spans",
+      "file": "apps/api/src/portal/portal-home.service.ts",
+      "symbol": "buildRequests",
+      "line": 334,
+      "claim": "the personal half filters status 'open' alone, while the requests area treats ['open','answered'] as the live span, so the two screens can answer a different count for the same person on the same day",
+      "witness": {
+        "kind": "rule",
+        "detail": "portal-home.service.ts:336 filters `status: 'open'`. apps/api/src/requests/requests.service.ts:260 and :265 count a member's live requests with `status: { in: ['open','answered'] }`, and :131, :144, :153 treat both as non-terminal. REQ-01-020 says 'open requests' without naming the statuses.",
+        "source": "specs/portal/01-home.md:REQ-01-020"
+      },
+      "suggestedFix": "say in the document which statuses the panel spans; if both, use the same span the requests area uses"
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-32",
+      "rule": "reviewer — blast radius",
+      "file": "apps/web/src/layout/Sidebar.tsx",
+      "symbol": "Sidebar",
+      "line": 303,
+      "claim": "the rail's logo still addresses /org/{orgId}/members after the organization root became the home screen, so the shell now offers two different 'home' destinations",
+      "witness": {
+        "kind": "rule",
+        "detail": "Sidebar.tsx:303 passes logoHref={`/org/${orgId}/members`} to the Rail, unchanged by this diff, while REQ-01-001 moves the landing to /org/{orgId} and REQ-01-003 puts Team overview first in the rail pointing at the same root. Nothing in the bundle asks for the logo to move — contracts §Screens says only that 'The login form changes its destination and nothing else' — so this is for a person, not a defect against a rule.",
+        "source": "specs/portal/01-home.md:REQ-01-001"
+      },
+      "suggestedFix": "none in this run; a person decides whether the logo follows the landing, in a document"
+    },
+    {
+      "stage": "review",
+      "id": "N10",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "sweep 11 — a mechanism applied at some call sites and not the rest",
+      "file": "apps/api/src/portal/portal-settings.service.ts",
+      "symbol": "requireCaller",
+      "line": 150,
+      "claim": "the settings pair answers a bare 403 where every other route in this spec answers 404 for the same state — a session whose account holds no active membership in this organization",
+      "witness": {
+        "kind": "rule",
+        "detail": "resolvePortalCaller (portal-entry.types.ts:163) and PortalHomeService.requireMembership (portal-home.service.ts:164) both throw NotFoundException on `!membership || status !== 'active' || organizationId !== organizationId`; portal-settings.service.ts:150 throws ForbiddenException() on the identical condition, which contradicts contracts §Routes ('403 … a member of this organization without the capability') and §Security. S3 raised this as a blocker on the scenario 'a removed member's cookie still passes SessionGuard'; I checked it and the scenario does not hold — apps/api/src/members/members.service.ts:245-248 rotates securityStamp inside the removal transaction, so a removed member's session is dead at SessionGuard, and OrgScopeGuard already answers 404 to a client principal and to a wrong orgId before the service is reached. I could construct no live session that reaches this branch, so it is demoted to a note. It is worth recording because the branch copies RequestTopicsService.requireCaller (apps/api/src/requests/request-topics.service.ts:434-453) verbatim, so the same inconsistency is now in two areas, and it is one reachable state away from being a live refusal-discipline defect.",
+        "source": "specs/portal/01-home.contracts.md — §Routes, refusal discipline"
+      },
+      "suggestedFix": "throw NotFoundException from the no-active-membership / wrong-organization branch, keeping ForbiddenException(settingsForbidden) for the capability check alone"
+    },
+    {
+      "stage": "review",
+      "id": "N11",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "sweep 11 — a mechanism applied at some call sites and not the rest",
+      "file": "apps/web/app/org/[orgId]/news/[entryId]/page.tsx",
+      "symbol": "load",
+      "line": 212,
+      "claim": "the entry page's fetch has no cancellation guard, unlike its sibling on the home screen, so a response for a superseded entryId can write itself into state",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/web/app/org/[orgId]/page.tsx:92-113 wraps its fetch in a `cancelled` flag checked before every setState and cleared in the effect teardown. `load` (news/[entryId]/page.tsx:212-238) has none, and the effect at :240-243 calls it directly. If the component instance is reused across a params change — /org/X/news/A to /org/X/news/B, the same route segment — and A's response lands after B's, the page draws A's title, facts and share URL under B's address. Noted rather than blocked because no in-app path navigates entry to entry in this release: the feed links in, and portal-entry-back and entry.link both lead out.",
+        "source": "apps/web/app/org/[orgId]/page.tsx:98"
+      },
+      "suggestedFix": "carry the same cancelled flag through load's setState calls"
+    },
+    {
+      "stage": "review",
+      "id": "N12",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-36",
+      "rule": "sweep 12 — one value with two sources (UI-07)",
+      "file": "apps/web/app/org/[orgId]/news/[entryId]/page.tsx",
+      "symbol": "formatTimestamp",
+      "line": 186,
+      "claim": "the entry's stamp is formatted in the browser's timezone while the rest of the portal resolves dates in Account.timezone",
+      "witness": {
+        "kind": "scenario",
+        "detail": "formatTimestamp (:186-194) builds an Intl.DateTimeFormat with no timeZone option. An account whose timezone is Europe/Warsaw, read from a browser set to America/Los_Angeles, opens an entry with occurredAt 2026-09-08T00:30:00Z: the home screen's greeting says Tuesday 8 September and the entry page's stamp says 'Monday, 7 September, 17:30'. The spec is silent on this route's zone and the response body carries none, which is why this is a note where F5 is a blocker.",
+        "source": "specs/portal/01-home.md:112"
+      },
+      "suggestedFix": "pass the caller's timezone to Intl.DateTimeFormat on this page"
+    },
+    {
+      "stage": "review",
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-27",
+      "rule": "CLAUDE.md — Testing, 'Selectors are data-testid only'",
+      "file": "e2e/tests/portal.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 358,
+      "claim": "the geometry case reaches its measurement targets by tag name — locator('b') and locator('span').last() — so a structural edit to either panel silently moves the measurement onto a different box",
+      "witness": {
+        "kind": "rule",
+        "detail": "portal.spec.ts:358-359 selects the request title as `getByTestId('portal-request-row').first().locator('b')` and :365-366 the minutes cell as `getByTestId('portal-month-project-row').first().locator('span').last()`. The month row is today `<span>{projectName}</span><span>{minutes}</span>` (PortalMonthPanel.tsx:135-136), so adding any span moves the assertion onto it while the case keeps passing. A note rather than a blocker because the fix needs two ids the contracts' testid table does not name, and CLAUDE.md forbids a test id the spec does not name — so this cannot be closed in code alone.",
+        "source": "CLAUDE.md — Testing"
+      },
+      "suggestedFix": "add ids for the title and minutes cells to the contracts' Required data-testid table, then assert against them"
+    },
+    {
+      "stage": "review",
+      "id": "N14",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "spec/REQ-01-039 — one sentence, two builders",
+      "file": "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "symbol": "feedSentence",
+      "line": 148,
+      "claim": "the feed's sentence is composed twice, once in the feed and once on the entry page, with nothing holding the copies together",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-01-039 requires the entry page to be headed by 'the same sentence the feed drew for it'. feedSentence (PortalFeed.tsx:148-203) composes the four sentences and news/[entryId]/page.tsx:171-183 composes them again from its own literals. feedSentence is not exported, so nothing prevents drift; the contract answers no title field on the entry route, so composing it client-side is what the spec leaves available. They agree today, which is why this is a note.",
+        "source": "specs/portal/01-home.md:322"
+      },
+      "suggestedFix": "export one sentence builder and have both screens read it"
+    },
+    {
+      "stage": "review",
+      "id": "N15",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "CLAUDE.md — Navigation, no dead links",
+      "file": "apps/web/app/org/[orgId]/PortalTimeOffPanel.tsx",
+      "symbol": "PortalTimeOffPanel",
+      "line": 134,
+      "claim": "the way out of the no-country state points at a screen where the holiday country cannot be stated",
+      "witness": {
+        "kind": "rule",
+        "detail": "'Set it on your profile →' links to /account/settings. resolveMemberHolidayCountry (packages/validation/src/reports.ts:546-573) resolves the holiday country as the country stated on the membership and nothing else — 'Never a phone country' — and AccountSettingsScreen.tsx:341 carries only a phone country code. A reader who follows the link finds nothing there that changes the sentence they came from. The mock says 'profile' without naming a route, so which destination is right is a product question.",
+        "source": "packages/validation/src/reports.ts:547"
+      },
+      "suggestedFix": "point at the screen where a membership's country is set, or drop the link"
+    },
+    {
+      "stage": "review",
+      "id": "N16",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-11",
+      "rule": "contracts §What the screen borrows — Badge",
+      "file": "apps/web/app/org/[orgId]/PortalRequestsPanel.tsx",
+      "symbol": "RequestRow",
+      "line": 93,
+      "claim": "the request badges take a tone the borrow table does not list, and a solid paint where the mock draws a tint",
+      "witness": {
+        "kind": "rule",
+        "detail": "The borrow table names two uses: Badge neutral (§59) for categories and a request's Open state, and Badge warning/error (§32) for Overdue alone. The implementation adds status=\"info\" for 'Waiting on you' (:96) and maps Overdue to status=\"inactive\" (:94), which packages/ds/src/components/core/Badge.tsx:26-27 paints as a solid --status-error with white ink and documents as a person state. The mock draws both as tints (mock:136-138). No new colour is invented, so this is a note.",
+        "source": "specs/portal/01-home.mock.html:136"
+      },
+      "suggestedFix": "settle the three request tones against the borrow table"
+    },
+    {
+      "stage": "review",
+      "id": "N17",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-29",
+      "rule": "contracts §Screens, written from the mock",
+      "file": "apps/web/app/org/[orgId]/PortalMonthPanel.tsx",
+      "symbol": "PortalMonthPanel",
+      "line": 116,
+      "claim": "several details the mock draws are absent or reworded, with no record of the decision",
+      "witness": {
+        "kind": "rule",
+        "detail": "Against mock:341-352 the proportion bar on each project row (.sbar) is not drawn, and the caption reads 'Tracked this month' where the mock reads 'Tracked in September'; PortalTimeOffPanel.tsx:125 draws 'Next holidays · PL' where the mock draws 'Next holidays · Poland'. The mock's third figure ('Yesterday') is correctly omitted — the contract's home body carries no such field — but the bar is derivable from minutes / totalMinutes, which the body does carry. Also: formatDurationHuman (packages/validation/src/index.ts:2628) returns '4h 5m' unpadded where §Geometry & motion writes '4h 05m'; tabular-nums still aligns the columns, so the glyph count simply differs from the one the table reasoned about. None of these is a rule in §Screens or §Geometry & motion, so each is a note.",
+        "source": "specs/portal/01-home.mock.html:341"
+      },
+      "suggestedFix": "draw the bar and the country name and pad the minutes, or record in the spec that they were dropped"
+    },
+    {
+      "stage": "review",
+      "id": "N18",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-11",
+      "rule": "CLAUDE.md — Design system; DS gaps",
+      "file": "apps/web/app/org/[orgId]/news/[entryId]/page.tsx",
+      "symbol": "tileStyle",
+      "line": 147,
+      "claim": "a dozen size literals beyond the two the DS gaps table records reach app code, and the subject tile is a control the design system does not have, written twice on screens",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts §DS gaps records exactly two: --feed-col and the '32px / var(--font-weight-light)' figure pair. Also written as literals: the 8px holiday dot and 74px date column (PortalTimeOffPanel.tsx:56-58, :50), the 36px feed tile and 32px gear and letterSpacing 0.06em (PortalFeed.tsx:128-129, :32-33, :48), gap 2px and letterSpacing -0.5px (PortalMonthPanel.tsx:37, :46), lineHeight 1.6 and maxWidth 34ch (PortalFeed.tsx:373), maxWidth 720 (settings/portal/page.tsx:139), and the 40px subject tile here and in PortalFeed — which the mock sizes at 56 on the entry head (mock:231) and 36 in the feed (mock:156), so the head is drawn at neither. '1px solid var(--border-subtle)' (PortalRequestsPanel.tsx:37, PortalTimeOffPanel.tsx:29) is spelled 'var(--border-width-hairline)' in settings/portal/page.tsx:155, so one hairline is written two ways inside one change. I considered blocking under CR-11 and did not: the register's remedy is to add the value to the design system and record it in the spec's DS gaps table, and the implementer may not edit a spec, so routing this to `code` cannot terminate. It goes to a person instead. The 400px feed column is NOT part of this — it is spec-mandated and is the first row of the DS gaps table.",
+        "source": "specs/portal/01-home.contracts.md — §DS gaps"
+      },
+      "suggestedFix": "spell the hairline one way, size the entry head's tile and Avatar as the mock does, and add DS gaps rows (or tokens) for whichever of these the next screen would copy"
+    },
+    {
+      "stage": "review",
+      "id": "N19",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "contracts §Validation Rules — the limit the client ships",
+      "file": "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "symbol": "fetchPage",
+      "line": 273,
+      "claim": "the feed ships no limit, where the contract says the client ships one as a constant",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts §Validation Rules: 'The client validates nothing on the read routes — it never composes a cursor by hand, and the limit is a constant it ships.' fetchPage builds the query as `cursor ? '?cursor=…' : ''` and never sends limit, relying on the server default of 20. Behaviour is identical today; the divergence is that the page size is now a server constant the screen cannot see.",
+        "source": "specs/portal/01-home.contracts.md — §Validation Rules"
+      },
+      "suggestedFix": "send the limit the screen means, or amend the contract sentence"
+    },
+    {
+      "stage": "review",
+      "id": "N20",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "one rule, two implementations",
+      "file": "apps/api/src/portal/portal-home.service.ts",
+      "symbol": "buildTimeOff",
+      "line": 238,
+      "claim": "the reserve block re-implements VacationService's balance arithmetic as a second copy rather than calling the shipped one",
+      "witness": {
+        "kind": "rule",
+        "detail": "portal-home.service.ts:254-285 duplicates apps/api/src/vacation/vacation.service.ts:224-249 (loadRequests), :362-371 (currentYearBalance) and :379-400 (buildBalance) in effect — the current-year transaction sum, the approved/pending aggregation by startDate year, and calculateAvailableDays with the pending hold. The two agree today and nothing keeps them agreeing; a change to the vacation rule now has to be found in two files, and the home screen would keep answering the old number.",
+        "source": "apps/api/src/vacation/vacation.service.ts:379"
+      },
+      "suggestedFix": "extract the aggregation once and call it from both, or state in the document that the portal owns its own copy"
+    },
+    {
+      "stage": "implement",
+      "id": "L3",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-027",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/01-home.cases.md",
+      "symbol": "TC-01-INT-09",
+      "line": 234,
+      "claim": "The review's F3 blocked on a contradiction between TC-01-INT-09 and REQ-01-026 quoting text that no longer exists. The cases file changed after this run's plan was compiled; the case now agrees with REQ-01-026 and is implementable, so the finding was withdrawn rather than settled or halted on.",
+      "witness": {
+        "kind": "command",
+        "detail": "Hashing the bundle against the shas the handoff recorded: specs/portal/01-home.contracts.md UNCHANGED; specs/portal/01-home.cases.md CHANGED, bf9ec62e925706174a57fa4266ef8b1a2f68b95dca1a4a1731f5d25ba9f42de8 → a03bcc84669732febdd561e3c38f3927453ec38003bdb7281c59166e9d95acd9; specs/portal/01-home.md unchanged at 40eca1daf21f6500a23ef3cd2ffba63df41fcc440547eb2b8286518476102261. The review quoted TC-01-INT-09 as expecting 'two member-anniversary entries with detail.years 1 and 2' and a member-joined for the backdated member. The current text reads: 'No member-joined entry whose subject is the backdated member — its joining is 731 days ago, outside REQ-01-026's window — and exactly one member-anniversary entry for it, with detail.years 2; its first anniversary falls 366 days ago and is outside the window too.' The test was rewritten to that.",
+        "source": "specs/portal/01-home.cases.md:234"
+      },
+      "suggestedFix": "Nothing in the documents needs to change. Recorded because a gate blocked on a revision that had already been repaired, and because a run whose plan pins bundle shas can be handed findings written against a different revision — the shas are the cheap check that says so."
+    },
+    {
+      "stage": "implement",
+      "id": "L4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-052",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Error Messages",
+      "line": 168,
+      "claim": "Closing the review's CR-07 finding required five new PORTAL_MESSAGES keys for failure text, and the contracts' Error Messages table enumerates ten rows, none of them a failure sentence. The table no longer lists every message the area exports.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md §Error Messages lists ten rows — noProject, limitInvalid, cursorInvalid, groupsInvalid, settingsForbidden, feedEmptyTitle, feedEmptyBody, monthEmpty, requestsEmpty, noCountry — and every one is a success-path or refusal string. The review's blocking finding required that six inline sentences such as the Q1 failure banner's move into packages/validation, on the convention every other area follows (SIGNING_PROVIDER settings.saveFailed, HOLIDAY toastServerError, ENVELOPE_MESSAGES.generic). packages/validation/src/portal.ts now exports monthLoadFailed, feedLoadFailed, entryLoadFailed, settingsLoadFailed and settingsSaveFailed, which the table does not carry.",
+        "source": "specs/portal/01-home.contracts.md:168"
+      },
+      "suggestedFix": "Either add the five failure rows to §Error Messages, or state that the table enumerates the messages the spec decides and that transport-failure text follows the shared convention without being listed. The second is probably right — no other area's spec lists its generic failure string — but it should be said once rather than inferred."
+    },
+    {
+      "stage": "implement",
+      "id": "L1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-019",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Screens, states table, row \"Q1 answered, no country\"",
+      "line": 286,
+      "claim": "The screen replaces the holidays list with PORTAL_MESSAGES.noCountry whenever no country is stated, while REQ-01-019 answers that same caller the global holidays. On an organization holding a global holiday the screen says no calendar reaches the caller while discarding rows the body carried. Unchanged since attempt 5 and still true.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:286 — 'Q1 answered, no country | The holidays list is replaced by PORTAL_MESSAGES.noCountry and a link to the profile.' specs/portal/01-home.md:175 — 'IF the caller's membership states no country, THEN THE SYSTEM SHALL answer only the holidays whose countryCode is null.' Concrete case: an organization with one holiday whose countryCode is null, and a member whose membership states no country. GET .../portal/home answers holidays.countryCode null and holidays.upcoming carrying that row — TC-01-INT-07 asserts it. The screen draws the sentence in place of the list and never draws the row.",
+        "source": "specs/portal/01-home.contracts.md:286"
+      },
+      "suggestedFix": "Either draw the sentence only when holidays.upcoming is empty, or stop answering global rows to a member with no country. The implementation follows the states table because that table is determinate; no case distinguishes the readings, because every case with no country also has no global holiday."
+    },
+    {
+      "stage": "implement",
+      "id": "L5",
+      "target": "self",
+      "severity": "note",
+      "criterion": "CR-16",
+      "rule": "pipeline/environment",
+      "file": "e2e/environment.ts",
+      "symbol": "FALLBACK_DATABASE_URL",
+      "line": 81,
+      "claim": "A foreign Postgres took port 5433 mid-session — the port every suite here is configured for — and produced E2E failures that read as product defects: 30-second navigation timeouts while the dev server logged 200s for the same URL. It also took the integration suite down between two runs of it.",
+      "witness": {
+        "kind": "command",
+        "detail": "`netstat -ano | grep \":5433\" | grep LISTENING` returns two different PIDs (7152 and 5528). A direct pg connect from the host: `postgresql://devscribed:devscribed@127.0.0.1:5433/devscribed_dev` fails authentication, while `postgresql://devscribed:devscribed@127.0.0.1:5434/devscribed_dev` connects and answers `current_user = devscribed` — 5434 being the second port the project's own docker-compose publishes for the same container. `docker exec psql` succeeds against the container regardless, because it uses the container socket, which is why the container looked healthy. Before the workaround: integration `Error: P1000: Authentication failed` and e2e `client-participants` 3 failed. After pointing the untracked apps/api/.env at 5434: integration 19/19, and the targeted e2e 24 passed with no failures and no flakes.",
+        "source": "e2e/environment.ts:81"
+      },
+      "suggestedFix": "Nothing in the product. Recorded because the failure was indistinguishable from a product defect for several runs, and because the lever already exists: both apps/api/test/database-url.ts and e2e/environment.ts honour TEST_DATABASE_URL and E2E_DATABASE_URL, and both fall back to apps/api/.env. A person who wants 5433 back needs to find what took it; nothing here killed it."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/reports/reports.service.ts",
+      "symbol": "`PORTAL_MESSAGES.noProject`",
+      "claim": "\"`PORTAL_MESSAGES.noProject`\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"(No project)\" -- apps\napps/api/src/reports/reports.service.ts",
+        "source": "specs/portal/01-home.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-25",
+      "rule": "sweep 8 — the test no longer performs its case's Steps",
+      "file": "e2e/tests/portal.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 396,
+      "claim": "the rewritten case seeds requests in one organization only, while its own Steps seed a request in both and its Expected Result asserts the invariant 'in both organizations'",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.cases.md TC-01-E2E-08 Steps: 'Seed a project whose name is 100 characters, a holiday whose name is 80, and a request whose title is 200 … Then seed short-named equivalents in a second organization and record the same three.' Expected Result: 'In both organizations the request title's left edge is identical across every row.' portal.spec.ts:333 returns from seedGeometryOrg without raising any request, and seedVariedRequests is called once, for longOrg only (:396). The short organization therefore draws portal-requests-empty and the 'in both organizations' clause is vacuous for it. The within-organization comparison the fix added is the one that discriminates, so this is a note rather than a blocker — but the case as written is not what runs, and the bundle is frozen, so the divergence has nowhere to be recorded.",
+        "source": "specs/portal/01-home.cases.md:455"
+      },
+      "suggestedFix": "call seedVariedRequests for the short organization too with short titles and assert the same shared left edge there, which is what the case's own text asks for"
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — an assertion that cannot fail for the defect its own comment claims it catches",
+      "file": "e2e/tests/portal.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 417,
+      "claim": "the new right-edge probe cannot see an untruncated title, contrary to the comment beside it",
+      "witness": {
+        "kind": "scenario",
+        "detail": "portal.spec.ts:417-420 says 'A long title that was not truncated (the defect this case is also built to catch) would push that cell out of place.' It would not. The row is `gridTemplateColumns: 'minmax(0,1fr) auto auto'` (PortalRequestsPanel.tsx:33) and the title sits inside the first track's grid item, itself `minWidth: 0` (:89). A `<b>` left at display:inline with white-space:nowrap — precisely the state before this attempt's one-line fix at :43 — overflows its containing block with overflow:visible; it contributes nothing to the 1fr track's minimum, which is 0, so the auto tracks and the badge's right edge are exactly where they were. The probe passes either way. The left-edge probe above it is the one doing the work.",
+        "source": "apps/web/app/org/[orgId]/PortalRequestsPanel.tsx:33"
+      },
+      "suggestedFix": "either delete the claim from the comment, or assert the truncation directly — compare the `<b>`'s clientWidth against its scrollWidth on the 200-character row"
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "a comment cites a requirement that says something else",
+      "file": "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "symbol": "formatRelativeTime",
+      "line": 96,
+      "claim": "the new docstring anchors the timezone rule to REQ-01-037, which is about not announcing a disabled group",
+      "witness": {
+        "kind": "rule",
+        "detail": "PortalFeed.tsx:99-100: 'drawn in the caller's own Account.timezone … never the device's zone (REQ-01-037, portal-types.ts today)'. specs/portal/01-home.md:206 REQ-01-037 reads 'THE SYSTEM SHALL NOT state on the home screen that any group is switched off.' The requirement that governs the caller's date is REQ-01-010, which portal-types.ts:113-122 already names as the reason the greeting must not use new Date(). A reader following the citation lands on the wrong rule.",
+        "source": "specs/portal/01-home.md:206"
+      },
+      "suggestedFix": "cite REQ-01-010"
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "contracts §What the screen borrows — 'findable by a test' has no expressible form here",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "What the screen borrows — Preloader",
+      "line": 308,
+      "claim": "the Preloader borrow demands a wait that is findable by a test, but the contracts' testid table names no id for either wait and CLAUDE.md forbids adding one the spec does not name, so no test can assert a loading state on this screen",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts §What the screen borrows: '| Preloader (§23) | role=\"status\", findable by a test | Each of Q1 and Q2 draws its own |'. The role half is now met (PortalFeed.tsx:394, page.tsx:59/:65/:71). The findable half is not: `grep -rn \"status\\\"\\\\|Loading \" e2e/tests/portal.spec.ts` matches no loading assertion, §Required data-testid Attributes carries no preloader row, CLAUDE.md — Testing says 'Selectors are data-testid only, and the ids are named in the specs', and CR-27 blocks a test id the spec does not name. The demand cannot be closed in code alone. Separately, Q2's wait draws three regions all carrying role=\"status\" and the identical aria-label 'Loading what's new' (PortalFeed.tsx:391-396), so a screen reader is told the same sentence three times; §States asks for three Preloader entries, not three announcements.",
+        "source": "specs/portal/01-home.contracts.md:308"
+      },
+      "suggestedFix": "a person decides: either name a wait id in the contracts' testid table, or drop 'findable by a test' from the borrow; and give the three Q2 blocks one announced region rather than three"
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "a message and its table",
+      "file": "packages/validation/src/portal.ts",
+      "symbol": "PORTAL_MESSAGES",
+      "line": 25,
+      "claim": "the five new failure sentences are exported but appear in no table in the bundle, so the contracts' Error Messages list and the export no longer enumerate the same set",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:170-181 lists exactly ten PORTAL_MESSAGES rows and nothing else; packages/validation/src/portal.ts:9-30 now exports fifteen. Moving the sentences into the package was required (CR-07) and the spec names no string for a failed read anywhere, so the text had to be invented — but the table a future reader consults to learn what this spec's messages are is now short by five, and the spec is frozen, so nothing in the bundle records them.",
+        "source": "specs/portal/01-home.contracts.md:170"
+      },
+      "suggestedFix": "for a person: record the five in whichever document next speaks about the portal's messages, since this bundle may not be edited"
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing; test cases are numbered in the specs and the code references those ids",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "REQ-01-026 caller's own today",
+      "line": 857,
+      "claim": "the new integration case carries a requirement id but no TC id, because the cases register has no case for the zone boundary it proves",
+      "witness": {
+        "kind": "test",
+        "test": "no id",
+        "detail": "portal.spec.ts:857 is titled 'REQ-01-026 keeps a row inside the caller's own today even after the UTC day has rolled over'; every other case in the file names a TC id (e.g. :698 TC-01-INT-09, :1155 TC-01-INT-18). `grep -n 'TC-01-INT' specs/portal/01-home.cases.md` lists no case covering a non-UTC caller's window, which is exactly why the defect survived four passes of a UTC-run suite. The test is right to exist; it simply has nowhere in the register to point at, and the bundle is frozen.",
+        "source": "specs/portal/01-home.cases.md"
+      },
+      "suggestedFix": "for a person: give the boundary a numbered case in whichever document next speaks about the feed window, so the coverage is recorded rather than incidental"
+    },
+    {
+      "stage": "implement",
+      "id": "L6",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-010",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Screens, Q3",
+      "line": 263,
+      "claim": "The entry page draws its timestamp in the browser's zone while every other moment in this area is resolved in the caller's Account.timezone. It is not the defect the review raised — nothing can throw and no second source contradicts it on that screen — but the spec never says which clock the entry page reads, so the answer was chosen by the implementation rather than decided.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.md:114 REQ-01-010 — 'THE SYSTEM SHALL compute the personal half over the calendar month containing the caller's own today, resolved in Account.timezone, falling back to UTC when it is unset.' The contracts' §Screens Q3 row names the entry page's inputs as 'the entry id; the caller's role and project memberships' and says nothing about a zone. apps/web/app/org/[orgId]/news/[entryId]/page.tsx:188 builds `new Intl.DateTimeFormat('en-GB', { weekday, day, month, hour, minute })` with no timeZone option, so `occurredAt` is drawn in whatever zone the device is set to. A caller whose Account.timezone is America/Los_Angeles, reading on a laptop set to Europe/Warsaw, sees an entry's time in Warsaw while the home screen they arrived from resolved every date in Los Angeles.",
+        "source": "specs/portal/01-home.contracts.md:263"
+      },
+      "suggestedFix": "Say which clock an entry page reads. If it is the caller's, the page needs the zone the feed now resolves and the fix is one argument; if it is the device's, that is defensible for a single timestamp with nothing to contradict it and should be written down once. Left unchanged this attempt because no finding asked for it and it would be unrequested surface in a diff already under review."
+    },
+    {
+      "stage": "implement",
+      "id": "L1",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-019",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Screens, states table, row \"Q1 answered, no country\"",
+      "line": 286,
+      "claim": "The screen replaces the holidays list with PORTAL_MESSAGES.noCountry whenever no country is stated, while REQ-01-019 answers that same caller the global holidays. On an organization holding a global holiday the screen says no calendar reaches the caller while discarding rows the body carried. Carried forward unchanged from attempts 5 and 7; still true.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:286 — 'Q1 answered, no country | The holidays list is replaced by PORTAL_MESSAGES.noCountry and a link to the profile.' specs/portal/01-home.md:175 — 'IF the caller's membership states no country, THEN THE SYSTEM SHALL answer only the holidays whose countryCode is null.' Concrete case: an organization with one holiday whose countryCode is null, and a member whose membership states no country. GET .../portal/home answers holidays.countryCode null and holidays.upcoming carrying that row — TC-01-INT-07 asserts it. The screen draws the sentence in place of the list and never draws the row.",
+        "source": "specs/portal/01-home.contracts.md:286"
+      },
+      "suggestedFix": "Either draw the sentence only when holidays.upcoming is empty, or stop answering global rows to a member with no country. The implementation follows the states table because that table is determinate; no case distinguishes the readings, because every case with no country also has no global holiday."
+    },
+    {
+      "stage": "implement",
+      "id": "L4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "REQ-01-052",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Error Messages",
+      "line": 168,
+      "claim": "Five PORTAL_MESSAGES failure keys added in attempt 7 to close a CR-07 finding are not in the contracts' Error Messages table, which enumerates ten rows and no failure sentence. Carried forward.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md §Error Messages lists noProject, limitInvalid, cursorInvalid, groupsInvalid, settingsForbidden, feedEmptyTitle, feedEmptyBody, monthEmpty, requestsEmpty, noCountry — every one a success-path or refusal string. packages/validation/src/portal.ts additionally exports monthLoadFailed, feedLoadFailed, entryLoadFailed, settingsLoadFailed and settingsSaveFailed, added because a blocking finding required the six inline sentences to move into packages/validation on the convention every other area follows.",
+        "source": "specs/portal/01-home.contracts.md:168"
+      },
+      "suggestedFix": "Either add the five failure rows, or state once that the table enumerates the messages the spec decides and that transport-failure text follows the shared convention unlisted. The second is probably right — no other area's spec lists its generic failure string — but it should be said rather than inferred."
+    },
+    {
+      "stage": "implement",
+      "id": "L5",
+      "target": "self",
+      "severity": "note",
+      "criterion": "CR-16",
+      "rule": "pipeline/environment",
+      "file": "e2e/environment.ts",
+      "symbol": "FALLBACK_DATABASE_URL",
+      "line": 81,
+      "claim": "A foreign Postgres holds port 5433 on this machine — the port every suite here is configured for. It produced failures that read as product defects in attempt 7 and still costs retries: the two client-participants cases it hits were flaky again this attempt.",
+      "witness": {
+        "kind": "command",
+        "detail": "`netstat -ano | grep \":5433\" | grep LISTENING` returns two different PIDs. A direct pg connect from the host: 127.0.0.1:5433 fails authentication for devscribed/devscribed, while 127.0.0.1:5434 connects and answers current_user = devscribed — 5434 being the second port the project's own docker-compose publishes for the same container. `docker exec psql` succeeds either way, because it uses the container socket, which is why the container looks healthy. With apps/api/.env pointed at 5434: integration 20/20, targeted e2e exit 0 with 22 passed and 2 flaky (client-participants.spec.ts:167 and :248, the same pair, passing on retry).",
+        "source": "e2e/environment.ts:81"
+      },
+      "suggestedFix": "Nothing in the product. The lever exists: apps/api/test/database-url.ts and e2e/environment.ts both honour TEST_DATABASE_URL and E2E_DATABASE_URL and both fall back to apps/api/.env, which is untracked and now names 5434. A person who wants 5433 back has to find what took it; nothing here killed it."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/reports/reports.service.ts",
+      "symbol": "`PORTAL_MESSAGES.noProject`",
+      "claim": "\"`PORTAL_MESSAGES.noProject`\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"(No project)\" -- apps\napps/api/src/reports/reports.service.ts",
+        "source": "specs/portal/01-home.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-18",
+      "rule": "sweep 11 — a mechanism applied at some call sites and not the rest",
+      "file": "apps/api/src/portal/portal-home.service.ts",
+      "symbol": "tzOf",
+      "line": 137,
+      "claim": "the home route still resolves the caller's zone with the guard the two feed routes just stopped using, and echoes an unresolvable identifier back in month.timezone as the zone the month was computed in — while the month was in fact computed in UTC",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Same input as review 2's F1 — an account whose Account.timezone holds 'Europe/Warszawa', which POST /api/invitations/accept and PUT /api/account/settings both accept because validateTimezone checks non-emptiness alone (packages/validation/src/index.ts:1060-1064). That member calls GET /api/organizations/{orgId}/portal/home. tzOf (portal-home.service.ts:137-140) applies `typeof … === 'string' && trim().length > 0`, so it answers 'Europe/Warszawa' unchanged; :116 hands it to localDateInTz, which goes through wallClockParts and falls back to UTC parts on the RangeError (index.ts:2994-3016), so `today`, `startDate` and `endDate` are the UTC month — correct, and no 500. But the same raw string is carried into the response at :226 and answered as `month.timezone`, which the contracts sample presents as the zone the month was resolved in (specs/portal/01-home.contracts.md:33-36, Q1 at :261 — 'the calendar month of their today in Account.timezone'). So the body states a zone the computation did not use. Nothing renders it today — the web's only two date formatters over this block pass a literal timeZone: 'UTC' (portal-types.ts:124, :134) — which is why this is a note and not a blocker; the defect is a false claim in a contract-visible field, and the next reader of that field inherits it. The docstring on the new resolver says 'Every reader of a stored Account.timezone needs this, not just the writer' (hiring-time.ts:64-71), and this reader, inside the same diff, does not ask it.",
+        "source": "apps/api/src/portal/portal-home.service.ts:137"
+      },
+      "suggestedFix": "call resolvedTimeZone in tzOf, so the zone the month block reports is the zone the month was actually resolved in — one line, and it makes the resolver the single answer this run's diff gives for the column"
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing; test cases are numbered in the specs and the code references those ids",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "answers 200 for the feed and an entry page when Account.timezone cannot be resolved",
+      "line": 1198,
+      "claim": "the second review-driven integration case carries a review finding id in place of a TC id, because the cases register has no case for an unresolvable stored zone — the same gap pass 2 recorded for the zone-boundary case, now doubled",
+      "witness": {
+        "kind": "test",
+        "test": "no id",
+        "detail": "portal.spec.ts:1189-1196 heads the case 'Review F1 — an unresolvable Account.timezone reads 200, not 500' and :1198 titles it without any TC id; the neighbouring case at :857 is titled 'REQ-01-026 keeps a row inside the caller's own today…' with no id either, while every case the bundle specifies names one (:698 TC-01-INT-09, :1155 TC-01-INT-18). `grep -n 'Account.timezone' specs/portal/01-home.cases.md` returns nothing, and Edge case 12 of the contracts (specs/portal/01-home.contracts.md:348) covers 'unset' only, not 'set to something Intl cannot build' — which is why two rounds of a suite seeded with valid zones never saw either defect. Both tests are right to exist and neither can be given an id without editing a frozen bundle. Recording it so the coverage is deliberate rather than incidental.",
+        "source": "specs/portal/01-home.cases.md"
+      },
+      "suggestedFix": "for a person: give the unresolvable zone and the non-UTC window boundary numbered cases in whichever document next speaks about the portal feed, and say there what an unresolvable Account.timezone means — REQ-01-010 names only 'unset'"
+    }
+  ],
+  "preflight": {
+    "at": "2026-09-08T08:37:11.282Z",
+    "checks": [
+      {
+        "name": "config-valid",
+        "ok": true,
+        "detail": ".claude/ai-workflow.config.json parses and every track resolves"
+      },
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/portal-home\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-available",
+        "ok": true,
+        "detail": "the suite would take 3000/4000"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "32 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260825130709_hiring_vacancies_candidates_applications",
+      "20260826094500_application_cv_size",
+      "20260826121829_add_invitations_and_job_title",
+      "20260826150000_hiring_categories",
+      "20260826170000_hiring_criteria",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_manage_booking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260828170000_application_cv",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_candidate_soft_delete",
+      "20260901120000_spec_org_01_clients",
+      "20260901130000_spec_org_03_holidays",
+      "20260901140000_requests_01_requests",
+      "20260901140000_spec_16_billable_time",
+      "20260903120000_requests_02_request_topics",
+      "20260903120100_requests_02_request_topics_backfill",
+      "20260903130000_requests_03_client_participants",
+      "20260904120000_time_off_01_vacation_calendar",
+      "20260907120000_time_off_02_holiday_sourcing"
+    ]
+  },
+  "resumes": [
+    {
+      "at": "2026-09-08T09:30:41.666Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/incomplete-decision (specs/portal/01-home.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+        "to": "3bba8e34152e503501c14b13d728cdf6d3ef9317"
+      },
+      "specSha": {
+        "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+        "pendingUntilReplan": "e913c6052939ee528b25f0dc3b5e913548eda710cd31a054fa37282de9694746"
+      }
+    },
+    {
+      "at": "2026-09-08T09:58:37.392Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/portal/01-home.md); spec/contradiction (specs/portal/01-home.cases.md); spec/untestable-case (specs/portal/01-home.cases.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "3bba8e34152e503501c14b13d728cdf6d3ef9317",
+        "to": "69bba60c334e5ef2656d8fb90e2243e00861d26a"
+      },
+      "specEdits": [
+        "specs/portal/01-home.cases.md",
+        "specs/portal/01-home.contracts.md",
+        "specs/portal/01-home.md",
+        "specs/portal/01-home.mock.html",
+        "specs/portal/README.md"
+      ],
+      "specSha": {
+        "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+        "pendingUntilReplan": "45d79cf712f413e1ddbfce9ffa9594059a8520632fda9c8143195beadcbf67bf"
+      }
+    },
+    {
+      "at": "2026-09-08T10:18:19.853Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "pre_implement found a defect in the spec: spec/stale-statement (specs/portal/01-home.contracts.md)",
+      "reason": null,
+      "headAtInit": {
+        "from": "69bba60c334e5ef2656d8fb90e2243e00861d26a",
+        "to": "413177bc0b8b9eb21e38a038d22c285ee84ccf7e"
+      },
+      "specEdits": [
+        "specs/portal/01-home.cases.md",
+        "specs/portal/01-home.contracts.md",
+        "specs/portal/01-home.md"
+      ],
+      "specSha": {
+        "from": "936ef1081b1c3e91680c10b36abd967f977d007d74920c9766ec704f64980c5e",
+        "pendingUntilReplan": "40eca1daf21f6500a23ef3cd2ffba63df41fcc440547eb2b8286518476102261"
+      }
+    },
+    {
+      "at": "2026-09-08T11:30:02.789Z",
+      "stage": "implement",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": null,
+      "headAtInit": {
+        "from": "413177bc0b8b9eb21e38a038d22c285ee84ccf7e",
+        "to": "2202f8265d1ddd348dd59249531a33dcbae2ce2a"
+      }
+    },
+    {
+      "at": "2026-09-08T11:32:56.008Z",
+      "stage": "implement",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": null,
+      "headAtInit": {
+        "from": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
+        "to": "2202f8265d1ddd348dd59249531a33dcbae2ce2a"
+      }
+    },
+    {
+      "at": "2026-09-08T12:20:55.744Z",
+      "stage": "implement",
+      "from": "aborted",
+      "detail": "the run has been going 221 minutes, past the 180-minute breaker (breakers.runTimeoutMin)",
+      "reason": null,
+      "headAtInit": {
+        "from": "2202f8265d1ddd348dd59249531a33dcbae2ce2a",
+        "to": "f3b0cec639f869bd01813c73066cc7db4e8c0908"
+      }
+    },
+    {
+      "at": "2026-09-08T13:34:17.383Z",
+      "stage": "implement",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: spec/contradiction (specs/portal/01-home.cases.md)",
+      "reason": "TC-01-INT-09 restated against REQ-01-026; review's 12 code blockers go back to implement",
+      "headAtInit": {
+        "from": "f3b0cec639f869bd01813c73066cc7db4e8c0908",
+        "to": "546f6291def7c3fc43934ca3d7614e455f4ee481"
+      },
+      "specEdits": [
+        "specs/portal/01-home.cases.md"
+      ]
+    },
+    {
+      "at": "2026-09-08T14:15:33.945Z",
+      "stage": "implement",
+      "from": "gate-authority",
+      "detail": "implement produced findings outside its authority: implement may not address \"self\" (allowed: spec)",
+      "reason": "a note outside authority halted a stage that passed; the router now records it",
+      "headAtInit": {
+        "from": "546f6291def7c3fc43934ca3d7614e455f4ee481",
+        "to": "e9670bf46594ed9b17df140c667492b5f07dbbb5"
+      }
+    }
+  ]
+}

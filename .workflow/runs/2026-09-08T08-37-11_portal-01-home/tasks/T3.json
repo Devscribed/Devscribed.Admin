@@ -1,0 +1,43 @@
+{
+ "id": "T3",
+ "title": "API: the /portal route group, its guard stack, and the personal half",
+ "files": [
+  "apps/api/src/portal/portal.controller.ts",
+  "apps/api/src/portal/portal.module.ts",
+  "apps/api/src/portal/portal-home.service.ts",
+  "apps/api/src/app.module.ts"
+ ],
+ "requirements": [
+  "REQ-01-004",
+  "REQ-01-010",
+  "REQ-01-011",
+  "REQ-01-012",
+  "REQ-01-013",
+  "REQ-01-014",
+  "REQ-01-015",
+  "REQ-01-016",
+  "REQ-01-017",
+  "REQ-01-018",
+  "REQ-01-019",
+  "REQ-01-020",
+  "REQ-01-021",
+  "REQ-01-053"
+ ],
+ "dependsOn": [
+  "T1",
+  "T2"
+ ],
+ "allCallSites": [
+  "apps/api/src/portal/portal.controller.ts#getHome",
+  "apps/api/src/portal/portal.controller.ts#listNews",
+  "apps/api/src/portal/portal.controller.ts#getNewsEntry",
+  "apps/api/src/portal/portal.controller.ts#getSettings",
+  "apps/api/src/portal/portal.controller.ts#putSettings"
+ ],
+ "concurrency": {
+  "rows": [],
+  "lock": "none — every route in this task is a read, and REQ-01-054 forbids writing a row on a read. The month, the reserve, the holidays and the requests are four independent SELECTs against tables this spec never writes.",
+  "reread": []
+ },
+ "detail": "@Controller('api/organizations/:orgId') @UseGuards(SessionGuard, OrgScopeGuard), exactly as apps/api/src/requests/requests.controller.ts:41-42 does, with the five handlers on 'portal/home', 'portal/news', 'portal/news/:entryId', 'portal/settings'. **Write no @AllowClientPrincipal() on any handler in this group, and this prohibition is REQ-01-004's first two rows in full**: OrgScopeGuard (apps/api/src/auth/org-scope.guard.ts:36-42) throws a bare NotFoundException for a client principal on any :orgId route that has not opted in, and it does so before any capability is read, so a client contact is 404 on the settings pair exactly as on the reads. The wrong-organization 404 is the same guard's first branch (org-scope.guard.ts:31-33). **No handler in this group carries `CapabilityGuard`, and none carries `@RequireCapability`** — the guard stack is `SessionGuard, OrgScopeGuard` on the controller and nothing else, on the settings pair exactly as on the three reads (contracts §Routes). `ViewPortalHome` is asked in the service with `hasCapability(membership.role, 'ViewPortalHome')` because every staff role holds it and a guard would add a query for a decision that is already true; `ManagePortalSettings` is asked in the settings service (T5) because its refusal must carry `PORTAL_MESSAGES.settingsForbidden` and the guard's message is fixed. Every query takes session.organizationId; the path :orgId is proven equal by the guard and then never passed to a service method. The personal half: REQ-01-010 resolves the caller's today in Account.timezone (Account.timezone is nullable — schema.prisma:37 — and UTC is the fallback, Edge case 12), then the calendar month containing it, and answers startDate/endDate/today/timezone. REQ-01-011/012/014 sum TimeEntry.durationMinutes for the caller's membership over `date` in that range (index @@index([membershipId, date])), grouped by projectId, ordered by minutes descending then project name ascending; daysWithEntry is the count of distinct `date` values. REQ-01-013 names the projectId-null row `PORTAL_MESSAGES.noProject` with projectId: null. REQ-01-015 answers availableDays/usedDays/pendingDays/totalDaysPerYear — reuse the arithmetic behind VacationService.buildBalance (apps/api/src/vacation/vacation.service.ts:375-390) and `calculateAvailableDays`, which already folds in the pending hold. REQ-01-016: when the membership has no MemberFinancials row the whole `timeOff` object is null. REQ-01-053 and §Security: no monetary key appears in the body for any role — `reserveBalance`, `monthlySalary` and `clientHourlyRate` are not conditionally omitted, they are not in the DTO. **`holidays` is a sibling of `timeOff`, not a member of it** (§Routes body): it is answered whatever the reserve says, `holidays.countryCode` is `resolveMemberHolidayCountry(membership.countryCode)` from packages/validation/src/reports.ts:566 and nothing else — REQ-01-018/019, and the schema comment at schema.prisma:250-254 still describing an organization fallback is stale against PATCH-012, which apps/api/src/holidays/holidays.service.ts:111-118 already implements. `holidays.upcoming` is the next three Holiday rows with `date >= today` and countryCode null or equal to the resolved country, ascending. REQ-01-020/021: Request rows with status 'open' (the literal schema value, schema.prisma:1310) where requesterMembershipId or assigneeMembershipId is the caller's, ordered overdue first, then neededBy ascending nulls last, then lastActivityAt descending, at most three, plus openTotal over the same filter. **The seam between the parallel tasks, named so two shards agree without reading each other:** T3 writes the controller and portal.module.ts, and the module registers and the controller injects four services — PortalHomeService (T3, `getHome(session, organizationId)`), PortalFeedService (T4, `listNews(session, organizationId, { limit, cursor })`), PortalEntryService (T4, `getEntry(session, organizationId, entryId)`) and PortalSettingsService (T5, `readGroups(organizationId)` and `writeGroups(session, organizationId, groups)`). Those five names are the contract; a shard that renames one breaks the other's file."
+}

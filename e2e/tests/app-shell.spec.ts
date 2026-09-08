@@ -7,7 +7,7 @@ async function signIn(page: import('@playwright/test').Page, email: string): Pro
   await page.getByTestId('login-email-input').fill(email);
   await page.getByTestId('login-password-input').fill(VALID.password);
   await page.getByTestId('login-submit-button').click();
-  await page.waitForURL('**/members');
+  await page.waitForURL(/\/org\/[^/]+\/?$/);
 }
 
 test.describe('App shell', () => {
@@ -21,16 +21,17 @@ test.describe('App shell', () => {
 
     // Two titled groups, and the one holding the current route is the one that is open.
     // A group title is a button and not a link: `Hiring` has no screen behind it, so it
-    // toggles its section and goes nowhere.
+    // toggles its section and goes nowhere. REQ-01-001 lands on the portal — `Team
+    // overview`, a top-level row outside every group — so neither group opens itself.
     const people = page.getByRole('button', { name: 'People', exact: true });
     const hiring = page.getByRole('button', { name: 'Hiring', exact: true });
-    await expect(people).toHaveAttribute('aria-expanded', 'true');
+    await expect(people).toHaveAttribute('aria-expanded', 'false');
     await expect(hiring).toHaveAttribute('aria-expanded', 'false');
     // Closed means gone, not merely hidden — a collapsed group holds no rows to tab into.
     await expect(page.getByTestId('nav-vacancies')).toHaveCount(0);
 
-    // Members is where we just landed, and it is inside the group that opened itself.
-    await expect(page.getByTestId('nav-members')).toHaveAttribute('aria-current', 'page');
+    // Team overview is where we just landed.
+    await expect(page.getByTestId('nav-portal')).toHaveAttribute('aria-current', 'page');
 
     // The toggle is operable from the keyboard, which is the whole of §13's argument for
     // making it a real button: an `<li onClick>` is one nobody can reach or hear.

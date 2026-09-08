@@ -1,0 +1,246 @@
+{
+  "stage": "review",
+  "status": "blocked",
+  "reviewedUpTo": "c4eb0fcfda88897202c03e338d2826d5c11125f7",
+  "base": "7a6e059e2389ff0b34ee85001a0e6ecf450c8a84",
+  "slice": "05ddb20..c4eb0fc — 13 files, 463 changed lines (review-slice.mjs, shape lead-open, pass 2)",
+  "covered": {
+    "scope": 13,
+    "read": [
+      "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "e2e/tests/portal.spec.ts",
+      "apps/api/test/portal.spec.ts",
+      "apps/web/app/org/[orgId]/settings/portal/page.tsx",
+      "apps/api/src/portal/portal-entry.types.ts",
+      "apps/web/app/org/[orgId]/page.tsx",
+      "packages/validation/src/portal.ts",
+      "specs/portal/01-home.cases.md",
+      "apps/web/app/org/[orgId]/news/[entryId]/page.tsx",
+      "apps/api/src/portal/portal-entry.service.ts",
+      "e2e/tests/client-participants.spec.ts",
+      "apps/api/src/portal/portal-feed.service.ts",
+      "apps/web/app/org/[orgId]/PortalRequestsPanel.tsx"
+    ],
+    "unreached": []
+  },
+  "priorBlockers": [
+    {
+      "id": "F1",
+      "claim": "the feed window ended at the caller's local date read as a UTC day",
+      "closed": true,
+      "how": "computePortalWindow now takes the zone and resolves both ends through zonedTimeToUtc (portal-entry.types.ts:137-153); both call sites pass caller.timezone (portal-feed.service.ts:135, portal-entry.service.ts:63). zonedTimeToUtc normalizes the day+1 overflow through Date.UTC (hiring-time.ts:127), so the last-instant-of-today construction is sound, and for zone 'UTC' the result is byte-identical to the old string form, so every existing UTC-run case is unmoved. A discriminating integration case was added at apps/api/test/portal.spec.ts:857 with an America/Los_Angeles caller and a createdAt three hours past the UTC end of that caller's local date. NOTE: the fix introduced a new defect of its own on the same lines — see F1 below."
+    },
+    {
+      "id": "F2",
+      "claim": "the withheld roster was answered as members: null rather than omitted",
+      "closed": true,
+      "how": "members is now `PortalEntryMemberRefDto[] | undefined` (portal-entry.service.ts:304) on an optional DTO field (portal-entry.types.ts:108), so JSON.stringify drops the key; the misleading 'omitted (never nulled)' comment now matches the code. apps/api/test/portal.spec.ts:1179 asserts `expect(unassignedPage.body).not.toHaveProperty('members')`, which is the side of the requirement REQ-01-056 states. The web reader already tolerated both shapes (news/[entryId]/page.tsx:56, :335)."
+    },
+    {
+      "id": "F3",
+      "claim": "TC-01-INT-09's Expected Result was unreachable from its own Steps under REQ-01-026",
+      "closed": true,
+      "how": "Settled in the document by a person, not by the gate: commit 546f629 (author ivandemchenko01, separate from the implement commit 838b66a) rewrites TC-01-INT-09's Steps and Expected Result so the window stands and the case moves — a third member joins today to carry REQ-01-027, the backdated member carries one anniversary with years 2. apps/api/test/portal.spec.ts:698-733 now asserts exactly that, including the absence of a member-joined entry for the backdated member. Pass 1's N2 (leap-year fragility) is closed as a side effect: the joining is at least 730 days back and the Y=1 anniversary at least 366, both outside a 365-day window in every calendar year."
+    },
+    {
+      "id": "F4",
+      "claim": "six failure sentences inline in app code",
+      "closed": true,
+      "how": "PORTAL_MESSAGES gains monthLoadFailed, feedLoadFailed, entryLoadFailed, settingsLoadFailed, settingsSaveFailed (packages/validation/src/portal.ts:25-30) and all four screens render them (page.tsx:152, PortalFeed.tsx:399, news/[entryId]/page.tsx:256, settings/portal/page.tsx:150, :168). `grep -rn \"Something went wrong\" apps/web/app apps/web/src --include=*.tsx` now returns nothing. The discarded server message is also restored: settings/portal/page.tsx:130-131 reads the 422 body and prefers `fields.groups`, which is the shape portal-settings.service.ts:85-88 throws."
+    },
+    {
+      "id": "F5",
+      "claim": "the feed's day boundary came from the device clock while the rest of the screen used the server's month.today",
+      "closed": true,
+      "how": "dayLabel and formatRelativeTime now take the caller's Account.timezone (PortalFeed.tsx:100-130, :298) so the zone is one value with one source. month.today itself is deliberately not passed in, and that is right rather than a shortfall: contracts §States requires the feed column to stand when Q1 fails, and taking month.today would re-create F13 exactly. The residual gap needs a device whose *clock* is wrong by a day, not a zone disagreement. NOTE: the new zone plumbing introduced a defect of its own — see F2 below."
+    },
+    {
+      "id": "F6",
+      "claim": "the empty feed drew no invite control",
+      "closed": true,
+      "how": "PortalFeed.tsx:412-416 draws `Button as=\"a\"` to /org/{orgId}/members inside the EmptyState, gated on `can(session.role as Role, 'invite')` — the same form members/page.tsx:45 already uses, and can('user'|'member','invite') is false either way so the role-transition reading is unaffected. It sits inside EmptyState's children, which is what §What the screen borrows demands."
+    },
+    {
+      "id": "F7",
+      "claim": "neither wait carried role=\"status\"",
+      "closed": true,
+      "how": "role=\"status\" and an aria-label are now passed on all five Preloaders this change owns (PortalFeed.tsx:394, page.tsx:59/:65/:71, news/[entryId]/page.tsx:262, settings/portal/page.tsx:166); Preloader spreads them onto its wrapper (packages/ds/src/components/feedback/Preloader.tsx:35-37). The overclaiming comment is corrected. The 'findable by a test' half is still unmet and cannot be met in code alone — see N4."
+    },
+    {
+      "id": "F8",
+      "claim": "a failed settings load re-entered the wait forever",
+      "closed": true,
+      "how": "The three flags are replaced by one discriminated SettingsState (settings/portal/page.tsx:60-63). The failure path sets `{status:'error'}`, the render at :148-153 draws the banner and a `Try again` control that re-runs load, and :156 suppresses the card entirely in that state, so no preloader is drawn beneath the banner. Save is separately keyed on saveError, which is only drawn while ready."
+    },
+    {
+      "id": "F9",
+      "claim": "the request title's ellipsis was declared on an inline box",
+      "closed": true,
+      "how": "reqTitleStyle gains `display: 'block'` (PortalRequestsPanel.tsx:43), which is the piece specs/portal/01-home.mock.html:125 declares. The <b> is now a block box inside the `minWidth: 0` grid item, so overflow:hidden and text-overflow:ellipsis both apply."
+    },
+    {
+      "id": "F10",
+      "claim": "portal-month-days, portal-entry-back and portal-entry-fact were asserted nowhere",
+      "closed": true,
+      "how": "e2e/tests/portal.spec.ts:156 asserts portal-month-days, :199 portal-entry-back, :204 `portal-entry-fact` toHaveCount(2). The count is the number the kind actually carries and not merely nonzero: buildVacancyEntry pushes exactly two facts unconditionally (portal-entry.service.ts:180-183), and both are drawn one per fact at news/[entryId]/page.tsx:364."
+    },
+    {
+      "id": "F11",
+      "claim": "nav-portal's absent-for-a-contact half was asserted nowhere",
+      "closed": true,
+      "how": "e2e/tests/client-participants.spec.ts:270 adds `toHaveCount(0)` beside the other three. The assertion is not vacuous: the same case asserts sidebar-requests-link is visible three lines above, so the rail is rendered when the count is taken."
+    },
+    {
+      "id": "F12",
+      "claim": "TC-01-E2E-08 compared one row per organization, so a badge-first layout still passed",
+      "closed": true,
+      "how": "The case now seeds three requests in one organization drawing three differently-sized badges — Overdue, Waiting on you, Open (portal.spec.ts:369-388) — and compares all three titles' left edges within that organization (:412-415). The seeding holds up: POST /api/invitations/accept issues the cookie (invitations.controller.ts:36-45) so the two colleague-raised requests really are 'assigned' for the admin, PATCH is permitted because caller.isAdmin short-circuits the requester check (requests.service.ts:911), and buildRequests returns both directions capped at three (portal-home.service.ts:334-364), so toHaveCount(3) is the count the panel draws. A badge-first layout would now start each title at a different x. Two residual weaknesses are N1 and N2 below."
+    },
+    {
+      "id": "F13",
+      "claim": "a Q1 failure took the settings link out of the feed column",
+      "closed": true,
+      "how": "page.tsx:171 now passes `hasCapability(session.role, 'ManagePortalSettings')`, which normalizes the raw column internally (roles.ts:317-320) exactly as Sidebar does, and the docstring at :84-88 now describes what the code does. This is not a second source for one value: the server's own canManageSettings is computed by the same function from the same column (portal-home.service.ts:133), and /api/me answers the raw Membership.role, so the two cannot disagree."
+    }
+  ],
+  "beyondTheRegister": "I asked what this change is for and what could make it wrong that no criterion names. It is a repair round, and the shape of its risk is that a repair introduces a fault the original did not have. Two of the thirteen repairs did exactly that, and both are the same one: the change adds three new readers of Account.timezone, and none of them carries the tolerance every shipped reader of that column carries. That is F1 and F2, and neither is visible to a UTC-run suite or to any test that seeds a valid zone.",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-18",
+      "rule": "sweep 11 — a mechanism applied at some call sites and not the rest",
+      "file": "apps/api/src/portal/portal-entry.types.ts",
+      "symbol": "computePortalWindow",
+      "line": 137,
+      "claim": "the new window code hands Account.timezone straight to Intl without the unknown-zone fallback every other reader of that column carries, so a stored zone that is not a resolvable identifier turns both feed routes into a permanent 500 for that member",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The value is caller-supplied and unvalidated on two write paths. POST /api/invitations/accept is public and stores dto.timezone as any non-empty trimmed string (apps/api/src/invitations/invitations.service.ts:286-287, :293); PUT /api/account/settings stores it too, because validateTimezone only checks non-emptiness — `if (value.length === 0) return fail(...); return ok(value);` (packages/validation/src/index.ts:1060-1064) — and account.service.ts:96 writes the result. So an account can hold e.g. 'Europe/Warszawa' (a plausible typo the picker would never produce but the route accepts). That member then calls GET /api/organizations/{orgId}/portal/news. portal-feed.service.ts:134 calls todayInTimeZone, which catches the failure and answers the UTC date — its own comment is the mechanism: 'An unknown zone is a data anomaly, not a reason to fail a read; UTC is the same fallback a null zone gets' (packages/validation/src/requests.ts:648-651). Line 135 then calls computePortalWindow(today, caller.timezone); the guard at portal-entry.types.ts:138 only rescues null and blank, so the raw string reaches zonedTimeToUtc -> zoneOffsetMs -> zonedParts -> partsFormatter, which constructs `new Intl.DateTimeFormat('en-US', { timeZone })` with no try/catch (packages/validation/src/hiring-time.ts:31-44, :77, :96, :127-129). Verified by command: `node -e \"new Intl.DateTimeFormat('en-US',{timeZone:'Not/AZone',hourCycle:'h23',year:'numeric'})\"` prints `THROWS: RangeError Invalid time zone specified: Not/AZone`, while the en-CA formatter todayInTimeZone builds throws the same error and is caught. Nothing above catches it, so the route answers 500 on every read, and portal-entry.service.ts:63 makes every entry page 500 the same way. Before this attempt the same account read the feed normally, because computePortalWindow only concatenated strings. The mechanism is the repository's, not an invention: the other shared reader of this column states it as a rule — 'An empty / unknown / UTC zone — or any Intl failure — falls back to UTC' (packages/validation/src/index.ts:2994-2998, implemented at :2999-3016).",
+        "source": "packages/validation/src/requests.ts:648"
+      },
+      "suggestedFix": "resolve the zone once through the same tolerance the rest of the codebase uses — fall back to 'UTC' when isValidTimeZone(zone) is false (packages/validation/src/hiring-time.ts:54-62) before either zonedTimeToUtc call, so an unresolvable stored zone reads the window in UTC exactly as todayInTimeZone already reads the date"
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "blocker",
+      "criterion": "CR-18",
+      "rule": "sweep 11 — a mechanism applied at some call sites and not the rest",
+      "file": "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "symbol": "localYmd",
+      "line": 88,
+      "claim": "the feed's new zone plumbing reads session.account.timezone with a weaker guard than every shipped screen that reads the same field and then constructs Intl directly, so an unresolvable stored zone throws during render and the home screen shows an error instead of the feed",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Same input as F1 — an account whose timezone was stored through POST /api/invitations/accept (invitations.service.ts:286-287) or PUT /api/account/settings (validateTimezone, packages/validation/src/index.ts:1060-1064) as any non-empty string. /api/me answers the column raw (apps/api/src/members/me.controller.ts:110). PortalFeed.tsx:298 does `session.account.timezone ?? 'UTC'`, which passes a non-null unresolvable identifier straight through, and localYmd (:88-90) constructs `new Intl.DateTimeFormat('en-CA', { timeZone })` with no try/catch. It is reached on the ordinary path: groupByDay (:135) calls dayLabel (:126) for every entry as soon as the feed answers with at least one, so the component throws during render and React unwinds to the nearest error boundary — the whole /org/{orgId} screen, not just the feed column, which is the opposite of the independence contracts §States requires of the two halves. formatRelativeTime (:113-114) does the same twice more. The four shipped screens that read this exact field all guard it before use — `session.account.timezone && session.account.timezone.trim().length > 0 ? … : 'UTC'` at time-tracking/page.tsx:76-78, TimerBar.tsx:67-69, reports/time-and-activity/page.tsx:122-124, reports/amounts-owed/page.tsx:86-88 — and hand the value to wallClockParts, which swallows any Intl failure and returns UTC parts (packages/validation/src/index.ts:2999-3016). The new reader carries neither half of that mechanism.",
+        "source": "apps/web/app/org/[orgId]/time-tracking/page.tsx:76"
+      },
+      "suggestedFix": "resolve the zone once at PortalFeed.tsx:298 with the guard the other four screens use and fall back to 'UTC' when isValidTimeZone is false, so no Intl constructor in this file can be handed a string the engine refuses"
+    },
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-25",
+      "rule": "sweep 8 — the test no longer performs its case's Steps",
+      "file": "e2e/tests/portal.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 396,
+      "claim": "the rewritten case seeds requests in one organization only, while its own Steps seed a request in both and its Expected Result asserts the invariant 'in both organizations'",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.cases.md TC-01-E2E-08 Steps: 'Seed a project whose name is 100 characters, a holiday whose name is 80, and a request whose title is 200 … Then seed short-named equivalents in a second organization and record the same three.' Expected Result: 'In both organizations the request title's left edge is identical across every row.' portal.spec.ts:333 returns from seedGeometryOrg without raising any request, and seedVariedRequests is called once, for longOrg only (:396). The short organization therefore draws portal-requests-empty and the 'in both organizations' clause is vacuous for it. The within-organization comparison the fix added is the one that discriminates, so this is a note rather than a blocker — but the case as written is not what runs, and the bundle is frozen, so the divergence has nowhere to be recorded.",
+        "source": "specs/portal/01-home.cases.md:455"
+      },
+      "suggestedFix": "call seedVariedRequests for the short organization too with short titles and assert the same shared left edge there, which is what the case's own text asks for"
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "sweep 8 — an assertion that cannot fail for the defect its own comment claims it catches",
+      "file": "e2e/tests/portal.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 417,
+      "claim": "the new right-edge probe cannot see an untruncated title, contrary to the comment beside it",
+      "witness": {
+        "kind": "scenario",
+        "detail": "portal.spec.ts:417-420 says 'A long title that was not truncated (the defect this case is also built to catch) would push that cell out of place.' It would not. The row is `gridTemplateColumns: 'minmax(0,1fr) auto auto'` (PortalRequestsPanel.tsx:33) and the title sits inside the first track's grid item, itself `minWidth: 0` (:89). A `<b>` left at display:inline with white-space:nowrap — precisely the state before this attempt's one-line fix at :43 — overflows its containing block with overflow:visible; it contributes nothing to the 1fr track's minimum, which is 0, so the auto tracks and the badge's right edge are exactly where they were. The probe passes either way. The left-edge probe above it is the one doing the work.",
+        "source": "apps/web/app/org/[orgId]/PortalRequestsPanel.tsx:33"
+      },
+      "suggestedFix": "either delete the claim from the comment, or assert the truncation directly — compare the `<b>`'s clientWidth against its scrollWidth on the 200-character row"
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "a comment cites a requirement that says something else",
+      "file": "apps/web/app/org/[orgId]/PortalFeed.tsx",
+      "symbol": "formatRelativeTime",
+      "line": 96,
+      "claim": "the new docstring anchors the timezone rule to REQ-01-037, which is about not announcing a disabled group",
+      "witness": {
+        "kind": "rule",
+        "detail": "PortalFeed.tsx:99-100: 'drawn in the caller's own Account.timezone … never the device's zone (REQ-01-037, portal-types.ts today)'. specs/portal/01-home.md:206 REQ-01-037 reads 'THE SYSTEM SHALL NOT state on the home screen that any group is switched off.' The requirement that governs the caller's date is REQ-01-010, which portal-types.ts:113-122 already names as the reason the greeting must not use new Date(). A reader following the citation lands on the wrong rule.",
+        "source": "specs/portal/01-home.md:206"
+      },
+      "suggestedFix": "cite REQ-01-010"
+    },
+    {
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "contracts §What the screen borrows — 'findable by a test' has no expressible form here",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "What the screen borrows — Preloader",
+      "line": 308,
+      "claim": "the Preloader borrow demands a wait that is findable by a test, but the contracts' testid table names no id for either wait and CLAUDE.md forbids adding one the spec does not name, so no test can assert a loading state on this screen",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts §What the screen borrows: '| Preloader (§23) | role=\"status\", findable by a test | Each of Q1 and Q2 draws its own |'. The role half is now met (PortalFeed.tsx:394, page.tsx:59/:65/:71). The findable half is not: `grep -rn \"status\\\"\\\\|Loading \" e2e/tests/portal.spec.ts` matches no loading assertion, §Required data-testid Attributes carries no preloader row, CLAUDE.md — Testing says 'Selectors are data-testid only, and the ids are named in the specs', and CR-27 blocks a test id the spec does not name. The demand cannot be closed in code alone. Separately, Q2's wait draws three regions all carrying role=\"status\" and the identical aria-label 'Loading what's new' (PortalFeed.tsx:391-396), so a screen reader is told the same sentence three times; §States asks for three Preloader entries, not three announcements.",
+        "source": "specs/portal/01-home.contracts.md:308"
+      },
+      "suggestedFix": "a person decides: either name a wait id in the contracts' testid table, or drop 'findable by a test' from the borrow; and give the three Q2 blocks one announced region rather than three"
+    },
+    {
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-30",
+      "rule": "a message and its table",
+      "file": "packages/validation/src/portal.ts",
+      "symbol": "PORTAL_MESSAGES",
+      "line": 25,
+      "claim": "the five new failure sentences are exported but appear in no table in the bundle, so the contracts' Error Messages list and the export no longer enumerate the same set",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/portal/01-home.contracts.md:170-181 lists exactly ten PORTAL_MESSAGES rows and nothing else; packages/validation/src/portal.ts:9-30 now exports fifteen. Moving the sentences into the package was required (CR-07) and the spec names no string for a failed read anywhere, so the text had to be invented — but the table a future reader consults to learn what this spec's messages are is now short by five, and the spec is frozen, so nothing in the bundle records them.",
+        "source": "specs/portal/01-home.contracts.md:170"
+      },
+      "suggestedFix": "for a person: record the five in whichever document next speaks about the portal's messages, since this bundle may not be edited"
+    },
+    {
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-23",
+      "rule": "CLAUDE.md — Testing; test cases are numbered in the specs and the code references those ids",
+      "file": "apps/api/test/portal.spec.ts",
+      "symbol": "REQ-01-026 caller's own today",
+      "line": 857,
+      "claim": "the new integration case carries a requirement id but no TC id, because the cases register has no case for the zone boundary it proves",
+      "witness": {
+        "kind": "test",
+        "test": "no id",
+        "detail": "portal.spec.ts:857 is titled 'REQ-01-026 keeps a row inside the caller's own today even after the UTC day has rolled over'; every other case in the file names a TC id (e.g. :698 TC-01-INT-09, :1155 TC-01-INT-18). `grep -n 'TC-01-INT' specs/portal/01-home.cases.md` lists no case covering a non-UTC caller's window, which is exactly why the defect survived four passes of a UTC-run suite. The test is right to exist; it simply has nowhere in the register to point at, and the bundle is frozen.",
+        "source": "specs/portal/01-home.cases.md"
+      },
+      "suggestedFix": "for a person: give the boundary a numbered case in whichever document next speaks about the feed window, so the coverage is recorded rather than incidental"
+    }
+  ]
+}

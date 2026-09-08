@@ -61,6 +61,18 @@ export function isValidTimeZone(id: unknown): id is string {
   }
 }
 
+/**
+ * A zone guaranteed constructible: the value itself when it resolves, `'UTC'` when it is
+ * absent, blank, or a string `Intl` cannot build a formatter from. Every reader of a stored
+ * `Account.timezone` needs this, not just the writer — the column is checked for
+ * non-emptiness alone before it is saved, so an unresolvable identifier such as
+ * `'Europe/Warszawa'` reaches here exactly as it was typed, and a caller who was not the one
+ * who mistyped it should not see their feed fail because of it.
+ */
+export function resolvedTimeZone(id: string | null | undefined): string {
+  return isValidTimeZone(id) ? id : 'UTC';
+}
+
 export interface ZonedParts {
   year: number;
   /** 1–12, not the `Date` API's 0–11 — every ISO date string here is 1-based. */

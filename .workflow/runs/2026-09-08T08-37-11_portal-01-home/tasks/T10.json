@@ -1,0 +1,30 @@
+{
+ "id": "T10",
+ "title": "E2E cases, and the measurement TC-01-E2E-08 needs",
+ "files": [
+  "e2e/tests/portal.spec.ts",
+  "e2e/tests/ui-invariants.ts"
+ ],
+ "requirements": [
+  "REQ-01-001",
+  "REQ-01-003",
+  "REQ-01-012",
+  "REQ-01-016",
+  "REQ-01-017",
+  "REQ-01-019",
+  "REQ-01-020",
+  "REQ-01-025",
+  "REQ-01-036",
+  "REQ-01-037",
+  "REQ-01-039",
+  "REQ-01-042",
+  "REQ-01-043",
+  "REQ-01-052"
+ ],
+ "dependsOn": [
+  "T7",
+  "T8",
+  "T9"
+ ],
+ "detail": "TC-01-E2E-01 through TC-01-E2E-09 in one file. Selectors are data-testid only, from the §Required data-testid table — with the one deliberate exception the repository already has, that a navigation control is reached by its accessible name, which openNavSection in e2e/tests/helpers.ts already handles. TC-01-E2E-01 asserts nav-portal is present **and first in the rail** — compare DOM order or bounding boxes, not a testid, which proves presence and never position. TC-01-E2E-03's member has no financials, so `portal-timeoff-figures` is absent while `portal-timeoff-panel` stands. **TC-01-E2E-07 switches all three groups off**, People included, or the joinings the run itself created keep the feed non-empty; it asserts each of monthEmpty, requestsEmpty, noCountry and feedEmptyBody is matched exactly once **by count** — expectMessageOnce in e2e/tests/ui-invariants.ts:99 is the probe, and a testid assertion would pass on a screen that drew the message twice. TC-01-E2E-08 needs a probe ui-invariants.ts does not have: that a set of elements share a left edge (the request titles) and a right edge (the minutes cells), measured from bounding boxes, alongside the existing expectNoScrollGrowth (line 51). Add it there, beside the others, rather than in the spec file. Run targeted: `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/portal.spec.ts tests/regressions.spec.ts` from e2e — never the whole suite, and never on 3000/4000."
+}

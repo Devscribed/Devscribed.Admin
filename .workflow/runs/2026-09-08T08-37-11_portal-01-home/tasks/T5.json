@@ -1,0 +1,33 @@
+{
+ "id": "T5",
+ "title": "API: the three group switches, and the backdate-joined fixture",
+ "files": [
+  "apps/api/src/portal/portal-settings.service.ts",
+  "apps/api/src/test/test-fixtures.controller.ts"
+ ],
+ "requirements": [
+  "REQ-01-004",
+  "REQ-01-048",
+  "REQ-01-049",
+  "REQ-01-050",
+  "REQ-01-051",
+  "REQ-01-052"
+ ],
+ "dependsOn": [
+  "T1",
+  "T2"
+ ],
+ "allCallSites": [
+  "apps/api/src/portal/portal-settings.service.ts#readGroups — the one reader, called by GET .../portal/settings and by the feed on every news read",
+  "apps/api/src/portal/portal-settings.service.ts#writeGroups — the one writer in this spec",
+  "apps/api/src/test/test-fixtures.controller.ts#backdateJoined"
+ ],
+ "concurrency": {
+  "rows": [
+   "OrganizationPortalSettings"
+  ],
+  "lock": "none, deliberately. The write is a single-statement upsert keyed by the unique organizationId, which is itself the create-or-update atomicity REQ-01-051 asks for, and Edge case 18 settles the race as last write wins on a whole-record replacement: all three booleans are required (§Validation Rules 3-5), so there is no partial body that could interleave into a mixed state, and the loser's switch is one flick to redo. No other writer of this row exists in the product.",
+  "reread": []
+ },
+ "detail": "GET and PUT .../portal/settings carry no capability guard: the controller's stack is SessionGuard + OrgScopeGuard (T3) and `ManagePortalSettings` is asked inside this service, on both verbs (contracts §Routes names `hasCapability(role, 'ManagePortalSettings')` in the service for each). REQ-01-049: no row means all three groups read true, so the reader returns defaults rather than 404 and nothing is written on a read. REQ-01-051: the PUT is a `prisma.organizationPortalSettings.upsert` on the unique organizationId — one statement, so the create and the write are the same transaction. REQ-01-050: a member of this organization without the capability is answered 403 by this service, `throw new ForbiddenException({ error: 'forbidden', message: PORTAL_MESSAGES.settingsForbidden })`. Copy the precedent exactly — apps/api/src/requests/request-topics.service.ts:431-469, whose `requireCaller` reads the live Membership row by `accountId`, refuses a membership that is missing, not `active` or in another organization, and normalizes the role with `normalizeRole(membership.role)` before the capability is asked, so the decision is never made from a role copied into the cookie. Then `hasCapability(role, 'ManagePortalSettings')`, which is true for `admin` alone. A caller who is not a member of this organization never reaches any of it, because OrgScopeGuard has already answered 404 (REQ-01-004); a client principal likewise. `PORTAL_MESSAGES.settingsForbidden` is T1's export and this is its only emitter. REQ-01-052's server half is `canManageSettings` on the home body, computed from hasCapability(role, 'ManagePortalSettings'), which is what T7 draws the settings link from. The fixture: POST /api/test/membership/backdate-joined on the existing TestFixturesController (apps/api/src/test/test-fixtures.controller.ts), body { email, joinedAt: 'YYYY-MM-DD' }, answering 204 and setting Membership.joinedAt for the active membership of that account. Copy backdateFinancials (line 130) exactly: `this.guard(authorization)` first, which is the InMemoryMailService check plus assertFixturesOpen from apps/api/src/test-support/fixture-gate.ts, and NotFoundException for a missing email, a missing joinedAt or an account with no membership. Membership.accountId is @unique (schema.prisma:241), so `account.memberships[0]` is the whole answer."
+}

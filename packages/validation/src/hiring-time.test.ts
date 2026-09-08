@@ -9,6 +9,7 @@ import {
   isValidTimeZone,
   isoDateInZone,
   monthMatrix,
+  resolvedTimeZone,
   shiftMonth,
   zoneLabel,
   zonedTimeToUtc,
@@ -48,6 +49,15 @@ describe('zone arithmetic', () => {
     expect(isValidTimeZone('')).toBe(false);
     expect(isValidTimeZone(undefined)).toBe(false);
     expect(isValidTimeZone(3)).toBe(false);
+  });
+
+  it('resolves a zone to itself when it is real, and to UTC when it cannot be', () => {
+    expect(resolvedTimeZone('Europe/Minsk')).toBe('Europe/Minsk');
+    expect(resolvedTimeZone('Europe/Warszawa')).toBe('UTC');
+    expect(resolvedTimeZone('')).toBe('UTC');
+    expect(resolvedTimeZone('   ')).toBe('UTC');
+    expect(resolvedTimeZone(null)).toBe('UTC');
+    expect(resolvedTimeZone(undefined)).toBe('UTC');
   });
 
   it('names a zone by its offset and city', () => {

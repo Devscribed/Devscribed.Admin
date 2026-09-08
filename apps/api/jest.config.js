@@ -11,12 +11,20 @@ module.exports = {
    * Every hiring suite's `beforeEach` truncates the whole schema, so two spec files
    * running concurrently delete each other's fixtures mid-test — which surfaces as a
    * session that was valid a line earlier answering 401, or a vacancy that vanished
-   * between being created and being booked against. The `test` script already passes
-   * `--runInBand`; this is here so that running `npx jest` directly cannot reintroduce
-   * it, because serial execution is a property of the suite rather than of the command
-   * somebody happened to type.
+   * between being created and being booked against. The `test` script passes `--runInBand`;
+   * this is here so that running `npx jest` directly cannot reintroduce it, because serial
+   * execution is a property of the suite rather than of the command somebody happened to type.
+   *
+   * `forceExit` is here for the same reason, and it has to be here rather than in the script.
+   * A suite that finishes its tests and then never returns is indistinguishable from a suite
+   * still running, and whoever is waiting — a person or an agent — waits forever on a result
+   * that already exists. Everything that runs a single spec file runs `npx jest` directly, so
+   * a flag that lives only in the `test` script protects the one invocation nobody debugs with.
+   * It does not close the handle that kept the process alive: `--detectOpenHandles` on the
+   * suite that hangs is how that one is found.
    */
   maxWorkers: 1,
+  forceExit: true,
   globalSetup: '<rootDir>/test/global-setup.ts',
   setupFiles: ['<rootDir>/test/setup-env.ts'],
   testTimeout: 30000,

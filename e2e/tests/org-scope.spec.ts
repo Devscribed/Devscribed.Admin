@@ -24,7 +24,7 @@ test.describe('Organization scope', () => {
     await page.getByTestId('login-email-input').fill(mine);
     await page.getByTestId('login-password-input').fill(VALID.password);
     await page.getByTestId('login-submit-button').click();
-    await page.waitForURL('**/members');
+    await page.waitForURL(/\/org\/[^/]+\/?$/);
 
     // The API refuses the list outright — the boundary does not depend on the client.
     const direct = await page.request.get(

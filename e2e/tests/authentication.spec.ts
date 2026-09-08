@@ -10,8 +10,9 @@ const focusedTestId = (page: import('@playwright/test').Page) =>
   page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
 
 test.describe('02 — Authentication & Login', () => {
-  // TC-02-E2E-01
-  test('signs in and lands on the members list', async ({ page, request }) => {
+  // TC-02-E2E-01 — REQ-01-001 (specs/portal/01-home.md) moved the post-sign-in destination
+  // from the members list to the organization's portal home.
+  test('signs in and lands on the portal', async ({ page, request }) => {
     const email = uniqueEmail('signin');
     await registerAccount(request, email);
 
@@ -20,8 +21,8 @@ test.describe('02 — Authentication & Login', () => {
     await page.getByTestId('login-password-input').fill(VALID.password);
     await page.getByTestId('login-submit-button').click();
 
-    await page.waitForURL('**/members');
-    await expect(page.getByTestId('members-list')).toBeVisible();
+    await page.waitForURL(/\/org\/[^/]+\/?$/);
+    await expect(page.getByTestId('portal-greeting')).toBeVisible();
   });
 
   // TC-02-E2E-02 — the one place in the suite that proves a *server* error reaches a form.
@@ -83,7 +84,7 @@ test.describe('02 — Authentication & Login', () => {
     await page.getByTestId('login-email-input').fill(email);
     await page.getByTestId('login-password-input').fill('NewPass1');
     await page.getByTestId('login-submit-button').click();
-    await page.waitForURL('**/members');
+    await page.waitForURL(/\/org\/[^/]+\/?$/);
 
     // The old password is dead.
     await page.goto('/login');

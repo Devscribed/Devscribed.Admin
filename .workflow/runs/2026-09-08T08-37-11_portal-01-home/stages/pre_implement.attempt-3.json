@@ -1,0 +1,68 @@
+{
+  "status": "blocked",
+  "stage": "pre_implement",
+  "spec": "specs/portal/01-home.md",
+  "handoff": ".workflow/runs/2026-09-08T08-37-11_portal-01-home/handoff.json",
+  "report": ".workflow/runs/2026-09-08T08-37-11_portal-01-home/stages/pre_implement.md",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "ok",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "finding",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "n/a",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok",
+    "H-18": "ok",
+    "H-19": "ok",
+    "H-20": "ok"
+  },
+  "compiledNotes": {
+    "H-01": "All 51 `#### REQ-01-nnn` headings are named in some task's `requirements`; tallied id by id against the heading list, not by count.",
+    "H-02": "33 cases, none retired (no body opens `- **Retired.**`). Every one is in `testCases` and every one has an owning task in `caseOwners`. The three that could not pass as written at attempt 2 — TC-01-INT-10, TC-01-INT-11, TC-01-INT-14 — and TC-01-E2E-07 were repaired in commit 69bba60 and are runnable now: INT-11 switches People and Hiring off before seeding, INT-14 asserts one vacancy-opened and no kind but member-joined beside it, INT-10 asserts equality between the four bodies rather than a count, and E2E-07 switches all three groups off.",
+    "H-03": "Twenty `##` sections across the bundle — seven in the spec, ten in contracts, three in cases — and all twenty have an entry in `sections`. `handoff-coverage` reports 7/7 on the spec's own.",
+    "H-04": "Every repository path cited in the handoff was stat-ed. All exist bar the twenty-three this change creates, which are in `buildFromZero`. Two corrections against the previous plan: the fixture controller is `apps/api/src/test/test-fixtures.controller.ts` and the gate is `apps/api/src/test-support/fixture-gate.ts` — two different directories, and the contracts cite only the second.",
+    "H-05": "Fifteen `reuse` rows with file:line and twenty-three `buildFromZero` entries. The largest reuse is negative and is recorded as a prohibition in T3: REQ-01-004's first four rows need no code, only the absence of `@AllowClientPrincipal()`.",
+    "H-06": "Four requirements are phrased over a whole set and each carries its complete list. REQ-01-004 ('every route in this spec') — the five handlers, in T3's `allCallSites`. REQ-01-027/030/031 ('every Membership / Vacancy / Project') — the four derivation call sites, in T4's. REQ-01-053 ('every monetary field, for every role') — one DTO with no monetary key, asserted by TC-01-INT-04 scanning the serialised body. REQ-01-001 ('27 further spec files') — T9's `allCallSites` enumerates all 33 literal waits by file and line, plus the six parameterised ones a literal grep does not find, plus the two that must not move because they are not sign-ins.",
+    "H-07": "Nine shipping surfaces, each with the rule that governs it and the task that plans it. Seven are governed by requirements of this spec. Two are widenings the spec decides deliberately — a `user` and a `viewer` reading a vacancy's five facts and its booking link, and reading a project's name and start date for a project they are not on — both argued in the README's Product decisions and in Acceptance Criterion 8, and both bounded by REQ-01-035/055 and REQ-01-047/056. One row is in the table precisely because it is NOT a widening: `view-list` is true for all four roles, so a member entry page carries nothing the member card does not.",
+    "H-08": "Every route but the settings PUT is a read, and REQ-01-054 forbids writing a row on a read; T3 and T4 carry `concurrency` with an empty `rows` and the reason. The one writer is a single-statement upsert on the unique `organizationId`, and Edge case 18 settles the race as last-write-wins over a whole-record replacement — all three booleans are required, so no partial body can interleave. No lock is added. The fixture's write to `Membership.joinedAt` is outside every product path.",
+    "H-09": "Nine of the ten Error Messages rows name a new `PORTAL_MESSAGES` export, and each has an emitter and the single element that draws it. The tenth is finding P1: the row names an export that exists and states a text that export does not carry.",
+    "H-10": "One Verification Plan row is marked as not existing today — `POST /api/test/membership/backdate-joined`, observed 404 — and it is T5. TC-01-INT-09 and TC-01-INT-12 need it, and T6 depends on T5.",
+    "H-11": "One migration, additive: one new table, one back-relation, no column added to an existing table, no rename, no drop, no new NOT NULL. T2's note states the order read from infra/deploy.sh:27 — migrations run as a one-off task on the new image before the Terraform rollout — and why the additive shape makes the rollback direction safe.",
+    "H-12": "T1 adds both capabilities to all four `ROLE_CAPABILITIES` rows and states that `hasCapability` normalizes, so a stored legacy `member` reads as `user` (roles.ts:38-45) and an unrecognised value as `viewer`. The stored set is `admin`/`member`, the target set is `admin | manager | user | viewer`, and TC-01-INT-02 and TC-01-UNIT-06 exercise both. T4 decides `view-clients` and `manage-projects` on `can(normalizeRole(role), …)`. T1 also records what is NOT built: nothing is added to `MemberCapability` or `CAPABILITY_MATRIX`, because no rule in this spec calls `can()` for either new capability.",
+    "H-13": "The bundle has no External Contracts section. Every route in it is this repository's own, behind the session cookie, and the spec's own rehearsal ran with no credential beyond a signed-up account.",
+    "H-14": "No double is planned, because no external contract is depended on.",
+    "H-15": "Three DS gaps: the two the spec's own table carries (`--layout-reading-column`, and a `Figure` component or `--figure-size`/`--figure-weight`), plus a panel that is a control — §Screens requires each feed entry to be a `Card variant=\"panel\"` that is an `<a>` and hovers, and `Card` renders a `div`, takes no `as` prop and withholds hover by design (Card.tsx:33-38, 52-77). The interim shape is written down so the improvisation is on the record.",
+    "H-16": "Ten tasks, each with `files`, `requirements` and `dependsOn`. `files` are explicit paths rather than directory globs, so the two pairs that share a directory — T7/T8 under apps/web/app/org/[orgId]/, T9/T10 under e2e/tests/ — do not intersect.",
+    "H-17": "`node scripts/handoff-coverage.mjs --run 2026-09-08T08-37-11_portal-01-home` → pass, sections 7/7. Its requirement and case counters read 0/0 here, because it extracts requirements as `^\\d+\\. ` lines and cases as `^### TC-` from the spec file alone, and this bundle numbers requirements as `#### REQ-01-nnn` headings and keeps its cases in the cases file. H-01 and H-02 above were therefore tallied by hand against the heading lists rather than delegated to the script.",
+    "H-18": "Ten rows, each a line of T7 (eight) or T8 (two): what varies, what holds it, and what moves if it does not. No row's holder is a `min-width` or a `min-height` — they are a fixed-gap flex band with no justify-content, `minmax(0,1fr)` columns with ellipsis beside `auto` ones, a `justify-content: space-between` heading row, a block in the column's flow, a 720px reading cap, and a `flex: 1; min-width: 0` code box, where `min-width: 0` removes a min-content floor rather than imposing one.",
+    "H-19": "Nothing on these screens is drawn outside its own flow, and the spec says so rather than being silent: the Geometry row for the day separator makes it a block in the column's flow with its own top padding that overlays nothing, and every panel, entry and settings row is in flow. The only positioned box any of these controls opens is a `Select`'s list, which the design system portals (§95) and which no ancestor's overflow counts. Recorded on T7.",
+    "H-20": "Each of the six strings the screens draw names the single element that draws it — `portal-month-empty`, `portal-requests-empty`, `portal-holidays-no-country`, `portal-feed-empty` for four of them, a `portal-month-project-row` for `noProject`, and the same `EmptyState` for `feedEmptyTitle`. TC-01-E2E-07 counts four of them exactly once rather than asserting visibility, using `expectMessageOnce` (e2e/tests/ui-invariants.ts:99). The remaining four Error Messages rows are API refusals with no drawn element. Note N11 records that `feedEmptyTitle` and `noProject` are counted by nothing."
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/portal/01-home.contracts.md",
+      "symbol": "Error Messages, row TEMPLATE_MESSAGES.generic.forbidden",
+      "claim": "§Error Messages states that the existing export `TEMPLATE_MESSAGES.generic.forbidden` carries the text \"You do not have permission to do that.\" and marks the row `New: no`. The export carries \"You do not have permission to manage templates\", and that is the string every `CapabilityGuard` refusal in the product already puts on the wire — so a manager refused the portal's settings reads a sentence about templates, and the only way to make the spec's text true changes a message four other areas emit and breaks two shipped tests the spec's own README promises are untouched.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "specs/portal/01-home.contracts.md §Error Messages: '| `TEMPLATE_MESSAGES.generic.forbidden` | `GET /api/organizations/{orgId}/portal/settings`, `PUT /api/organizations/{orgId}/portal/settings` | You do not have permission to do that. | no |'. The code: packages/validation/src/documents.ts:125 reads `forbidden: 'You do not have permission to manage templates',` inside `TEMPLATE_MESSAGES.generic` (the object is declared at documents.ts:64 and there is exactly one), and apps/api/src/auth/capability.guard.ts:63-66 raises `new ForbiddenException({ error: 'forbidden', message: TEMPLATE_MESSAGES.generic.forbidden })`. Scenario: a `manager` of the organization calls `PUT /api/organizations/{orgId}/portal/settings` with a valid body. §Routes names `CapabilityGuard('ManagePortalSettings')` on that route, so the guard refuses with 403 and the body's message is 'You do not have permission to manage templates' — not the sentence §Error Messages states. The two implementations that could satisfy the row instead: (1) change the export's text, which alters the 403 message of every `@RequireCapability` route in documents, hiring, clients, holidays, reports and requests, and fails `apps/api/test/document-templates.spec.ts:576` (`message: 'You do not have permission to manage templates'`) and `packages/validation/src/documents.test.ts`, both of which assert the literal — while specs/portal/README.md §Blast Radius says 'Nothing in the documents, hiring, requests, reports or time-off areas changes' and §Backward Compatibility says 'Every existing route answers exactly what it answered'; (2) emit a portal-owned message instead, which requires raising the refusal in the service rather than by the guard — the pattern requests/02 already uses for `REQUEST_TOPIC_MESSAGES.manageForbidden` (packages/validation/src/roles.ts:98-101) — and contradicts the `CapabilityGuard('ManagePortalSettings')` the §Routes table names on both settings routes. No implementation satisfies the Error Messages row, the Routes row and the README's two guarantees together.",
+        "source": "packages/validation/src/documents.ts:125"
+      },
+      "suggestedFix": "One decision, in this spec's own text. Either correct the row to the text the export actually carries and accept that a portal refusal says 'templates' — in which case say so deliberately, because it is a sentence a manager reads on a portal screen — or give the portal its own `PORTAL_MESSAGES.settingsForbidden`, mark the row `New: yes`, and change the §Routes Guards column on both settings rows from `CapabilityGuard('ManagePortalSettings')` to a capability check in the service, which is where this repository already raises a refusal whose message a spec names. The third answer — rewording `TEMPLATE_MESSAGES.generic.forbidden` itself to a generic sentence — is a real product improvement and is a change to five other areas, so it belongs in a document of its own rather than inside this one; if it is taken here, the README's 'Nothing in the documents … areas changes' and 'Every existing route answers exactly what it answered' must both go, and the two shipped assertions of the old literal must be named as amended."
+    }
+  ]
+}

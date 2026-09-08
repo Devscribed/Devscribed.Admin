@@ -131,12 +131,28 @@ for (const file of git('diff', '--name-only', runStart, '--', 'specs').split('\n
 
 /* ── 2. the checks are not the implementation's to weaken ────────────────── */
 
+/* Two of these are code constructs and two are only ever written in a comment, and the ones that
+   are code are read against the line's code alone. A detector that reads prose finds `as any` in
+   "answered the same as any other stranger" and charges the implementation with a cast it never
+   wrote — and the retry that answers it spends a whole attempt deleting a sentence. */
 const SUPPRESSIONS = [
-  [/\.(skip|only)\s*\(/, 'a skipped or focused test', true],
-  [/@ts-ignore|@ts-expect-error/, 'a suppressed type error', false],
-  [/\bas\s+any\b/, 'an `as any` cast', false],
-  [/eslint-disable/, 'a disabled lint rule', false],
+  [/\.(skip|only)\s*\(/, 'a skipped or focused test', true, 'code'],
+  [/@ts-ignore|@ts-expect-error/, 'a suppressed type error', false, 'comment'],
+  [/\bas\s+any\b/, 'an `as any` cast', false, 'code'],
+  [/eslint-disable/, 'a disabled lint rule', false, 'comment'],
 ];
+
+/**
+ * One diff line with its comments and string literals blanked, leaving the code it states.
+ *
+ * String literals go first, so that a `//` inside one — `"https://host/a//b"` — is gone before
+ * anything looks for a comment. The other order truncates the line at the URL and loses the cast
+ * that follows it, which is the false negative that matters here: a missed suppression ships.
+ */
+const codeOnly = (l) => l
+  .replace(/\/\*[\s\S]*?(?:\*\/|$)/g, ' ')
+  .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, ' ')
+  .replace(/\/\/.*$/, ' ');
 
 /* Split on the header rather than on "\ndiff --git ": the first chunk has no leading
    newline, so a naive split leaves its header attached and the first file of every diff
@@ -147,8 +163,8 @@ for (const chunk of git('diff', '-U0', base, '--', 'apps', 'packages', 'e2e').sp
 
   for (const line of chunk.split('\n')) {
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
-    for (const [re, what, testsOnly] of SUPPRESSIONS) {
-      if (!re.test(line) || (testsOnly && !isTest(file))) continue;
+    for (const [re, what, testsOnly, where] of SUPPRESSIONS) {
+      if (!re.test(where === 'code' ? codeOnly(line) : line) || (testsOnly && !isTest(file))) continue;
       add({
         rule: 'pipeline/no-detector-weakening',
         file,
@@ -581,9 +597,14 @@ for (const family of namedFamilies) {
 
 /* ── verdict ─────────────────────────────────────────────────────────────── */
 
+/* A note is by definition the thing that does not block, so a gate that reports `blocked`
+   because it raised one describes a run that was never stopped. The router reads the severities
+   and advances regardless, but `lastVerdict` and the run commit both take this field verbatim —
+   so the permanent record then says a gate blocked a stage it passed. The notes still travel:
+   they are recorded from the findings, not from the status. */
 const verdict = {
   stage: 'static_gate',
-  status: findings.length ? 'blocked' : 'pass',
+  status: findings.some((f) => f.severity === 'blocker') ? 'blocked' : 'pass',
   base,
   findings,
 };

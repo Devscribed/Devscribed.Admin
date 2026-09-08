@@ -1,0 +1,94 @@
+{
+  "status": "blocked",
+  "stage": "pre_implement",
+  "spec": "specs/portal/01-home.md",
+  "handoff": ".workflow/runs/2026-09-08T08-37-11_portal-01-home/handoff.json",
+  "report": ".workflow/runs/2026-09-08T08-37-11_portal-01-home/stages/pre_implement.md",
+  "compiled": {
+    "H-01": "ok",
+    "H-02": "finding",
+    "H-03": "ok",
+    "H-04": "ok",
+    "H-05": "ok",
+    "H-06": "ok",
+    "H-07": "ok",
+    "H-08": "ok",
+    "H-09": "ok",
+    "H-10": "ok",
+    "H-11": "ok",
+    "H-12": "ok",
+    "H-13": "n/a",
+    "H-14": "n/a",
+    "H-15": "ok",
+    "H-16": "ok",
+    "H-17": "ok",
+    "H-18": "ok",
+    "H-19": "ok",
+    "H-20": "ok"
+  },
+  "compiledNotes": {
+    "H-01": "All 51 numbered requirements are named in a task's `requirements`; checked mechanically against the `#### REQ-01-nnn` headings.",
+    "H-02": "All 33 live cases are claimed and each has an owning task in `caseOwners` — none is retired. Three of them cannot pass as written, which is findings P2 (TC-01-E2E-03) and P3 (TC-01-INT-10, TC-01-INT-11, TC-01-INT-14, TC-01-E2E-07): the assignment is complete, the cases are not runnable against the spec's own rules.",
+    "H-03": "Seven `##` sections in the spec, all seven accounted for; the ten in contracts and the three in cases are accounted for too. `handoff-coverage` reports 7/7.",
+    "H-04": "Every path cited exists, bar the twenty-three this change creates, which are listed in `buildFromZero`. Checked by extracting every repository path from the handoff and stat-ing it.",
+    "H-05": "Fifteen `reuse` rows with file paths and ten `buildFromZero` entries. The largest reuse is negative: REQ-01-004's client-principal refusal needs no code, because OrgScopeGuard already answers it and T3 records the prohibition on adding @AllowClientPrincipal().",
+    "H-06": "REQ-01-004 (`every route in this spec`), REQ-01-027/030/031 (`every Membership/Vacancy/Project`), REQ-01-053 (`every monetary field, for every role`) and REQ-01-001 (`27 further spec files`) each carry their complete list — in T3/T4's detail and in T9's `allCallSites`, where the 33 `**/members` waits are enumerated by the grep that produces them.",
+    "H-07": "Seven shipping surfaces, each with the rule that governs it. Six are governed by requirements of this spec. The seventh is a deliberate widening — the entry page answers a `user` and a `viewer` the five vacancy facts REQ-01-042/043 name, which both hiring reads refuse them with 403 today — and is governed by REQ-01-042/043/044 and Acceptance Criterion 8, argued in the README's Product decisions. It is recorded rather than raised because the spec decides it.",
+    "H-08": "Every route but the settings PUT is a read, and REQ-01-054 forbids writing on a read. The one writer is a single-row upsert keyed by the unique `organizationId`; Edge case 18 settles the race as last-write-wins on a whole-record replacement, so no lock is added. The fixture's write to Membership.joinedAt is outside the product's paths.",
+    "H-09": "All ten Error Messages rows have a `packages/validation` export and an emitter. Nine are new on PORTAL_MESSAGES; TEMPLATE_MESSAGES.generic.forbidden exists and is emitted by CapabilityGuard. `PORTAL_MESSAGES.noProject` carries a string ReportsService writes inline at reports.service.ts:770 and :1445 — this spec exports it and changes neither call site, which the README's blast radius already records.",
+    "H-10": "One Verification Plan row is marked as not existing today — POST /api/test/membership/backdate-joined, observed 404 — and it is T5. TC-01-INT-09 and TC-01-INT-12 depend on it, and T6 depends on T5.",
+    "H-11": "One migration, additive: one new table, no column added to an existing one, no rename, no drop, no new NOT NULL. The note states the order read from infra/deploy.sh:27 — migrations run as a one-off task on the new image before the Terraform rollout of the services.",
+    "H-12": "T1 adds both capabilities to all four ROLE_CAPABILITIES rows and states that `hasCapability` normalizes, so a stored legacy `member` reads as `user` and an unrecognised value as `viewer`; T4 decides any role question on `normalizeRole(Membership.role)`. The target set is `admin | manager | user | viewer` and the stored set is `admin | member`; TC-01-INT-02 and TC-01-UNIT-06 exercise both.",
+    "H-13": "The bundle has no External Contracts section: every route in this spec is this repository's own, behind the session cookie, and the spec's rehearsal ran with no credential beyond a signed-up account.",
+    "H-14": "No double is planned, because no external contract is depended on.",
+    "H-15": "Three DS gaps: the two in the spec's own table, plus a panel that is a control — `## Screens` requires each feed entry to be a `Card variant=\"panel\"` that is an `<a>` and hovers, and `Card` renders a `div`, has no `as` prop and hovers nothing by design (packages/ds/src/components/core/Card.tsx:33-38, 52-77). The interim shape is recorded so the improvisation is on the record.",
+    "H-16": "Ten tasks, each with `files`, `requirements` and `dependsOn`. The globs are disjoint except that T5 shares apps/api/src/test/test-fixtures.controller.ts with nothing and T9's `e2e/tests/*.spec.ts` overlaps T10's new file only by pattern — T10 writes tests/portal.spec.ts, which does not exist when T9 runs.",
+    "H-18": "Ten rows, each a line of T7 or T8: what varies, what holds it, and what moves if it does not. No row's holder is a `min-width` or a `min-height`. One note rather than a finding: the `portal-month-total` row says 'the two figures beside it', counting the mock's three, where the contract answers two and the testid table names two (N1).",
+    "H-19": "Nothing on these screens is drawn outside its own flow. `## Screens` makes the day separator a block in the column's flow with its own top padding; the feed entries, the panels and the settings rows are all in flow; the only absolutely-positioned box any of them opens is a `Select` list, which the design system portals and which no ancestor's overflow counts. Recorded on T7.",
+    "H-20": "Each of the nine drawn messages names the single element that draws it — `portal-month-empty`, `portal-requests-empty`, `portal-holidays-no-country`, `portal-feed-empty` among them — and TC-01-E2E-07 counts four of them exactly once rather than asserting visibility. The remaining messages are API refusals with no drawn element. That counting case is one of the four P3 names."
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.md",
+      "symbol": "Acceptance Criteria, criterion 5",
+      "claim": "Acceptance Criterion 5 requires a `user` and an `admin` to be answered different feeds, and names the difference as the client entries — a kind REQ-01-032 now derives nothing for, which REQ-01-034's table no longer contains, and which the case the criterion names as its own observer asserts is absent for everybody.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "specs/portal/01-home.md §Acceptance Criteria row 5: 'A `user` and an `admin` reading the same organization are answered different feeds, and the difference is exactly the client entries | TC-01-INT-10'. REQ-01-032: 'THE SYSTEM SHALL derive no entry from a `Client`.' REQ-01-034's decision table has sixteen rows over four kinds (memberJoined, memberAnniversary, vacancyOpened, projectStarted) and every one reads 'Drawn.' — there is no clientAdded row and no 'Not drawn' outcome anywhere in it. TC-01-INT-10 (specs/portal/01-home.cases.md): steps 'Seed one member, one vacancy, one project and one client. Call the route as each of admin, manager, user and viewer'; expected 'All four are answered the same three entries — the member, the vacancy and the project. The client draws no entry for anybody (REQ-01-032), and no entry differs between the four bodies'. Run those steps: the admin's body and the user's body contain the same entries, so criterion 5 is false. Make criterion 5 true and REQ-01-032 is violated — a Client must derive an entry, and REQ-01-034 must withhold it from `user`. No implementation satisfies both, and criterion 5 is what QA reads at the end of the run."
+      },
+      "suggestedFix": "Restate criterion 5 as what the repair left true — the four roles are answered the same entries, and the only difference between their bodies is a `project-started`'s `clientName` (REQ-01-035/055), observed by TC-01-INT-15 — or delete it and let criterion 7 carry the feed's confidentiality. While that line is open, three further sentences the same removal left behind are worth taking with it (they change nothing that is built, and are note N11 in the handoff): §Roles & Permission Matrix's 'what varies is which entries the answer contains, and that is REQ-01-040's table' (the table is REQ-01-034's, and nothing varies now); specs/portal/README.md §Product decisions, which still lists the projection as being over 'Membership, Vacancy, Project and Client' and still carries a 'Client entries | Withheld from user and viewer' row; and TC-01-INT-10's own 'which TC-01-INT-11 covers', where TC-01-INT-15 is the case that covers clientName."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/portal/01-home.cases.md",
+      "symbol": "TC-01-E2E-03",
+      "claim": "The holidays and the resolved country live inside `timeOff`, which REQ-01-016 makes null in full for a membership with no `MemberFinancials` row. TC-01-E2E-03 puts exactly such a member on the screen and asserts both that the time-off panel is absent in full and that the no-country message is visible — a sentence the screen has no field left to decide and no panel left to draw it in.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A member with no MemberFinancials row — which is every admin straight out of signup, and is the member TC-01-E2E-03 signs in ('an organization created in this run with no time entries, no financials, no country and no requests, and whose feed has only their own joining'). Contracts §Routes, GET .../portal/home: `timeOff` is the object holding availableDays, usedDays, pendingDays, totalDaysPerYear, `countryCode` and `holidays`, and the sentence under the body reads '`timeOff` is `null` in full when the membership has no `MemberFinancials` row (REQ-01-016), and `timeOff.countryCode` is `null` when nobody has stated one (REQ-01-019)'. TC-01-INT-05 asserts it: 'Call the route as a member with no MemberFinancials row … Expected: `timeOff` is `null` in the first body.' So for this member the response carries no `countryCode` and no `holidays` at all. Contracts §Screens, state 'Q1 answered, no financials': '`portal-timeoff-panel` is absent in full', and §Required data-testid: `portal-timeoff-panel` — 'absent when the membership has no financials'. State 'Q1 answered, no country' begins 'The figures stand' and replaces the holidays list inside that same panel, which is where 01-home.mock.html draws it (state 2, a Time off panel carrying 0/0 figures — 'zero days available is an answer about a reserve that exists'). TC-01-E2E-03 then asserts, of one screen: '`portal-timeoff-panel` is absent in full. `portal-holidays-no-country` is visible.' One implementation drops the panel and the case fails on the message; the other draws the message for a null `timeOff` and the case fails on 'absent in full' — and that implementation must also invent a country decision from a body that carries none. TC-01-INT-06 and TC-01-INT-07 lean the same way: both read `timeOff.holidays` without stating that financials were configured."
+      },
+      "suggestedFix": "One decision, in the spec's own text: either the holidays and `countryCode` come out of the reserve block — a member with no `MemberFinancials` row still reads the holidays that reach them, REQ-01-016 nulls only the four day-figures, the contract splits the body, and §Screens gains the state — or they stay inside it, TC-01-E2E-03's member is given financials before the holidays assertion (and loses its REQ-01-016 coverage to TC-01-INT-05), and TC-01-INT-06/07 say that financials exist. The same answer settles whether TC-01-E2E-07's `user`, 'whose month, reserve, holidays and requests are all empty', has a reserve row or none."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/untestable-case",
+      "file": "specs/portal/01-home.cases.md",
+      "symbol": "TC-01-INT-14",
+      "claim": "Four cases assert feed entry counts that REQ-01-027 makes impossible: every active membership in the organization derives a `member-joined` entry into the People group, which none of the four switches off, and every organization has at least the membership of the caller doing the asserting.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "REQ-01-027: 'THE SYSTEM SHALL derive a `member-joined` entry from every `Membership` whose `status` is `active`, at the moment `joinedAt`.' REQ-01-026's window is the 365 days ending at the caller's today, so a membership created during a test run is always inside it, and REQ-01-049 reads a never-configured organization as all three groups enabled. TC-01-INT-14: steps 'Seed a vacancy, book an interview on it through the public endpoint, assess one criterion on the resulting application, and close the vacancy. Call the route as an admin.' Expected: 'Exactly one entry, `vacancy-opened`, at the vacancy's `createdAt`.' The admin doing the calling has an active Membership created moments earlier, so the answer contains at least two entries and the case fails on its own first assertion. Three more of the same shape: TC-01-INT-11 seeds five projects, reads with `limit=2` and expects pages of 2, 2 and 1 with no `nextCursor` on the third — the organization's memberships add at least one more entry, so the third page is full and carries a cursor. TC-01-INT-10 seeds one member and calls as admin, manager, user and viewer — four memberships, therefore at least four `member-joined` entries — and expects 'the same three entries'. TC-01-E2E-07 switches only Work and Hiring off, so People still draws the admin's and the user's joinings, the feed is not empty, `EmptyState` is not drawn, and `PORTAL_MESSAGES.feedEmptyBody` is matched zero times where the case asserts exactly once."
+      },
+      "suggestedFix": "Decide it once, for all four: either each case switches the People group off first (TC-01-E2E-07 needs all three off, which is Edge case 11's state and the only way its `feedEmptyBody` assertion can hold), or each expected result is restated relative to the memberships present — 'one `vacancy-opened` entry and no other kind', 'the five projects appear in three pages with no entry repeated', 'the four bodies are identical'. The second reading keeps what each case exists to prove; the first keeps the arithmetic literal. Either is a sentence per case, and it is the spec's to write rather than the implementer's to infer."
+    }
+  ]
+}
