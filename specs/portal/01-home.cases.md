@@ -21,7 +21,7 @@ Rules live in [01-home.md](01-home.md); routes, messages and testids in
 | Whether a reader is told a group is switched off | No. Somebody who cannot change the setting learns only that something is missing; the admin who can reads it on the settings screen | agent | REQ-01-037, REQ-01-052 |
 | What the reserve block states | Days, never money — the shape a `user` is already answered for their own membership | agent | REQ-01-015 |
 | What an empty month draws | The sentence alone. Zero figures beside "No time tracked yet this month" is one message twice | agent | Screens, mock state 2 |
-| What a membership with no financials draws | Nothing — the whole panel is absent. A reserve nobody configured is not a zero reserve | agent | REQ-01-016, Screens |
+| What a membership with no financials draws | The reserve figures are absent — a reserve nobody configured is not a zero reserve — and **the holidays below them are drawn all the same**. A public holiday says where somebody works, not what they are owed, and gating it on a financials row would hide the holidays ahead from every admin straight out of signup | human | REQ-01-016, REQ-01-017, Screens |
 | How far back the feed reaches | 365 days | agent | REQ-01-026, Known Gaps |
 | Which status refuses an entry the caller may not see | `404`, identical to a malformed id and a vanished row, because an entry id encodes a source row | agent | REQ-01-040, REQ-01-041 |
 | What a settings save does when two admins save at once | Last write wins on a single-row upsert. The two do not race in ordinary use — one row, edited by whoever administers the organization | agent | Edge case 18 |
@@ -193,8 +193,9 @@ state in the table and printed what came back. What it found, and what changed b
 - **Asserts:** `GET /api/organizations/{orgId}/portal/home` → 200
 - **Steps:** Call the route as a member with no `MemberFinancials` row, then configure financials
   and seed a reserve credit, then call it again.
-- **Expected Result:** `timeOff` is `null` in the first body. In the second it is an object with
-  `availableDays` and no monetary key.
+- **Expected Result:** `timeOff` is `null` in the first body and `holidays` is an object in it all
+  the same — the reserve being absent withholds nothing from the holidays. In the second `timeOff`
+  is an object with `availableDays` and no monetary key.
 
 ### TC-01-INT-06
 
@@ -203,8 +204,8 @@ state in the table and printed what came back. What it found, and what changed b
 - **Asserts:** `GET /api/organizations/{orgId}/portal/home` → 200
 - **Steps:** Seed five holidays with no country: one before the run's today and four after it.
   Call the route.
-- **Expected Result:** `timeOff.holidays` has three rows, the three earliest on or after today, in
-  ascending date order. The past one is absent.
+- **Expected Result:** `holidays.upcoming` has three rows, the three earliest on or after today,
+  in ascending date order. The past one is absent.
 
 ### TC-01-INT-07
 
@@ -215,7 +216,7 @@ state in the table and printed what came back. What it found, and what changed b
   B. Call as a member whose membership states A; then clear the membership's country, set the
   organization's to B, and call again.
 - **Expected Result:** First: the null-country holiday and A's. Second: the null-country holiday
-  alone, and `timeOff.countryCode` is `null` — the organization's B is not inherited, so the
+  alone, and `holidays.countryCode` is `null` — the organization's B is not inherited, so the
   second call answers what the time-off calendar answers the same member.
 
 ### TC-01-INT-08
@@ -248,9 +249,10 @@ state in the table and printed what came back. What it found, and what changed b
 - **Asserts:** `GET /api/organizations/{orgId}/portal/news` → 200
 - **Steps:** Seed one member, one vacancy, one project and one client. Call the route as each of
   `admin`, `manager`, `user` and `viewer`.
-- **Expected Result:** All four are answered the same three entries — the member, the vacancy and
-  the project. The client draws no entry for anybody (`REQ-01-032`), and no entry differs between
-  the four bodies except a `project-started`'s `clientName`, which `TC-01-INT-11` covers.
+- **Expected Result:** The four bodies carry an identical set of entries — the seeded member's
+  joining, each caller's own joining, the vacancy and the project — and every entry is identical
+  field for field between them, except a `project-started`'s `clientName` (`TC-01-INT-15`). The
+  client draws no entry for anybody (`REQ-01-032`); the count is not asserted, the equality is.
 
 ### TC-01-INT-11
 
@@ -259,11 +261,12 @@ state in the table and printed what came back. What it found, and what changed b
 - **Asserts:** `GET /api/organizations/{orgId}/portal/news` → 200;
   `GET /api/organizations/{orgId}/portal/news` → 422 PORTAL_MESSAGES.cursorInvalid;
   `GET /api/organizations/{orgId}/portal/news` → 422 PORTAL_MESSAGES.limitInvalid
-- **Steps:** Seed five projects in one call sequence. Read with `limit=2`, then follow
-  `nextCursor` twice. Then read with a cursor of `"not-a-cursor"`, and with `limit=51`.
-- **Expected Result:** The three pages carry 2, 2 and 1 entries, in descending moment order, with
-  no entry repeated and none missed; the third body has no `nextCursor`. The bad cursor and the
-  bad limit answer `422` with their own messages.
+- **Steps:** Switch People and Hiring off, so `project-started` is the only kind the feed derives.
+  Seed five projects in one call sequence. Read with `limit=2`, then follow `nextCursor` until a
+  body carries none. Then read with a cursor of `"not-a-cursor"`, and with `limit=51`.
+- **Expected Result:** The pages carry 2, 2 and 1 entries, in descending moment order, with no
+  entry repeated and none missed; the last body has no `nextCursor`. The bad cursor and the bad
+  limit answer `422` with their own messages.
 
 ### TC-01-INT-12
 
@@ -299,9 +302,11 @@ state in the table and printed what came back. What it found, and what changed b
 - **Asserts:** `GET /api/organizations/{orgId}/portal/news` → 200
 - **Steps:** Seed a vacancy, book an interview on it through the public endpoint, assess one
   criterion on the resulting application, and close the vacancy. Call the route as an admin.
-- **Expected Result:** Exactly one entry, `vacancy-opened`, at the vacancy's `createdAt`. No entry
-  names the candidate, the application, the schedule event or the assessment; asserted by scanning
-  the body for the candidate's email and name, both absent.
+- **Expected Result:** Exactly one `vacancy-opened` entry, at the vacancy's `createdAt`, and no
+  entry of any kind but `member-joined` beside it — every membership the run created draws one of
+  those, the admin's own included, and People is not switched off. No entry names the candidate,
+  the application, the schedule event or the assessment; asserted by scanning the body for the
+  candidate's email and name, both absent.
 
 ### TC-01-INT-15
 
@@ -381,12 +386,13 @@ state in the table and printed what came back. What it found, and what changed b
 - **Steps:** Sign in as a member of an organization created in this run with no time entries, no
   financials, no country and no requests, and whose feed has only their own joining.
 - **Expected Result:** `portal-month-empty` is visible and `portal-month-total` is absent —
-  the figures are not drawn beside the sentence. `portal-timeoff-panel` is absent in full.
-  `portal-holidays-no-country` is visible. `portal-requests-empty` is visible.
-  `portal-feed-entry` has a count of 1 and `portal-feed-empty` is absent.
-- **Selectors:** `portal-month-empty`, `portal-month-total` (absent), `portal-timeoff-panel`
-  (absent), `portal-holidays-no-country`, `portal-requests-empty`, `portal-feed-entry`,
-  `portal-feed-empty` (absent)
+  the figures are not drawn beside the sentence. `portal-timeoff-figures` is absent in full, and
+  `portal-timeoff-panel` stands — the holidays are not gated on a reserve. `portal-holidays-no-country`
+  is visible. `portal-requests-empty` is visible. `portal-feed-entry` has a count of 1 and
+  `portal-feed-empty` is absent.
+- **Selectors:** `portal-month-empty`, `portal-month-total` (absent), `portal-timeoff-figures`
+  (absent), `portal-timeoff-panel`, `portal-holidays-no-country`, `portal-requests-empty`,
+  `portal-feed-entry`, `portal-feed-empty` (absent)
 
 ### TC-01-E2E-04
 
@@ -425,8 +431,9 @@ state in the table and printed what came back. What it found, and what changed b
 
 - **Level:** E2E
 - **Covers:** REQ-01-037
-- **Steps:** Switch Work and Hiring off as an admin. Sign in as a `user` whose month, reserve,
-  holidays and requests are all empty, and land on the portal.
+- **Steps:** Switch all three groups off as an admin — People included, or the joinings the run
+  itself created keep the feed non-empty. Sign in as a `user` whose month, reserve, holidays and
+  requests are all empty, and land on the portal.
 - **Expected Result:** Each of `PORTAL_MESSAGES.monthEmpty`, `requestsEmpty`, `noCountry` and
   `feedEmptyBody` is matched **exactly once** on the page, asserted by count and not by id. No
   text on the page names Hiring or Work.

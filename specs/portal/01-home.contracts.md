@@ -45,9 +45,11 @@ source row, so a forbidden answer would confirm that a row with that id exists.
     "availableDays": 17.5,
     "usedDays": 6.5,
     "pendingDays": 4,
-    "totalDaysPerYear": 20,
+    "totalDaysPerYear": 20
+  },
+  "holidays": {
     "countryCode": "PL",
-    "holidays": [{ "id": "…", "date": "2026-11-01", "name": "All Saints' Day" }]
+    "upcoming": [{ "id": "…", "date": "2026-11-01", "name": "All Saints' Day" }]
   },
   "requests": {
     "openTotal": 5,
@@ -68,8 +70,10 @@ source row, so a forbidden answer would confirm that a row with that id exists.
 }
 ```
 
-`timeOff` is `null` in full when the membership has no `MemberFinancials` row (`REQ-01-016`), and
-`timeOff.countryCode` is `null` when nobody has stated one (`REQ-01-019`). **No monetary field
+`timeOff` is `null` in full when the membership has no `MemberFinancials` row (`REQ-01-016`).
+`holidays` is answered whatever the reserve says, because a public holiday is a fact about where
+somebody works and not about their days: `holidays.countryCode` is `null` when nobody has stated
+one, and `holidays.upcoming` then carries the global rows alone (`REQ-01-019`). **No monetary field
 appears anywhere in this body** (`REQ-01-015`) — `reserveBalance` is not omitted conditionally, it
 is not part of the contract.
 
@@ -225,7 +229,8 @@ re-validates all five.**
 | `portal-month-project-row` | Home | one per project, counted |
 | `portal-month-empty` | Home | present when the month is empty, absent otherwise |
 | `portal-timeoff-available` | Home | present when financials exist, absent otherwise |
-| `portal-timeoff-panel` | Home | absent when the membership has no financials |
+| `portal-timeoff-figures` | Home | absent when the membership has no financials |
+| `portal-timeoff-panel` | Home | present — it carries the holidays, which no reserve gates |
 | `portal-holiday-row` | Home | one per holiday, counted |
 | `portal-holidays-no-country` | Home | present when no country is stated |
 | `portal-request-row` | Home | one per request, counted |
@@ -277,8 +282,8 @@ is an `<a>`, so it takes the hover §12 withholds from a static card — this ca
 |---|---|
 | Q1 loading | The three panel headings and the column frame are painted; each figure and each row is a `Preloader` block. No content from a previous answer is on screen, because Q1's only input is the caller and it does not change without a navigation. |
 | Q1 answered, month empty | The figures are **not drawn at all**; `portal-month-empty` carries `PORTAL_MESSAGES.monthEmpty` and the control that starts the timer. Zero figures beside that sentence would be one message twice. |
-| Q1 answered, no financials | `portal-timeoff-panel` is absent in full. A reserve nobody configured is not a zero reserve. |
-| Q1 answered, no country | The figures stand; the holidays list is replaced by `PORTAL_MESSAGES.noCountry` and a link to the profile. |
+| Q1 answered, no financials | The panel stands and `portal-timeoff-figures` is absent in full — a reserve nobody configured is not a zero reserve, and drawing it at zero would answer a question nobody asked. The holidays below it are drawn as they always are: they say where the caller works, not what they are owed. |
+| Q1 answered, no country | The holidays list is replaced by `PORTAL_MESSAGES.noCountry` and a link to the profile. Whatever the figures above are doing, they are unaffected — the two are answered independently. |
 | Q1 answered, no requests | The panel stands; `portal-requests-empty` carries `PORTAL_MESSAGES.requestsEmpty`. |
 | Q1 failed | The three panels are replaced by one `InfoBanner` in the left column. The feed is untouched — it answers a different question. |
 | Q2 loading | Three `Preloader` entries under the `What's new` heading. They are `div`s: a wait is not a link. |

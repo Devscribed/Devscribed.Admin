@@ -64,9 +64,11 @@ Blast radius and backward compatibility for this spec are in [README.md](README.
 | `view-portal-home` — read the home screen and the feed | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `manage-portal-settings` — read and change the group switches | ✅ | ❌ | ❌ | ❌ | ❌ |
 
-`view-portal-home` is held by every staff role, so the capability is not what varies — **what
-varies is which entries the answer contains**, and that is `REQ-01-040`'s table. The check runs on
-`normalizeRole(Membership.role)`, so a legacy `member` row is read as `user`.
+`view-portal-home` is held by every staff role, and **every kind the feed derives is drawn to all
+four of them** (`REQ-01-034`). What a role changes is one field inside an entry, not the set of
+entries: a `project-started`'s `clientName` is withheld from a reader who may not already see it
+(`REQ-01-035`, `REQ-01-055`). The check runs on `normalizeRole(Membership.role)`, so a legacy
+`member` row is read as `user`.
 
 ## Functional Requirements
 
@@ -151,12 +153,17 @@ reason stops holding if a future spec grants a `user` their own monetary balance
 IF the caller's membership has no `MemberFinancials` row, THEN THE SYSTEM SHALL answer `null` for
 the whole reserve block.
 
+`Decided:` a reserve nobody configured is not a zero reserve, so the block is absent rather than
+drawn at zero. The holidays are outside it (`REQ-01-017`) — they are a fact about where somebody
+works, not about their days, and withholding them would hide the holidays ahead from every admin
+straight out of signup, whose membership carries no financials row.
+
 ### The personal half — holidays
 
 #### REQ-01-017 — the holidays ahead
 
 THE SYSTEM SHALL answer the next three holidays that reach the caller, on or after the caller's
-own today, ordered by date ascending.
+own today, ordered by date ascending, whatever the reserve block answers.
 
 #### REQ-01-018 — which holidays reach the caller
 
@@ -420,7 +427,7 @@ THE SYSTEM SHALL draw the feed's settings control only for a caller holding
 | 2 | A client contact signing in still arrives at their requests page | TC-01-INT-01 |
 | 3 | The personal half states the caller's own month, split by project, and never a monetary amount | TC-01-INT-04 |
 | 4 | A member whose membership states no country is answered only the holidays no country claims | TC-01-INT-07 |
-| 5 | A `user` and an `admin` reading the same organization are answered different feeds, and the difference is exactly the client entries | TC-01-INT-10 |
+| 5 | A `user` and an `admin` reading the same organization are answered the same entries; the only field that differs between their bodies is a `project-started`'s `clientName` | TC-01-INT-10, TC-01-INT-15 |
 | 6 | Switching a group off removes exactly that group's entries and nothing else | TC-01-INT-13 |
 | 7 | No feed entry ever names a candidate, an application or an assessment | TC-01-INT-14 |
 | 8 | A `user` opens a vacancy's entry page and reads its description and its booking link, having been refused the vacancy itself | TC-01-E2E-04 |

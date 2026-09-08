@@ -43,11 +43,11 @@ its own bookkeeping.
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Feed storage | A read-time projection over `Membership`, `Vacancy`, `Project` and `Client` | Every source already carries the moment it happened. A materialised table would need a write path in five areas, would start empty for organizations that have been running for a year, and would carry a `visibleTo` column that ages against the role it was computed from. |
+| Feed storage | A read-time projection over `Membership`, `Vacancy` and `Project` | Every source already carries the moment it happened. A materialised table would need a write path in five areas, would start empty for organizations that have been running for a year, and would carry a `visibleTo` column that ages against the role it was computed from. |
 | Absences as news | Not news | Settled with the requester. An approved vacation and a public holiday are the personal half's business — who is away is a schedule, not an announcement. |
 | Which groups exist | People, Hiring, Work | The three the requester chose. The grain is a group and not a source table, so a switch means something to whoever flips it. |
 | Hiring in the feed | A vacancy opening, and nothing else | A candidate's name, an interview and an assessment are confidential to hiring. The vacancy is the one hiring fact the whole company benefits from seeing. |
-| Client entries | Withheld from `user` and `viewer` | `view-clients` is admin and manager. A client the reader cannot open is a name with nothing behind it. |
+| Client entries | Not news at all | Settled with the requester. The kind was dropped rather than role-filtered: what a client's arrival changes that people act on is a project starting, and the feed already draws that. |
 | Project entries | Shown to everybody; the client's name only where the reader may already see it | A project starting is company news; what is inside the project is not. |
 | Entry pages | Every entry has one, in 01 | The source records are gated — a `user` is answered `403` by both vacancy reads and an empty list by the projects read — so a feed of links to them would be a feed of dead ends for the role that reads it most. |
 | Money on the home screen | None, for any role | A `user` reading their own membership is already answered days and a null balance. Drawing money would make one screen two. |
