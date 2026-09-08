@@ -597,9 +597,14 @@ for (const family of namedFamilies) {
 
 /* ── verdict ─────────────────────────────────────────────────────────────── */
 
+/* A note is by definition the thing that does not block, so a gate that reports `blocked`
+   because it raised one describes a run that was never stopped. The router reads the severities
+   and advances regardless, but `lastVerdict` and the run commit both take this field verbatim —
+   so the permanent record then says a gate blocked a stage it passed. The notes still travel:
+   they are recorded from the findings, not from the status. */
 const verdict = {
   stage: 'static_gate',
-  status: findings.length ? 'blocked' : 'pass',
+  status: findings.some((f) => f.severity === 'blocker') ? 'blocked' : 'pass',
   base,
   findings,
 };
