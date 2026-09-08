@@ -201,9 +201,17 @@ function promptFor(stage, run, verdictPath) {
     : '';
 
   switch (stage) {
-    case 'pre_implement':
+    case 'pre_implement': {
+      /* A resumed planner wrote its own findings and still has them; repeating them here would
+         be telling it what it already said. What it cannot know is that the document changed
+         under it after it stopped. */
+      const again = resumesSession(run, 'pre_implement')
+        ? `\n\`${run.spec}\` has been corrected where you blocked. Re-read those passages, confirm each is `
+          + `settled, and compile. Block again only for what is still open.\n`
+        : '';
       return `${head}\nCompile the spec into \`.workflow/runs/${run.id}/handoff.json\` and write your reasoning to `
-        + `\`.workflow/runs/${run.id}/stages/pre_implement.md\`.${back}`;
+        + `\`.workflow/runs/${run.id}/stages/pre_implement.md\`.${back}${again}`;
+    }
     case 'implement': {
       /* The shape reaches the lead as configuration, not as a choice: two runs of one handoff
          must split it the same way, or a comparison between them measures the split. How to
@@ -340,19 +348,20 @@ async function runAgentStage(stage, run) {
 
   const prompt = promptFor(stage, run, verdictPath);
 
-  /* The implementer resumes its own session between attempts; every other agent starts cold.
-     The asymmetry is the point. Converging on working code is helped by remembering what you
-     already tried — and three gates downstream catch it if the memory carries a mistake. A
-     reviewer's judgement is not helped by remembering what it already ruled: it would be
-     defending a position rather than re-deriving one, and two passes over the same diff must
-     be able to disagree. See `code-reviewer.md`, "Reviewing again". */
-  const resume = stage === 'implement' && run.stages[stage].attempts > 0
-    ? lastSessionId(run, stage)
+  /* The two stages that build something resume their own session between attempts; every
+     gate starts cold. The asymmetry is the point. Converging on working code is helped by
+     remembering what you already tried — and three gates downstream catch it if the memory
+     carries a mistake. A reviewer's judgement is not helped by remembering what it already
+     ruled: it would be defending a position rather than re-deriving one, and two passes over
+     the same diff must be able to disagree. See `code-reviewer.md`, "Reviewing again". */
+  /* The planner resumes the attempt that *finished* — see `lastSessionId`. */
+  const resume = resumesSession(run, stage)
+    ? lastSessionId(run, stage, stage === 'pre_implement')
     : null;
 
   const via = nested ? 'sdk' : 'cli';
   note(`${via === 'sdk' ? 'sdk query' : 'claude -p'} --agent ${agent}${model ? ` --model ${model}` : ''}  (fuse ${timeoutMin}m)`);
-  if (resume) note(`resuming session ${resume.slice(0, 8)} — the implementer keeps what it already learned`);
+  if (resume) note(`resuming session ${resume.slice(0, 8)} — ${stage} keeps what it already learned`);
   if (dryRun) return { status: 'pass', findings: [], dryRun: true };
 
   const started = Date.now();
@@ -503,8 +512,57 @@ async function runViaSDK({ stage, agent, model, prompt, resume, timeoutMin, stem
  *
  * The agent's own report of its session is not a heuristic and cannot be contaminated.
  */
-function lastSessionId(run, stage) {
+/**
+ * Whether this attempt continues the previous one's session, or starts cold.
+ *
+ * The implementer always continues: it is converging on working code, and what it already
+ * tried is the cheapest thing it knows.
+ *
+ * The planner continues only when its *own* previous attempt blocked on the spec. That is the
+ * one case where the compile was sound and a document, not the plan, was what stopped it: the
+ * person corrects the passage and the planner has only to re-read it, keeping the reading of
+ * the codebase it already paid for. Every other way back into `pre_implement` is a replan — a
+ * later stage rejected the plan — and there the plan itself is what was wrong, so remembering
+ * it is the opposite of what the run needs.
+ *
+ * Read from the previous verdict on disk rather than from `run.halt`, which `wf resume`
+ * deletes before this ever runs. Attempts are walked backwards because an attempt that was
+ * killed leaves a log but no verdict.
+ */
+function resumesSession(run, stage) {
+  if (!(run.stages[stage].attempts ?? 0)) return false;
+  if (stage === 'implement') return true;
+  return stage === 'pre_implement' && lastSpecBlockers(run).length > 0;
+}
+
+/**
+ * The spec-targeted blockers from the planner's own most recent *completed* attempt.
+ *
+ * `lastBlockers` reads the gates only, so a stage that blocked itself was never told what it
+ * had said — and a planner that resumes its session remembers the finding but not that the
+ * document has been corrected since. Attempts are walked backwards because a killed attempt
+ * leaves a log and no verdict.
+ */
+function lastSpecBlockers(run) {
+  for (let n = run.stages.pre_implement?.attempts ?? 0; n >= 1; n--) {
+    const p = join(run.dir, 'stages', `pre_implement.attempt-${n}.json`);
+    if (!existsSync(p)) continue;
+    const v = JSON.parse(readFileSync(p, 'utf8'));
+    return (v.findings ?? []).filter((f) => f.severity !== 'note' && f.target === 'spec');
+  }
+  return [];
+}
+
+/*
+ * `completedOnly` skips attempts that wrote no verdict. An attempt that was killed still
+ * leaves a log with a session in it, so the newest session is not always the one that knows
+ * anything: a cold attempt killed a minute in, and a third attempt resuming *it*, both point
+ * away from the attempt that actually did the compile. Resuming a truncated transcript
+ * inherits the truncation and pays for the reading again.
+ */
+function lastSessionId(run, stage, completedOnly = false) {
   for (let n = run.stages[stage].attempts ?? 0; n >= 1; n--) {
+    if (completedOnly && !existsSync(join(run.dir, 'stages', `${stage}.attempt-${n}.json`))) continue;
     const log = join(run.dir, 'stages', `${stage}.attempt-${n}.log`);
     if (!existsSync(log)) continue;
     const m = readFileSync(log, 'utf8').match(/"session_id"\s*:\s*"([0-9a-fA-F-]{36})"/);
