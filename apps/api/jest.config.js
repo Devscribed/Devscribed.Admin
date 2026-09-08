@@ -15,13 +15,16 @@ module.exports = {
    * this is here so that running `npx jest` directly cannot reintroduce it, because serial
    * execution is a property of the suite rather than of the command somebody happened to type.
    *
-   * The script also passes `--forceExit`. A suite that finishes its tests and then never
-   * returns is indistinguishable from a suite still running, and whoever is waiting — a person
-   * or an agent — waits forever on a result that already exists. Forcing the exit turns that
-   * into a completed run with a verdict. It does not close the handle that kept the process
-   * alive; `--detectOpenHandles` on the suite that hangs is how that one is found.
+   * `forceExit` is here for the same reason, and it has to be here rather than in the script.
+   * A suite that finishes its tests and then never returns is indistinguishable from a suite
+   * still running, and whoever is waiting — a person or an agent — waits forever on a result
+   * that already exists. Everything that runs a single spec file runs `npx jest` directly, so
+   * a flag that lives only in the `test` script protects the one invocation nobody debugs with.
+   * It does not close the handle that kept the process alive: `--detectOpenHandles` on the
+   * suite that hangs is how that one is found.
    */
   maxWorkers: 1,
+  forceExit: true,
   globalSetup: '<rootDir>/test/global-setup.ts',
   setupFiles: ['<rootDir>/test/setup-env.ts'],
   testTimeout: 30000,
