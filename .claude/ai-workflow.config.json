@@ -31,7 +31,7 @@
         "implement": {
           "$comment": "Writes the code.",
           "enabled": true,
-          "use": "single",
+          "use": "orchestrated",
           "shapes": {
             "single": {
               "$comment": "One implementer, synchronous. The safe shape for a small or tangled diff.",
@@ -93,11 +93,7 @@
               "$comment": "levels is the order QA runs them in; skipE2eIfLowerFailed stops before the expensive one when a cheaper level has already failed.",
               "agent": "qa",
               "model": "sonnet",
-              "levels": [
-                "unit",
-                "int",
-                "e2e"
-              ],
+              "levels": ["unit", "int", "e2e"],
               "skipE2eIfLowerFailed": true
             }
           }
@@ -190,11 +186,7 @@
             "targeted": {
               "agent": "qa",
               "model": "sonnet",
-              "levels": [
-                "unit",
-                "int",
-                "e2e"
-              ],
+              "levels": ["unit", "int", "e2e"],
               "skipE2eIfLowerFailed": true
             }
           }
@@ -278,11 +270,7 @@
             "targeted": {
               "agent": "qa",
               "model": "sonnet",
-              "levels": [
-                "unit",
-                "int",
-                "e2e"
-              ],
+              "levels": ["unit", "int", "e2e"],
               "skipE2eIfLowerFailed": true
             }
           }
@@ -314,9 +302,7 @@
       "CI": "1"
     }
   },
-  "protectedBranches": [
-    "main"
-  ],
+  "protectedBranches": ["main"],
   "refine": {
     "$comment": "The pre-pipeline gate, and the only thing here that is not per-track: it judges spec bundles, which is the one track that requires it. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre_implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note. Override the shape for one run with --shape.",
     "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireSweepCounts: a verdict that passes carries `sweeps` as a map of how many items each sweep enumerated, and one that does not is a judge error — an admission rests on an enumeration, and prose in that field records none. A blocked verdict gets a note instead, since it will be judged again. requireEnumeration: the verdict carries `enumerated`, the list its sweep counts count, and the loop measures two of those lists against the bundle — every case in the .cases.md is an item of the testability sweep, every requirement an item of the obligations sweep. A list shorter than that is a sweep that stopped part-way, and the round is retried; a number with no list behind it is not a sweep. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; it applies only to tracks with requiresRefine true, and `--accept-unrefined <reason>` overrides it and is recorded in run.json.",
@@ -392,10 +378,7 @@
         "judgeModel": "opus",
         "judgePasses": 2,
         "judgeSplit": [
-          [
-            "Currency",
-            "Repository conventions"
-          ],
+          ["Currency", "Repository conventions"],
           [
             "Contradiction",
             "Self-sufficiency",
