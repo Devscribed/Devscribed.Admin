@@ -43,6 +43,13 @@ Never write a spec from the prompt alone. Read the code first and produce two ex
 Also read two or three existing specs in `specs/` first. Match their structure, their register, and
 their level of detail.
 
+**Every rule you take from another area is read from the newest document that states it, and the
+newest is often a patch.** `specs/patches/` is outside the area it changes: a patch note's
+front matter names what it supersedes, and the rule it carries governs whatever an older spec in
+that area still says. Before restating another area's rule, list the patch notes superseding that
+area, read them, and cite the ones the rule you restate depends on. An area's own specs are not
+the current state of that area.
+
 When the spec depends on a system this repository does not own, reconnaissance includes that system
 too: probe it, in the state the product will meet it in, and record what came back. Documentation
 and a plausible reading of an API are not observations. What you cannot probe is written down as
@@ -73,6 +80,12 @@ got what they came for.
 **Ask with `AskUserQuestion`** — your recommendation first with its reason, every option carrying
 its real trade-off. The architectural forks, the two to four where different answers produce
 materially different specs, are these same questions and not a separate round.
+
+**A set's membership is decided before anything about a member.** Where the spec introduces a
+vocabulary — the kinds of a thing, the states of a row, the sources a screen draws from — what
+belongs in it is a product decision and goes to the person first. Every question about a member
+is downstream of that one, and asking "who sees this kind" of a kind nobody agreed to adds a
+member by answering about it.
 
 **The number of questions is decided by the spec, never by a quota.** A surface that changes
 nothing about what the product does raises none. Do not manufacture a question to look thorough,
@@ -189,6 +202,13 @@ depends on.
 Follow `references/spec-template.md`. It gives the file split, the EARS patterns, the decision-table
 directive, and the exact table headers the lint parses — keep those verbatim. Specs are written in
 English, including in Russian-language conversations.
+
+**Refusals are one decision table over the caller, never one requirement per condition.** The
+keys are the principal kind and the capability; the cells are the statuses. A refusal written a
+requirement at a time reads correctly one requirement at a time, and two of them then answer the
+same caller differently with neither saying which wins. The same holds for any two rules whose
+conditions can both be true at once: state them as one table, or state the exception in the wider
+rule by name.
 
 **The request is the budget.** The Summary opens with the request in one sentence and closes
 with what the spec adds beyond it, one line per addition with its reason — a route the request
@@ -448,7 +468,12 @@ second as something not to reproduce.
 - Asking a question to look thorough, when the code, a convention or a shipped screen already
   answers it.
 - Writing the text of a screen before the person has seen the screen.
+- Deciding something about a member of a set the person was never asked to agree to.
 - A `## Behaviour Walkthrough` that restates the rules instead of recording who decided them.
+- Taking another area's rule from that area's specs without reading the patch notes that
+  supersede them.
+- A vocabulary finished for every member but one.
+- A refusal stated a requirement at a time, so that two of them answer one caller differently.
 - E2E cases written for a screen nobody reached.
 - A precondition no route reaches — "an expired envelope exists", with nothing that makes one.
 - Leaving QA to obtain access this stage could have obtained.
